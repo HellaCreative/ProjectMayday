@@ -105,6 +105,7 @@ final class GraphPackStore {
     private(set) var lastManifestVersion: String = "v1"
     private(set) var verifiedInstalledRegionIds: Set<String> = []
     private(set) var isRefreshingCatalog = false
+    private(set) var managementInFlight: Set<String> = []
     /// Fuel stations loaded from installed `fuel.v1.json` sidecars.
     private var packedFuelByRegion: [String: [POIFeature]] = [:]
 
@@ -388,7 +389,7 @@ final class GraphPackStore {
 
     static func managementRows(from regions: [RegionInfo]) -> [InstalledPackManagementRow] {
         regions.compactMap { region in
-            guard case .installed = region.install else { return nil }
+            guard region.install == .installed || region.revisionState != .missing else { return nil }
             let state: PackRevisionState = region.revisionState == .missing ? .current : region.revisionState
             return InstalledPackManagementRow(
                 id: region.id,
@@ -505,7 +506,7 @@ final class GraphPackStore {
     func downloadRegion(_ regionId: String, quiet: Bool = false, replaceInstalled: Bool = false) {
         let id = regionId.lowercased()
         guard publishedIds.contains(id) else { return }
-        guard downloadTasks[id] == nil else { return }
+        guard downloadTasks[id] == nil, !managementInFlight.contains(id) else { return }
         if quiet {
             guard quietDownloadIds.isEmpty else { return }
             quietDownloadIds.insert(id)
@@ -549,20 +550,61 @@ final class GraphPackStore {
         await task.value
     }
 
-    func deleteRegion(_ regionId: String) {
+    /// Remove every revision: the displayed install may predate the current catalog.
+    func deleteRegion(_ regionId: String) async throws {
         let id = regionId.lowercased()
-        downloadTasks[id]?.cancel()
+        guard regions.contains(where: { $0.id == id }) else { return }
+        guard !protectInstalledRevisions else {
+            throw NSError(domain: "DIRT.Packs", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "End navigation before deleting this pack."])
+        }
+        guard managementInFlight.insert(id).inserted else { throw CocoaError(.fileLocking) }
+        defer { managementInFlight.remove(id) }
+        let pending = downloadTasks[id]
+        pending?.cancel()
+        await pending?.value
+        guard !protectInstalledRevisions else {
+            throw NSError(domain: "DIRT.Packs", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "End navigation before deleting this pack."])
+        }
         downloadTasks[id] = nil
         quietDownloadIds.remove(id)
-        let dir = regionDir(regionId: id)
-        try? FileManager.default.removeItem(at: dir)
+        try Self.removeInstalledRevisions(regionID: id, cacheRoot: cacheRoot)
+        verifiedInstalledRegionIds.remove(id)
         packedFuelByRegion.removeValue(forKey: id)
+        loadedRegionIds.removeAll { $0.lowercased() == id }
         if activePack?.regionId?.lowercased() == id {
             activePack = nil
-            loadedRegionIds.removeAll { $0.lowercased() == id }
             phase = .idle
         }
         refreshInstalledFromDisk()
+    }
+
+    static func removeInstalledRevisions(regionID: String, cacheRoot: URL) throws {
+        guard !regionID.isEmpty, regionID.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
+        let fm = FileManager.default
+        if fm.fileExists(atPath: cacheRoot.path) {
+            let versions = try fm.contentsOfDirectory(at: cacheRoot,
+                includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
+            for version in versions where (try? version.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                let directory = version.appendingPathComponent(regionID, isDirectory: true)
+                if fm.fileExists(atPath: directory.path) { try fm.removeItem(at: directory) }
+            }
+        }
+    }
+
+    func updateRegion(_ regionId: String) async throws {
+        // Navigation pins its installed revision for the duration of the ride.
+        guard !protectInstalledRevisions else {
+            throw NSError(domain: "DIRT.Packs", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "End navigation before updating this pack."])
+        }
+        guard managementInFlight.insert(regionId).inserted else { throw CocoaError(.fileLocking) }
+        defer { managementInFlight.remove(regionId) }
+        if let pending = downloadTasks[regionId] { await pending.value }
+        try await installVerifiedPacks([regionId], replaceInstalled: true)
     }
 
     /// Start Nav: prepare only the province/state containing the rider's start.
@@ -1783,8 +1825,11 @@ final class GraphPackStore {
                 return
             }
 
-            let dest = regionDir(regionId: regionId)
+            let destination = regionDir(regionId: regionId)
+            // Stage a complete revision so failures never expose mixed graph/geometry bytes.
+            let dest = cacheRoot.appendingPathComponent(".update-\(regionId)-\(UUID().uuidString)", isDirectory: true)
             try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dest) }
             let files = region.files.filter { Self.phonePackFileNames.contains($0.name) }
             let total = max(files.count, 1)
             for (index, file) in files.enumerated() {
@@ -1831,6 +1876,18 @@ final class GraphPackStore {
                 throw PackIntegrityError.regionIncomplete(regionId: regionId)
             }
 
+            try Task.checkCancellation()
+            // Navigation may have started while the replacement was downloading.
+            if replaceInstalled && protectInstalledRevisions {
+                throw NSError(domain: "DIRT.Packs", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "End navigation before updating this pack."])
+            }
+            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                _ = try FileManager.default.replaceItemAt(destination, withItemAt: dest)
+            } else {
+                try FileManager.default.moveItem(at: dest, to: destination)
+            }
             verifiedInstalledRegionIds.insert(regionId)
             setInstall(regionId, .installed)
             packedFuelByRegion.removeValue(forKey: regionId)

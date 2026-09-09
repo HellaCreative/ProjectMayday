@@ -89,6 +89,7 @@ struct RootView: View {
     @State private var portraitRouteSheetHeight: CGFloat = 0
     @State private var showRouteConfetti = false
     @State private var fuelControlsOpen = false
+    @State private var ridePreferencesOpen = false
     @State private var mapFuelRangeKm = FuelRangePrefs.kilometers
     @State private var mapFuelReservePercent = FuelRangePrefs.reservePercent
     @State private var mapAutomaticFuelPlanning = FuelRangePrefs.automaticPlanningEnabled
@@ -216,6 +217,11 @@ struct RootView: View {
             .fullScreenCover(isPresented: profilePresented) {
                 ProfileSheet(onClose: dismissDockSheet)
                     .environment(app)
+            }
+            .fullScreenCover(isPresented: $ridePreferencesOpen) {
+                RidePreferencesSheet(initial: app.planner.displayedRidePreferences) {
+                    app.planner.applyRidePreferences($0)
+                }
             }
             .background { rootLifecycleHooks }
     }
@@ -617,6 +623,7 @@ struct RootView: View {
             if showsDock, routeCardOpen, activeSheet == nil, !navActive {
                 HStack(alignment: .bottom, spacing: 10) {
                     fuelRangeButton
+                    if app.planner.mode != .saved { ridePreferencesButton }
                     Spacer(minLength: 0)
                     mapControlStack
                 }
@@ -864,6 +871,7 @@ struct RootView: View {
         // Packs on the sheet-adjacent edge; fit + recenter on the far open-map edge.
         let controls = HStack(spacing: 10) {
             fuelRangeButton
+            if app.planner.mode != .saved { ridePreferencesButton }
             Spacer(minLength: 8)
             if app.planner.canFocusEntirePlannedRoute {
                 landscapeFitPlanButton
@@ -976,6 +984,22 @@ struct RootView: View {
             }
         }
         .frame(maxWidth: 300, alignment: .leading)
+    }
+
+    private var ridePreferencesButton: some View {
+        Button {
+            fuelControlsOpen = false
+            ridePreferencesOpen = true
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 48, height: 48)
+                .background(DirtTheme.chrome, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ride settings")
+        .accessibilityHint("Adjust wander, cities and highways")
     }
 
     private var fuelRangeButton: some View {

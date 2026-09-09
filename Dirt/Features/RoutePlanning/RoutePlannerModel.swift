@@ -181,6 +181,20 @@ final class RoutePlannerModel {
             }
         }
     }
+    var ridePreferences: RidePreferences?
+
+    var displayedRidePreferences: RidePreferences {
+        ridePreferences ?? RidePreferences(avoidHighways: profile == .cleanest && avoidMotorways)
+    }
+
+    func applyRidePreferences(_ preferences: RidePreferences) {
+        guard navigation.phase == .idle else { return }
+        let next = preferences.normalized
+        guard next != displayedRidePreferences else { return }
+        ridePreferences = next
+        apply(.rebuild, source: "ridePreferences")
+    }
+
     var showUnknownAck = false
 
     /// A pin-triggered build gets one spatial story: first anchor, then each
@@ -724,6 +738,7 @@ final class RoutePlannerModel {
         replanFromStationID: String? = nil
     ) {
         let requested = itinerary
+        let preferences = ridePreferences
         let fuel = FuelRangePrefs.snapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)
         canonicalBuildStartCount += 1
@@ -737,7 +752,8 @@ final class RoutePlannerModel {
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
             self.itineraryBuilder.mapZoom = self.mapState.mapZoom
-            let result = await self.itineraryBuilder.build(
+            let result = await RidePreferenceContext.$current.withValue(preferences) {
+                await self.itineraryBuilder.build(
                 requested,
                 from: legIndex,
                 through: throughLegIndex,
@@ -757,6 +773,7 @@ final class RoutePlannerModel {
                     self.refreshMap()
                 }
             )
+            }
             guard !Task.isCancelled else {
                 RoutingDebugLog.shared.event(
                     "build result discarded requestedGen=\(requested.generation) "
@@ -1896,6 +1913,24 @@ final class RoutePlannerModel {
         appendPlanPoint(point)
     }
 
+    var canCloseLoop: Bool {
+        mode == .plan && navigation.phase == .idle && Self.loopReturnPoint(in: itinerary) != nil
+    }
+
+    static func loopReturnPoint(in itinerary: RiderItinerary) -> RouteCoordinate? {
+        guard itinerary.waypoints.count >= 2,
+              let first = itinerary.waypoints.first?.coordinate,
+              let last = itinerary.waypoints.last?.coordinate else { return nil }
+        let distance = CLLocation(latitude: first.latitude, longitude: first.longitude)
+            .distance(from: CLLocation(latitude: last.latitude, longitude: last.longitude))
+        return distance > 25 ? first : nil
+    }
+
+    func closeLoop() {
+        guard canCloseLoop, let start = Self.loopReturnPoint(in: itinerary) else { return }
+        apply(.append(coordinate: start), source: "closeLoop")
+    }
+
     // MARK: - Clear / mode
 
     /// From here has a pin and/or a calculated route worth confirming before leaving.
@@ -2295,6 +2330,7 @@ final class RoutePlannerModel {
         existing.pavedPercent = aggregatePavedPercent
         existing.segments = activeResponses.flatMap { $0.segments ?? [] }
         existing.surfaceFamilyMode = activeSurfaceFamilyMode
+        existing.ridePreferencesData = ridePreferences.flatMap { try? JSONEncoder().encode($0) }
         try? context.save()
         savedRouteOrigin = SavedRouteOrigin(id: existing.id, name: existing.name)
         toast = "Updated “\(existing.name)”"
@@ -2311,6 +2347,7 @@ final class RoutePlannerModel {
             segments: activeResponses.flatMap { $0.segments ?? [] },
             surfaceFamilyMode: activeSurfaceFamilyMode
         )
+        route.ridePreferencesData = ridePreferences.flatMap { try? JSONEncoder().encode($0) }
         context.insert(route)
         try? context.save()
         // Adopt the new record so a second Save updates it rather than stacking copies.
@@ -2325,6 +2362,7 @@ final class RoutePlannerModel {
     }
 
     func loadSavedRoute(_ saved: SavedRoute) {
+        ridePreferences = saved.ridePreferencesData.flatMap { try? JSONDecoder().decode(RidePreferences.self, from: $0) }
         mode = .saved
         applyStoredRouteGeometry(
             name: saved.name,

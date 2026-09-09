@@ -557,6 +557,20 @@ struct RoutePlannerCard: View {
             stageList
         }
 
+        if planner.canCloseLoop {
+            Button {
+                planner.closeLoop()
+            } label: {
+                Label("Loop back to start", systemImage: "arrow.triangle.2.circlepath")
+                    .font(DirtType.rowTitle)
+                    .foregroundStyle(DirtTheme.orange)
+                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Adds a routed return to point 1, including fuel stops when needed")
+        }
+
         routingStatus
 
         if planner.hasRoute {

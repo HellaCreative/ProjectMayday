@@ -767,3 +767,15 @@ implementation or physical acceptance is not claimed by this correction.
 Explicit `access=yes` or `motor_vehicle=yes` at these passable payment points
 must also remain passable. Destination/customer-only access does not become
 unrestricted through access.
+
+### September 9 — installed pack management
+
+Downloaded packs offer Update when a newer approved revision is available and Delete for installed revisions. Update stages and verifies the complete replacement before switching; failure retains the previous pack. Rows remain visible during updates and actions report failures. Delete removes every cached revision for that region so catalog changes cannot leave the displayed install behind. Neither operation replaces/removes a revision pinned by active navigation. This change does not modify route selection or navigation behavior.
+
+### September 9 — Loop and optional ride settings (DEV)
+
+Loop means closing the current ordered waypoint plan back to its first point, not generating a distance-targeted round trip. Append a distinct return waypoint, retain earlier leg identities and carry fuel consumption into the new return leg. Hide the action when the end is already within 25 metres of the start.
+
+Route planning offers a settings affordance beside fuel (portrait and landscape), opening a full-screen draft with ride wander, avoid cities/towns, and avoid highways. Cancel changes nothing; Apply rebuilds the full route/fuel plan. Settings travel in optional `options.ridePreferences` (wander 0…1, avoidCities/avoidHighways booleans), remain scoped to one build, distinguish cache entries, and are saved as optional metadata. Older saved routes retain defaults. The accepted default payload is unchanged.
+
+Wander narrows the proven shared candidate pool by distance before applying surface preference, without relaxing access/fuel constraints. City avoidance minimizes mapped urban exposure; highway avoidance strongly weights other roads while allowing necessary connections and waypoint/fuel access. DEV qualification currently covers live NS/NB; offline custom planning is explicitly unavailable rather than silently ignoring preferences. Existing downloaded-route navigation remains unchanged. Broader regional/offline customization is not yet qualified.

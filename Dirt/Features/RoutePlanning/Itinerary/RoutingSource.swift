@@ -33,6 +33,7 @@ final class RouteResponseCache {
         let cleanMetroMultiplier: Double?
         let avoidMotorways: Bool
         let preferBackRoads: Bool
+        var ridePreferences: RidePreferences? = nil
         let startEndpointKind: String?
         let endEndpointKind: String?
 
@@ -198,6 +199,7 @@ final class PackRoutingSource: RoutingSource {
     }
 
     func route(_ req: RouteRequest) async throws -> RouteResponse {
+        guard req.options?.ridePreferences == nil else { throw RoutingError.server("Custom ride settings require online planning.") }
         let endpoints = try routeEndpoints(req)
         let key = RouteResponseCache.Key(
             from: endpoints.0,
@@ -216,6 +218,7 @@ final class PackRoutingSource: RoutingSource {
             cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
             avoidMotorways: req.options?.avoidMotorways == true,
             preferBackRoads: req.options?.preferBackRoads == true,
+            ridePreferences: req.options?.ridePreferences,
             startEndpointKind: req.options?.startEndpointKind,
             endEndpointKind: req.options?.endEndpointKind
         )
@@ -291,6 +294,7 @@ final class PackRoutingSource: RoutingSource {
     /// Offline equivalent of the existing forward fuel-chain path: the pack's
     /// own reachability search proves each pump before it is committed.
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
+        guard req.options?.ridePreferences == nil else { throw RoutingError.server("Custom ride settings require online planning.") }
         guard req.locations.count == 2 else { throw RoutingError.invalidEndpoints }
         let start = coordinate(req.locations[0])
         let end = coordinate(req.locations[1])
@@ -856,6 +860,7 @@ private func cacheKey(
         cleanMetroMultiplier: request.options?.cleanMetroMultiplier,
         avoidMotorways: request.options?.avoidMotorways == true,
         preferBackRoads: request.options?.preferBackRoads == true,
+        ridePreferences: request.options?.ridePreferences,
         startEndpointKind: request.options?.startEndpointKind,
         endEndpointKind: request.options?.endEndpointKind
     )

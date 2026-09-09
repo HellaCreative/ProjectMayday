@@ -92,6 +92,7 @@ struct AccessPolicy: Codable, Sendable {
 /// Optional per-request routing options. `avoidEdgeIds` is honored on-device
 /// (route incident recovery). Requests without it omit `options`.
 struct RouteRequestOptions: Codable, Sendable {
+    var ridePreferences: RidePreferences?
     var avoidEdgeIds: [String]?
     var priorEdgeIds: [String]?
     var arrivalEdgeId: String?
@@ -134,6 +135,7 @@ struct RouteRequestOptions: Codable, Sendable {
         startEndpointKind: String? = nil,
         endEndpointKind: String? = nil
     ) {
+        self.ridePreferences = RidePreferenceContext.current
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
         self.arrivalEdgeId = arrivalEdgeId
@@ -201,7 +203,7 @@ struct RouteRequest: Codable, Sendable {
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
            !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil,
-           startEndpointKind == nil, endEndpointKind == nil {
+           startEndpointKind == nil, endEndpointKind == nil, RidePreferenceContext.current == nil {
             options = nil
         } else {
             options = RouteRequestOptions(
@@ -309,7 +311,7 @@ struct FuelChainRequest: Codable, Sendable {
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
         options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
-            && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil
+            && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil && RidePreferenceContext.current == nil
             ? nil
             : RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
