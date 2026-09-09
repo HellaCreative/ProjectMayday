@@ -27,7 +27,7 @@ function routeResponse(segments,profile,identity,diagnostics,point=null) {
 }
 function toLiveResponse(pool,body,kind,identity) {
  const r=pool.selected;
- if(!r)return {status:'unknown',error:'adventure_search_incomplete',message:'Route search did not complete. No fuel gap has been proved.',diagnostics:{strategy:'adventure-preview-v1',reason:pool.search.reason},stops:[],routes:[],windowComplete:false};
+ if(!r||!pool.search.poolComplete)return {status:'unknown',error:'adventure_search_incomplete',message:'Route search did not complete. No fuel gap has been proved.',diagnostics:{strategy:'adventure-preview-v1',reason:pool.search.reason},stops:[],routes:[],windowComplete:false};
  const diagnostics={allowUnknown:body.profile!=='cleanest'&&body.accessPolicy?.motorizedUnknown===true,mapZoom:body.options?.mapZoom,strategy:'adventure-preview-v1',selectedReason:pool.selectedObjective,adventure:{dirtEntryCost:r.provenance.dirtEntryCost,fuelHeuristicWeight:r.provenance.fuelHeuristicWeight,candidates:pool.candidates,search:pool.search,quality:r.qualityAudit,fuelState:r.fuel.state},packIdentity:identity};
  if(kind==='route')return routeResponse(r.road.segments,body.profile,identity,diagnostics);
  if(!['provisional_station_access','verified'].includes(r.fuel.state))return {status:'unknown',error:r.fuel.reason||'fuel_unverified',message:'Road found, but fuel planning remains unverified.',routes:[routeResponse(r.road.segments,body.profile,identity,diagnostics)],stops:[],windowComplete:true,diagnostics};
@@ -81,9 +81,9 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
   }
   return joinedCache.data;
  })();
- if(data.pack.graphBinaryVersion!==4)return null;
+ if(data.pack.graphBinaryVersion!==4)return {status:'unknown',error:'adventure_pack_unqualified',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
  const identity=data.identity||data.packIdentity||[],revision=identity.map(p=>`${p.graphSha256}/${p.geometrySha256}`).join('|');
- if(!revision||identity.some(p=>p.releaseId!=='fabric-v4-20260908-02'))return null;
+ if(!identity.length||!revision||identity.some(p=>p.releaseId!=='fabric-v4-20260908-02'))return {status:'unknown',error:'adventure_pack_unqualified',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
  const excluded=new Set(body.fuel?.excludedStationIds||[]),profile=body.profile==='cleanest'?'clean':body.profile;
  const input={mode:'from_here',anchors:body.locations.map((p,i)=>({id:`rider-${i}`,lat:p.lat,lon:p.lon})),legs:[{from:'rider-0',to:'rider-1',profile,allowUnknown:profile!=='clean'&&body.accessPolicy?.motorizedUnknown===true}],
   fuel:kind==='fuel'?{fullRangeMeters:body.fuel.usableRangeMeters,reserveFraction:0,initialUsableMeters:body.fuel.firstLegMaxMeters}:null};

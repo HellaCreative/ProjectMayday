@@ -123,3 +123,13 @@ test("generated fuel cannot masquerade as a fixed rider anchor",()=>{
   assert.throws(()=>normalizeRequest({mode:"from_here",anchors:[{id:"a",lat:1,lon:1},{id:"f",kind:"fuel",lat:2,lon:2}],
     legs:[{from:"a",to:"f",profile:"dirt"}]}),/Generated fuel/);
 });
+
+test('optional refinement timeout preserves the parent budget and charges its work',()=>{
+ const {createBudget,createRefinementBudget}=require('./budget');let now=0;
+ const parent=createBudget({deadlineAtMs:1000,maxExpansions:3,now:()=>now});
+ const child=createRefinementBudget(parent,{maxMilliseconds:100,now:()=>now});
+ assert.equal(child.consume(),true);assert.equal(parent.snapshot().expansions,1);
+ now=100;assert.equal(child.check(),false);assert.equal(child.snapshot().reason,'refinement_deadline');
+ assert.equal(parent.check(),true);assert.equal(parent.consume(),true);assert.equal(parent.consume(),true);assert.equal(parent.consume(),false);
+ assert.equal(parent.snapshot().reason,'expansion_limit');
+});
