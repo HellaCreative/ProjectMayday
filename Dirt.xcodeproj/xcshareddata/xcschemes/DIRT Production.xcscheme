@@ -69,5 +69,14 @@
    <AnalyzeAction buildConfiguration = "Release">
    </AnalyzeAction>
    <ArchiveAction buildConfiguration = "Release" revealArchiveInOrganizer = "YES">
+      <PostActions>
+         <ExecutionAction ActionType="Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent title="Finalize MapLibre archive metadata and symbols" scriptText="&quot;$SRCROOT/scripts/finalize-ios-archive.sh&quot; &quot;$ARCHIVE_PATH&quot; &gt; /tmp/dirt-archive-finalize.log 2&gt;&amp;1&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="2B0105543014DE2B00065435" BuildableName="Dirt.app" BlueprintName="Dirt" ReferencedContainer="container:Dirt.xcodeproj"/>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PostActions>
    </ArchiveAction>
 </Scheme>

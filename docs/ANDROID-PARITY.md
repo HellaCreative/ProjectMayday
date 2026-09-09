@@ -921,3 +921,12 @@ now target v4/releases/fabric-v4-20260909-01 on the existing R2 host. DEV keeps
 its candidate namespace. Android must use the same immutable release and hashes;
 do not mix the root legacy catalog/files with V4. National engine activation
 is still under qualification and is not implied by this path preparation.
+
+### iOS archive packaging repair
+
+MapLibre6.28.0 device binary is unchanged. The archive action corrects its
+incorrect iPhoneSimulator plist label to iPhoneOS only after validating the
+actual arm64 IOS Mach-O, then re-signs the framework and enclosing app. Official
+matching UUID symbols are included. This has no Android runtime counterpart.
+Archive signing may be Development; App Store export must prove Distribution
+signing separately. No routing or navigation behavior changes.

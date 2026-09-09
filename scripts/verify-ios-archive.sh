@@ -28,7 +28,9 @@ if [[ ! -d "$archive" || ! -f "$archive_info" || ! -d "$app" ]]; then
 fi
 
 set +e
-"$script_dir/verify-ios-release.sh" --require-signing "$app"
+# Xcode archives may use Development signing; App Store export re-signs them.
+# Validate Distribution signing against the exported app before upload.
+"$script_dir/verify-ios-release.sh" "$app"
 release_verifier_exit=$?
 set -e
 if [[ $release_verifier_exit -ne 0 ]]; then
