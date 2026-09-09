@@ -1,0 +1,47 @@
+{
+  "name": "Porters\u2013Yarmouth\u2013central NS return loop",
+  "recorded": "2026-09-09",
+  "points": [
+    [
+      44.764835,
+      -63.340265
+    ],
+    [
+      43.839237,
+      -66.119184
+    ],
+    [
+      44.660761,
+      -65.520139
+    ],
+    [
+      44.764835,
+      -63.340265
+    ]
+  ],
+  "profiles": [
+    "balanced",
+    "dirt",
+    "balanced"
+  ],
+  "usableRangeMeters": 180000,
+  "mapZoom": 9.6,
+  "allowUnknown": false,
+  "status": "known_failure",
+  "observed": {
+    "firstTwoLegsComplete": true,
+    "firstTwoLegWithinRepeatMeters": [
+      0,
+      0
+    ],
+    "firstTwoLegAcrossRepeatMeters": 152571,
+    "returnFailure": "Core dirt-10/dirt-30 fuel searches reach label limit; shared pool remains incomplete",
+    "previousStableAlsoFails": true
+  },
+  "limits": [
+    "First two legs alone are not a completed loop",
+    "Overlap is diagnostic, not proof that every repeated road is avoidable",
+    "Do not weaken access, fuel, arrival, shared pool or request budget to pass"
+  ],
+  "evidencePrefix": "/tmp/dirt-central-loop180-"
+}
