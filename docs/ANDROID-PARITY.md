@@ -896,3 +896,11 @@ beads. Retain existing surface colours and ferry treatment. Paint changes do not
 alter route geometry, access eligibility, fuel, or surface statistics. Preserve
 route hit testing on the coloured stroke. Native Android implementation should
 produce the same continuous visual result.
+
+### Build 33 — owner-provided launch audio
+
+Replace the synthetic SplashThrottle.wav with the supplied firtbike.mp3. Keep
+the accepted logo animation and carousel unchanged, including ambient/mute and
+Reduce Motion behavior. Playback follows the existing splash window rather than
+extending onboarding to the recording length. Production resource verification
+requires firtbike.mp3; the old synthetic asset and generator are removed.

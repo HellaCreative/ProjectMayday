@@ -4,8 +4,7 @@ import UIKit
 
 /// Cold-launch splash: wordmark lands → one throttle pop → three quick pops →
 /// wordmark surges at the camera with dirt flying off the bars → blackout into
-/// the intro. Engine audio rides the same beat when `SplashThrottle.wav` is in
-/// the bundle (swap that file anytime; keep the name).
+/// the intro. Engine audio uses the owner-provided `firtbike.mp3`.
 ///
 /// Runs on a fixed timeline rather than waiting on bootstrap so the animation is
 /// never clipped mid-blip on a fast launch; `AppGateView` holds the splash until
@@ -189,16 +188,14 @@ struct AnimatedSplashView: View {
 
 // MARK: - Audio
 
-/// Plays `SplashThrottle.wav` from the app bundle. Missing file is a soft no-op so
-/// a TestFlight build without the asset still launches; drop a real motorcycle
-/// recording in `Dirt/Resources/SplashThrottle.wav` to replace the synthetic placeholder.
+/// Plays the owner-provided motorcycle recording during the accepted splash timeline.
 @MainActor
 final class SplashThrottleAudio {
     private var player: AVAudioPlayer?
 
     func play() {
         guard !UIAccessibility.isReduceMotionEnabled else { return }
-        guard let url = Bundle.main.url(forResource: "SplashThrottle", withExtension: "wav") else {
+        guard let url = Bundle.main.url(forResource: "firtbike", withExtension: "mp3") else {
             return
         }
 

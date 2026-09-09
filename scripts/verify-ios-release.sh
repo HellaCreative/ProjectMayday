@@ -114,7 +114,7 @@ done
 
 for required_resource in \
   ThirdPartyNotices.txt \
-  SplashThrottle.wav \
+  firtbike.mp3 \
   RegionPolygons.json \
   UrbanSettlements.json \
   shortbread-style.json \
@@ -133,7 +133,7 @@ unexpected_root_entries=0
 while IFS= read -r entry; do
   name=$(basename "$entry")
   case "$name" in
-    Dirt|SplashThrottle.wav|Info.plist|PkgInfo|PrivacyInfo.xcprivacy|ThirdPartyNotices.txt|Assets.car|AppIcon*.png|Frameworks|swift-crypto_Crypto.bundle|_CodeSignature|embedded.mobileprovision|SC_Info|RegionPolygons.json|UrbanSettlements.json|shortbread-style.json|svwd03sprite.json|svwd03sprite.png|svwd03sprite@2x.json|svwd03sprite@2x.png)
+    Dirt|firtbike.mp3|Info.plist|PkgInfo|PrivacyInfo.xcprivacy|ThirdPartyNotices.txt|Assets.car|AppIcon*.png|Frameworks|swift-crypto_Crypto.bundle|_CodeSignature|embedded.mobileprovision|SC_Info|RegionPolygons.json|UrbanSettlements.json|shortbread-style.json|svwd03sprite.json|svwd03sprite.png|svwd03sprite@2x.json|svwd03sprite@2x.png)
       ;;
     *)
       fail "unexpected top-level Release resource: $name"
