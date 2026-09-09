@@ -857,3 +857,7 @@ orange outline remains. All active build messages use the indeterminate orange
 thumper card, including loop-candidate status and previously unrecognized
 status text. Known statuses retain their specific explanatory detail. Do not
 present the pulse as percentage complete. Reduce Motion keeps a static bar.
+
+### Open Terrain refinement — build 28
+
+Profile uses the enclosing glass sheet without an additional opaque white backing. Zoom +/− buttons retain white fill and black icons, with a 40% black neutral-grey border (#999999). From Here’s initial Surface picker uses the same menu field as Loop (white fill, #D8DADD border, 8pt radius); selecting a surface does not expand the sheet. Route leg disclosure fields share that visual treatment while preserving their existing detail expansion and controls.

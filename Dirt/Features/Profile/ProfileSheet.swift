@@ -110,11 +110,6 @@ struct ProfileSheet: View {
             .scrollEdgeEffectStyle(.soft, for: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            Rectangle()
-                .fill(DirtTheme.sheet)
-                .ignoresSafeArea()
-        }
         .onAppear { displayName = supabase.displayName }
         .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
         .sheet(isPresented: $showPaywall) {

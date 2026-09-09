@@ -135,7 +135,7 @@ struct MapControlStack: View {
                 .foregroundStyle(.black)
                 .frame(width: 50, height: 50)
                 .background(.white, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(.black, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(white: 0.6), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(increase ? "Zoom in" : "Zoom out")
