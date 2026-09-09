@@ -420,6 +420,13 @@ struct DirtSheetHeader: View {
 }
 
 struct BrandChip: View {
+    @Environment(AppEnvironment.self) private var app
+
+    private var edition: String {
+        if AppConfig.backendEnvironment == .development { return "DEV" }
+        return app.subscription.isSubscribed ? "PRO" : "FREE"
+    }
+
     /// When set (nav top chrome), stretch the chrome box to match cue/speed height
     /// without enlarging the wordmark.
     var minHeight: CGFloat = 42
@@ -437,22 +444,20 @@ struct BrandChip: View {
                 .italic()
                 .fontWeight(.black)
                 .foregroundStyle(DirtTheme.orange)
-            if AppConfig.backendEnvironment == .development {
-                Text("DEV")
-                    .font(.system(size: 8, weight: .black, design: .rounded))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 3)
-                    .background(DirtTheme.orange, in: Capsule())
-                    .padding(.leading, 6)
-            }
+            Text(edition)
+                .font(.system(size: 8, weight: .black, design: .rounded))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 3)
+                .background(DirtTheme.orange, in: Capsule())
+                .padding(.leading, 6)
         }
         .font(.dirtUI(16, weight: .black))
         .padding(.horizontal, 12)
         .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: minHeight)
         .dirtChromeSurface(radius: DirtRadius.chip)
         .accessibilityLabel(
-            AppConfig.backendEnvironment == .development ? "DIRT development" : "DIRT"
+            AppConfig.backendEnvironment == .development ? "DIRT development" : "DIRT \(edition.lowercased())"
         )
     }
 }
