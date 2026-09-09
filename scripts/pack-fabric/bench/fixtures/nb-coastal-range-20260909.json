@@ -1,0 +1,41 @@
+{
+  "name": "NB coastal mixed-style fuel-range comparison",
+  "points": [
+    [
+      46.851988,
+      -65.12319
+    ],
+    [
+      47.047134,
+      -64.891699
+    ],
+    [
+      47.625592,
+      -65.517018
+    ]
+  ],
+  "usableRangeMeters": 120000,
+  "allowUnknown": false,
+  "variants": [
+    {
+      "reverse": false,
+      "profiles": [
+        "cleanest",
+        "balanced"
+      ],
+      "mapZoom": 7
+    },
+    {
+      "reverse": true,
+      "profiles": [
+        "dirt",
+        "cleanest"
+      ],
+      "mapZoom": 10
+    }
+  ],
+  "verifiedSource": "f2da612ae73dd175123430391010b48f0d9408a7",
+  "qualification": "All four legs complete with fuel/joins checks. Shape flags remain: forward Clean fuel detour6892m repeat; departure from middle rider pin3026.015m repeat in either direction.",
+  "control": "Same first Clean request at225000m initial/usable has0stops/0repeat locally and hosted.",
+  "evidence": "/tmp/dirt-nb-coastal*"
+}
