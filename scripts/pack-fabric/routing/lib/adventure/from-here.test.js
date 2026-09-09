@@ -194,3 +194,12 @@ test('wider allowed radius preserves an already successful waypoint projection',
  assert.deepEqual(b.road.geometry,a.road.geometry);assert.deepEqual(b.fuel.plannedRefills,a.fuel.plannedRefills);
  assert.equal(b.provenance.waypointSnap.attempts,1);
 });
+
+test('rider waypoint at a mapped fuel POI is not broadened into an area destination',()=>{
+ const f=fixture();f.input.anchors[1].lat=.04;
+ assert.equal(build(f,{endpointRadiusMeters:6000}).road.state,'complete');
+ f.stations.push({id:'fixed-poi',lat:.04,lon:.03});
+ const r=build(f,{endpointRadiusMeters:6000});
+ assert.notEqual(r.road.state,'complete');
+ assert.equal(r.provenance.waypointSnap.attempts,1);
+});

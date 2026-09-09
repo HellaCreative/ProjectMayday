@@ -66,18 +66,23 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   }
   let startCandidates=history.edges.length?(endpoints.matches[0].candidates||[]).filter(c=>c.edgeIndex===history.edges.at(-1)):endpoints.matches[0].candidates||[];
   let picked=selectConnectedSnapPair(pack,startCandidates,endpoints.matches[1].candidates,{allowUnknown});
+  // The app recognizes a rider waypoint at a mapped pump within 150 m.
+  // Such a point is a fixed service destination, not a broad area selection.
+  const fixedFuel=request.anchors.map(a=>Boolean(a.stationId)||stations.some(s=>
+    haversineMeters([a.lon,a.lat],[s.lon,s.lat])<=stationRadiusMeters));
   let attempts=1;
   while(!picked.ok&&radius<endpointRadiusMeters) {
+    if(fixedFuel[1]&&startCandidates.length)break;
     if(!budget.check())return incomplete(budget.snapshot().reason);
     radius=Math.min(endpointRadiusMeters,radius*2);attempts++;
-    if(!startCandidates.length&&!history.edges.length){
+    if(!startCandidates.length&&!history.edges.length&&!fixedFuel[0]){
       const starts=matchStations({pack,geom,index,stations:[request.anchors[0]],maxMeters:radius,allowUnknown,budget});
       if(starts.state!=='complete')return incomplete(starts.reason);
       startCandidates=starts.matches[0].candidates||[];
     }
     const components=weakComponentIds(pack,allowUnknown);
     const allowed=new Set(startCandidates.map(c=>components[pack.edgeFrom[c.edgeIndex]]));
-    const ends=matchStations({pack,geom,index,stations:[request.anchors[1]],maxMeters:radius,allowUnknown,budget,
+    const ends=matchStations({pack,geom,index,stations:[request.anchors[1]],maxMeters:fixedFuel[1]?Math.min(2000,radius):radius,allowUnknown,budget,
       eligibleEdge:e=>allowed.has(components[pack.edgeFrom[e]])});
     if(ends.state!=='complete')return incomplete(ends.reason);
     picked=selectConnectedSnapPair(pack,startCandidates,ends.matches[0].candidates,{allowUnknown});
