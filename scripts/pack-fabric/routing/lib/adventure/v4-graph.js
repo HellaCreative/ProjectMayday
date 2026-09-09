@@ -78,6 +78,14 @@ function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Ma
     stateKey:(node,state)=>`${node}:${state??0}`,
     transition,
     stationAt:node=>stations.get(node)||null,
+    forEachOutgoing(node,visit) {
+      for(let offset=pack.nodeOffsets[node];offset<pack.nodeOffsets[node+1];offset++) {
+        const id=pack.edgeUndirectedIndex[offset],to=pack.edgeTargets[offset];
+        const endpoint=endpoints.has(id)?id:-1;
+        if(!allows(pack,id,node,to,allowUnknown,endpoint,endpoint))continue;
+        if(visit({id,from:node,to,roadClassLeaf:pack.enums.roadClassLeafNames?.[pack.edgeRoadClassLeaf[id]]||null,distanceMeters:pack.edgeMeters[id],surfaceLeaf:pack.enums.surfaceLeafNames[pack.edgeSurfaceLeaf[id]] || null})===false)return false;
+      }
+    },
     *outgoing(node) {
       for(let offset=pack.nodeOffsets[node];offset<pack.nodeOffsets[node+1];offset++) {
         const id=pack.edgeUndirectedIndex[offset],to=pack.edgeTargets[offset];

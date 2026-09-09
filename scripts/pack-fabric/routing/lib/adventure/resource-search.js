@@ -157,24 +157,29 @@ function prepareReverseCosts({graph,nodeCount,edgeCost,budget,maxBytes=256*1024*
   if(byteLength>maxBytes)return incomplete("reverse_storage_limit");
   const heads=new Int32Array(nodeCount);heads.fill(-1);
   const chunks=[],chunkSize=16384;let arcCount=0;
-  for(let node=0;node<nodeCount;node++) {
-    if(!budget.consume())return incomplete(budget.snapshot().reason);
-    for(const arc of graph.outgoing(node)) {
-      if(!budget.consume())return incomplete(budget.snapshot().reason);
+  let source=0,failure=null;
+  const visit=arc=>{
+    if(failure)return false;
+      if(!budget.consume()){failure=budget.snapshot().reason;return false;}
       if(!Number.isInteger(arc.to)||arc.to<0||arc.to>=nodeCount)throw new TypeError("Arc target outside graph");
       const cost=edgeCost(arc);
       if(!Number.isFinite(cost)||cost<0)throw new TypeError("Search costs must be finite and nonnegative");
-      if(arcCount>=0x7fffffff)return incomplete("reverse_storage_limit");
+      if(arcCount>=0x7fffffff){failure="reverse_storage_limit";return false;}
       const offset=arcCount%chunkSize;
       if(offset===0) {
-        if(byteLength+chunkSize*16>maxBytes)return incomplete("reverse_storage_limit");
+        if(byteLength+chunkSize*16>maxBytes){failure="reverse_storage_limit";return false;}
         chunks.push({from:new Uint32Array(chunkSize),next:new Int32Array(chunkSize),cost:new Float64Array(chunkSize)});
         byteLength+=chunkSize*16;
       }
       const chunk=chunks[chunks.length-1];
-      chunk.from[offset]=node;chunk.next[offset]=heads[arc.to];chunk.cost[offset]=cost;
+      chunk.from[offset]=source;chunk.next[offset]=heads[arc.to];chunk.cost[offset]=cost;
       heads[arc.to]=arcCount++;
-    }
+  };
+  for(source=0;source<nodeCount;source++){
+    if(!budget.consume())return incomplete(budget.snapshot().reason);
+    if(graph.forEachOutgoing)graph.forEachOutgoing(source,visit);
+    else for(const arc of graph.outgoing(source))if(visit(arc)===false)break;
+    if(failure)return incomplete(failure);
   }
   return {state:"complete",graph,nodeCount,edgeCost,heads,chunks,chunkSize,arcCount,byteLength};
 }
