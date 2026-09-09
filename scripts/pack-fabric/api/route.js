@@ -1,9 +1,8 @@
-const {adventureCanaryRequest}=require("../routing/lib/adventure/live-canary");
+const { parseRoutingBody, dispatchRouting } = require("../routing/lib/dispatch");
 /**
  * Thin Vercel handler for Phase 2B routing.
  * Loads the prebuilt offline graph once per warm isolate.
  */
-const { routeRequest } = require("../routing/lib/router.js");
 const {
   ROUTING_SERVICE_CONTRACT,
   serviceBuild,
@@ -43,6 +42,7 @@ module.exports = async function handler(req, res) {
   const started = Date.now();
   const abortController = new AbortController();
   const abortRequest = () => abortController.abort();
+  if (req.aborted) abortRequest();
   if (typeof req.once === "function") req.once("aborted", abortRequest);
   if (typeof res.once === "function") {
     res.once("close", () => {
@@ -50,13 +50,12 @@ module.exports = async function handler(req, res) {
     });
   }
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    body.options = { ...(body.options || {}), abortSignal: abortController.signal };
+    const body = parseRoutingBody(req.body, abortController.signal);
     console.log(
       `route request begin id=${requestId} profile=${body.profile || "-"} ` +
       `locations=${Array.isArray(body.locations) ? body.locations.length : 0}`
     );
-    const result = await adventureCanaryRequest(body,"route") || await routeRequest(body);
+    const result = await dispatchRouting(body, "route");
     console.log(
       `route request end id=${requestId} status=${result.status || "-"} ` +
       `elapsedMs=${Date.now() - started}`
@@ -64,6 +63,9 @@ module.exports = async function handler(req, res) {
     const code = result.status === "complete" ? 200 : (result.status === "error" ? 400 : 422);
     return res.status(code).json(withServiceIdentity(result));
   } catch (err) {
+    if (err?.code === "invalid_request_body") {
+      return res.status(400).json(withServiceIdentity({ status: "error", error: err.code, message: err.message }));
+    }
     console.error(`route failed id=${requestId} elapsedMs=${Date.now() - started}`, err);
     const message = err && err.message ? err.message : "Routing failed";
     const memoryPressure = /graph_memory_pressure/i.test(message);

@@ -1,7 +1,6 @@
-const {adventureCanaryRequest}=require("../routing/lib/adventure/live-canary");
+const { parseRoutingBody, dispatchRouting } = require("../routing/lib/dispatch");
 "use strict";
 
-const { fuelChainRequest } = require("../routing/lib/fuel-chain.js");
 const {
   ROUTING_SERVICE_CONTRACT,
   serviceBuild,
@@ -46,6 +45,7 @@ module.exports = async function handler(req, res) {
   const started = Date.now();
   const abortController = new AbortController();
   const abortRequest = () => abortController.abort();
+  if (req.aborted) abortRequest();
   if (typeof req.once === "function") req.once("aborted", abortRequest);
   if (typeof res.once === "function") {
     res.once("close", () => {
@@ -53,15 +53,14 @@ module.exports = async function handler(req, res) {
     });
   }
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    body.options = { ...(body.options || {}), abortSignal: abortController.signal };
+    const body = parseRoutingBody(req.body, abortController.signal);
     console.log(
       `fuel request begin id=${requestId} profile=${body.profile || "-"} ` +
       `riderLeg=${body.fuel && body.fuel.riderLegId || "-"} ` +
       `locations=${Array.isArray(body.locations) ? body.locations.length : 0} ` +
       `budgetMs=${body.fuel && body.fuel.windowTimeBudgetMs || "-"}`
     );
-    const result = echoLegId(await adventureCanaryRequest(body,"fuel") || await fuelChainRequest(body), body.legId);
+    const result = echoLegId(await dispatchRouting(body, "fuel"), body.legId);
     const diagnostics = result && result.diagnostics || {};
     console.log(
       `fuel request end id=${requestId} status=${result.status || "-"} ` +
@@ -86,6 +85,9 @@ module.exports = async function handler(req, res) {
     const status = result.status === "complete" ? 200 : (result.status === "error" ? 400 : 422);
     return res.status(status).json(withServiceIdentity(result));
   } catch (error) {
+    if (error?.code === "invalid_request_body") {
+      return res.status(400).json(withServiceIdentity({ status: "error", error: error.code, message: error.message }));
+    }
     console.error(
       `live fuel chain failed id=${requestId} elapsedMs=${Date.now() - started}`,
       error
