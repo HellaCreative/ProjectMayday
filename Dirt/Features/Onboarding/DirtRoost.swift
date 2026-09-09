@@ -223,3 +223,35 @@ struct SurgeField: View {
         }
     }
 }
+
+/// Brief hot sparks on the throttle beats; one canvas, no per-particle views.
+struct SparkBurstField: View {
+    let start: Date
+    let blips: [Double]
+    var paused: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused)) { timeline in
+            Canvas { context, size in
+                let elapsed = timeline.date.timeIntervalSince(start)
+                let origin = CGPoint(x: size.width * 0.6, y: size.height * 0.52)
+                for beat in blips {
+                    let age = elapsed - beat
+                    guard age >= 0, age < 0.34 else { continue }
+                    for index in 0..<18 {
+                        let angle = Double(index) * 2.39996
+                        let speed = Double(180 + (index * 37) % 220)
+                        let distance = age * speed
+                        let tail = max(0, distance - 8 - age * 20)
+                        var path = Path()
+                        path.move(to: CGPoint(x: origin.x + cos(angle) * tail, y: origin.y + sin(angle) * tail))
+                        path.addLine(to: CGPoint(x: origin.x + cos(angle) * distance, y: origin.y + sin(angle) * distance))
+                        context.stroke(path, with: .color((index % 3 == 0 ? Color.white : DirtTheme.orange).opacity(1 - age / 0.34)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}

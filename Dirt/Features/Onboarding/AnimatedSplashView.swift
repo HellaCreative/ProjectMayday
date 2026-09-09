@@ -46,6 +46,9 @@ struct AnimatedSplashView: View {
             .blendMode(.plusLighter)
 
             if !reduceMotion {
+                SparkBurstField(start: start, blips: Self.blipTimes, paused: roostPaused)
+                    .frame(height: 280)
+                    .opacity(surging ? 0 : 1)
                 RoostField(start: start, blips: Self.blipTimes, paused: roostPaused)
                     .frame(height: 280)
                     .opacity(surging ? 0 : 1)
@@ -130,6 +133,7 @@ struct AnimatedSplashView: View {
         guard !reduceMotion else {
             withAnimation(.easeOut(duration: 0.3)) { arrived = true }
             try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
             onFinished()
             return
         }
@@ -140,6 +144,7 @@ struct AnimatedSplashView: View {
 
         // Soft first pop.
         try? await Task.sleep(for: .milliseconds(Int(Self.blipTimes[0] * 1000)))
+        guard !Task.isCancelled else { return }
         audio.play()
         await throttleBlip(intensity: 0.7)
 
@@ -149,6 +154,7 @@ struct AnimatedSplashView: View {
             if remaining > 0 {
                 try? await Task.sleep(for: .milliseconds(Int(remaining * 1000)))
             }
+            guard !Task.isCancelled else { return }
             await throttleBlip(intensity: 0.9)
         }
 
@@ -157,6 +163,7 @@ struct AnimatedSplashView: View {
         if untilSurge > 0 {
             try? await Task.sleep(for: .milliseconds(Int(untilSurge * 1000)))
         }
+        guard !Task.isCancelled else { return }
         surgePaused = false
         roostPaused = true
         surgeHaptic.impactOccurred(intensity: 1.0)
@@ -166,6 +173,7 @@ struct AnimatedSplashView: View {
         withAnimation(.easeIn(duration: 0.22)) { blackout = true }
 
         try? await Task.sleep(for: .milliseconds(240))
+        guard !Task.isCancelled else { return }
         surgePaused = true
         audio.fadeOut()
         onFinished()

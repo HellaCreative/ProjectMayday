@@ -873,3 +873,26 @@ Layers uses Profile-height glass presentation with a top-right X; the existing L
 ### Full-height Layers containment — build 30
 
 While the full-height Layers or Profile sheet is open, suppress the floating map-control stack, rather than trying to place it above the full-height panel. Keep the sheet header/X within the safe viewport and the primary navigation fixed at the bottom. The list scrolls inside the sheet. This avoids control-stack padding increasing the parent layout beyond the screen.
+
+## September 9 — onboarding and continuous route paint (iOS build 32)
+
+Loop generation is frozen at owner-accepted build 30. National rollout is newly
+requested after onboarding; this does not authorize retuning the accepted Loop.
+
+Onboarding keeps the existing logo size and rev/zoom timing. Four rev beats emit
+brief orange/white sparks, followed by the launch zoom. Bundle the original
+synthetic `SplashThrottle.wav`; playback mixes with existing audio, respects
+silent mode, and is disabled alongside spark motion for Reduce Motion. Cancelled
+splash tasks must not trigger delayed sound or completion. The skippable carousel
+now has six pages: brand, surface/preferences, Loop, fuel planning, downloaded
+maps, and Groups. Offline copy advises preparing maps/routes before departure;
+it does not promise unqualified national offline routing.
+
+Route paint uses one opaque 8-point-equivalent stroke with round joins and caps.
+Unknown motorized access replaces surface colour with purple (#54208F), not a
+wider halo behind brown. Exclude those segments from surface buckets. Surface
+strokes have no per-segment white casings or translucency, avoiding dark overlap
+beads. Retain existing surface colours and ferry treatment. Paint changes do not
+alter route geometry, access eligibility, fuel, or surface statistics. Preserve
+route hit testing on the coloured stroke. Native Android implementation should
+produce the same continuous visual result.
