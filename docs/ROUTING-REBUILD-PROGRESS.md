@@ -1366,3 +1366,9 @@ Continue overnight on the intermittent Clean deadline and other documented gaps;
 ## Concurrent Atlantic data loading — local, not deployed
 
 Covered cross-province canary requests start independent NS/NB graph+fuel loads concurrently, retaining requested region order and rejecting any load failure rather than returning a partial list. Joining, pack identity checks, arrival/fuel/access contracts and the20s deadline are unchanged. New debug timings separate data loading/joining, candidate search, and response assembly. This targets avoidable serial I/O; no claim yet that it fixes the intermittent Clean deadline.191 focused tests pass, including load ordering and failure propagation. Private hosted qualification required before stable promotion. Stable56308d4 remains protected.
+
+## Private load timing result — 42f1580, stable unchanged
+
+Private3qcxx4vn1/source42f158025d12805ecb716317fc931ccad20fd6f0 cold Clean final-fuel returned unknown at20s: data/join8.583s, search11.417s. Subsequent identical requests passed15.123s and16.639s with data16–17ms. All three target coarsepin legs also pass. Concurrent region loading alone is not a qualified deadline fix. Stable56308d4 remains unchanged. Evidence /tmp/dirt-load-timing-final-{1,2,3} and /tmp/dirt-load-timing-target.
+
+Add detailed per-region elapsed time plus join time/cache-hit diagnostics to distinguish remote loading from seam joining on the next cold request. This adds diagnostics only to the private experiment, not route-rule changes. Existing fuel/identity/deadline controls unchanged. Do not promote the experiment solely because warm requests pass.
