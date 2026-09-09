@@ -50,7 +50,7 @@ function buildRideAlternatives(options) {
    const best=winners.find(r=>r&&!attempted.has(r.id)&&r.result.qualityAudit?.repeatedRoadMeters>0);
    if(!best)break;
    attempted.add(best.id);
-   const budget=createRefinementBudget(options.budget,{maxMilliseconds:2000});
+   const budget=createRefinementBudget(options.budget,{maxMilliseconds:4000});
    if(!budget.check())break;
    const refined=build(candidates.find(c=>c.id===best.id),true,budget);
    if(feasibleResult(refined))best.result=refined;
