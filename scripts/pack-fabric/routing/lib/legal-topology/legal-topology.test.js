@@ -281,7 +281,8 @@ test("16. corruption, capability, mixed-contract rejection", () => {
     graph: { name: "graph.v4.bin", bytes: 1, sha256: "a".repeat(64) },
     geometry: { name: "geometry.v1.bin", bytes: 1, sha256: "b".repeat(64) },
     fuel: { name: "fuel.v1.json", bytes: 1, sha256: "c".repeat(64) },
-    sourceEpoch: "epoch-1"
+    sourceEpoch: "epoch-1",
+    timezone: "America/Halifax"
   });
   assert.equal(validatePackManifestV2(manifest), true);
   assert.throws(() => validatePackManifestV2({ schema: "pack-manifest.v1" }));
