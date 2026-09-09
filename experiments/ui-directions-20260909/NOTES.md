@@ -27,3 +27,5 @@ Groups follow-up supersedes rider drawer: details expand directly beneath the se
 Rider grouping refinement: chevrons removed, whole name/status row toggles details, tighter 60px rows. Expanded rider header and details share a subtle background and boundary so ownership is clear. Sharing remains a separate button.
 
 Map controls: use exported Apple symbols matching native MapControlStack (safari, person.crop.circle, dot.scope, route curve) and native fuel/settings symbols. Right stack remains on map-facing screens; View Route is beside recenter when a route exists. Fuel/settings appear only with routing tools. 50px controls and 10px gaps match native layout. No simulator used; native files unchanged.
+
+Groups hierarchy restored: group library with created/joined roles, member/live counts and Create/Join; opening a group shows its roster. Rows contain sharing dot, name, Current Location and labelled coloured status badge. No update-age prose. Inline expansion retains actions; own sharing action is in own expansion. Demo data illustrates green Riding, yellow Flat tire and gray Offline; red issue styling available. Native unchanged.
