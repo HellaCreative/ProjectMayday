@@ -117,43 +117,7 @@ function v2FilesExist(v1Path) {
  * Build spatial grid from geometry sidecar (snap only; not used in relax).
  */
 function buildEdgeGridFromGeom(geom, edgeCount) {
-  const GRID = 0.01;
-  const edgeGrid = new Map();
-  const { offsets, coords } = geom;
-  for (let index = 0; index < edgeCount; index += 1) {
-    const start = offsets[index];
-    const end = offsets[index + 1];
-    if (end <= start) continue;
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (let i = start; i < end; i += 2) {
-      const x = coords[i];
-      const y = coords[i + 1];
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-    }
-    if (!Number.isFinite(minX)) continue;
-    const x0 = Math.floor(minX / GRID);
-    const y0 = Math.floor(minY / GRID);
-    const x1 = Math.floor(maxX / GRID);
-    const y1 = Math.floor(maxY / GRID);
-    for (let x = x0; x <= x1; x += 1) {
-      for (let y = y0; y <= y1; y += 1) {
-        const key = x + ":" + y;
-        let bucket = edgeGrid.get(key);
-        if (!bucket) {
-          bucket = [];
-          edgeGrid.set(key, bucket);
-        }
-        bucket.push(index);
-      }
-    }
-  }
-  return { edgeGrid, GRID };
+  return require("./geometry-edge-grid").buildEdgeGridFromGeom(geom, edgeCount);
 }
 
 function materializeRuntimeV2(
