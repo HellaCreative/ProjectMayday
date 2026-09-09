@@ -13,6 +13,7 @@ const cases={neardalhousie:[[44.764810,-63.340233],[47.914772,-65.948078]],coars
  if(process.env.REBUILD_MULTI_CASE&&process.env.REBUILD_MULTI_CASE!==name)continue;
  if(['coarsepins','neardalhousie'].includes(name)&&!process.env.REBUILD_MULTI_CASE)continue;
  const usable=Number(process.env.REBUILD_MULTI_USABLE||225000),profiles=(process.env.REBUILD_MULTI_PROFILES||'balanced,balanced,balanced').split(',');let remaining=usable,history=[];const results=[];
+ assert.ok(profiles.every(p=>['dirt','balanced','cleanest'].includes(p)),'Use API profiles dirt, balanced, or cleanest');
  for(let i=0;i<pts.length-1;i++){
   const request={profile:profiles[i]||'balanced',locations:pts.slice(i,i+2).map(([lat,lon])=>({lat,lon})),accessPolicy:{motorizedPermissive:true,motorizedUnknown:process.env.REBUILD_MULTI_UNKNOWN==='1'},options:{mapZoom:Number(process.env.REBUILD_MULTI_ZOOM||9.6),...(history.length?{arrivalEdgeId:history.at(-1).id,priorEdgeIds:history.map(s=>s.id),backtrackFactor:4}:{})},fuel:{usableRangeMeters:usable,firstLegMaxMeters:remaining,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:i===pts.length-2,forwardFeeler:false}};
   const at=Date.now();let r;
