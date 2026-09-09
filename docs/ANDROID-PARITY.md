@@ -808,3 +808,8 @@ The live NS/NB adventure service supports an explicit required first station, wi
 ### Fuel replacement acceptance freeze — September 9, 2026
 
 Richard accepted fuel-stop replacement on White and explicitly froze it. Preserve the shared From Here/Loop/Plan a Route interaction and checked replacement/upstream-preservation contract above. Baselines: iOS904f11f, live476230d4bfa3ed8b5fed16514e2908266b691b63. Future engine changes must preserve this accepted behavior; no Android implementation or offline qualification is implied.
+
+
+### Atlantic request hardening — September 9, 2026
+
+Accepted NS/NB route results, incomplete results and failures must never silently switch to compatibility routing. Cancelled requests return no stale geometry and cannot start a second engine. Malformed JSON/container input returns a client error. Both accepted Atlantic pack revisions require exact graph/geometry/fuel identities, not just a release name. Legacy routing remains available only outside new-engine coverage or for its still-supported operations; PE/NL and offline behavior are not newly qualified. No change to the frozen fuel-replacement interaction, navigation, route costs or UI.
