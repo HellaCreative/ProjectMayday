@@ -59,3 +59,9 @@ body{background:#eef0eb}.studio{max-width:1120px;margin:auto;padding:36px 28px;d
 .sheet,.phone[data-screen=navigation] .nav-sheet{background:rgba(250,252,250,.92)}
 .picker-options,select,.picker>summary{background:#fff;border:1px solid #d8dadd;border-radius:8px}
 .picker>summary{padding:8px 10px}
+
+/* HTML comparison: primary navigation matches the logo pill surface. */
+.primary-nav{background:#202820}
+.primary-nav button{color:#fff}
+.primary-nav button.route-present{color:#ff8000;border-color:#ff8000}
+.primary-nav button.active{color:#fff}
