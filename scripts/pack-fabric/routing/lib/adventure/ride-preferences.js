@@ -2,7 +2,8 @@
 function validatePreferences(value) {
  if(value==null)return null;
  if(typeof value!=='object'||!Number.isFinite(value.wander)||value.wander<0||value.wander>1||typeof value.avoidCities!=='boolean'||typeof value.avoidHighways!=='boolean')throw new TypeError('Invalid ride preferences');
- return {wander:value.wander,avoidCities:value.avoidCities,avoidHighways:value.avoidHighways};
+ if(value.preferDifferentRoads!=null&&typeof value.preferDifferentRoads!=='boolean')throw new TypeError('Invalid return road preference');
+ return {wander:value.wander,avoidCities:value.avoidCities,avoidHighways:value.avoidHighways,...(value.preferDifferentRoads===true?{preferDifferentRoads:true}:{})};
 }
 // Wander narrows the proven shared pool; it never invents distance or relaxes
 // access/fuel constraints. At 1 the accepted profile selection is unchanged.

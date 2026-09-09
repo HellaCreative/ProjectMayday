@@ -30,3 +30,10 @@ test('town switch changes the actual connected route',()=>{
  assert.equal(direct.road.state,'complete');assert.equal(avoid.road.state,'complete');
  assert.ok(direct.road.urbanMeters>0);assert.equal(avoid.road.urbanMeters,0);
 });
+
+test('return-road preference is optional and validated',()=>{
+ const plain={wander:1,avoidCities:true,avoidHighways:false};
+ assert.deepEqual(validatePreferences(plain),plain);
+ assert.equal(validatePreferences({...plain,preferDifferentRoads:true}).preferDifferentRoads,true);
+ assert.throws(()=>validatePreferences({...plain,preferDifferentRoads:'yes'}));
+});

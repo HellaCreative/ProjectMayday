@@ -64,8 +64,9 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     const prior=new Set(history.edges),baseCost=edgeCost;
     // Positive cost discourages recently ridden roads without rewarding a
     // circuit or forbidding a necessary return from a fixed rider waypoint.
-    edgeCost=arc=>baseCost(arc)*(prior.has(arc.id)?4:1);
-    provenance.priorRoadPreference={edges:prior.size,factor:4};
+    const factor=ridePreferences?.preferDifferentRoads?16:4;
+    edgeCost=arc=>baseCost(arc)*(prior.has(arc.id)?factor:1);
+    provenance.priorRoadPreference={edges:prior.size,factor};
   }
   let startCandidates=history.edges.length?(endpoints.matches[0].candidates||[]).filter(c=>c.edgeIndex===history.edges.at(-1)):endpoints.matches[0].candidates||[];
   const endCandidates=endpoints.matches[1].candidates||[];
