@@ -8,12 +8,13 @@ const data={};for(const id of (process.env.REBUILD_DEPLOYMENT?[]:['ns','nb'])){c
 let combined;
 function load(resolution){if(resolution.regionIds.length===1)return data[resolution.regionIds[0]];
  if(!combined){const rows=['ns','nb'].map(id=>data[id]);const joined=joinV4(rows,{budget:createBudget({deadlineAtMs:Date.now()+20000,maxExpansions:20000000})});combined={...joined,stations:[...new Map(rows.flatMap(r=>r.stations).map(s=>[s.id,s])).values()],identity:rows.flatMap(r=>r.identity)};}return combined;}
-const cases={inverness:[[44.738289,-63.315088],[45.929257,-59.953773],[46.478234,-61.082533],[48.065038,-66.428275]],yarmouth:[[45.251114,-61.187782],[43.839237,-66.119184],[44.360924,-64.459705],[47.625592,-65.517018]]};
+const cases={coarsepins:[[44.804135,-63.097441],[43.566279,-65.491539],[44.660761,-65.520139],[46.851988,-65.123190]],inverness:[[44.738289,-63.315088],[45.929257,-59.953773],[46.478234,-61.082533],[48.065038,-66.428275]],yarmouth:[[45.251114,-61.187782],[43.839237,-66.119184],[44.360924,-64.459705],[47.625592,-65.517018]]};
 (async()=>{for(const [name,pts] of Object.entries(cases)){
  if(process.env.REBUILD_MULTI_CASE&&process.env.REBUILD_MULTI_CASE!==name)continue;
+ if(name==='coarsepins'&&!process.env.REBUILD_MULTI_CASE)continue;
  const usable=Number(process.env.REBUILD_MULTI_USABLE||225000),profiles=(process.env.REBUILD_MULTI_PROFILES||'balanced,balanced,balanced').split(',');let remaining=usable,history=[];const results=[];
  for(let i=0;i<pts.length-1;i++){
-  const request={profile:profiles[i]||'balanced',locations:pts.slice(i,i+2).map(([lat,lon])=>({lat,lon})),accessPolicy:{motorizedPermissive:true,motorizedUnknown:false},options:{mapZoom:9.6,...(history.length?{arrivalEdgeId:history.at(-1).id,priorEdgeIds:history.map(s=>s.id),backtrackFactor:4}:{})},fuel:{usableRangeMeters:usable,firstLegMaxMeters:remaining,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:i===pts.length-2,forwardFeeler:false}};
+  const request={profile:profiles[i]||'balanced',locations:pts.slice(i,i+2).map(([lat,lon])=>({lat,lon})),accessPolicy:{motorizedPermissive:true,motorizedUnknown:false},options:{mapZoom:Number(process.env.REBUILD_MULTI_ZOOM||9.6),...(history.length?{arrivalEdgeId:history.at(-1).id,priorEdgeIds:history.map(s=>s.id),backtrackFactor:4}:{})},fuel:{usableRangeMeters:usable,firstLegMaxMeters:remaining,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:i===pts.length-2,forwardFeeler:false}};
   const at=Date.now();let r;
   if(process.env.REBUILD_DEPLOYMENT){
     const requestFile=path.resolve(output,`${name}-${i}-request.json`);fs.writeFileSync(requestFile,JSON.stringify(request));
