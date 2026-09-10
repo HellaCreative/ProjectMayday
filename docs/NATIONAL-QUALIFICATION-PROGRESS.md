@@ -61,3 +61,7 @@ unchanged. WA matching5255→1018ms in local20s samples, preparation4204→3721m
 It reaches more candidate search work but still fails fuel label limits/deadline.
 Bounds add32bytes/edge (~69MB WA); measured overall process1.16GiB peak including
 further search progress, not a production memory guarantee.219tests pass.
+Station index now reads exposed typed coordinates directly when available,
+retaining polyline fallback for joined graphs. This avoids per-point temporary
+arrays; direct/fallback query equivalence test passes. Request timings remain
+variable under concurrent work and no national performance claim follows.

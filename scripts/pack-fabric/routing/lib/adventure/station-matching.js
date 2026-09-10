@@ -8,13 +8,20 @@ function buildEdgeIndex(pack,geom,budget) {
   const size=.02,cells=new Map(),broad=new Set(),bounds=new Float64Array(pack.edgeCount*4);
   for(let edge=0;edge<pack.edgeCount;edge++) {
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
-    const coords=geom.polyline(edge);
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-    for(const [x,y] of coords) {
+    if(geom.offsets&&geom.coords) {
+      // Decoded immutable geometry exposes its exact coordinates; avoid
+      // allocating millions of temporary point arrays for this bounds pass.
+      for(let i=geom.offsets[edge];i<geom.offsets[edge+1];i+=2) {
+        if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
+        const x=geom.coords[i],y=geom.coords[i+1];
+        minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+      }
+    } else for(const [x,y] of geom.polyline(edge)) {
       if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
       minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
     }
-    bounds.set([minX,minY,maxX,maxY],edge*4);
+    const at=edge*4;bounds[at]=minX;bounds[at+1]=minY;bounds[at+2]=maxX;bounds[at+3]=maxY;
     if(!Number.isFinite(minX))continue;
     const a=Math.floor(minX/size),b=Math.floor(maxX/size),c=Math.floor(minY/size),d=Math.floor(maxY/size);
     if((b-a+1)*(d-c+1)>1000){broad.add(edge);continue;}

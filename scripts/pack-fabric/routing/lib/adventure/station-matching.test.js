@@ -55,3 +55,11 @@ test('exact bounds reject distant cell neighbours while retaining full crossing 
  assert.deepEqual(index.query({lon:.01,lat:0},150).sort(),[0,2]);
  assert.deepEqual(index.query({lon:.01,lat:.008},150).sort(),[1,2]);
 });
+
+test('zero-copy decoded coordinate indexing equals polyline fallback',()=>{
+ const {pack,geom}=fixture();
+ const direct=buildEdgeIndex(pack,geom,budget());
+ const fallback=buildEdgeIndex(pack,{polyline:geom.polyline},budget());
+ for(const lat of [44.999,45,45.005,45.01])for(const lon of [-64,-63.99,-63.98])
+  assert.deepEqual(direct.query({lat,lon},150),fallback.query({lat,lon},150));
+});
