@@ -1392,26 +1392,20 @@ final class GraphPackStore {
 
     private func graphFileURL(regionId: String) -> URL {
         if let found = findGraphFileURL(regionId: regionId) { return found }
-        // Destination for a fresh download into the current manifest version.
-        // Prefer v3 when present for local ride-tests; catalog still ships v2.
-        return regionDir(regionId: regionId).appendingPathComponent(
-            AppConfig.backendEnvironment == .development && regionId.lowercased() == "ns"
-                ? "graph.v4.bin"
-                : "graph.v3.bin"
-        )
+        // Both channels publish V4. Installed older revisions remain discoverable.
+        return regionDir(regionId: regionId).appendingPathComponent("graph.v4.bin")
     }
 
-    /// Prefer `graph.v3.bin` when present (Phase E1 local packs); else `graph.v2.bin`.
+    /// Prefer V4 in both distribution channels, retaining older installed revisions.
     /// Searches across manifest version folders so a catalog bump does not hide installs.
     private func findGraphFileURL(regionId: String) -> URL? {
+        Self.findInstalledGraph(regionId: regionId, cacheRoot: cacheRoot, version: lastManifestVersion)
+    }
+
+    nonisolated static func findInstalledGraph(regionId: String, cacheRoot: URL, version: String) -> URL? {
         let id = regionId.lowercased()
         let fm = FileManager.default
-        let names: [String]
-        if AppConfig.backendEnvironment == .development {
-            names = ["graph.v4.bin", "graph.v3.bin", "graph.v2.bin"]
-        } else {
-            names = ["graph.v3.bin", "graph.v2.bin"]
-        }
+        let names = ["graph.v4.bin", "graph.v3.bin", "graph.v2.bin"]
 
         func firstExisting(in dir: URL) -> URL? {
             for name in names {
@@ -1421,7 +1415,7 @@ final class GraphPackStore {
             return nil
         }
 
-        if let hit = firstExisting(in: regionDir(regionId: id)) { return hit }
+        if let hit = firstExisting(in: cacheRoot.appendingPathComponent(version).appendingPathComponent(id)) { return hit }
 
         let legacy = cacheRoot
             .appendingPathComponent("v1", isDirectory: true)
@@ -1906,6 +1900,10 @@ final class GraphPackStore {
             if asNavigationPrep { phase = .idle }
             throw CancellationError()
         } catch {
+            let detail = error as NSError
+            RoutingDebugLog.shared.event(
+                "pack download failed region=\(regionId) domain=\(detail.domain) code=\(detail.code) message=\(detail.localizedDescription)"
+            )
             setInstall(regionId, publishedIds.contains(regionId) ? .available : .unavailable)
             if asNavigationPrep {
                 phase = .skipped(error.localizedDescription)

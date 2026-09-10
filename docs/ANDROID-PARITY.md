@@ -930,3 +930,7 @@ actual arm64 IOS Mach-O, then re-signs the framework and enclosing app. Official
 matching UUID symbols are included. This has no Android runtime counterpart.
 Archive signing may be Development; App Store export must prove Distribution
 signing separately. No routing or navigation behavior changes.
+
+### Production V4 installed-pack recognition — September 9, 2026
+
+Both production and development must recognize downloaded graph.v4.bin as an installed routing pack, with V4 preferred within a revision and older V3/V2 installs still discoverable. A catalog revision change must not hide existing installed files. Production must not report a successful V4 acquisition as a missing download due to channel-specific file-name filtering. Swift lookup regression checks cover current and earlier revisions, missing regions, V4 preference and V3 compatibility. No route scoring changes.

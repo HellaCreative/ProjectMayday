@@ -5,6 +5,24 @@ import Testing
 
 @Suite("Graph V4 legal topology")
 struct GraphV4PackTests {
+    @Test("production pack lookup recognizes V4 and keeps older revisions discoverable")
+    func installedV4Lookup() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let region = root.appendingPathComponent("release/ns")
+        try FileManager.default.createDirectory(at: region, withIntermediateDirectories: true)
+        let graph = region.appendingPathComponent("graph.v4.bin")
+        try Data([1]).write(to: graph)
+        #expect(GraphPackStore.findInstalledGraph(regionId: "NS", cacheRoot: root, version: "release") == graph)
+        #expect(GraphPackStore.findInstalledGraph(regionId: "ns", cacheRoot: root, version: "new-release")?.resolvingSymlinksInPath() == graph.resolvingSymlinksInPath())
+        #expect(GraphPackStore.findInstalledGraph(regionId: "nb", cacheRoot: root, version: "release") == nil)
+        let older = region.appendingPathComponent("graph.v3.bin")
+        try Data([1]).write(to: older)
+        #expect(GraphPackStore.findInstalledGraph(regionId: "ns", cacheRoot: root, version: "release") == graph)
+        try FileManager.default.removeItem(at: graph)
+        #expect(GraphPackStore.findInstalledGraph(regionId: "ns", cacheRoot: root, version: "release") == older)
+    }
+
     @Test("real forecourt arrival and separate exit match JavaScript")
     func forecourtPaths() throws {
         for profile: RouteProfile in [.cleanest, .balanced] {
