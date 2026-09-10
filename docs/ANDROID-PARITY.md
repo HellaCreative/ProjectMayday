@@ -1077,3 +1077,7 @@ fuel-free fallback as a verified chain. Pure graph-only feelers, forced stops,
 and other unsupported controls remain explicitly rejected. Existing iOS accepts
 returned route geometry and advances from that pump with preserved arrival
 history. Android must use the same contract. Real multi-window replay pending.
+
+Regional candidate fuel searches that hit the label cap receive the existing
+continuation-style guidance retry (weight3), within the same request budget
+and unchanged label cap/constraints. This remains bounded candidate generation.
