@@ -54,7 +54,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-06.rural-before-urban.27";
+const { FUEL_CHAIN_SERVICE_VERSION } = require("./fuel-chain-version");
 const FUEL_SELECTION_POLICY = "minimum_stops_rural_before_urban_then_75pct";
 /**
  * Preserve the first three quarters of each usable tank for the requested

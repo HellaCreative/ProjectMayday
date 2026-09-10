@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method === "GET") {
-    const { FUEL_CHAIN_SERVICE_VERSION } = require("../routing/lib/fuel-chain.js");
+    const { FUEL_CHAIN_SERVICE_VERSION } = require("../routing/lib/fuel-chain-version.js");
     return res.status(200).json({
       ok: true,
       adventureCanary: process.env.DIRT_ADVENTURE_CANARY || null,

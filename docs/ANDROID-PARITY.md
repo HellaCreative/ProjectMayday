@@ -1031,3 +1031,6 @@ Large national pack capacity: any non-Atlantic request may use90000ms server
 work with100000ms transport; keep all-Atlantic20000ms/23000ms. A smaller caller
 window is still honored. All work shares one deadline; incomplete searches must
 remain unknown, never interpreted as a proved fuel gap.
+
+## Fuel health metadata isolation
+GET /api/fuel-chain now reads version metadata without loading the compatibility routing engine. POST dispatch, route/fuel behavior, pack bytes and Android request contracts are unchanged. A health response proves handler liveness, not fuel-plan feasibility.
