@@ -56,6 +56,10 @@ function toLiveResponse(pool,body,kind,identity,{allowProvenSelection=false}={})
   regionIds:identity.map(p=>p.regionId),packIdentity:identity,destinationEscapeMeters:complete?r.fuel.destinationEscape.distanceMeters:null,diagnostics,
   fuelAccessEvidence:r.fuel.state};
 }
+function requestWindowMs(regionIds,requested) {
+ const maximum=regionIds.some(id=>!['ns','nb','pe','nl'].includes(id))?60000:20000;
+ return Math.min(maximum,Math.max(100,Number(requested||maximum)));
+}
 async function adventureCanaryRequest(body,kind,{environment=process.env,load=null}={}) {
  if(body.options?.ridePreferences!=null) {
   const r=require('../../regional/select').resolveGraphRequest(body);
@@ -78,10 +82,8 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  let ridePreferences;
  try {ridePreferences=require('./ride-preferences').validatePreferences(body.options?.ridePreferences);}
  catch {return {status:'unknown',error:'invalid_ride_preferences',message:'The ride settings are invalid.',routes:[],stops:[],windowComplete:false};}
- const national=resolution.regionIds.some(id=>!['ns','nb','pe','nl'].includes(id));
- const maximumWindowMs=national?60000:20000;
- const started=Date.now(),window=Number(body.fuel?.windowTimeBudgetMs||maximumWindowMs);
- const deadlineAtMs=started+Math.min(maximumWindowMs,Math.max(100,window));
+ const started=Date.now();
+ const deadlineAtMs=started+requestWindowMs(resolution.regionIds,body.fuel?.windowTimeBudgetMs);
  const loadTiming={regions:[],joinMs:0,joinCacheHit:false};
  const data=load?await load(resolution):await (async()=>{
   const {loadGraphsForRequest}=require('../graph'),{loadRegionFuel}=require('../fuel-data');
@@ -128,4 +130,4 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started,adventureDataMs:dataReadyAt-started,adventureLoad:loadTiming,adventureSearchMs:searchDoneAt-dataReadyAt,adventureResponseMs:Date.now()-searchDoneAt};response.legId=body.legId;}
  return response;
 }
-module.exports={adventureCanaryRequest,canarySupported,toLiveResponse,routeResponse,loadRegionRows,enabledRegions};
+module.exports={adventureCanaryRequest,canarySupported,toLiveResponse,routeResponse,loadRegionRows,enabledRegions,requestWindowMs};

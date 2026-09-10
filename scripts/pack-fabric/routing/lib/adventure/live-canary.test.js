@@ -131,3 +131,13 @@ test('national opt-in admits exactly the audited 63 regions and preserves Atlant
  assert.deepEqual(enabledRegions({}),[]);
  assert.equal(canarySupported({profile:'balanced',locations:[{},{}]},'route',{DIRT_ADVENTURE_CANARY:'national-v1'}),true);
 });
+
+test('national window includes cross-border requests without widening Atlantic-only work',()=>{
+ const {requestWindowMs}=require('./live-canary');
+ assert.equal(requestWindowMs(['ns','nb','pe','nl'],60000),20000);
+ assert.equal(requestWindowMs(['ns','qc'],60000),60000);
+ assert.equal(requestWindowMs(['wa'],90000),60000);
+ assert.equal(requestWindowMs(['wa'],10000),10000);
+ assert.equal(requestWindowMs(['wa']),60000);
+ assert.equal(requestWindowMs(['ns']),20000);
+});
