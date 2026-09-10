@@ -428,7 +428,8 @@ struct RoutePlannerCard: View {
                     if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                     Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
                         ForEach(RouteProfile.allCases) { profile in
-                            Label(profile.title, systemImage: DirtSurfaceIcon.symbol(for: profile.title)).tag(profile)
+                            Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
+                                .foregroundStyle(DirtTheme.orange).tag(profile)
                         }
                     }
                     .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
@@ -586,7 +587,8 @@ struct RoutePlannerCard: View {
                 Spacer()
                 Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
                     ForEach(RouteProfile.allCases) { profile in
-                        Label(profile.title, systemImage: DirtSurfaceIcon.symbol(for: profile.title)).tag(profile)
+                        Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
+                                .foregroundStyle(DirtTheme.orange).tag(profile)
                     }
                 }
                 .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
@@ -1694,7 +1696,7 @@ struct StageCard<Headline: View, Detail: View>: View {
                 .font(.system(size: 9, weight: .black))
                 .rotationEffect(.degrees(isActive ? 180 : 0))
         }
-        .foregroundStyle(DirtTheme.ink)
+        .foregroundStyle(DirtTheme.orange)
         .dirtDropdownSurface()
     }
 }

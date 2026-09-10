@@ -934,3 +934,9 @@ signing separately. No routing or navigation behavior changes.
 ### Production V4 installed-pack recognition — September 9, 2026
 
 Both production and development must recognize downloaded graph.v4.bin as an installed routing pack, with V4 preferred within a revision and older V3/V2 installs still discoverable. A catalog revision change must not hide existing installed files. Production must not report a successful V4 acquisition as a missing download due to channel-specific file-name filtering. Swift lookup regression checks cover current and earlier revisions, missing regions, V4 preference and V3 compatibility. No route scoring changes.
+
+### Confirmed waypoint dragging and surface controls — September 9, 2026
+
+A tap selects/highlights a planner waypoint for drag. A drag release snaps to the nearest visible road before presenting Yes/No. If no road is found, retain the prior proposal and ask the rider to move closer; do not route from an unsnapped drop. Existing waypoint moves remain draft-only until Yes; No dismisses confirmation and permits another drag. Adding a waypoint on a leg creates a draggable draft without showing confirmation immediately. Arbitrary map taps no longer relocate the selected pin. Route geometry and itinerary remain unchanged until confirmation. Clear/mode changes discard proposals. Fuel replacement and in-navigation editing locks remain unchanged. All surface dropdowns use orange selected content; native menu surface icons retain orange original rendering over opaque white controls.
+
+Validation: production compile, DEV/test compile, and 32 planner/V4 tests passed on physical white iPhone (iOS26.6.1); no simulator used. V4 fixtures now resolve from test bundle on device rather than relying on the developer filesystem. Visual/touch acceptance of the new drag interaction is not claimed from model tests.

@@ -1197,14 +1197,16 @@ final class RoutePlannerModel {
         }
         guard let nearest else { return }
         let resolvedRiderLegID = stages[nearest.index].riderLegID
+        waypointMove = nil
         waypointPlacement = (resolvedRiderLegID, nearest.point)
-        showsWaypointPlacementConfirmation = true
+        showsWaypointPlacementConfirmation = false
         refreshMap()
         mapState.selectPlannerPin("waypoint-draft")
         RoutingDebugLog.shared.event("ui waypoint placement draft leg=\(resolvedRiderLegID)")
     }
 
     var waypointPlacement: (legID: UUID, coordinate: RouteCoordinate)?
+    var waypointMove: (id: UUID, coordinate: RouteCoordinate)?
     var showsWaypointPlacementConfirmation = false
 
     func keepMovingWaypoint() {
@@ -1213,9 +1215,18 @@ final class RoutePlannerModel {
     }
 
     func confirmWaypointPlacement() {
+        guard showsWaypointPlacementConfirmation, navigation.phase == .idle, !isRouting else { return }
+        if let move = waypointMove {
+            waypointMove = nil
+            showsWaypointPlacementConfirmation = false
+            mapState.selectPlannerPin(nil)
+            apply(.move(waypointID: move.id, to: move.coordinate), source: "confirmedMove")
+            return
+        }
         guard let draft = waypointPlacement, navigation.phase == .idle, !isRouting,
               itinerary.legs.contains(where: { $0.id == draft.legID }) else { return }
         waypointPlacement = nil
+        waypointMove = nil
         showsWaypointPlacementConfirmation = false
         if mode == .fromHere { switchToPlanKeepingFromHere() }
         apply(.insert(afterLegID: draft.legID, coordinate: draft.coordinate), source: "confirmedPlacement")
@@ -1713,6 +1724,7 @@ final class RoutePlannerModel {
     /// Invalidate every in-flight planner route (clear / mode convert / wipe).
     private func invalidateInFlightRoutes(cancelPlanRebuildTask: Bool = true) {
         waypointPlacement = nil
+        waypointMove = nil
         showsWaypointPlacementConfirmation = false
         cancelFuelReplacement()
         fromHereIntentGeneration += 1
@@ -1831,19 +1843,11 @@ final class RoutePlannerModel {
 
     // MARK: - Waypoint drag (map pin drag-to-move)
 
-    /// Called by the map when the user drag-releases a planner pin.
-    /// Applies client-side road snap (nearest point on active route within 500 m),
-    /// updates the affected stage coordinate(s), and re-routes.
-    ///
-    /// Snap strategy: project the dropped coordinate onto every segment of the
-    /// currently displayed route polyline.  If the nearest point is ≤ 500 m
-    /// away we use it; otherwise the raw coordinate is kept.  Use loaded
-    /// network geometry first, fall back to the raw point when nothing is near
-    /// enough.  Full rendered-layer
-    /// snapping (like `queryRenderedFeatures`) is not yet available in
-    /// MapLibre Native iOS.
+    /// The map snaps a drag-release to its nearest visible road. Keep the
+    /// proposed coordinate separate until the rider confirms; never project
+    /// the pin back onto the old route or start a search during placement.
     func moveWaypoint(markerID: String, to rawCoordinate: CLLocationCoordinate2D) {
-        guard navigation.phase == .idle else { return }
+        guard navigation.phase == .idle, !isRouting else { return }
         if markerID.hasPrefix("fuel:") {
             moveFuelStop(markerID: markerID, to: rawCoordinate)
             return
@@ -1856,7 +1860,9 @@ final class RoutePlannerModel {
             return
         }
         let raw = RouteCoordinate(longitude: rawCoordinate.longitude, latitude: rawCoordinate.latitude)
-        let snapped = snapToRouteNetwork(raw)
+        // Map coordinator already snaps the drop to a visible road; do not pull
+        // it back onto the old route the rider is deliberately reshaping.
+        let snapped = raw
         switch mode {
         case .fromHere:
             // B relocates via long-press on the map (road-snapped) — pins are not draggable.
@@ -2091,8 +2097,11 @@ final class RoutePlannerModel {
               let waypointID = UUID(uuidString: String(markerID.dropFirst(3))),
               itinerary.waypoints.contains(where: { $0.id == waypointID })
         else { return }
-        mapState.selectPlannerPin(nil)
-        apply(.move(waypointID: waypointID, to: snapped), source: "drag")
+        waypointPlacement = nil
+        waypointMove = (waypointID, snapped)
+        showsWaypointPlacementConfirmation = true
+        refreshMap()
+        mapState.selectPlannerPin(markerID)
     }
 
 
@@ -2176,6 +2185,7 @@ final class RoutePlannerModel {
 
     func clearRoute() {
         waypointPlacement = nil
+        waypointMove = nil
         showsWaypointPlacementConfirmation = false
         if navigation.phase != .idle {
             endNavigation()
@@ -2211,6 +2221,7 @@ final class RoutePlannerModel {
     /// Switch tabs without the keep/clear confirmation (Saved, or empty drafts).
     func selectMode(_ newMode: Mode) {
         waypointPlacement = nil
+        waypointMove = nil
         showsWaypointPlacementConfirmation = false
         cancelFuelReplacement()
         if showingLoop {
@@ -2497,8 +2508,8 @@ final class RoutePlannerModel {
         var markers = itinerary.waypoints.enumerated().map { index, waypoint in
             MapState.Marker(
                 id: "wp:\(waypoint.id.uuidString)",
-                latitude: waypoint.coordinate.latitude,
-                longitude: waypoint.coordinate.longitude,
+                latitude: waypointMove?.id == waypoint.id ? waypointMove!.coordinate.latitude : waypoint.coordinate.latitude,
+                longitude: waypointMove?.id == waypoint.id ? waypointMove!.coordinate.longitude : waypoint.coordinate.longitude,
                 label: "\(index + 1)",
                 kind: index == 0 ? .start : (index == itinerary.waypoints.count - 1 ? .destination : .stage),
                 isLocked: riderPinsLocked

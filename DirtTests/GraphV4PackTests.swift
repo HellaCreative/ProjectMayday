@@ -70,6 +70,11 @@ struct GraphV4PackTests {
     }
 
     private func fixtureURL(_ name: String) throws -> URL {
+        let bundle = Bundle(for: GraphV4FixtureBundle.self)
+        if let bundled = bundle.url(forResource: name, withExtension: nil)
+            ?? bundle.url(forResource: name, withExtension: nil, subdirectory: "Fixtures") {
+            return bundled
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("Fixtures", isDirectory: true)
@@ -304,3 +309,5 @@ struct GraphV4PackTests {
     }
 
 }
+
+private final class GraphV4FixtureBundle: NSObject {}

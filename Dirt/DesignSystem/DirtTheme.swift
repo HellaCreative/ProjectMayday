@@ -462,6 +462,13 @@ struct BrandChip: View {
 
 /// One surface vocabulary across route controls and navigation.
 enum DirtSurfaceIcon {
+    /// Native menu rows retain brand tint instead of inheriting UIKit label black.
+    static func menuImage(for title: String) -> Image {
+        let symbol = UIImage(systemName: symbol(for: title))?
+            .withTintColor(UIColor(DirtTheme.orange), renderingMode: .alwaysOriginal)
+        return Image(uiImage: symbol ?? UIImage()).renderingMode(.original)
+    }
+
     static func symbol(for title: String) -> String {
         let value = title.lowercased()
         if value.contains("ferry") { return "ferry" }
@@ -476,7 +483,9 @@ enum DirtSurfaceIcon {
 /// Opaque dropdown affordance: the field stays legible above map-backed sheets.
 extension View {
     func dirtDropdownSurface() -> some View {
-        padding(.horizontal, 10)
+        tint(DirtTheme.orange)
+            .foregroundStyle(DirtTheme.orange)
+            .padding(.horizontal, 10)
             .frame(minHeight: 36)
             .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(dirtHex: 0xD8DADD), lineWidth: 1))

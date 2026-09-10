@@ -976,7 +976,7 @@ struct MapLibreMapView: UIViewRepresentable {
                         self?.state.onPlannerPinDragBegan?(markerID)
                     }
                     view.onDragEnded = { [weak self] markerID, coordinate in
-                        self?.state.onPlannerPinDragEnd?(markerID, coordinate)
+                        self?.finishPlannerPinMove(markerID, coordinate: coordinate)
                     }
                 }
             }
@@ -1340,10 +1340,20 @@ struct MapLibreMapView: UIViewRepresentable {
                     self?.state.onPlannerPinDragBegan?(markerID)
                 }
                 view.onDragEnded = { [weak self] markerID, coordinate in
-                    self?.state.onPlannerPinDragEnd?(markerID, coordinate)
+                    self?.finishPlannerPinMove(markerID, coordinate: coordinate)
                 }
             }
             return view
+        }
+
+        private func finishPlannerPinMove(_ markerID: String, coordinate: CLLocationCoordinate2D) {
+            guard let mapView else { return }
+            let point = mapView.convert(coordinate, toPointTo: mapView)
+            guard let snapped = snapToNearestRoad(coordinate, at: point, in: mapView) else {
+                state.onPlannerPinSnapFailed?()
+                return
+            }
+            state.onPlannerPinDragEnd?(markerID, snapped)
         }
 
         func mapView(_ mapView: MLNMapView, annotationCanShowCallout annotation: MLNAnnotation) -> Bool {
@@ -1363,6 +1373,8 @@ struct MapLibreMapView: UIViewRepresentable {
             guard !state.isNavigating else { return }
             // Tap pin → select (orange lift) so drag / second-tap relocate is obvious.
             state.selectPlannerPin(dirtAnnotation.markerID)
+            (mapView.view(for: dirtAnnotation) as? DirtPlannerPinView)?
+                .applySelectionChrome(!dirtAnnotation.isLocked, animated: true)
             if dirtAnnotation.kind == .fuel {
                 state.onPlannerPinDragBegan?(dirtAnnotation.markerID)
             }
@@ -1451,21 +1463,6 @@ struct MapLibreMapView: UIViewRepresentable {
                 mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
                 state.selectPlannerPin(pin.markerID)
                 return
-            }
-
-            // Selected pin + tap map → relocate (Plan / Saved). From here relocates
-            // B via long-press with road snap — never by dragging or short-tap.
-            if case .map = resolution,
-               let selectedID = state.selectedPlannerPinID,
-               !state.isNavigating,
-               !state.fromHereLongPressRelocatesDestination {
-                let locked = annotations.first(where: { $0.markerID == selectedID })?.isLocked == true
-                if !locked {
-                    logTouch(.map)
-                    let coordinate = mapView.convert(pt, toCoordinateFrom: mapView)
-                    state.onPlannerPinDragEnd?(selectedID, coordinate)
-                    return
-                }
             }
 
             // POI wins over pin-drop: generous hit box so a near-miss still

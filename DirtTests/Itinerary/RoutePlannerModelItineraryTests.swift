@@ -565,6 +565,7 @@ struct RoutePlannerModelItineraryTests {
         source.routeRequests.removeAll()
         model.handleRouteTap(point(0).locationCoordinate, source: "longPress")
         #expect(model.waypointPlacement != nil)
+        #expect(!model.showsWaypointPlacementConfirmation)
         #expect(model.itinerary.waypoints.count == 2)
         #expect(source.routeRequests.isEmpty)
         model.keepMovingWaypoint()
@@ -576,6 +577,35 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
         #expect(model.waypointPlacement == nil)
         #expect(model.itinerary.waypoints.count == 3)
+        #expect(!source.routeRequests.isEmpty)
+    }
+
+    @Test func existingWaypointMoveWaitsForYesAndNoAllowsRefinement() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 0
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.selectMode(.plan)
+        model.apply(.replaceAll(waypoints: [point(0), point(1)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "seed")
+        await model.waitForCanonicalBuildForTesting()
+        let waypoint = try #require(model.itinerary.waypoints.last)
+        source.routeRequests.removeAll()
+        let markerID = "wp:\(waypoint.id.uuidString)"
+        model.moveWaypoint(markerID: markerID, to: point(0.7).locationCoordinate)
+        #expect(model.showsWaypointPlacementConfirmation)
+        #expect(model.itinerary.waypoints.last?.coordinate == waypoint.coordinate)
+        #expect(source.routeRequests.isEmpty)
+        model.keepMovingWaypoint()
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.confirmWaypointPlacement()
+        #expect(source.routeRequests.isEmpty)
+        model.moveWaypoint(markerID: markerID, to: point(0.8).locationCoordinate)
+        model.confirmWaypointPlacement()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.waypointMove == nil)
+        #expect(model.itinerary.waypoints.last?.coordinate == point(0.8))
         #expect(!source.routeRequests.isEmpty)
     }
 

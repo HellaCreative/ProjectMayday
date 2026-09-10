@@ -349,6 +349,7 @@ final class MapState {
     /// Called when the user drags a planner pin and releases it.
     /// Arguments: marker ID (e.g. "s0", "e0", "dest") + new map coordinate.
     var onPlannerPinDragEnd: ((String, CLLocationCoordinate2D) -> Void)?
+    var onPlannerPinSnapFailed: (() -> Void)?
 
     /// Currently selected planner pin (tap-to-select, then drag or tap map to move).
     var selectedPlannerPinID: String? {
