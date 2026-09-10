@@ -150,3 +150,17 @@ test('native cross-region combined forward window is admitted while graph-only f
  for(const patch of [{routeFirstPlan:false},{allowPartialWindow:false},{windowMaxStops:4},{minimumFuelStops:1},{requireFuelStopBeforeEnd:true},{probeFirstReachableStation:true}])
   assert.equal(canarySupported({...body,fuel:{...body.fuel,...patch}},'fuel',env),false);
 });
+
+test('native one-pump window retains fuel-proved geometry and marks the remaining trip incomplete',()=>{
+ const nodes=Array.from({length:10},(_,i)=>({id:i+1,lon:-63.3+i*.005,lat:44.7}));
+ const ways=[{id:10,nodeIds:nodes.map(n=>n.id),tags:{highway:'unclassified',surface:'asphalt',access:'yes'}}];
+ const encoded=encodeFromOsmGraph(buildGraphFromOsm({nodes,ways}),{regionId:'ns',sourceEpoch:'test'});
+ const pool=buildRideAlternatives({pack:decodeGraphV4(encoded.graphBuffer,encoded.geomBuffer),geom:decodeGeometryV1(encoded.geomBuffer),revision:'window-fixture',stations:[2,4,6,8].map(i=>({id:`pump-${i}`,lat:nodes[i].lat,lon:nodes[i].lon})),input:{mode:'from_here',anchors:[{id:'a',lat:nodes[0].lat,lon:nodes[0].lon},{id:'b',lat:nodes[9].lat,lon:nodes[9].lon}],legs:[{from:'a',to:'b',profile:'clean'}],fuel:{fullRangeMeters:1100,reserveFraction:0,initialUsableMeters:1100}},allowPassingRefillAdvisory:true,budget:work()});
+ assert.equal(pool.search.poolComplete,true);
+ assert.ok(pool.selected.fuel.plannedRefills.length>1);
+ const r=toLiveResponse(pool,{profile:'cleanest',fuel:{forwardFeeler:true,routeFirstPlan:true,allowPartialWindow:true,windowMaxStops:1}},'fuel',[]);
+ assert.equal(r.status,'complete');assert.equal(r.windowComplete,false);
+ assert.equal(r.stops.length,1);assert.equal(r.routes.length,1);
+ assert.ok(r.routes[0].distanceMeters<=1100);assert.equal(r.destinationEscapeMeters,null);
+ assert.deepEqual(r.routes[0].geometry,pool.selected.road.geometry.slice(0,r.routes[0].geometry.length));
+});

@@ -1081,3 +1081,8 @@ history. Android must use the same contract. Real multi-window replay pending.
 Regional candidate fuel searches that hit the label cap receive the existing
 continuation-style guidance retry (weight3), within the same request budget
 and unchanged label cap/constraints. This remains bounded candidate generation.
+
+Owner-trip replay reached three pumps before parallel access roads made the
+last two history edges ambiguous. Resolve their direction from the preceding
+ordered approach junction; retain rejection for equally consistent orientations.
+No geometric direction guess or turn-restriction reset is permitted.

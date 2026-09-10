@@ -26,3 +26,14 @@ test('history lookup constructs only requested way aliases and preserves cached 
  for(let at=1;at<4096;at+=255){const ids=Array.from({length:Math.min(255,4096-at)},(_,i)=>id(at+i));assert.equal(resolveHistory(p,ids,ids.at(-1),budget()).state,'complete');}
  assert.deepEqual(resolveHistory(p,[id(0),id(4096)],id(4096),budget()).edges,[0,4096]);
 });
+
+
+test('parallel pump access edges use the preceding approach junction to resolve arrival',()=>{
+ const p={edgeFrom:[0,1,1],edgeTo:[1,2,2]};
+ assert.deepEqual(directedArrival(p,[0,1,2],{edgeIndex:2,fraction:.4}).arcs,
+  [{id:0,from:0,to:1},{id:1,from:1,to:2},{id:2,from:2,to:1}]);
+ const reverse={edgeFrom:[3,1,1],edgeTo:[2,2,2]};
+ assert.deepEqual(directedArrival(reverse,[0,1,2],{edgeIndex:2,fraction:.4}).arcs,
+  [{id:0,from:3,to:2},{id:1,from:2,to:1},{id:2,from:1,to:2}]);
+ assert.equal(directedArrival(p,[1,2],{edgeIndex:2,fraction:.4}).reason,'arrival_direction_ambiguous');
+});

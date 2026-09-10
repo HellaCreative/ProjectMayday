@@ -44,8 +44,24 @@ function directedArrival(pack,edges,point) {
   const prior=edges.at(-2);
   if(prior==null)return {state:'incomplete',reason:'arrival_direction_unknown'};
   const shared=[a,b].filter(n=>n===pack.edgeFrom[prior]||n===pack.edgeTo[prior]);
-  if(shared.length!==1)return {state:'incomplete',reason:'arrival_direction_ambiguous'};
-  to=shared[0]===a?b:a;
+  if(shared.length===1)to=shared[0]===a?b:a;
+  else if(shared.length===2) {
+   // Parallel source roads share both endpoints. Walk the ordered approach
+   // back to the preceding junction that distinguishes the two orientations.
+   // A two-edge tie remains ambiguous; coordinates never guess direction.
+   const suffixLength=target=>{
+    let count=0;
+    for(let i=edges.length-1;i>=0;i--){
+     const from=pack.edgeFrom[edges[i]],end=pack.edgeTo[edges[i]];
+     if(from===end||target!==from&&target!==end)break;
+     target=target===from?end:from;count++;
+    }
+    return count;
+   };
+   const towardA=suffixLength(a),towardB=suffixLength(b);
+   if(towardA===towardB)return {state:'incomplete',reason:'arrival_direction_ambiguous'};
+   to=towardA>towardB?a:b;
+  } else return {state:'incomplete',reason:'arrival_direction_ambiguous'};
  }
  const arcs=[];
  for(let i=edges.length-1;i>=0;i--){
