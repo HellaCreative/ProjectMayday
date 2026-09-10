@@ -1097,3 +1097,8 @@ guidance; final fuel range, turn restrictions, surface objectives and urban
 priority remain unchanged. Never classify search exhaustion as a proved fuel
 gap. NS/NB-only behavior is unchanged. September 10 DEV qualification uses
 the owner failed destination 46.15605369715979,-70.65032958984375.
+
+Within one shared-candidate request, identical projected topology, pack object,
+exposure cost function, destination and bound stopping node may reuse the same
+immutable avoidance-distance array. Cancellation still wins. Do not reuse across
+changed maps, endpoints or preference costs. This changes computation only.

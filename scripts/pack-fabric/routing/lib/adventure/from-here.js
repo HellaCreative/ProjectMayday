@@ -18,7 +18,7 @@ const {proveFuel}=require("./fuel-proof");
 // explicitly provisional station access; they never become physical entrance
 // proof. Caller supplies the experimental cost model, not a hidden final style.
 function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudget=budget,edgeCost,objectiveId,
-  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,ridePreferences=null,additionalUrbanAreas=[],preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,arrivalHistory=null,fuelFirst=false,allowZeroRefillAdvisory=false,allowPassingRefillAdvisory=false,useAvoidanceLowerBounds=false}) {
+  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,ridePreferences=null,additionalUrbanAreas=[],preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,arrivalHistory=null,fuelFirst=false,allowZeroRefillAdvisory=false,allowPassingRefillAdvisory=false,useAvoidanceLowerBounds=false,avoidanceBoundsCache=null}) {
   if(preparationBudget.snapshot().deadlineAtMs>budget.snapshot().deadlineAtMs)throw new TypeError("Preparation cannot outlive the request deadline");
   const request=normalizeRequest(input);
   if(request.mode!=="from_here")throw new TypeError("From Here requires exactly two fixed rider anchors");
@@ -175,7 +175,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(bounds.state!=="complete")return incomplete(bounds.reason);
   // A rural pin can sit beyond unavoidable town access. Inspecting only its
   // adjacent arcs misses that exposure and exhausts the rural fuel frontier.
-  const avoidanceBounds=useAvoidanceLowerBounds?buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost:avoidanceCost,budget,stopAt:start}):null;
+  const avoidanceBounds=useAvoidanceLowerBounds?(avoidanceBoundsCache?avoidanceBoundsCache.prepare:buildLowerBounds)({graph,nodeCount:graph.nodeCount,target:end,edgeCost:avoidanceCost,budget,stopAt:start}):null;
   if(avoidanceBounds && avoidanceBounds.state!=="complete")return incomplete(avoidanceBounds.reason);
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();

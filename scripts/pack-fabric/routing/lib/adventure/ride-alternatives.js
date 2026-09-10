@@ -28,6 +28,7 @@ function refinementPreservesWinners(rows,id,replacement) {
  });
 }
 function buildRideAlternatives(options) {
+ options={...options,avoidanceBoundsCache:require('./target-bounds-cache').createTargetBoundsCache()};
  const continuityMeters=options.dirtContinuityMeters??0;
  if(!Number.isFinite(continuityMeters)||continuityMeters<0)throw new TypeError("Continuity distance must be finite and nonnegative");
  const context=options.context||createRideAlternativeContext(),results=[];
