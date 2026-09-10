@@ -9,12 +9,13 @@ function buildEdgeIndex(pack,geom,budget) {
   for(let edge=0;edge<pack.edgeCount;edge++) {
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-    if(geom.offsets&&geom.coords) {
+    const range=geom.offsets&&geom.coords?{coords:geom.coords,start:geom.offsets[edge],end:geom.offsets[edge+1]}:geom.coordinateRange?.(edge);
+    if(range) {
       // Decoded immutable geometry exposes its exact coordinates; avoid
       // allocating millions of temporary point arrays for this bounds pass.
-      for(let i=geom.offsets[edge];i<geom.offsets[edge+1];i+=2) {
+      for(let i=range.start;i<range.end;i+=2) {
         if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
-        const x=geom.coords[i],y=geom.coords[i+1];
+        const x=range.coords[i],y=range.coords[i+1];
         minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
       }
     } else for(const [x,y] of geom.polyline(edge)) {

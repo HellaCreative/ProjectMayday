@@ -3,7 +3,7 @@
   "trailingSlash": false,
   "functions": {
     "api/route.js": {
-      "memory": 2048,
+      "memory": 4096,
       "maxDuration": 300,
       "includeFiles": "routing/{lib,regional,schema}/**",
       "excludeFiles": "{app/data,routing/data,routing/candidates}/**"

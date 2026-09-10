@@ -1126,3 +1126,21 @@ proof. Larger-range diagnostic tests do not change the rider's saved range.
 No pack, native binary, or production promotion is part of this qualification.
 After owner DEV acceptance, Swift and Android must reproduce these outcomes;
 neither native parity nor physical acceptance is claimed by automated tests.
+
+
+## September 10: multi-state pack selection repair
+
+DEV-only follow-up: US and Canada/US pack adjacency must use the existing
+national crossing index. Bounding rectangles must not invent a New York to
+West Virginia connection and omit Pennsylvania. This chooses required packs;
+actual seam traversal still requires exact shared OSM node/edge identity and
+legal turn history. The join work allowance scales to the deterministic sum
+of source nodes, edges and directed arcs while retaining the request deadline.
+No data rebuild, native parity or production acceptance is implied.
+
+Checkpoint before demand-loaded graph experiment: compact in-memory joins and
+requested-objective-first long fuel-off searches are private candidates only.
+Hosted six-region requests still exceed the 90-second deadline. Accepted live
+DEV remains 139a173; no native parity, production promotion, or new pack bytes
+are implied. Future paging must preserve exact road identities, turn restrictions,
+profile selection, and fuel proof; an unloaded area is not evidence of no route.

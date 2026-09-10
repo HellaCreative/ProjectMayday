@@ -61,3 +61,12 @@ require('node:test')('NS-PE selection includes the bridge region without changin
   assert.deepEqual(regionsForRoute(['ns','nb']), ['nb','ns']);
   assert.deepEqual(regionsForRoute(['pe']), ['pe']);
 });
+
+test('overlapping state rectangles never skip Pennsylvania between New York and West Virginia',()=>{
+ assert.deepEqual(shortestRegionPath('ny','wv'),['ny','pa','wv']);
+ const {resolveGraphRequest}=require('./select');
+ const r=resolveGraphRequest({locations:[{lat:44.76481,lon:-63.34018},{lat:38.99357,lon:-80.19745}]});
+ assert.ok(r.regionIds.includes('pa'));
+ assert.ok(r.regionIds.includes('ny'));
+ assert.deepEqual(shortestRegionPath('ns','me'),['ns','nb','me']);
+});

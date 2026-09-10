@@ -208,21 +208,19 @@ function bboxesTouch(a, b, pad = 0.15) {
 }
 
 /**
- * Canada–Canada stays on the explicit land/bridge graph (rectangles lie).
- * US–US and Canada–US use bbox touch so we don't maintain 50-state adjacency.
+ * Canada keeps its explicit accepted links. US connections come from the
+ * existing national crossing index, never rectangular overlap. Selection
+ * only loads packs; joinV4 still proves the actual road connection.
  */
 function neighboursOf(id) {
   const key = String(id || "").toLowerCase();
   const out = new Set(REGION_NEIGHBOURS[key] || []);
-  const { REGION_BBOX, US_STATE_IDS } = require("./select");
-  const bbox = REGION_BBOX[key];
-  if (!bbox) return [...out];
-  const idIsUS = US_STATE_IDS.has(key);
-  for (const [other, ob] of Object.entries(REGION_BBOX)) {
-    if (other === key) continue;
-    const otherUS = US_STATE_IDS.has(other);
-    if (!idIsUS && !otherUS) continue;
-    if (bboxesTouch(bbox, ob)) out.add(other);
+  const { US_STATE_IDS } = require("./select");
+  const { pairs } = require("../schema/national-connections/index.json");
+  for (const pair of pairs) {
+    const other = pair.left === key ? pair.right : pair.right === key ? pair.left : null;
+    if (!other || !(pair.proofs > 0)) continue;
+    if (US_STATE_IDS.has(key) || US_STATE_IDS.has(other)) out.add(other);
   }
   return [...out];
 }

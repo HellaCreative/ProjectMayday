@@ -35,7 +35,8 @@ function buildRideAlternatives(options) {
  const continuation=!!options.arrivalHistory?.priorEdgeIds?.length;
  // Four distinct continuation objectives retain paved, moderate mixed, and
  // both dirt strengths. Fresh-route candidate coverage remains unchanged.
- const candidates=continuation?[...objectives,expandedObjectives[3]]:options.expandedCandidates?expandedObjectives:objectives;
+ const baseCandidates=continuation?[...objectives,expandedObjectives[3]]:options.expandedCandidates?expandedObjectives:objectives;
+ const candidates=options.preferredObjective?[...baseCandidates].sort((a,b)=>(b.id===options.preferredObjective)-(a.id===options.preferredObjective)):baseCandidates;
  const profile=options.input.legs[0].profile;
  const wander=options.ridePreferences?.wander??1;
  const objectiveCosts=new Map(candidates.map(o=>[o.id,wanderEdgeCost(o.cost,wander)]));

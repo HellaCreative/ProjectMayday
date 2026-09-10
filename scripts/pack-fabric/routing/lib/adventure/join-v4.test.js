@@ -64,3 +64,16 @@ test('lazy identities retain canonical names and every overlapping source alias'
   }
  }
 });
+
+test('compact joined geometry index matches materialized source geometry at a seam',()=>{
+ const joined=joinV4(fixtures(),{budget:budget()});
+ const {buildEdgeIndex}=require('./station-matching');
+ const compact=buildEdgeIndex(joined.pack,joined.geom,budget());
+ const materialized=buildEdgeIndex(joined.pack,{polyline:e=>joined.geom.polyline(e)},budget());
+ for(const point of [{lat:46,lon:-63.99},{lat:46,lon:-63.98},{lat:46.1,lon:-63.98}])
+  assert.deepEqual(compact.query(point,500),materialized.query(point,500));
+ for(let e=0;e<joined.pack.edgeCount;e++){
+  const range=joined.geom.coordinateRange(e);
+  assert.deepEqual(Array.from(range.coords.subarray(range.start,range.end)),joined.geom.polyline(e).flat());
+ }
+});
