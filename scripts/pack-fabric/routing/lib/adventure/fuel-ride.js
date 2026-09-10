@@ -66,12 +66,17 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,a
   // No roads or detours are inserted. Refills are minimal on this fixed path;
   // no global refill tie-break optimality across equal-cost roads is claimed.
   if(!result&&allowPassingRefillAdvisory) {
-    const candidate=advisory(),seen=new Set();
+    const candidate=advisory(),seen=new Map();
     const noRepeat=candidate.state==='found'&&candidate.arcs.every(arc=>{
-      if(seen.has(arc.id))return false;seen.add(arc.id);return true;
+      const lo=Math.min(arc.fromFraction??0,arc.toFraction??1),hi=Math.max(arc.fromFraction??0,arc.toFraction??1);
+      const intervals=seen.get(arc.id)||[];
+      if(intervals.some(([a,b])=>lo<b&&hi>a))return false;
+      intervals.push([lo,hi]);seen.set(arc.id,intervals);return true;
     });
+    if(candidate.diagnostics)candidate.diagnostics.passingRefillAttempt=noRepeat?'escape_check':'road_repeats_or_incomplete';
     if(noRepeat) {
       const escape=acceptGoal({node:end,turnState:candidate.endTurnState,remainingUsableMeters:fuel.usableRangeMeters});
+      candidate.diagnostics.passingRefillAttempt=escape.accepted?'schedule_check':'escape_unproved';
       if(escape.accepted) {
         const pumps=[];let meters=0;
         const append=node=>{const station=graph.stationAt(node);if(station)pumps.push({stationId:station.id,atMeters:meters,...(station.accessEvidence?{accessEvidence:station.accessEvidence}:{})});};

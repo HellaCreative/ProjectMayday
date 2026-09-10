@@ -157,3 +157,14 @@ test('passing candidate supports an initially empty tank at a mapped starting pu
  assert.equal(result.fuel.state,'verified_on_supplied_station_access');
  assert.deepEqual(result.road.visits,[{stationId:'pump-A',atMeters:0}]);
 });
+
+test('projected station splits are continuous road, not repeated edge travel',()=>{
+ const arcs=[{id:0,from:'A',to:'P',distanceMeters:6,fromFraction:0,toFraction:0.6},
+ {id:0,from:'P',to:'D',distanceMeters:4,fromFraction:0.6,toFraction:1},
+ {id:1,from:'D',to:'Q',distanceMeters:2}];
+ const g={outgoing:n=>arcs.filter(a=>a.from===n),stationAt:n=>['P','Q'].includes(n)?{id:n}:null,
+ transition:()=>({allowed:true,state:null}),stateKey:n=>n};
+ const result=ride(g,{allowPassingRefillAdvisory:true});
+ assert.equal(result.road.diagnostics.passingRefillAdvisory,true);
+ assert.deepEqual(result.road.visits,[{stationId:'P',atMeters:6}]);
+});

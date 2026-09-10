@@ -92,7 +92,7 @@ function buildRideAlternatives(options) {
  pool.sort(rank);
  const selected=pool[0];
  return {state:selected?'complete':'incomplete',selected:selected?.result||null,selectedObjective:selected?.id||null,
-  candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,searchRetry:r.retry,zeroRefillAdvisory:r.result.search?.fuelSearch?.zeroRefillAdvisory===true,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing,repeatedRoadMeters:r.result.qualityAudit?.repeatedRoadMeters,approachRefinement:r.refinement||r.result.search?.fuelSearch?.approachRefinement})),
+  candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,searchRetry:r.retry,zeroRefillAdvisory:r.result.search?.fuelSearch?.zeroRefillAdvisory===true,passingRefillAdvisory:r.result.search?.fuelSearch?.passingRefillAdvisory===true,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing,repeatedRoadMeters:r.result.qualityAudit?.repeatedRoadMeters,approachRefinement:r.refinement||r.result.search?.fuelSearch?.approachRefinement})),
   search:{...options.budget.snapshot(),poolComplete},
   limitations:['bounded shared candidate pool; not global best ride proof','station access may remain provisional']};
 }
