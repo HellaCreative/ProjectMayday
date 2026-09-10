@@ -81,3 +81,7 @@ NS/VTNH/PE Balanced selectedgeometry, distance, fuelstops identical incomparison
 Pavedcandidate differs NS81210.948→80771.554m; VTNH8750.150→8749.150m, bothsame
 urban0/retrace0. Thus not identical weighted-search behavior for everyprofile.
 Do not enable on frozenAtlantic or claim qualified from Balancedcomparison alone.
+Hard exclusion added: the private zero-refill flag cannot affect any request
+containing NS, NB, PE or NL. Accepted Atlantic routing stays on its existing path.
+Corrected19graph overlay plus unchangedother44 admit63/63 with a37856b reader;
+report /tmp/dirt-63-reader-corrected.json. Publishedrelease02verification pending.
