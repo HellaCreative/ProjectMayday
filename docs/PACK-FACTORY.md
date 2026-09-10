@@ -1,5 +1,8 @@
 # DIRT Pack Factory
 
+> September9 restriction correction: repeated OSM from/via roles must be resolved at source-way level before edge expansion. Do not collapse the first graph edge in every Cartesian row. Use factory commit `3c03c17` and the [restriction correction record](REPEATED-RESTRICTION-REVIEW-2026-09-09.md). Ambiguous all-role sources are explicitly quarantined with original evidence retained. Release02 is published and verified; live routing and app activation remain separate gates. Main-project factory commit: `9eff5dd`.
+
+
 **Status:** canonical legal-topology migration contract.
 
 **Halt production:** Do not stamp, overwrite, or promote V1/V2/V3 packs. Public
