@@ -1059,3 +1059,8 @@ The private regional experiment uses the standard three-objective shared pool
 (paved, dirt-10, dirt-30), not NB's six-objective expansion, outside the accepted
 NS/NB-only coverage. All three must pass fuel proof within the unchanged app
 budget. NS/NB and continuation history retain their existing pools.
+
+The experimental reverse exposure bound is prepared only when an outgoing
+edge at the destination has positive exposure cost. Otherwise ordinary bounds
+and exact forward exposure accounting remain; this is guidance preparation,
+not a relaxation of urban or road eligibility rules.

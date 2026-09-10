@@ -175,7 +175,8 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(bounds.state!=="complete")return incomplete(bounds.reason);
   // Bound unavoidable destination exposure too, so a required urban arrival
   // does not expand every zero-exposure rural fuel state before reaching it.
-  const avoidanceBounds=useAvoidanceLowerBounds?buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost:avoidanceCost,budget,stopAt:start}):null;
+  const destinationExposure=useAvoidanceLowerBounds&&Array.from(graph.outgoing(end)).some(arc=>avoidanceCost(arc)>0);
+  const avoidanceBounds=destinationExposure?buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost:avoidanceCost,budget,stopAt:start}):null;
   if(avoidanceBounds && avoidanceBounds.state!=="complete")return incomplete(avoidanceBounds.reason);
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();
