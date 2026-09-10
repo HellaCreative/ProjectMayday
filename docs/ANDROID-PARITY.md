@@ -994,3 +994,8 @@ Distinct parallel from/via edges sharing both endpoints use source-resolved
 viaNode only after validating full via/to adjacency; do not infer entry from
 array order. This does not permit general repeated-role edge deduplication.
 Source-level corrected pack revisions must accompany national admission.
+Private OFF-by-default zero-refill advisory candidate: preserve full legaldirected
+arrival state and prove destinationescape within remaininginitialfuel. No repeated
+edge, forced/requiredpump, minimumStops>0, or priorhistory may take shortcut.
+Diagnostic zeroRefillAdvisory identifies use. This changes weightedcandidate
+selection in some cases; not approved for frozenAtlantic or claimednativeparity.

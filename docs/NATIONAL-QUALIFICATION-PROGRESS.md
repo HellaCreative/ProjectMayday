@@ -71,3 +71,13 @@ only after checking complete via/to adjacency. Repeated-edge broad normalization
 was rejected after SK/OH source counterexamples; only the earlier independently
 proved WA case remains until corrected versioned packs arrive. Added directed
 parallel-entry and wrong-entry/disconnected rejection coverage.
+
+Private zero-refill candidate (OFF by default; env DIRT_ZERO_REFILL_ADVISORY=candidate-v1):
+An alreadycomputed advisory with no repeated edges, sufficient initial fuel, and
+proved direction-aware destination escape can avoid full resource label search.
+Required/forced pump, minimumStops>0, prior itinerary histories excluded inadapter.
+WA local complete13.6s with all3objectives proved; prior repeated20s failures.
+NS/VTNH/PE Balanced selectedgeometry, distance, fuelstops identical incomparison.
+Pavedcandidate differs NS81210.948→80771.554m; VTNH8750.150→8749.150m, bothsame
+urban0/retrace0. Thus not identical weighted-search behavior for everyprofile.
+Do not enable on frozenAtlantic or claim qualified from Balancedcomparison alone.

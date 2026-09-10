@@ -11,7 +11,7 @@ const body=JSON.parse(fs.readFileSync(requestPath));
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 (async()=>{
  const started=Date.now();let loaded=[];
- const result=await adventureCanaryRequest(body,body.fuel?'fuel':'route',{environment:{DIRT_ADVENTURE_CANARY:'national-v1'},load:async resolution=>{
+ const result=await adventureCanaryRequest(body,body.fuel?'fuel':'route',{environment:{DIRT_ADVENTURE_CANARY:'national-v1',DIRT_ZERO_REFILL_ADVISORY:process.env.DIRT_ZERO_REFILL_ADVISORY},load:async resolution=>{
   const rows=resolution.regionIds.map(id=>{
    const at=Date.now(),folder=path.join(root,id),graph=fs.readFileSync(path.join(folder,'graph.v4.bin')),geometry=fs.readFileSync(path.join(folder,'geometry.v1.bin')),fuel=fs.readFileSync(path.join(folder,'fuel.v1.json'));
    const row={pack:decodeGraphV4(graph,geometry),geom:decodeGeometryV1(geometry),stations:JSON.parse(fuel).stations,identity:[{regionId:id,releaseId:'fabric-v4-20260909-01',graphSha256:sha(graph),geometrySha256:sha(geometry),fuelSha256:sha(fuel)}]};

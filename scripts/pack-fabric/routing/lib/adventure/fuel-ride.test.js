@@ -94,3 +94,19 @@ test('fuel-first continuation preserves the proved ride while avoiding a redunda
  const gap=ride(graph([['A','D',12]]),{fuelFirst:true});
  assert.equal(gap.road.state,'found');assert.equal(gap.fuel.state,'unverified');
 });
+
+test('opt-in zero-refill advisory matches feasible objective and proves directional escape',()=>{
+ const g=graph([['A','D',4],['A','X',3],['X','D',3],['D','P',2]],['P']);
+ const baseline=ride(g),fast=ride(g,{allowZeroRefillAdvisory:true});
+ assert.deepEqual(fast.road.arcs,baseline.road.arcs);
+ assert.deepEqual(fast.fuel,baseline.fuel);
+ assert.equal(fast.road.diagnostics.zeroRefillAdvisory,true);
+ const restricted=graph([['A','D',1],['D','P',1]],['P'],(state,a)=>({allowed:!(state===0&&a.id===1),state:a.id}),(n,s)=>`${n}:${s}`);
+ assert.equal(ride(restricted,{allowZeroRefillAdvisory:true}).fuel.state,'unverified');
+});
+test('opt-in shortcut falls through when initial fuel cannot cover legal escape',()=>{
+ const g=graph([['A','D',6],['A','P',3],['P','D',4],['D','Q',4]],['P','Q']);
+ const baseline=ride(g),fast=ride(g,{allowZeroRefillAdvisory:true});
+ assert.deepEqual(fast.road.arcs,baseline.road.arcs);assert.deepEqual(fast.fuel,baseline.fuel);
+ assert.equal(fast.road.diagnostics.zeroRefillAdvisory,undefined);
+});

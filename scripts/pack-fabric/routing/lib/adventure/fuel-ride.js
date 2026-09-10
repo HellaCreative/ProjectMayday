@@ -7,7 +7,7 @@ const {searchResourcePath}=require("./resource-search");
 // The inexpensive road candidate is retained for advisory display. The fuel
 // search then constructs a feasible ride with refills in its state; it doesn't
 // search for pumps near that candidate and repeatedly insert new detours.
-function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,fuelFirst=false}) {
+function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,fuelFirst=false,allowZeroRefillAdvisory=false}) {
   if(fuel!=null)validateFuel(fuel);
   const base={graph,start,end,edgeCost,budget,lowerBounds,initialTurnState,avoidanceCost,dirtEntryCost};
   let road;
@@ -44,7 +44,20 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,i
         ...(graph.stationAt(finalNode).accessEvidence?{accessEvidence:graph.stationAt(finalNode).accessEvidence}:{})}};
   }
   const searchOptions={...base,fuel,acceptGoal,maxLabels:maxFuelLabels,heuristicWeight:fuelHeuristicWeight,preferOnwardFuel};
-  let result=searchResourcePath(searchOptions);
+  let result;
+  if(allowZeroRefillAdvisory) {
+    const candidate=advisory(),seen=new Set();
+    const noRepeat=candidate.state==='found'&&candidate.arcs.every(arc=>{
+      if(seen.has(arc.id))return false;seen.add(arc.id);return true;
+    });
+    if(noRepeat&&fuelCovers(fuel.initialUsableMeters,candidate.distanceMeters)) {
+      const remaining=fuel.initialUsableMeters-candidate.distanceMeters;
+      const escape=acceptGoal({node:end,turnState:candidate.endTurnState,remainingUsableMeters:remaining});
+      if(escape.accepted&&budget.check())result={...candidate,visits:[],remainingUsableMeters:remaining,
+        goalEvidence:escape.evidence,diagnostics:{...candidate.diagnostics,zeroRefillAdvisory:true}};
+    }
+  }
+  if(!result)result=searchResourcePath(searchOptions);
   if(result.state!=="found")return {road:advisory(),fuel:{state:"unverified",
     reason:result.state==="incomplete"?result.reason:"no_feasible_chain_in_matched_graph"},fuelSearch:result,
     escapeSearches,search:budget.snapshot()};
