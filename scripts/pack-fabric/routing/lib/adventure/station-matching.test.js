@@ -48,3 +48,10 @@ test('station cache never publishes partial matches or bypasses cancellation',()
  assert.equal(cache.match({...args,allowUnknown:true,budget:budget()}).cacheHit,false);
  const other=fixture();assert.equal(cache.match({...args,...other,index:buildEdgeIndex(other.pack,other.geom,budget()),budget:budget()}).cacheHit,false);
 });
+
+test('exact bounds reject distant cell neighbours while retaining full crossing geometry',()=>{
+ const lines=[[[0,0],[.02,0]],[[.005,.008],[.015,.008]],[[.009,-.01],[.009,.01]]];
+ const pack={edgeCount:3},geom={polyline:i=>lines[i]},index=buildEdgeIndex(pack,geom,budget());
+ assert.deepEqual(index.query({lon:.01,lat:0},150).sort(),[0,2]);
+ assert.deepEqual(index.query({lon:.01,lat:.008},150).sort(),[1,2]);
+});

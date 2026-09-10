@@ -53,3 +53,11 @@ The immutable preparation cache works, but cold/warm fuel-chain qualification
 is not complete. Finer grid experiment reduced matching locally but raised
 preparation time and did not complete; reverted rather than change accepted
 index geometry without a demonstrated overall win. No production alias moved.
+
+Exact source bounding rectangles retained in the station index now reject
+coarse-cell neighbours outside the conservative query rectangle before expensive
+polyline projection. Crossings retained; source geometry/projection/access rules
+unchanged. WA matching5255→1018ms in local20s samples, preparation4204→3721ms.
+It reaches more candidate search work but still fails fuel label limits/deadline.
+Bounds add32bytes/edge (~69MB WA); measured overall process1.16GiB peak including
+further search progress, not a production memory guarantee.219tests pass.

@@ -5,7 +5,7 @@ const {legalSnapDetailed}=require("../legal-topology/snap");
 // Coarse index only narrows the exact legal projection search. It never proves
 // station arrival or connects the station to a nearby road by a synthetic arc.
 function buildEdgeIndex(pack,geom,budget) {
-  const size=.02,cells=new Map(),broad=new Set();
+  const size=.02,cells=new Map(),broad=new Set(),bounds=new Float64Array(pack.edgeCount*4);
   for(let edge=0;edge<pack.edgeCount;edge++) {
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
     const coords=geom.polyline(edge);
@@ -14,6 +14,7 @@ function buildEdgeIndex(pack,geom,budget) {
       if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
       minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
     }
+    bounds.set([minX,minY,maxX,maxY],edge*4);
     if(!Number.isFinite(minX))continue;
     const a=Math.floor(minX/size),b=Math.floor(maxX/size),c=Math.floor(minY/size),d=Math.floor(maxY/size);
     if((b-a+1)*(d-c+1)>1000){broad.add(edge);continue;}
@@ -43,7 +44,13 @@ function buildEdgeIndex(pack,geom,budget) {
     if(dx>1)return Array.from({length:pack.edgeCount},(_,i)=>i);
     for(const [lo,hi] of ranges)for(let x=Math.floor(lo/size);x<=Math.floor(hi/size);x++)
       for(let y=Math.floor((lat-dy)/size);y<=Math.floor((lat+dy)/size);y++)for(const edge of cells.get(`${x}:${y}`)||[])edges.add(edge);
-    return [...edges];
+    // Exact source bounds cheaply reject roads from the same coarse cell that
+    // cannot intersect the conservative search rectangle. Keep every segment
+    // crossing, including those whose endpoints lie outside that rectangle.
+    return [...edges].filter(edge=>{
+      const at=edge*4;
+      return bounds[at+3]>=lat-dy&&bounds[at+1]<=lat+dy&&ranges.some(([lo,hi])=>bounds[at+2]>=lo&&bounds[at]<=hi);
+    });
   }};
 }
 

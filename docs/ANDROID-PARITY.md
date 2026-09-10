@@ -986,3 +986,7 @@ bidirectional, selfloop, entry-only, same-edge, or multi-via cases. This resolve
 OSM relation16478624 in WA. Swift/Android must implement the same derived rule
 before offline national parity is claimed. Spatial urban candidate narrowing
 changes preparation work only, preserving measured exposure and route costs.
+Station matching may reject edges whose exact full-source bounding rectangle
+cannot intersect the conservative radius rectangle, before legal projection.
+Do not substitute endpoint-only bounds or change radius/access/nearest ranking.
+This is preparation optimization only; it does not qualify national search.
