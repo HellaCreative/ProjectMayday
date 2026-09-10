@@ -1553,12 +1553,12 @@ struct FuelPlanningWindowPolicyTests {
         #expect(FuelPlanningWindowPolicy.transportSeconds(milliseconds: 20_000) == 23)
     }
     @Test func nationalAndMixedWindowsAllowColdPackPreparation() {
-        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["wa"], live: true) == 60_000)
-        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["nb", "me"], live: true) == 60_000)
-        #expect(FuelPlanningWindowPolicy.transportSeconds(milliseconds: 60_000) == 70)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["wa"], live: true) == 90_000)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["nb", "me"], live: true) == 90_000)
+        #expect(FuelPlanningWindowPolicy.transportSeconds(milliseconds: 90_000) == 100)
         let start = Date(timeIntervalSinceReferenceDate: 0)
-        let watchdog = FuelPlanningProgressWatchdog(inactivityInterval: 75, now: start)
-        #expect(!watchdog.isExpired(at: start.addingTimeInterval(70)))
-        #expect(watchdog.isExpired(at: start.addingTimeInterval(75)))
+        let watchdog = FuelPlanningProgressWatchdog(inactivityInterval: 105, now: start)
+        #expect(!watchdog.isExpired(at: start.addingTimeInterval(100)))
+        #expect(watchdog.isExpired(at: start.addingTimeInterval(105)))
     }
 }

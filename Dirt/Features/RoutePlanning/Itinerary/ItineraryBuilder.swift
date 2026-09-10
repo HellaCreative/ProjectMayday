@@ -61,7 +61,7 @@ struct FuelPlanningProgressWatchdog {
 enum FuelPlanningWindowPolicy {
     static func milliseconds(regions: [String], live: Bool) -> Int {
         let atlantic: Set<String> = ["ns", "nb", "pe", "nl"]
-        return live && regions.contains(where: { !atlantic.contains($0) }) ? 60_000 : 20_000
+        return live && regions.contains(where: { !atlantic.contains($0) }) ? 90_000 : 20_000
     }
 
     static func transportSeconds(milliseconds: Int) -> TimeInterval {
@@ -864,7 +864,7 @@ final class ItineraryBuilder {
             points: itinerary.waypoints.map(\.coordinate), live: source.name == "live"
         )
         var progressWatchdog = FuelPlanningProgressWatchdog(
-            inactivityInterval: itineraryWindowMs > 20_000 ? 75 : 28
+            inactivityInterval: itineraryWindowMs > 20_000 ? 105 : 28
         )
 
         if let resume {

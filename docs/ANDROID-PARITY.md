@@ -952,3 +952,15 @@ Fuel diagnostics include the applied wander value and city/highway preferences, 
 ### September 9 — shared production pack release02
 
 DEV34 and Production19 use immutable `v4/releases/fabric-v4-20260909-02` for routing and rider-service downloads, matching live engine admission. The catalogSHA256 is `7b30e90d77349fdce7d245692c38106853c305ae7573d751c914b8c4535b8ebb`. Android must use this same published catalog; nineteen corrected graphs resolve source restriction ambiguity while retaining road/surface/geometry/fuel data and explicit provenance. Old release01 remains immutable for rollback, not the new download target.
+
+
+### September 10 — rider wander correction and national fuel proof
+
+Server5fbf2a8 replaces finished-candidate distance filtering with continuous extra-distance cost `30 × (1 − wander)²` per metre inside each existing surface objective. Zero no longer forces the paved candidate; surface profile remains independent. Natural plateaus are permitted; do not fabricate different paths at every slider increment. Sixty supplied-NS route/profile/unknown/wander combinations passed.
+
+Servere4f234c allows a proved zero-refill route only outside Atlantic provinces: unweighted legal search, no repeated roads, initial fuel covering the route plus arrival-direction legal escape. Forced/required fuel stops, minimum-stop requirements and prior rider history exclude it. No restriction, access or fuel checks may be bypassed. This supersedes the earlier blanket OFF requirement for the experimental path; only the proved national setting is allowed. Atlantic behavior remains excluded.
+
+
+### Final national capacity — measured California cold load
+
+The final national allowance supersedes the60/70-second draft:90,000ms work including cold load/preparation,100-second client transport,105-second inactivity watchdog and server hosting allowance. Atlantic20,000ms/23-second transport/28-second watchdog remain unchanged. California full candidate pool completed cold in76.6seconds on4GiB, source5cc36e2; no route preference was changed to obtain this capacity result.

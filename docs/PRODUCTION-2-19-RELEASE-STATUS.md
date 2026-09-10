@@ -4,7 +4,7 @@ September 9–10, 2026. User authorized completing tests, archive, App Store Con
 
 ## App artifact
 
-Archive: `.build/archives/DIRT-Production-2-19.xcarchive`.
+Archive: `.build/archives/DIRT-Production-2-19-Final.xcarchive`.
 Bundle `com.mayday.dirt`, version2, build19; DEV source build34.
 Source release-target commit582fcb1, app fixes51353d2/6b42d63/72e87d6.
 The working tree also contains pre-existing development changes; it was not reset or represented as a clean release checkout.
@@ -22,7 +22,7 @@ Latest planner result: `.build/release-validation/Logs/Test/Test-DIRT Dev-2026.0
 
 All63regions /465objects in immutable `fabric-v4-20260909-02` published and checked. App DEV/Production download targets aligned. Catalog SHA256 `7b30e90d77349fdce7d245692c38106853c305ae7573d751c914b8c4535b8ebb` independently fetched and checked.
 Pack evidence: `scripts/pack-fabric/routing/candidates/fabric-v4-20260909-02/publication/handoff.json`.
-Live service promotion remains owned by national routing agent; do not infer it from pack publication.
+Both public aliases now serve all63 regions on source23d8f2563702c5004cc0942a340007149e03ec09 and release02. Public production NS zero-wander Dirt passed2.65s and WA defaults passed33.30s.
 
 ## Current external blockers
 
@@ -32,6 +32,10 @@ App Store group localization, same subscription service level, current build sel
 
 Website factual corrections prepared but not published (SiteGround publishing access not configured); see `WEBSITE-FACTUAL-REPAIR-2026-09-09.md`.
 
-## Active server repair
+## Completed server repair
 
-User supplied wander-slider bug. Server agent confirmed finished-candidate filtering wrongly forced shortest/paved at zero. Bounded continuous distance-cost fix tested60/60 route combinations; no arbitrary requirement for every slider increment to produce a different path. Production promotion still pending final default-settings qualification. Washington with default avoidCities=true reaches a fuel label ceiling; avoidCities=false cold/warm passed. Defaults were not silently changed to hide the failure.
+Continuous wander distance-cost fix passed60/60 supplied route combinations. Zero no longer forces paved; surface profile remains independent. Both DEV and production now run national scope on release02, source23d8f2563702c5004cc0942a340007149e03ec09. National proved zero-refill path preserves legal access, restrictions and fuel escape; Atlantic excludes it.
+
+California full cold candidate pool passed76.6seconds on4GiB. Final app/server national budget90seconds, client transport100seconds, watchdog105seconds; Atlantic20/23/28 unchanged. Final physical policy test compiled but launch was blocked by the locked white iPhone; eight assertions against extracted actual policy/watchdog source passed instead. Earlier physical tests used the60-second draft, so are not represented as final90-second device validation.
+
+Final archive and archive verification passed. Logs: `/tmp/dirt-production19-final-archive.log`, `/tmp/dirt-production19-final-verify.log`. The earlier archive without `-Final` is superseded. Signing/account blockers above still prevent distribution export, upload and submission.
