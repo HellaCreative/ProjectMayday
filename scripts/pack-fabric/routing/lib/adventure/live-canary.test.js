@@ -136,8 +136,8 @@ test('national window includes cross-border requests without widening Atlantic-o
  const {requestWindowMs}=require('./live-canary');
  assert.equal(requestWindowMs(['ns','nb','pe','nl'],60000),20000);
  assert.equal(requestWindowMs(['ns','qc'],60000),60000);
- assert.equal(requestWindowMs(['wa'],90000),60000);
+ assert.equal(requestWindowMs(['wa'],120000),90000);
  assert.equal(requestWindowMs(['wa'],10000),10000);
- assert.equal(requestWindowMs(['wa']),60000);
+ assert.equal(requestWindowMs(['wa']),90000);
  assert.equal(requestWindowMs(['ns']),20000);
 });

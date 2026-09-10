@@ -16,7 +16,7 @@
     },
     "api/fuel-chain.js": {
       "memory": 2048,
-      "maxDuration": 75,
+      "maxDuration": 105,
       "includeFiles": "routing/{lib,regional,schema}/**",
       "excludeFiles": "{app/data,routing/data,routing/candidates}/**"
     },
@@ -30,7 +30,10 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
       ]
     }
   ]
