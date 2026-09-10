@@ -85,3 +85,9 @@ Hard exclusion added: the private zero-refill flag cannot affect any request
 containing NS, NB, PE or NL. Accepted Atlantic routing stays on its existing path.
 Corrected19graph overlay plus unchangedother44 admit63/63 with a37856b reader;
 report /tmp/dirt-63-reader-corrected.json. Publishedrelease02verification pending.
+
+Live reverse-cost storage ceiling raised from64MiB to256MiB, allocated in
+chunks for actual eligiblearcs only. Generic caller default stays64MiB. This
+removes a deterministic large-state admission ceiling without preallocating
+256MiB or changing graph/scoring.223adventure tests pass; large-state hosted
+memory still requires measurement. No capacity/subscriber-scale claim.
