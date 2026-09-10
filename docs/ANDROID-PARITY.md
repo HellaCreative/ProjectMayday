@@ -1026,3 +1026,8 @@ This preserves the objective, not the previous heuristic-weighted candidate.
 WA default (wander 1, avoidCities true) completes locally in 14.7s with all three
 proofs; the previous fuel frontier hit 400k labels on each candidate. 225 tests
 pass including exact-search comparison with urban priority and passing pumps.
+
+Large national pack capacity: any non-Atlantic request may use90000ms server
+work with100000ms transport; keep all-Atlantic20000ms/23000ms. A smaller caller
+window is still honored. All work shares one deadline; incomplete searches must
+remain unknown, never interpreted as a proved fuel gap.

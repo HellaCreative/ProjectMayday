@@ -125,3 +125,21 @@ This preserves the objective, not the previous heuristic-weighted candidate.
 WA default (wander 1, avoidCities true) completes locally in 14.7s with all three
 proofs; the previous fuel frontier hit 400k labels on each candidate. 225 tests
 pass including exact-search comparison with urban priority and passing pumps.
+
+Hosted e4f234c WA default, release02: COMPLETE44960ms cold. California on2GiB
+failed with platform-confirmed OOM;4GiB performance tier (existing Pro plan)
+restored bounded responses. Cold60s completed first objective but not fullpool;
+warm hit fixed30m expansion cap. National-only work cap now scales with graph
+edge count (64 per edge, minimum30m), deadline90s; Atlantic20s/30m unchanged.
+Fuel-chain host105s. Both service projects future deployments configured4GiB.
+Stable DEV slider repair deployed e4f234c with ns-nb-v1 scope while national
+qualification continues; zero-wander Dirt NS completes3371ms, release02.
+
+Hosted5cc36e2 California default cold COMPLETE76582ms,15019ms load; allthree
+objective candidates complete with directional fuel escape proof. Thus90s work
+and100s transport are measured allowances, not an unverified latency promise.
+Evidence /tmp/dirt-ca-90-hosted.json; private
+https://pack-fabric-o05hhg34d-goricksmith-7678s-projects.vercel.app .
+225 focused adventure tests pass.63/63 corrected-reader admission evidence
+/tmp/dirt-63-reader-corrected.json. This qualifies published pack admission plus
+representative live routes, not every possible itinerary or concurrent load.
