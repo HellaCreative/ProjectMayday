@@ -947,3 +947,8 @@ Validation: production compile, DEV/test compile, and 32 planner/V4 tests passed
 Live fuel requests wholly within NS/NB/PE/NL retain the accepted 20,000 ms work window and 23-second transport timeout. A request involving another published region may use 60,000 ms (including server pack loading/preparation), with 70-second transport timeout and a 75-second inactivity watchdog. Offline and unclassified requests retain 20 seconds. Proven progress renews the watchdog; cancellation remains immediate. No route ranking, surface preference, or fuel selection rule changes. The server host allows 75 seconds for a bounded 60-second national operation. The optional national fast-selection experiment remains disabled in production.
 
 Fuel diagnostics include the applied wander value and city/highway preferences, so a surface-profile issue can be distinguished from route reuse. An automated same-endpoint Dirt→Balanced→Clean test confirms new response geometry replaces map geometry; it does not claim subjective road suitability or physical map rendering acceptance. Both custom and framework waypoint drag callbacks require road snapping before confirmation.
+
+
+### September 9 — shared production pack release02
+
+DEV34 and Production19 use immutable `v4/releases/fabric-v4-20260909-02` for routing and rider-service downloads, matching live engine admission. The catalogSHA256 is `7b30e90d77349fdce7d245692c38106853c305ae7573d751c914b8c4535b8ebb`. Android must use this same published catalog; nineteen corrected graphs resolve source restriction ambiguity while retaining road/surface/geometry/fuel data and explicit provenance. Old release01 remains immutable for rollback, not the new download target.

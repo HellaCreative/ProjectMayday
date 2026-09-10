@@ -128,7 +128,7 @@ enum AppConfig {
 
     /// Immutable production bytes verified against the accepted national pack audit.
     nonisolated static var v4ProductionBaseURL: URL {
-        packCDNBaseURL.appendingPathComponent("v4/releases/fabric-v4-20260909-01")
+        packCDNBaseURL.appendingPathComponent("v4/releases/fabric-v4-20260909-02")
     }
 
     #if DIRT_DEVELOPMENT
@@ -137,12 +137,9 @@ enum AppConfig {
     nonisolated static var v4ConnectionBaseURL: URL {
         v4CandidateBaseURL
     }
-    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260909-01"
+    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260909-02"
     nonisolated static var v4CandidateBaseURL: URL {
-        packCDNBaseURL
-            .appendingPathComponent("v4")
-            .appendingPathComponent("candidates")
-            .appendingPathComponent(v4CandidateReleaseId)
+        v4ProductionBaseURL
     }
     #endif
 
