@@ -193,3 +193,17 @@ test('unavoidable urban arrival bounds prevent exhausting rural fuel labels',()=
  assert.equal(result.avoidanceCost,baseline.avoidanceCost);
  assert.throws(()=>searchResourcePath({...options,budget:budget(),avoidanceLowerBounds:{...bounds,target:1}}),/Avoidance bounds/);
 });
+
+test('rural endpoint beyond a required town also needs an urban bound',()=>{
+ const rows=[[0,1,1],[1,2,1],[2,3,1],[3,2,1],[0,4,1]];
+ for(let n=4;n<80;n++)rows.push([n,n+1,1]);
+ const g=graph(rows,[0]),edgeCost=a=>a.distanceMeters,avoidanceCost=a=>a.to===1?10:0;
+ assert.ok(g.outgoing(3).every(a=>avoidanceCost(a)===0));
+ const options={graph:g,start:0,end:3,edgeCost,avoidanceCost,fuel:{usableRangeMeters:1000,initialUsableMeters:1000}};
+ const baseline=searchResourcePath({...options,budget:budget()});
+ assert.equal(searchResourcePath({...options,budget:budget(),maxLabels:20}).reason,'label_limit');
+ const bounds=buildLowerBounds({graph:g,nodeCount:81,target:3,edgeCost:avoidanceCost,budget:budget(),stopAt:0});
+ const result=searchResourcePath({...options,budget:budget(),maxLabels:20,avoidanceLowerBounds:bounds});
+ assert.equal(result.state,'found');assert.deepEqual(result.arcs,baseline.arcs);
+ assert.equal(result.avoidanceCost,baseline.avoidanceCost);
+});

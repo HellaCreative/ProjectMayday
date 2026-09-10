@@ -173,10 +173,9 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(reverse.state!=="complete")return incomplete(reverse.reason);
   const bounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost,budget,reverseCosts:reverse.reverseCosts,stopAt:start});
   if(bounds.state!=="complete")return incomplete(bounds.reason);
-  // Bound unavoidable destination exposure too, so a required urban arrival
-  // does not expand every zero-exposure rural fuel state before reaching it.
-  const destinationExposure=useAvoidanceLowerBounds&&Array.from(graph.outgoing(end)).some(arc=>avoidanceCost(arc)>0);
-  const avoidanceBounds=destinationExposure?buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost:avoidanceCost,budget,stopAt:start}):null;
+  // A rural pin can sit beyond unavoidable town access. Inspecting only its
+  // adjacent arcs misses that exposure and exhausts the rural fuel frontier.
+  const avoidanceBounds=useAvoidanceLowerBounds?buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost:avoidanceCost,budget,stopAt:start}):null;
   if(avoidanceBounds && avoidanceBounds.state!=="complete")return incomplete(avoidanceBounds.reason);
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();
@@ -185,7 +184,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   timing.searchAndAdvisoryMs=Math.round(performance.now()-phase);
   if(result.road.state!=="found")return incomplete(result.road.reason);
   if(!["provisional_station_access","verified_on_supplied_station_access"].includes(result.fuel.state)) {
-    return {...incomplete(result.fuel.reason||result.fuel.state),fuel:result.fuel,search:{...budget.snapshot(),fuelSearch:result.road.diagnostics}};
+    return {...incomplete(result.fuel.reason||result.fuel.state),fuel:result.fuel,search:{...budget.snapshot(),fuelSearch:{...result.road.diagnostics,...(result.fuelSearch?{failedFuelSearch:result.fuelSearch.diagnostics}:{})}}};
   }
   stage="geometry_and_fuel_proof";phase=performance.now();
   const road=materializeRoute({pack,geom,result:result.road,budget});
@@ -203,7 +202,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   timing.geometryAndProofMs=Math.round(performance.now()-phase);
   return {request,provenance,road,qualityAudit,fuel:{...proof,plannedRefills:stops,destinationEscape:escape},stage:"complete",
     stationDiagnostics,timing:{...timing,totalMs:Math.round(performance.now()-at)},
-    search:{...budget.snapshot(),fuelSearch:result.road.diagnostics,escapeSearches:result.escapeSearches},
+    search:{...budget.snapshot(),fuelSearch:{...result.road.diagnostics,...(result.fuelSearch?{failedFuelSearch:result.fuelSearch.diagnostics}:{})},escapeSearches:result.escapeSearches},
     limitations:["nearest eligible road projection does not prove station entrance/exit or operation",
       "one station projection and one connected endpoint pair; alternatives not exhausted",
       "experimental additive ride objective; full profile quality not qualified","single region; no app/API adapter"]};

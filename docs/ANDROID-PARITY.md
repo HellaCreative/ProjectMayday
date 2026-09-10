@@ -1086,3 +1086,14 @@ Owner-trip replay reached three pumps before parallel access roads made the
 last two history edges ambiguous. Resolve their direction from the preceding
 ordered approach junction; retain rejection for equally consistent orientations.
 No geometric direction guess or turn-restriction reset is permitted.
+
+
+### Regional fuel search: unavoidable access beyond rural destinations
+
+Regional live search must include the reverse urban-exposure lower bound even
+when the destination-adjacent roads have zero urban exposure. A rural pin may
+require town access farther back. The bound relaxes turns/fuel only for search
+guidance; final fuel range, turn restrictions, surface objectives and urban
+priority remain unchanged. Never classify search exhaustion as a proved fuel
+gap. NS/NB-only behavior is unchanged. September 10 DEV qualification uses
+the owner failed destination 46.15605369715979,-70.65032958984375.
