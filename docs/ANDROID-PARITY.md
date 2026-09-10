@@ -999,3 +999,8 @@ arrival state and prove destinationescape within remaininginitialfuel. No repeat
 edge, forced/requiredpump, minimumStops>0, or priorhistory may take shortcut.
 Diagnostic zeroRefillAdvisory identifies use. This changes weightedcandidate
 selection in some cases; not approved for frozenAtlantic or claimednativeparity.
+National live fuel-chain budget: requests containing a non-Atlantic region may
+request windowTimeBudgetMs60000; server cap60s includes graphload/preparation.
+All-Atlantic(NS/NB/PE/NL) remains capped20s. Clients must allow~70s transport for
+national windows and retain existing~23s Atlantic timeout. Hosting75s is only
+response overhead headroom; routework does not restart its60s clock.

@@ -16,7 +16,7 @@
     },
     "api/fuel-chain.js": {
       "memory": 2048,
-      "maxDuration": 60,
+      "maxDuration": 75,
       "includeFiles": "routing/{lib,regional,schema}/**",
       "excludeFiles": "{app/data,routing/data,routing/candidates}/**"
     },

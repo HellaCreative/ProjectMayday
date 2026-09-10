@@ -91,3 +91,7 @@ chunks for actual eligiblearcs only. Generic caller default stays64MiB. This
 removes a deterministic large-state admission ceiling without preallocating
 256MiB or changing graph/scoring.223adventure tests pass; large-state hosted
 memory still requires measurement. No capacity/subscriber-scale claim.
+National time allowance authorized with newapp archive: cap60s for anynon-Atlantic
+region,20s for all-Atlantic. Caller smallerwindow retained. Allload/preparation
+shares deadline; hostingfuel-chain75s. Privatezero-refill flag remains disabled
+for production deployment, preserving accepted candidate selection.

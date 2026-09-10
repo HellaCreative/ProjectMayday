@@ -78,8 +78,10 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  let ridePreferences;
  try {ridePreferences=require('./ride-preferences').validatePreferences(body.options?.ridePreferences);}
  catch {return {status:'unknown',error:'invalid_ride_preferences',message:'The ride settings are invalid.',routes:[],stops:[],windowComplete:false};}
- const started=Date.now(),window=Number(body.fuel?.windowTimeBudgetMs||20000);
- const deadlineAtMs=started+Math.min(20000,Math.max(100,window));
+ const national=resolution.regionIds.some(id=>!['ns','nb','pe','nl'].includes(id));
+ const maximumWindowMs=national?60000:20000;
+ const started=Date.now(),window=Number(body.fuel?.windowTimeBudgetMs||maximumWindowMs);
+ const deadlineAtMs=started+Math.min(maximumWindowMs,Math.max(100,window));
  const loadTiming={regions:[],joinMs:0,joinCacheHit:false};
  const data=load?await load(resolution):await (async()=>{
   const {loadGraphsForRequest}=require('../graph'),{loadRegionFuel}=require('../fuel-data');
