@@ -95,3 +95,11 @@ National time allowance authorized with newapp archive: cap60s for anynon-Atlant
 region,20s for all-Atlantic. Caller smallerwindow retained. Allload/preparation
 shares deadline; hostingfuel-chain75s. Privatezero-refill flag remains disabled
 for production deployment, preserving accepted candidate selection.
+
+Hosted d04b390 preview6, zero-refill OFF, actual rider preferences wander.5 /
+avoidCitiesfalse / avoidHighwaysfalse, WASeattle→Bellevue:
+- cold COMPLETE20753ms (data5391),37.9426899km, all3candidate proofs.
+- warm COMPLETE7422ms (data119), identical37.9426899km.
+Both retained accepted weightedcandidate selection; no fastpath used.
+https://pack-fabric-nzuuqxstt-goricksmith-7678s-projects.vercel.app
+Evidence /tmp/dirt-wa-preview6.json and /tmp/dirt-wa-preview6-warm.json.
