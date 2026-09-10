@@ -44,3 +44,12 @@ Urban preparation now applies only spatially intersecting core boxes to each
 candidate edge. Full/indexed and partial/reversed crossing measurements agree.
 WA local request progresses into route/fuel search (preparation4204ms) but still
 fails20s deadline after fuel label_limit. This remains an open national blocker.
+
+Preview3 source0ce8c2e:
+https://pack-fabric-od1cxhn5j-goricksmith-7678s-projects.vercel.app
+WA cold: data5608ms, preparation6351ms, deadline during station matching.
+WA warm: data3ms, preparation0ms, station matching10820ms, search still hits20s.
+The immutable preparation cache works, but cold/warm fuel-chain qualification
+is not complete. Finer grid experiment reduced matching locally but raised
+preparation time and did not complete; reverted rather than change accepted
+index geometry without a demonstrated overall win. No production alias moved.
