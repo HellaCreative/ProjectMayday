@@ -120,3 +120,40 @@ test('zero-refill proof preserves urban priority and surface objective with pass
  assert.deepEqual(proved.road.visits,[]);assert.equal(proved.fuel.arrivalUsableMeters,7);
  assert.equal(proved.road.diagnostics.zeroRefillProof,'minimum-objective-zero-retrace-with-legal-escape');
 });
+
+test('passing refill candidate proves multiple tanks without changing the road',()=>{
+ const g=graph([['A','P',6],['P','R',8],['R','D',7],['D','Q',2]],['P','R','Q']);
+ const result=ride(g,{fuelFirst:true,allowPassingRefillAdvisory:true});
+ assert.equal(result.fuel.state,'verified_on_supplied_station_access');
+ assert.deepEqual(result.road.arcs.map(a=>a.to),['P','R','D']);
+ assert.deepEqual(result.road.visits.map(v=>[v.stationId,v.atMeters]),[['pump-P',6],['pump-R',14]]);
+ assert.equal(result.fuel.arrivalUsableMeters,3);
+ assert.equal(result.fuel.destinationEscape.distanceMeters,2);
+ assert.equal(result.road.diagnostics.passingRefillAdvisory,true);
+});
+test('passing candidate skips unnecessary pumps and retains projected-access evidence',()=>{
+ const g=graph([['A','P',2],['P','R',4],['R','D',4],['D','Q',2]],['P','R','Q']);
+ g.stationAt=n=>['P','R','Q'].includes(n)?{id:n,accessEvidence:'legal_road_projection'}:null;
+ const result=ride(g,{allowPassingRefillAdvisory:true});
+ assert.deepEqual(result.road.visits,[{stationId:'R',atMeters:6,accessEvidence:'legal_road_projection'}]);
+ assert.equal(result.fuel.state,'provisional_station_access');
+});
+test('passing candidate falls back to integrated search when a detour is required',()=>{
+ const g=graph([['A','D',6],['A','P',3],['P','D',4],['D','Q',4]],['P','Q']);
+ const result=ride(g,{allowPassingRefillAdvisory:true});
+ assert.deepEqual(result.road.arcs.map(a=>a.to),['P','D']);
+ assert.equal(result.road.diagnostics.passingRefillAdvisory,undefined);
+ assert.equal(result.fuel.state,'verified_on_supplied_station_access');
+});
+test('passing candidate cannot spend reserve or bypass arrival turn restrictions',()=>{
+ const g=graph([['A','P',7.01],['P','D',2],['D','Q',1]],['P','Q']);
+ assert.equal(ride(g,{allowPassingRefillAdvisory:true}).fuel.state,'unverified');
+ const restricted=graph([['A','P',3],['P','D',4],['D','Q',1]],['P','Q'],(s,a)=>({allowed:!(s===1&&a.id===2),state:a.id}),(n,s)=>`${n}:${s}`);
+ assert.equal(ride(restricted,{allowPassingRefillAdvisory:true}).fuel.state,'unverified');
+});
+test('passing candidate supports an initially empty tank at a mapped starting pump',()=>{
+ const g=graph([['A','D',6],['D','Q',2]],['A','Q']);
+ const result=ride(g,{fuel:{usableRangeMeters:10,initialUsableMeters:0},allowPassingRefillAdvisory:true});
+ assert.equal(result.fuel.state,'verified_on_supplied_station_access');
+ assert.deepEqual(result.road.visits,[{stationId:'pump-A',atMeters:0}]);
+});

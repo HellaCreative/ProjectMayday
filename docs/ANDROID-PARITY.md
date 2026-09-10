@@ -1040,3 +1040,17 @@ For routes whose selected regions include NS and PE, also load NB so the Confede
 
 ## Unavoidable-exposure lower-bound candidate
 Fuel search may use reverse nonnegative avoidance-cost lower bounds in its priority queue, retaining actual accumulated avoidance for dominance and results. Bounds must match graph, target and cost function and relax fuel/turn restrictions only for an admissible estimate; forward fuel and legal-turn checks remain mandatory. Capped reverse bounds remain lower bounds, never corridor limits. Candidate passes 226 JS tests, including unchanged optimal result and a state-limit reproduction. Native parity and physical acceptance remain pending; not promoted to public routing.
+
+Scope: the exposure-bound candidate is enabled only when the selected regions include a region other than NS/NB. Existing NS-only, NB-only and NS/NB behavior is explicitly retained.
+
+### Regional passing-station candidate — September 10 (not accepted/live)
+
+Private experiment only, gated by `DIRT_PASSING_REFILL_ADVISORY=candidate-v1`
+with at least one region outside NS/NB. On a minimum-objective, no-repeat road,
+certify a minimum-refill schedule on that fixed geometry using mapped station
+nodes and full arrival-turn-state escape. This inserts no road detours and
+never relaxes range/reserve, turn legality, or projected-access provenance.
+It does not prove the fewest refills across other equal-cost road alternatives.
+If this witness fails, retain integrated fuel search. Forced/required stops and
+prior itinerary history stay on the existing path. Android/native parity and
+physical acceptance remain pending; do not promote this experimental flag.
