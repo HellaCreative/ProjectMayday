@@ -219,3 +219,10 @@ Follow-ups, owners, due dates:
   that control is currently inside development-only tester tools. Support can
   use the safe intake path, screenshots, timestamps, and request IDs, but a
   public-build diagnostic-export decision remains open.
+
+## September 10 current-release verification
+The health verifier now checks the same immutable V4 release as current AppConfig.swift: fabric-v4-20260909-02, including its versioned Rider Services catalog. A regression test checks the release pin against the app. Legacy root manifest results are not evidence about this release. Five verifier tests passed. No app, engine or pack bytes changed.
+
+Strict/deep production run: `.build/launch-preparation-20260910/production-health.txt`. Auth, route/fuel/POI health, both 63-region catalogs, all 315 object HEAD size checks, and Shortbread passed. The fuel-chain endpoint returned HTTP 500 (FUNCTION_INVOCATION_FAILED), so the overall gate FAILED. Successful HEAD requests prove availability and size, not full downloaded checksums or route correctness. Do not treat this run as national route qualification.
+
+Release owner is Richard Smith. Named support/backend backups and delivery of alerts still need an operational owner; do not invent staffing or claim a backup restore drill occurred. The existing support intake is info@dirtmoto.app. Verify mailbox receipt before public launch.

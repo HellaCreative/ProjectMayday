@@ -52,7 +52,7 @@
          </TestableReference>
       </Testables>
       <StoreKitConfigurationFileReference
-         identifier = "../../../Dirt/Dirt.storekit">
+         identifier = "../../Dirt/Dirt.storekit">
       </StoreKitConfigurationFileReference>
    </TestAction>
    <LaunchAction
@@ -76,7 +76,7 @@
          </BuildableReference>
       </BuildableProductRunnable>
       <StoreKitConfigurationFileReference
-         identifier = "../../../Dirt/Dirt.storekit">
+         identifier = "../../Dirt/Dirt.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction

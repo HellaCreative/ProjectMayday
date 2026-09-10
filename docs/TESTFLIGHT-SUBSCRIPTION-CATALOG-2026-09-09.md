@@ -40,3 +40,14 @@ The missing products were a confirmed catalog defect; saved catalog work should 
 [Product metadata changes can take up to one hour to propagate](https://developer.apple.com/documentation/storekit/testing-purchases-made-outside-your-app).
 
 Approved pricing source: `docs/APP-STORE-LAUNCH-CHECKLIST.md`, Subscription products section.
+
+## September 10 morning
+
+Owner restored Safari. Confirmed Paid Apps Agreement, banking and tax statuses Active. English(US) DIRT PRO group display name saved and visibly verified. Added both plan review notes. Plan level reordering attempts did not save; monthly1/yearly2 remain. Actual TestFlight purchase and restore verification is pending owner testing. No review screenshot supplied yet.
+
+
+## September 10 testing disposition
+User confirmed purchase worked. The displayed $39.99 versus purchase $49.99 mismatch is assigned to application testing, including storefront/currency and StoreKit configuration. No pricing change is authorized in this preparation pass.
+
+## September 10 service-level reconciliation — completed
+Richard stacked Yearly with Monthly using the dashboard drag control. Saved and verified both plans at level 1 in App Store Connect group 22373005. Prices, duration, availability and introductory offers unchanged. Earlier monthly1/yearly2 notes are superseded. Review screenshots and application purchase/restore/expiry tests remain open; final submission stays on hold.

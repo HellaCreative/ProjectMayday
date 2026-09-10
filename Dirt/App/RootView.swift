@@ -1,3 +1,4 @@
+import AuthenticationServices
 import CoreLocation
 import SwiftUI
 
@@ -524,6 +525,12 @@ struct RootView: View {
             )) { _ in
                 refreshLandscapeEdgeTicket()
                 RoutingDebugLog.shared.event("lifecycle scene active")
+                Task { await app.supabase.checkAppleCredential { app.groups.handleCredentialRevoked() } }
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: ASAuthorizationAppleIDProvider.credentialRevokedNotification
+            )) { _ in
+                Task { await app.supabase.checkAppleCredential { app.groups.handleCredentialRevoked() } }
             }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIScene.didEnterBackgroundNotification
@@ -557,6 +564,7 @@ struct RootView: View {
             .task {
                 app.location.requestWhenInUse()
                 await app.supabase.bootstrap()
+                await app.supabase.checkAppleCredential { app.groups.handleCredentialRevoked() }
                 await app.rideIntelligence.flushPendingIncidents()
                 if app.groups.groups.isEmpty {
                     await app.groups.refreshGroups()
@@ -567,6 +575,8 @@ struct RootView: View {
             .onChange(of: app.supabase.isSignedIn) { _, signedIn in
                 if signedIn {
                     Task {
+                        await app.supabase.checkAppleCredential { app.groups.handleCredentialRevoked() }
+                        guard app.supabase.isSignedIn else { return }
                         await app.rideIntelligence.flushPendingIncidents()
                         await app.groups.refreshGroups()
                     }

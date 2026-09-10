@@ -1,5 +1,7 @@
 # DIRT iOS — App Store launch checklist
 
+> **Current reconciliation: September 10, 2026.** See [launch preparation](LAUNCH-PREPARATION-2026-09-10.md) for verified live changes and outstanding gates. Older build/baseline references below are historical evidence, not a current release approval. Final submission is on hold at the user’s request.
+
 **Purpose:** one operational source of truth for taking the frozen routing
 release candidate through TestFlight and public App Store review.
 
@@ -12,7 +14,7 @@ still needs the focused White pass in
 [NAVIGATION-PREP-REQUALIFICATION-2026-09-04.md](NAVIGATION-PREP-REQUALIFICATION-2026-09-04.md).
 The routing/fuel engine remains on the unchanged baseline above.
 
-**Deferred:** CarPlay is parked. Native GPX-to-DIRT conversion and subjective
+**CarPlay:** foundation planning reopened September 10; see [CarPlay groundwork](CARPLAY-FOUNDATION-2026-09-10.md). It is not implemented or advertised as supported. Native GPX-to-DIRT conversion and subjective
 visual redesign are separate product milestones, not hidden launch work.
 
 **Rider Services candidate:** build `2 (14)`, commit `9808936`, passed the RED

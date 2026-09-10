@@ -71,10 +71,12 @@ else
   pass "production routing service absent from development executable"
 fi
 
-expected_storekit_reference='identifier = "../../../Dirt/Dirt.storekit"'
+# Xcode resolves the identifier from xcshareddata, one level above xcschemes.
+storekit_relative_path='../../Dirt/Dirt.storekit'
+expected_storekit_reference="identifier = \"$storekit_relative_path\""
 storekit_reference_count=$(grep -F -c "$expected_storekit_reference" "$dev_scheme" || true)
 if [[ "$storekit_reference_count" -eq 2 ]] \
-  && [[ -f "$(dirname "$dev_scheme")/../../../Dirt/Dirt.storekit" ]]; then
+  && [[ -f "$(dirname "$dev_scheme")/../$storekit_relative_path" ]]; then
   pass "DIRT Dev StoreKit catalogue reference resolves"
 else
   fail "DIRT Dev StoreKit catalogue reference is missing or invalid"

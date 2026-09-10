@@ -6,6 +6,8 @@ import { pathToFileURL } from "node:url";
 const REGION_COUNT = 63;
 const ROUTING_CONTRACT = "dirt-routing.r0.v1";
 const PACK_CDN = "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
+export const FABRIC_RELEASE = "fabric-v4-20260909-02";
+const FABRIC_BASE = `${PACK_CDN}/v4/releases/${FABRIC_RELEASE}`;
 const SHORTBREAD = "https://dirt-shortbread-tiles.dirt-shortbread-edge.workers.dev";
 
 const ENVIRONMENTS = Object.freeze({
@@ -86,9 +88,15 @@ function advertisedFiles(manifest) {
   );
 }
 
-export function validatePackManifest(manifest) {
-  if (manifest?.schemaVersion !== "pack-manifest.v1") fail("unexpected pack manifest schema");
-  if (manifest?.version !== "v1") fail("unexpected pack manifest version");
+export function validatePackManifest(manifest, expectedRelease = null) {
+  const v4 = typeof manifest?.fabricReleaseId === "string";
+  if (v4) {
+    if (!/^fabric-v4-[a-z0-9-]+$/.test(manifest.fabricReleaseId) || manifest.version !== manifest.fabricReleaseId) fail("unexpected V4 pack identity");
+  } else {
+    if (manifest?.schemaVersion !== "pack-manifest.v1") fail("unexpected pack manifest schema");
+    if (manifest?.version !== "v1") fail("unexpected pack manifest version");
+  }
+  if (expectedRelease && manifest.fabricReleaseId !== expectedRelease) fail("pack release differs from app configuration");
   if (!Array.isArray(manifest.regions) || manifest.regions.length !== REGION_COUNT) {
     fail(`pack manifest advertises ${manifest?.regions?.length ?? 0} regions, expected ${REGION_COUNT}`);
   }
@@ -99,7 +107,7 @@ export function validatePackManifest(manifest) {
     }
     ids.add(region.id);
     const names = new Set((region.files || []).map((file) => file.name));
-    if (![...names].some((name) => /^graph\.v[23]\.bin$/.test(name))) {
+    if (v4 ? !names.has("graph.v4.bin") : ![...names].some((name) => /^graph\.v[23]\.bin$/.test(name))) {
       fail(`${region.id} has no graph file`);
     }
     for (const required of ["geometry.v1.bin", "fuel.v1.json"]) {
@@ -266,15 +274,15 @@ async function verifySupabase(fetchImpl, config, options, recorder, environment)
 }
 
 async function verifyCatalogs(fetchImpl, options, recorder) {
-  const packURL = `${PACK_CDN}/manifest.json?launch-health=${Date.now()}`;
+  const packURL = `${FABRIC_BASE}/manifest.json?launch-health=${Date.now()}`;
   const packResponse = await request(fetchImpl, packURL, { headers: { Accept: "application/json" } }, options.timeoutMs);
   if (packResponse.status !== 200) fail(`pack manifest returned HTTP ${packResponse.status}`);
   const packBytes = Buffer.from(await packResponse.arrayBuffer());
   const packManifest = JSON.parse(packBytes.toString("utf8"));
-  const packFiles = validatePackManifest(packManifest);
+  const packFiles = validatePackManifest(packManifest, FABRIC_RELEASE);
   recorder.pass("pack catalog", `${packManifest.regions.length} regions · ${packFiles.length} files · sha256 ${sha256(packBytes)}`);
 
-  const riderURL = `${PACK_CDN}/rider-services/v1/manifest.json?launch-health=${Date.now()}`;
+  const riderURL = `${FABRIC_BASE}/rider-services/manifest.json?launch-health=${Date.now()}`;
   const riderResponse = await request(fetchImpl, riderURL, { headers: { Accept: "application/json" } }, options.timeoutMs);
   if (riderResponse.status !== 200) fail(`Rider Services manifest returned HTTP ${riderResponse.status}`);
   const riderBytes = Buffer.from(await riderResponse.arrayBuffer());
@@ -284,8 +292,8 @@ async function verifyCatalogs(fetchImpl, options, recorder) {
 
   if (options.deep) {
     const objects = [
-      ...packFiles.map((file) => ({ ...file, url: `${PACK_CDN}/${file.regionId}/${file.name}` })),
-      ...riderFiles.map((file) => ({ ...file, url: `${PACK_CDN}/rider-services/v1/${file.regionId}/${file.name}` })),
+      ...packFiles.map((file) => ({ ...file, url: `${FABRIC_BASE}/${file.regionId}/${file.name}` })),
+      ...riderFiles.map((file) => ({ ...file, url: `${FABRIC_BASE}/rider-services/${file.regionId}/${file.name}` })),
     ];
     for (let index = 0; index < objects.length; index += 8) {
       await Promise.all(objects.slice(index, index + 8).map(async (file) => {

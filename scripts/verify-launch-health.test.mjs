@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   parseArgs,
+  FABRIC_RELEASE,
   validatePackManifest,
   validateRiderServicesManifest,
 } from "./verify-launch-health.mjs";
@@ -28,6 +30,18 @@ function riderRegion(id) {
 }
 
 const ids = Array.from({ length: 63 }, (_, index) => `r${String(index).padStart(2, "0")}`);
+
+test("health catalog follows the app's pinned V4 release", () => {
+  const source = readFileSync(new URL("../Dirt/Networking/AppConfig.swift", import.meta.url), "utf8");
+  assert.ok(source.includes(`v4/releases/${FABRIC_RELEASE}`));
+  const manifest = { version: FABRIC_RELEASE, fabricReleaseId: FABRIC_RELEASE, regions: ids.map(packRegion) };
+  assert.throws(() => validatePackManifest(manifest, FABRIC_RELEASE), /no graph/);
+  for (const region of manifest.regions) region.files[0].name = "graph.v4.bin";
+  assert.equal(validatePackManifest(manifest, FABRIC_RELEASE).length, 189);
+  assert.throws(() => validatePackManifest(manifest, "fabric-v4-other"), /differs from app/);
+  manifest.regions[0].files.pop();
+  assert.throws(() => validatePackManifest(manifest, FABRIC_RELEASE), /no fuel/);
+});
 
 test("parseArgs defaults to a fast production check", () => {
   assert.deepEqual(parseArgs([]), {

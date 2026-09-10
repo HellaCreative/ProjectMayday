@@ -111,7 +111,13 @@ begin
 
   -- Live route incidents are deliberately shared safety data. The author can
   -- edit their own report, but another signed-in rider cannot rewrite it.
-  select count(*) into visible_count from public.route_incidents;
+  -- Hosted development may already contain real public incident reports.
+  -- Assert visibility of both fixture authors without counting unrelated data.
+  select count(*) into visible_count from public.route_incidents
+  where id in (
+    '40000000-0000-0000-0000-000000000001',
+    '40000000-0000-0000-0000-000000000003'
+  );
   if visible_count <> 2 then
     raise exception 'member expected 2 live shared incidents, got %', visible_count;
   end if;

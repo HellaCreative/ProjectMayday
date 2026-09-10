@@ -1,77 +1,44 @@
-# Cursor prompt — run DIRT Pack Factory
+# Cursor prompt — DIRT legal-topology Pack Factory (NS V4 canary)
 
-Use the complete prompt below in Cursor. Cursor may use its existing **Pack
-Factory** skill, but the checked-in repository contract is authoritative.
-
----
-
-You are producing the remaining DIRT regional routing packs from the frozen
-routing release candidate.
-
-Work only in:
-`/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
-
-Use branch:
-`feature/routing-itinerary-rebuild`
-
-Invoke your Pack Factory skill, then read these files completely before making
-changes:
-
-1. `AGENTS.md`
-2. `docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`
-3. `docs/ROUTING-FREEZE-2026-09-03.md`
-4. `docs/PACK-FACTORY.md`
-5. `docs/PACK-DATA-V3-AUTHORITY.md`
-6. `.cursor/rules/live-and-pack-lockstep.mdc`
-
-The frozen routing implementation is
-`94b467a11375e3ea3233c127b07af2ef039d0658`, tagged
-`routing-rc1-2026-09-03`. Do not change route costs, profile objectives, search
-widths/budgets, fuel thresholds/ranking, stage-edit ownership, warning
-semantics, or app UI as part of pack production.
-
-The accepted V3 mould is Nova Scotia, New Brunswick, Prince Edward Island,
-Newfoundland and Labrador, Quebec, and Ontario. Their exact immutable release
-IDs and graph/geometry/fuel hashes are in the freeze document. Treat those
-bytes as read-only. Every new pack must use the same OSM-only V3 builder,
-lossless leaf schema, topology/membership laws, fuel sidecar format, release
-record, and guarded candidate/promote workflow.
-
-First, audit the public R2 manifest and both V3 registries. Produce an ordered
-list of regions that still require V3 packs. Do not bulk-promote. Work one region
-at a time through the full loop in `docs/PACK-FACTORY.md`:
-
-- register deliberate acceptance routes;
-- build `graph.v3.bin` and its paired `geometry.v1.bin` from the clipped
-  Geofabrik OSM source;
-- build the matching OSM `fuel.v1.json`;
-- fail closed on dictionary overflow or identity mismatch;
-- run the shared test suite and local region audit;
-- create and upload an immutable region-only candidate without changing the
-  public manifest;
-- add both V3 registries and commit the release record, fixtures, reports, and
-  registries so deployment has a real source identity;
-- deploy LIVE against the recorded candidate override;
-- run LIVE route, profile, urban, seam, ferry where applicable, and fuel
-  acceptance probes;
-- confirm no accepted reference regression changed;
-- promote the exact tested bytes;
-- add the region to both V3 registries;
-- redeploy LIVE from committed source without a candidate override; and
-- run `ship-routing.js --assert --region <region>`.
-
-For every region, report the OSM source provenance, release ID, node/edge counts,
-dictionary cardinalities, byte counts, SHA-256 values, local/LIVE acceptance,
-seam/fuel probes, `serviceBuild`, `serviceContract`, and lockstep assertion.
-
-Never use bare `--pack`, replace the remote catalog with the checked-in seed
-manifest, publish a local-only pack, add provincial supplements, use longhaul,
-invent connectors, or change an accepted neighbouring pack. If a region appears
-to require a router change, stop that region and present the reproduction and
-evidence; do not hide the change inside Pack Factory.
-
-Begin by showing the manifest/registry audit and proposed region order. Then
-start the first region. Keep a concise checkpoint after each region so a failed
-candidate can be abandoned without disturbing the currently promoted fabric.
+Use this prompt. The checked-in `docs/PACK-FACTORY.md` is authoritative.
+Do **not** build or promote remaining V3 regions.
 
 ---
+
+You are fixing DIRT’s regional pack factory and proving one Nova Scotia
+legal-topology canary. This is a safety migration, not another V3 restamp.
+
+Work only in `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` on
+`feature/routing-itinerary-rebuild`.
+
+Stop every US/provincial V3 pack build. Do not publish, upload, promote,
+change a public catalog, or point production LIVE at new packs. Do not reset
+or overwrite the dirty worktree. Do not change frozen route costs, search
+widths, fuel selection, stage-edit ownership, warnings, UI, or rider-services.
+
+Read completely: `AGENTS.md`, `docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`,
+`docs/ROUTING-FREEZE-2026-09-03.md`, `docs/PACK-FACTORY.md`,
+`docs/PACK-DATA-V4-AUTHORITY.md`, `docs/PACK-DATA-V3-AUTHORITY.md` (rollback
+only), `docs/ANDROID-PARITY.md`, `.cursor/rules/live-and-pack-lockstep.mdc`.
+
+Report uncommitted changes before editing.
+
+Implement `graph.v4.bin` + `pack-manifest.v2` + capability `legal-topology.v1`
+in a new R2 namespace. Keep public V1/V3 intact. Readers in JavaScript, Swift,
+and Kotlin must reject unsupported versions, missing capabilities, identity
+mismatches, mixed-contract routing, and missing safety sections.
+
+Do not rebuild Nova Scotia until factory, format readers, fixtures, and
+validators are green. Then build NS **once** as a DEV-only candidate. Do not
+build a second region until the owner physically accepts NS. Do not alter
+production.
+
+Stop and report if a requirement would change frozen costs/search law or fuel
+selection. Access eligibility for V4 motorcycle (ATV must not override
+`motorcycle=no`) is an explicit legal-topology change documented in
+`docs/PACK-FACTORY.md`; it is not a cost retune.
+
+Handback: files, V4 spec, provenance, JS/Swift/Kotlin results, NS counts and
+rejections, candidate identity, proof that production/V3/other regions were
+untouched, proof stitches and coordinate-identity are gone, device test card,
+proposed national order — do not start the national rebuild.

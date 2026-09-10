@@ -4,7 +4,7 @@ import UIKit
 
 /// Cold-launch splash: wordmark lands → one throttle pop → three quick pops →
 /// wordmark surges at the camera with dirt flying off the bars → blackout into
-/// the intro. Engine audio uses the owner-provided `firtbike.mp3`.
+/// the intro. Engine audio uses the owner-provided `MyKTM.m4a`.
 ///
 /// Runs on a fixed timeline rather than waiting on bootstrap so the animation is
 /// never clipped mid-blip on a fast launch; `AppGateView` holds the splash until
@@ -195,7 +195,7 @@ final class SplashThrottleAudio {
 
     func play() {
         guard !UIAccessibility.isReduceMotionEnabled else { return }
-        guard let url = Bundle.main.url(forResource: "firtbike", withExtension: "mp3") else {
+        guard let url = Bundle.main.url(forResource: "MyKTM", withExtension: "m4a") else {
             return
         }
 

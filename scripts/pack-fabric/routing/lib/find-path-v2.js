@@ -109,6 +109,8 @@ const {
 const { segmentStructureFields } = require("./structure");
 const { packHasDirectedArc } = require("./travel-direction");
 
+const { containsRoadSpan, repeatedRoadSpan } = require("./path-retrace");
+const { buildRoadCompass } = require("./road-compass");
 const { customerEndpointEdges, validCustomerRuns } = require("./customer-endpoint-access");
 
 function v4AccessCode(pack, ei, fromNode, toNode) {
@@ -965,6 +967,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   profile = resolveProfile(profile);
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
   if (!searchOpts.costMode) {
+    searchOpts.roadCompassCache ||= {};
     const baseCorridor = corridorMetersForProfile(profile);
     const straightLineMeters = haversineMeters(startMatch.coord, endMatch.coord);
     const graphNodeCount = Number(runtime && runtime.pack && runtime.pack.nodeCount) || 0;
@@ -1073,6 +1076,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         hardCorridor: Number.isFinite(width),
         boundedSearch: true,
         sessionSeed,
+        roadCompassCache: searchOpts.roadCompassCache,
+        startEndpointKind: searchOpts.startEndpointKind,
+        endEndpointKind: searchOpts.endEndpointKind,
         variety: false,
         // Preserve Clean's paved-only gate across corridor widen attempts.
         pavedOnly: searchOpts.pavedOnly === true,
@@ -1449,6 +1455,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   }
 
   function awayExtra(fromNode, toNode) {
+    if (roadRemaining) return approachAwayExtraCost(profile, roadRemaining[fromNode], roadRemaining[toNode], roadRemaining[startNode], 50);
     const a = nodeLL(fromNode);
     const b = nodeLL(toNode);
     if (!a || !b) return 0;
@@ -1539,6 +1546,14 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   virt[vEndB].nativeForward = true;
   if (vBetween >= 0) virt[vBetween].nativeForward = startMatch.distanceAlongM <= endMatch.distanceAlongM;
 
+  const startAlong = Math.max(0, Math.min(edgeMeters[startEi], startMatch.distanceAlongM));
+  const endAlong = Math.max(0, Math.min(edgeMeters[endEi], endMatch.distanceAlongM));
+  virt[vStartA].span = [0, startAlong];
+  virt[vStartB].span = [startAlong, edgeMeters[startEi]];
+  virt[vEndA].span = [0, endAlong];
+  virt[vEndB].span = [endAlong, edgeMeters[endEi]];
+  if (vBetween >= 0) virt[vBetween].span = [Math.min(startAlong,endAlong),Math.max(startAlong,endAlong)];
+
   // Bridge pack duplicate nodes on continuous OSM ways for every profile.
   // A topology seam is not a surface preference: if Clean can cross the same
   // two-metre OSM join, Dirt and Balanced must see that connected road too.
@@ -1585,8 +1600,45 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     .filter(ei => pack.graphBinaryVersion >= 4 &&
       [pack.edgeAccess[ei * 2], pack.edgeAccess[ei * 2 + 1]].includes(4))
     .map(ei => String(pack.edgeId(ei))));
+  let roadRemaining = null;
+  if (pack.graphBinaryVersion >= 4 && profile !== "cleanest" && costMode !== "distance") {
+    const cache = searchOpts.roadCompassCache || {};
+    const key = `${startEi}:${endEi}:${startMatch.distanceAlongM}:${endMatch.distanceAlongM}:${policy.motorizedUnknown}:${searchOpts.startEndpointKind}:${searchOpts.endEndpointKind}`;
+    let compass = cache.pack === pack && cache.key === key ? cache.compass : null;
+    if (!compass) {
+      compass = buildRoadCompass({stateCount:total, destination:endNode,
+        deadlineAtMs: Number.isFinite(Number(searchOpts.deadlineAtMs))
+          ? Number(searchOpts.deadlineAtMs) : Date.now() + PASS2_TIME_MS,
+        cancelled: () => searchOpts.abortSignal?.aborted === true,
+        outgoing: (state, visit) => {
+          const from = graphNodeOf(state);
+          if (from < n) {
+            for (let arc=nodeOffsets[from]; arc<nodeOffsets[from+1]; arc++) {
+              const ei=edgeUndirectedIndex[arc], to=edgeTargets[arc];
+              if (avoid?.has(pack.edgeId(ei))) continue;
+              const next=v4TransitionState(pack,turnState,state,ei,from,to,startEi,endEi,
+                searchOpts.startEndpointKind,searchOpts.endEndpointKind,policy.motorizedUnknown===true,customerAccess);
+              if (next>=0) visit(next,ei,edgeMeters[ei]);
+            }
+          }
+          for (const item of virtAdj.get(from) || []) {
+            const v=virt[item.id];
+            if (avoid?.has(pack.edgeId(v.ei)) ||
+                !virtualEndpointAccessAllowed(pack,v,item.forward,startEi,endEi,searchOpts,policy,customerAccess) ||
+                (item.to===endNode && !turnState.allowsExit(state,v.ei))) continue;
+            visit(item.to<n ? stateForArrival(item.to,v.ei) : item.to,v.ei,v.meters);
+          }
+        }});
+      if (compass.status === "complete") Object.assign(cache,{pack,key,compass});
+    }
+    if (compass.status !== "complete") {
+      if (searchOpts.diagnostics) Object.assign(searchOpts.diagnostics,{outcome:compass.status,searchOutcome:compass.status});
+      return null;
+    }
+    roadRemaining = compass.remaining;
+  }
   const requestedRegression = Number(searchOpts.progressRegressionMeters);
-  const regressionLimit = profile === "cleanest" || requestedRegression === Infinity
+  const regressionLimit = roadRemaining || profile === "cleanest" || requestedRegression === Infinity
     ? Number.MAX_SAFE_INTEGER
     : (Number.isFinite(requestedRegression)
       ? requestedRegression
@@ -1701,7 +1753,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       coincidentSiblings,
       shortDirtPenaltyEdgeIds,
       turnState,
-      customerAccess, customerEdges, customerIds,
+      customerAccess, customerEdges, customerIds, roadRemaining,
       startEndpointKind: searchOpts.startEndpointKind,
       endEndpointKind: searchOpts.endEndpointKind
     });
@@ -1726,6 +1778,14 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const prevForward = new Uint8Array(total);
   const pathMeters = new Float64Array(total);
   if (!sparseDistanceState) pathMeters.fill(Infinity);
+  function pathRecord(label) {
+    if (prev[label] < 0) return null;
+    if (prevKind[label] === 0) return {edge:prevData[label],span:[0,edgeMeters[prevData[label]]]};
+    const v = prevKind[label] === 1 ? virt[prevData[label]] : null;
+    return v && v.ei >= 0 ? {edge:v.ei,span:v.span} : null;
+  }
+  const retraces = (label, ei, span) => pack.graphBinaryVersion >= 4 &&
+    containsRoadSpan(label,ei,span,index=>prev[index],pathRecord);
   const slots = new Uint8Array(total);
   const heap = new MinHeap();
 
@@ -2003,6 +2063,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           dirt,
           false
         );
+        if (action !== "reject" && retraces(cur.node, ei, [0,edgeMeters[ei]])) action = "reject";
         if (action === "steal" && createsCycle(prev, cur.node, toState)) action = "reject";
         if (applyRelax(action, slots, toState)) {
           prev[toState] = cur.node;
@@ -2158,6 +2219,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           false,
           false
         );
+        if (action !== "reject" && retraces(cur.node, v.ei, v.span)) action = "reject";
         if (action === "steal" && createsCycle(prev, cur.node, toState)) action = "reject";
         if (applyRelax(action, slots, toState)) {
           prev[toState] = cur.node;
@@ -2189,12 +2251,14 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   }
 
   const used = [];
+  const traversedSpans = [];
   let hops = 0;
   for (let node = endNode; node !== startNode; ) {
     hops += 1;
     if (hops > total + 4) return null;
     const parent = prev[node];
     if (parent < 0) return null;
+    traversedSpans.push(pathRecord(node));
     if (prevKind[node] === 1) {
       const v = virt[prevData[node]];
       const forward = prevForward[node] === 1;
@@ -2243,6 +2307,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     node = parent;
   }
   used.reverse();
+  if (pack.graphBinaryVersion >= 4 && repeatedRoadSpan(traversedSpans)) {
+    if (searchOpts.diagnostics) Object.assign(searchOpts.diagnostics, {outcome:"retraceRejected",searchOutcome:"retraceRejected",failureReason:"retrace_rejected"});
+    return null;
+  }
   if (!validCustomerRuns(used, customerIds, searchOpts.startEndpointKind === "customers", searchOpts.endEndpointKind === "customers")) return null;
   // All profiles: remove geographic loops / out-and-backs after search.
   const pruned = pack.graphBinaryVersion >= 4
@@ -2388,7 +2456,7 @@ function searchBalancedResource(ctx) {
     endLL,
     startEi = -1,
     endEi = -1,
-    customerAccess, customerEdges, customerIds,
+    customerAccess, customerEdges, customerIds, roadRemaining,
     policy,
     avoid,
     profile,
@@ -2450,6 +2518,14 @@ function searchBalancedResource(ctx) {
   const prevKind = new Uint8Array(labels);
   const prevData = new Int32Array(labels);
   const prevForward = new Uint8Array(labels);
+  function pathRecord(label) {
+    if (prev[label] < 0) return null;
+    if (prevKind[label] === 0) return {edge:prevData[label],span:[0,edgeMeters[prevData[label]]]};
+    const v = prevKind[label] === 1 ? virt[prevData[label]] : null;
+    return v && v.ei >= 0 ? {edge:v.ei,span:v.span} : null;
+  }
+  const retraces = (label, ei, span) => pack.graphBinaryVersion >= 4 &&
+    containsRoadSpan(label,ei,span,index=>prev[index],pathRecord);
   const slots = new Uint8Array(labels);
   const heap = new MinHeap();
   const startLab = lab(startNode, 0);
@@ -2501,6 +2577,7 @@ function searchBalancedResource(ctx) {
 
   const abMeters = haversineMeters(startLL, endLL);
   function awayExtra(fromNode, toNode) {
+    if (roadRemaining) return approachAwayExtraCost(profile, roadRemaining[fromNode], roadRemaining[toNode], roadRemaining[startNode], 50);
     const a = nodeLL(fromNode);
     const b = nodeLL(toNode);
     if (!a || !b) return 0;
@@ -2627,7 +2704,7 @@ function searchBalancedResource(ctx) {
         if (shortDirtPenalized) edgeBase *= DIRT_RIDE_PAVED_PER_KM;
         const newScore = cur.searchCost
           + penalizeBacktrack(
-            edgeBase + awayExtra(node, to),
+            edgeBase + awayExtra(state, toState),
             edgeId
           );
         let action = considerRelax(
@@ -2642,6 +2719,7 @@ function searchBalancedResource(ctx) {
           addDirt > 0,
           dirtAt[toLab] > (Number.isFinite(dist[toLab]) ? dist[toLab] * 0.4 : 0)
         );
+        if (action !== "reject" && retraces(cur.node, ei, [0,edgeMeters[ei]])) action = "reject";
         if (action === "steal" && createsCycle(prev, cur.node, toLab)) action = "reject";
         if (applyRelax(action, slots, toLab)) {
           prev[toLab] = cur.node;
@@ -2724,10 +2802,10 @@ function searchBalancedResource(ctx) {
           : 1;
         const newScore = cur.searchCost
           + penalizeBacktrack(
-            v.meters * settlementMult * urbanMult + awayExtra(node, item.to),
+            v.meters * settlementMult * urbanMult + awayExtra(state, toState),
             pack.edgeId(v.ei)
           );
-        if (newScore < score[toLab]) {
+        if (newScore < score[toLab] && !retraces(cur.node,v.ei,v.span)) {
           dist[toLab] = newMeters;
           score[toLab] = newScore;
           dirtAt[toLab] = dirtSoFar;
@@ -2761,12 +2839,14 @@ function searchBalancedResource(ctx) {
 
   function materializeCandidate(candidate) {
     const used = [];
+    const traversedSpans = [];
     let hops = 0;
     for (let label = candidate.lab; nid(label) !== startNode; ) {
       hops += 1;
       if (hops > labels + 4) return null;
       const parent = prev[label];
       if (parent < 0) return null;
+      traversedSpans.push(pathRecord(label));
       if (prevKind[label] === 1) {
         const v = virt[prevData[label]];
         const forward = prevForward[label] === 1;
@@ -2815,6 +2895,10 @@ function searchBalancedResource(ctx) {
       label = parent;
     }
     used.reverse();
+    if (pack.graphBinaryVersion >= 4 && repeatedRoadSpan(traversedSpans)) {
+      if (diagnostics) Object.assign(diagnostics, {outcome:"retraceRejected",searchOutcome:"retraceRejected",failureReason:"retrace_rejected"});
+      return null;
+    }
     if (!validCustomerRuns(used, customerIds, ctx.startEndpointKind === "customers", ctx.endEndpointKind === "customers")) return null;
     const pruned = pack.graphBinaryVersion >= 4
     ? { edges: used, prunedLoopCount: 0, prunedMeters: 0 }
@@ -2976,6 +3060,7 @@ function applyHonestReportedStats(path) {
 }
 
 module.exports = {
+  buildTurnAwareState,
   v4TransitionState,
   findPathV2,
   chooseDirtRideCandidate,

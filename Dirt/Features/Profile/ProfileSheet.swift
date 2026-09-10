@@ -13,6 +13,7 @@ struct ProfileSheet: View {
     @State private var message: String?
     @State private var showManageSubscriptions = false
     @State private var showPaywall = false
+    @State private var showLicences = false
     @State private var showDeleteAccountConfirmation = false
     @State private var testerToolsOpen = false
     @State private var routeDebugBusy = false
@@ -112,6 +113,24 @@ struct ProfileSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { displayName = supabase.displayName }
         .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
+        .sheet(isPresented: $showLicences) {
+            NavigationStack {
+                ScrollView {
+                    Text(Self.thirdPartyNotices)
+                        .font(.footnote)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("Licences & credits")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showLicences = false }
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showPaywall) {
             PaywallView(
                 presentation: .soft,
@@ -439,8 +458,20 @@ struct ProfileSheet: View {
 
     // MARK: - About / legal
 
+    private static let thirdPartyNotices: String = {
+        guard let url = Bundle.main.url(forResource: "ThirdPartyNotices", withExtension: "txt"),
+              let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return "Licence notices could not be loaded. Please contact support at dirtmoto.app/support/."
+        }
+        return text
+    }()
+
     private var aboutRows: some View {
         VStack(spacing: DirtSpace.tight) {
+            Button { showLicences = true } label: {
+                linkRow("Licences & credits", systemImage: "doc.text.magnifyingglass")
+            }
+            .buttonStyle(.plain)
             Link(destination: LegalLinks.website) {
                 linkRow("Visit dirtmoto.app", systemImage: "globe")
             }

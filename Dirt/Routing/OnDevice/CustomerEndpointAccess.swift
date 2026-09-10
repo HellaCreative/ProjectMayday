@@ -19,7 +19,7 @@ nonisolated enum CustomerEndpointAccess {
 }
 
 extension GraphV2Pack {
-    func customerEndpointEdges(edgeIndex: Int, seeds: [(node: Int, meters: Double)], reverse: Bool = false) -> Set<Int> {
+    nonisolated func customerEndpointEdges(edgeIndex: Int, seeds: [(node: Int, meters: Double)], reverse: Bool = false) -> Set<Int> {
         guard version >= 4, legalTopology, edgeIndex >= 0,
               edgeIndex * 2 + 1 < edgeAccess.count,
               edgeAccess[edgeIndex * 2] == 4 || edgeAccess[edgeIndex * 2 + 1] == 4 else { return [] }

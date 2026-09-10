@@ -768,6 +768,10 @@ Explicit `access=yes` or `motor_vehicle=yes` at these passable payment points
 must also remain passable. Destination/customer-only access does not become
 unrestricted through access.
 
+### NS/NB DEV integrated fuel preview — September 8, 2026
+
+The iOS DEV client requests up to 12 combined fuel/geometry legs for NS↔NB primary legs with no individual fuel-hop overrides, disabling the legacy graph-only forwardFeeler hint. Other regions and production retain existing behavior. Android must consume the same complete route/fuel geometry and validate every hop against remaining usable fuel; a province boundary never refills the tank. This is a DEV route-building contract, not offline navigation qualification. No Android implementation is claimed.
+
 ### September 9 — installed pack management
 
 Downloaded packs offer Update when a newer approved revision is available and Delete for installed revisions. Update stages and verifies the complete replacement before switching; failure retains the previous pack. Rows remain visible during updates and actions report failures. Delete removes every cached revision for that region so catalog changes cannot leave the displayed install behind. Neither operation replaces/removes a revision pinned by active navigation. This change does not modify route selection or navigation behavior.
@@ -964,3 +968,25 @@ Servere4f234c allows a proved zero-refill route only outside Atlantic provinces:
 ### Final national capacity — measured California cold load
 
 The final national allowance supersedes the60/70-second draft:90,000ms work including cold load/preparation,100-second client transport,105-second inactivity watchdog and server hosting allowance. Atlantic20,000ms/23-second transport/28-second watchdog remain unchanged. California full candidate pool completed cold in76.6seconds on4GiB, source5cc36e2; no route preference was changed to obtain this capacity result.
+
+## September 10 — licence visibility
+
+Profile must expose Licences & credits offline using bundled full third-party notices, with map data/artwork/audio credits. iOS adds this in ProfileSheet and ThirdPartyNotices.txt; Android must provide an equivalent accessible screen and retain platform-appropriate dependency notices. Apple SF Symbols are iOS system assets, not assets to copy into Android. SVWD03 artwork distribution/source obligations remain unresolved; a notice alone does not close that gate.
+
+
+## September 10 launch preparation
+Production group access hardening and expanded rider status values now match DEV; see LAUNCH-PREPARATION-2026-09-10.md. Android must retain matching status values and group authorization expectations. CarPlay groundwork is separate from Android Auto; neither is advertised as implemented.
+
+
+## Map font notice — September 10
+If Android uses the same demotiles Noto Sans Regular glyphs, include the adjacent SIL OFL 1.1 notice as recorded in MAP-FONT-PROVENANCE-2026-09-10.md. iOS notice now includes it; this does not change the font or routing contract. Android notice delivery remains to verify.
+
+
+## Apple credential revocation — September 10 working tree
+iOS now checks Apple credential state on startup, foreground, sign-in and revocation notification. Confirmed revoked/not-found for the same session clears authentication and disables persisted group sharing. Errors or stale lookup results do not sign out a new session. Android needs equivalent provider-session revocation behavior for its supported identity flow; AuthenticationServices itself is iOS-only. Automatic Apple server token revocation remains separate and unimplemented. Physical Apple revocation remains a release test; policy assertions alone do not prove it.
+
+### Launch-health tooling alignment — September 10
+The repository launch health verifier now checks fabric-v4-20260909-02, matching the iOS AppConfig release, instead of the legacy V3 root catalog. This is read-only operational tooling with no Android app or backend behavior change. Android's release qualification must identify its actual manifest revision rather than infer correctness from the legacy catalog. Production fuel-chain health currently returns HTTP 500 and is an open shared-service issue; object availability checks are not route qualification.
+
+## Owner-recorded startup audio
+Startup audio now uses the owner-recorded MyKTM.m4a (AAC, 48 kHz stereo, 3.305 seconds), replacing firtbike.mp3. Android should use the same owner recording and owner attribution. iOS keeps its accepted animation, mute/mixing behavior and Reduce Motion behavior. No routing changes.

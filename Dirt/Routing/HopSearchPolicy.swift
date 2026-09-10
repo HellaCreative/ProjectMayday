@@ -278,6 +278,7 @@ nonisolated enum HopSearchPolicy {
 }
 
 nonisolated struct HopSearchContext: Sendable {
+    var roadRemaining: [Double]? = nil
     var customerStartEdges: Set<Int> = []
     var customerEndEdges: Set<Int> = []
     var sessionSeed: UInt64
