@@ -990,3 +990,7 @@ Station matching may reject edges whose exact full-source bounding rectangle
 cannot intersect the conservative radius rectangle, before legal projection.
 Do not substitute endpoint-only bounds or change radius/access/nearest ranking.
 This is preparation optimization only; it does not qualify national search.
+Distinct parallel from/via edges sharing both endpoints use source-resolved
+viaNode only after validating full via/to adjacency; do not infer entry from
+array order. This does not permit general repeated-role edge deduplication.
+Source-level corrected pack revisions must accompany national admission.

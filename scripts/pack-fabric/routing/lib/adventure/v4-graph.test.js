@@ -93,3 +93,15 @@ test('repeated approach normalization refuses unproved attachment and leaves sou
  assert.equal(g.transition(arrival.state,{id:1,from:1,to:2}).allowed,true);
  assert.equal(g.transition(arrival.state,{id:2,from:1,to:3}).allowed,false);
 });
+
+test('distinct parallel via entry uses source-resolved contiguous path',()=>{
+ const r={fromEdge:0,viaEdges:[1],toEdge:2,viaNode:1,only:false};
+ const p=pack([[0,1],[0,1],[0,2]],[r]),g=createV4Graph(p);
+ const arrival=g.seedArrival([{id:0,from:0,to:1},{id:1,from:1,to:0}]);
+ assert.equal(g.transition(arrival.state,{id:2,from:0,to:2}).allowed,false);
+ // Starting on the other directed arrival never begins this source sequence.
+ const other=g.seedArrival([{id:0,from:1,to:0}]);
+ assert.equal(g.transition(other.state,{id:2,from:0,to:2}).allowed,true);
+ p.restrictions=[{...r,viaNode:0}];assert.throws(()=>createV4Graph(p),/Ambiguous/);
+ p.restrictions=[{...r,viaNode:99}];assert.throws(()=>createV4Graph(p),/Ambiguous/);
+});

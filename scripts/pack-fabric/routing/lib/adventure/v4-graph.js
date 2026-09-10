@@ -38,10 +38,22 @@ function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Ma
     const sequence=[restriction.fromEdge,...restriction.viaEdges,restriction.toEdge].map(Number);
     const first=sequence[0],next=sequence[1];
     const shared=[pack.edgeFrom[first],pack.edgeTo[first]].filter(node=>node===pack.edgeFrom[next]||node===pack.edgeTo[next]);
-    // Ambiguous attachment needs a richer source representation; never guess.
-    if(shared.length!==1)throw Object.assign(new Error(`Ambiguous via-way entry in restriction ${restriction.osmRelationId||"unknown"}`),
+    // Distinct parallel source edges may share both endpoints. The V4 writer
+    // records the validated ordered source path's entry, so use it only after
+    // checking that the entire via/to sequence is contiguous from that node.
+    let entry=shared.length===1?shared[0]:null;
+    if(entry==null&&first!==next&&Number.isInteger(restriction.viaNode)&&shared.includes(restriction.viaNode)) {
+      let node=restriction.viaNode,valid=true;
+      for(const edge of sequence.slice(1)) {
+        const a=pack.edgeFrom[edge],b=pack.edgeTo[edge];
+        if(a===b||(node!==a&&node!==b)){valid=false;break;}
+        node=node===a?b:a;
+      }
+      if(valid)entry=restriction.viaNode;
+    }
+    if(entry==null)throw Object.assign(new Error(`Ambiguous via-way entry in restriction ${restriction.osmRelationId||"unknown"}`),
       {code:"ambiguous_via_way_entry",details:{relationId:restriction.osmRelationId||null,fromEdge:first,viaEdge:next,sharedNodes:shared}});
-    const group=`${shared[0]}:${first}`;
+    const group=`${entry}:${first}`;
     const id=rules.length;rules.push({sequence,only:restriction.only===true,group});
     const list=starts.get(group)||[];list.push(id);starts.set(group,list);
   }

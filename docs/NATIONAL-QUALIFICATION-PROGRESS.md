@@ -65,3 +65,9 @@ Station index now reads exposed typed coordinates directly when available,
 retaining polyline fallback for joined graphs. This avoids per-point temporary
 arrays; direct/fallback query equivalence test passes. Request timings remain
 variable under concurrent work and no national performance claim follows.
+
+Distinct parallel from/via edges can now use explicit writer-resolved viaNode
+only after checking complete via/to adjacency. Repeated-edge broad normalization
+was rejected after SK/OH source counterexamples; only the earlier independently
+proved WA case remains until corrected versioned packs arrive. Added directed
+parallel-entry and wrong-entry/disconnected rejection coverage.
