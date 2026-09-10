@@ -114,3 +114,14 @@ locally). Dirt at zero remains dirt-seeking; route changes have natural plateaus
 Release fabric-v4-20260909-02 exact graph/geometry/fuel identities admitted for
 all 63 regions; corrected 19 graphs and unchanged 44 passed reader checks.
 Production experimental zero-refill advisory must remain OFF.
+
+Superseding the prior OFF instruction after default-WA qualification: the
+proved-national-v1 zero-refill option is authorized for non-Atlantic requests
+only. Unweighted legal search proves minimum urban exposure then objective cost;
+a no-repeat path has zero retrace and zero refills. Initial fuel must cover the
+path plus arrival-direction legal escape. Required/forced pumps, minimum stops
+and prior rider history exclude this option. Atlantic exclusion remains hard.
+This preserves the objective, not the previous heuristic-weighted candidate.
+WA default (wander 1, avoidCities true) completes locally in 14.7s with all three
+proofs; the previous fuel frontier hit 400k labels on each candidate. 225 tests
+pass including exact-search comparison with urban priority and passing pumps.

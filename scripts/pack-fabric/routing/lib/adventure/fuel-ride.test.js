@@ -110,3 +110,13 @@ test('opt-in shortcut falls through when initial fuel cannot cover legal escape'
  assert.deepEqual(fast.road.arcs,baseline.road.arcs);assert.deepEqual(fast.fuel,baseline.fuel);
  assert.equal(fast.road.diagnostics.zeroRefillAdvisory,undefined);
 });
+
+test('zero-refill proof preserves urban priority and surface objective with passing pumps',()=>{
+ const g=graph([['A','D',2],['A','P',2],['P','X',1],['X','D',2],['D','Q',1]],['P','Q']);
+ const args={fuel:{usableRangeMeters:20,initialUsableMeters:12},avoidanceCost:a=>a.id===0?2:0,edgeCost:a=>a.distanceMeters*(a.id===2?0.2:1),fuelFirst:true,preferOnwardFuel:true};
+ const exact=ride(g,args),proved=ride(g,{...args,allowZeroRefillAdvisory:true});
+ assert.deepEqual(proved.road.arcs,exact.road.arcs);
+ assert.equal(proved.road.avoidanceCost,0);assert.equal(proved.road.cost,exact.road.cost);
+ assert.deepEqual(proved.road.visits,[]);assert.equal(proved.fuel.arrivalUsableMeters,7);
+ assert.equal(proved.road.diagnostics.zeroRefillProof,'minimum-objective-zero-retrace-with-legal-escape');
+});

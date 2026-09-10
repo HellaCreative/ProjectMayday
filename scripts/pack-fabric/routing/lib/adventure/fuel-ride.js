@@ -45,6 +45,11 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,i
   }
   const searchOptions={...base,fuel,acceptGoal,maxLabels:maxFuelLabels,heuristicWeight:fuelHeuristicWeight,preferOnwardFuel};
   let result;
+  // The unweighted, fuel-relaxed search is a lower bound on the fuel problem:
+  // minimum urban exposure, then objective cost. A feasible no-repeat result
+  // also has the minimum possible retrace (zero) and refill count (zero).
+  // Checking arrival-direction escape closes the remaining fuel constraint.
+  // This proves the objective, not identity with heuristic-weighted search.
   if(allowZeroRefillAdvisory) {
     const candidate=advisory(),seen=new Set();
     const noRepeat=candidate.state==='found'&&candidate.arcs.every(arc=>{
@@ -54,7 +59,7 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,i
       const remaining=fuel.initialUsableMeters-candidate.distanceMeters;
       const escape=acceptGoal({node:end,turnState:candidate.endTurnState,remainingUsableMeters:remaining});
       if(escape.accepted&&budget.check())result={...candidate,visits:[],remainingUsableMeters:remaining,
-        goalEvidence:escape.evidence,diagnostics:{...candidate.diagnostics,zeroRefillAdvisory:true}};
+        goalEvidence:escape.evidence,diagnostics:{...candidate.diagnostics,zeroRefillAdvisory:true,zeroRefillProof:"minimum-objective-zero-retrace-with-legal-escape"}};
     }
   }
   if(!result)result=searchResourcePath(searchOptions);
