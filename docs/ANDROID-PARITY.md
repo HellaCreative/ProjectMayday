@@ -972,3 +972,7 @@ in Android. Production/candidate paths preserve one release ID and exact hashes.
 Joined graph identity allocation may be lazy: route edge IDs and overlapping
 source aliases must remain identical to eager composition. This is a memory
 optimization only; no geometry, fuel ranking or restriction policy change.
+
+National pack preparation work allowance scales with edge count while retaining
+request deadline; do not reject larger valid packs solely on the Atlantic-sized
+fixed preparation count. Route search and legal eligibility remain unchanged.

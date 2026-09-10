@@ -26,3 +26,9 @@ source identities.214existing adventure tests pass; dedicated lazy-ID coverage
 added and passed. Same VT/NH route:600496KiB peakRSS versus1089296KiB before
 (~45% less),3879ms versus5017ms. Geometry and distance identical. This is one
 controlled sample, not a national memory ceiling. Larger regions remain open.
+
+Hosted preview b5804e6 against promoted release09: PEI complete2769ms cold,
+1267ms warm (data648→3ms); VT/NH complete15878ms; NS complete4548ms.
+WA stopped during preparation with expansion_limit before anysearch expansions.
+Preparation allowance now scales to max20M,64*edgeCount; existingdeadline retained.
+This does not grant more search time or change route scoring. Retest pending.

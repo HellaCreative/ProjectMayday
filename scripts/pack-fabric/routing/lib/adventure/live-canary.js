@@ -114,7 +114,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const {waypointRadiusMeters}=require('./waypoint-radius');
  const endpointRadiusMeters=waypointRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
  const buildOptions={ridePreferences,arrivalHistory:{priorEdgeIds:body.options?.priorEdgeIds||[],arrivalEdgeId:body.options?.arrivalEdgeId},pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:nbSupplement(identity,require('./nb-urban-review-20260908-01.json').cores),avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb')||!!body.options?.priorEdgeIds?.length,maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
-  budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})};
+  budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:Math.max(20000000,data.pack.edgeCount*64),signal})};
  if(kind==='fuel'&&body.fuel.requiredFirstStationId) {
   const response=require('./fuel-replacement').buildFuelReplacement({body,options:buildOptions,identity,routeResponse,toLiveResponse});
   response.legId=body.legId;
