@@ -20,6 +20,21 @@ function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Ma
       }
       continue;
     }
+    // Some OSM only-turn relations repeat their one-way approach as the via
+    // way. A proved YES/NO direction and unique exit make this exactly a node
+    // turn; neither an uncertain direction nor a multi-edge via is normalized.
+    const from=Number(restriction.fromEdge),to=Number(restriction.toEdge);
+    if(restriction.only===true&&restriction.viaEdges.length===1&&Number(restriction.viaEdges[0])===from) {
+      const forward=pack.edgeAccess[from*2]===0&&pack.edgeAccess[from*2+1]===2;
+      const reverse=pack.edgeAccess[from*2]===2&&pack.edgeAccess[from*2+1]===0;
+      const entry=forward?pack.edgeFrom[from]:pack.edgeTo[from];
+      const exit=forward?pack.edgeTo[from]:pack.edgeFrom[from];
+      const attachment=[pack.edgeFrom[to],pack.edgeTo[to]].filter(node=>node===pack.edgeFrom[from]||node===pack.edgeTo[from]);
+      if((forward||reverse)&&entry!==exit&&Number(restriction.viaNode)===entry&&attachment.length===1&&attachment[0]===exit) {
+        const key=`${exit}:${from}`,row=nodeTurns.get(key)||{only:new Set(),no:new Set()};
+        row.only.add(to);nodeTurns.set(key,row);continue;
+      }
+    }
     const sequence=[restriction.fromEdge,...restriction.viaEdges,restriction.toEdge].map(Number);
     const first=sequence[0],next=sequence[1];
     const shared=[pack.edgeFrom[first],pack.edgeTo[first]].filter(node=>node===pack.edgeFrom[next]||node===pack.edgeTo[next]);

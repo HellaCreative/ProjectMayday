@@ -976,3 +976,13 @@ optimization only; no geometry, fuel ranking or restriction policy change.
 National pack preparation work allowance scales with edge count while retaining
 request deadline; do not reject larger valid packs solely on the Atlantic-sized
 fixed preparation count. Route search and legal eligibility remain unchanged.
+
+### National adapter qualification — repeated one-way approach (September9)
+The JavaScript candidate recognizes a repeated single-edge from/via only-turn
+only when access is exactly YES/NO in one direction, viaNode equals entry, and
+the to edge attaches uniquely at the permitted exit. Enforce an only node-turn
+there; do not discard restriction, mutate source metadata, or normalize uncertain,
+bidirectional, selfloop, entry-only, same-edge, or multi-via cases. This resolves
+OSM relation16478624 in WA. Swift/Android must implement the same derived rule
+before offline national parity is claimed. Spatial urban candidate narrowing
+changes preparation work only, preserving measured exposure and route costs.

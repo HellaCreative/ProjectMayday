@@ -32,18 +32,21 @@ function interval(a,b,box) {
 function buildUrbanExposure({pack,geom,areas,budget,index=null}) {
   if(areas.some(box=>!validBox(box)))throw new TypeError("Valid urban bounds required");
   if(index&&(index.state!=="complete"||index.pack!==pack||index.geom!==geom))throw new TypeError("Urban index belongs to a different graph");
-  const ranges=new Map(),candidates=new Set();
+  const ranges=new Map(),candidates=new Map();
   if(index) {
     for(const box of areas) {
       const edges=index.queryBox(box,budget);
       if(!edges)return {state:"incomplete",reason:budget.snapshot().reason};
-      for(const edge of edges)candidates.add(edge);
+      for(const edge of edges) {
+        // The spatial index already excludes distant boxes without losing crossings.
+        const boxes=candidates.get(edge)||[];boxes.push(box);candidates.set(edge,boxes);
+      }
     }
   } else for(let edge=0;edge<pack.edgeCount;edge++) {
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
-    candidates.add(edge);
+    candidates.set(edge,areas);
   }
-  for(const edge of candidates) {
+  for(const [edge,edgeAreas] of candidates) {
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
     if(!areas.length)continue;
     const coords=geom.polyline(edge);
@@ -54,7 +57,7 @@ function buildUrbanExposure({pack,geom,areas,budget,index=null}) {
       const a=coords[i-1],b=coords[i];
       if(![...a,...b].every(Number.isFinite)||Math.abs(b[0]-a[0])>180)throw new TypeError("Unsupported or invalid urban source geometry");
       const meters=haversineMeters(a,b);
-      for(const box of areas) {
+      for(const box of edgeAreas) {
         if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
         const span=interval(a,b,box);
         if(span&&meters>0)pieces.push([length+meters*span[0],length+meters*span[1]]);

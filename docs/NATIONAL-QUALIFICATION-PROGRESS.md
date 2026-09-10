@@ -32,3 +32,15 @@ Hosted preview b5804e6 against promoted release09: PEI complete2769ms cold,
 WA stopped during preparation with expansion_limit before anysearch expansions.
 Preparation allowance now scales to max20M,64*edgeCount; existingdeadline retained.
 This does not grant more search time or change route scoring. Retest pending.
+
+WA follow-up: warm hosted request exposed repeated from/via OSM relation16478624.
+Adapter now normalizes only a repeated single-edge only-turn with explicit YES/NO
+one-way access, a unique to-edge exit, and a viaNode matching entry. It becomes
+an enforced node-only turn at that exit; source metadata/pack bytes unchanged.
+All other ambiguous cases still fail.218 adventure tests pass including negative
+selfloop, entry-only, same-edge, multi-via, unknown/bidirectional direction cases.
+
+Urban preparation now applies only spatially intersecting core boxes to each
+candidate edge. Full/indexed and partial/reversed crossing measurements agree.
+WA local request progresses into route/fuel search (preparation4204ms) but still
+fails20s deadline after fuel label_limit. This remains an open national blocker.

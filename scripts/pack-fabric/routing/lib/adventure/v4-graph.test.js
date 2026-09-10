@@ -65,3 +65,31 @@ test('waypoint arrival preserves node and via-way restrictions',()=>{
  const node=createV4Graph(pack([[0,1],[1,2]],[{fromEdge:0,toEdge:1,viaNode:1,only:false}]));
  assert.equal(node.transition(node.seedArrival([{id:0,from:0,to:1}]).state,{id:1,from:1,to:2}).allowed,false);
 });
+
+test('repeated only-turn approach with proved one-way direction enforces the unique exit',()=>{
+ const p=pack([[0,1],[1,2],[1,3],[4,1]],[{osmRelationId:'16478624',fromEdge:0,viaEdges:[0],toEdge:1,viaNode:0,only:true}]);
+ p.edgeAccess[1]=2;
+ assert.equal(route(p,0,2).state,'found');assert.equal(route(p,0,3).state,'exhausted');
+ assert.equal(route(p,4,3).state,'found');
+ for(const codes of [[0,0],[0,1],[1,2],[0,5]]){
+  p.edgeAccess.splice(0,2,...codes);assert.throws(()=>createV4Graph(p),/Ambiguous/);
+ }
+ p.edgeAccess.splice(0,2,0,2);p.restrictions[0].viaNode=1;
+ assert.throws(()=>createV4Graph(p),/Ambiguous/);
+});
+
+test('repeated approach normalization refuses unproved attachment and leaves source unchanged',()=>{
+ const restriction={osmRelationId:'16478624',fromEdge:0,viaEdges:[0],toEdge:1,viaNode:0,only:true,kind:4,vehicleMask:7};
+ for(const edges of [[[0,0],[0,2]],[[0,1],[0,2]],[[0,1],[0,1]]]) {
+  const p=pack(edges,[{...restriction}]);p.edgeAccess[1]=2;
+  assert.throws(()=>createV4Graph(p),/Ambiguous/);
+ }
+ const p=pack([[0,1],[1,2]],[{...restriction,viaEdges:[0,0]}]);p.edgeAccess[1]=2;
+ assert.throws(()=>createV4Graph(p),/Ambiguous/);
+ p.restrictions=[restriction];const before=JSON.stringify(p.restrictions);createV4Graph(p);
+ assert.equal(JSON.stringify(p.restrictions),before);
+ const reverse=pack([[1,0],[1,2],[1,3]],[restriction]);reverse.edgeAccess.splice(0,2,2,0);
+ const g=createV4Graph(reverse),arrival=g.seedArrival([{id:0,from:0,to:1}]);
+ assert.equal(g.transition(arrival.state,{id:1,from:1,to:2}).allowed,true);
+ assert.equal(g.transition(arrival.state,{id:2,from:1,to:3}).allowed,false);
+});

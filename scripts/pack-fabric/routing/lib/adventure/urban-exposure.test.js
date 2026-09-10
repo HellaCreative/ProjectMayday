@@ -49,3 +49,17 @@ test("reused spatial index matches full geometry classification including curved
   assert.throws(()=>buildUrbanExposure({...options,pack:{...pack},index,budget:budget()}),/different graph/);
   assert.equal(buildUrbanExposure({...options,index,budget:budget(1)}).state,"incomplete");
 });
+
+test('per-edge core candidates preserve overlapping and distant core measurements',()=>{
+ const {buildEdgeIndex}=require('./station-matching');
+ const lines=[[[0,0],[3,0]],[[10,0],[13,0]],[[0,2],[3,2]]];
+ const pack={edgeCount:3,edgeMeters:[300,300,300]},geom={polyline:i=>lines[i]};
+ const areas=[box,{...box,minLon:1.5,maxLon:2.5},{...box,minLon:11,maxLon:12}];
+ const index=buildEdgeIndex(pack,geom,budget(20000));
+ const full=buildUrbanExposure({pack,geom,areas,budget:budget(20000)});
+ const narrowed=buildUrbanExposure({pack,geom,areas,index,budget:budget(20000)});
+ for(let id=0;id<3;id++)for(const [fromFraction,toFraction] of [[0,1],[.2,.8],[.8,.2]]){
+  const arc={id,distanceMeters:300*Math.abs(toFraction-fromFraction),fromFraction,toFraction};
+  assert.equal(narrowed.urbanMeters(arc),full.urbanMeters(arc));
+ }
+});
