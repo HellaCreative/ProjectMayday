@@ -240,6 +240,10 @@ function regionsForRoute(regionIds) {
       for (const r of path) needed.add(r);
     }
   }
+  // NS–PE has a direct ferry adjacency, but selecting only the fewest
+  // region hops excludes the Confederation Bridge alternative through NB.
+  // Load both connections; the road search still decides the actual route.
+  if (needed.has("ns") && needed.has("pe")) needed.add("nb");
   return [...needed].sort();
 }
 

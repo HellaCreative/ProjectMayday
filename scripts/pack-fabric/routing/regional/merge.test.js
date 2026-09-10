@@ -52,3 +52,12 @@ test("Clean long-haul chaining never manufactures city-core waypoints", () => {
     );
   }
 });
+
+require('node:test')('NS-PE selection includes the bridge region without changing local rides', () => {
+  const assert = require('node:assert/strict');
+  const { regionsForRoute } = require('./merge');
+  assert.deepEqual(regionsForRoute(['ns','pe']), ['nb','ns','pe']);
+  assert.deepEqual(regionsForRoute(['pe','ns']), ['nb','ns','pe']);
+  assert.deepEqual(regionsForRoute(['ns','nb']), ['nb','ns']);
+  assert.deepEqual(regionsForRoute(['pe']), ['pe']);
+});

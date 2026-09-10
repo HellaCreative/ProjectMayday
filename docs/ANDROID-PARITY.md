@@ -1034,3 +1034,6 @@ remain unknown, never interpreted as a proved fuel gap.
 
 ## Fuel health metadata isolation
 GET /api/fuel-chain now reads version metadata without loading the compatibility routing engine. POST dispatch, route/fuel behavior, pack bytes and Android request contracts are unchanged. A health response proves handler liveness, not fuel-plan feasibility.
+
+## NS–PE bridge-region candidate
+For routes whose selected regions include NS and PE, also load NB so the Confederation Bridge alternative is available alongside the direct ferry adjacency. Within-province PE and NS/NB selection remain unchanged. This is a live candidate pending hosted verification and native parity; no pack bytes or road eligibility changed. Android and offline Swift must carry the same required-region rule before calling this complete.
