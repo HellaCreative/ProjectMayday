@@ -21,7 +21,7 @@ class Heap {
 }
 
 function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
-  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0}) {
+  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,avoidanceLowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0}) {
   if(!Number.isFinite(dirtEntryCost)||dirtEntryCost<0)throw new TypeError("Dirt entry cost must be finite and nonnegative");
   if(!Number.isFinite(heuristicWeight)||heuristicWeight<1)throw new TypeError("Heuristic weight must be finite and at least one");
   if(!Number.isFinite(destinationEscapeMeters)||destinationEscapeMeters<0) throw new TypeError("A proved destination escape distance is required");
@@ -40,8 +40,9 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
   // Fewer refills break otherwise equal route costs; free fuel actions must
   // not turn every passing pump into a planned stop.
   const compare=(a,b)=>a.avoidance-b.avoidance || (a.retraceMeters||0)-(b.retraceMeters||0) || a.cost-b.cost || a.refills-b.refills;
-  const heap=new Heap((a,b)=>a.avoidance-b.avoidance || (a.retraceMeters||0)-(b.retraceMeters||0) || a.priority-b.priority || a.refills-b.refills),frontiers=new Map();
+  const heap=new Heap((a,b)=>a.avoidancePriority-b.avoidancePriority || (a.retraceMeters||0)-(b.retraceMeters||0) || a.priority-b.priority || a.refills-b.refills),frontiers=new Map();
   if(lowerBounds && (lowerBounds.state!=="complete" || lowerBounds.target!==end || lowerBounds.graph!==graph || lowerBounds.edgeCost!==edgeCost)) throw new TypeError("Lower bounds must be complete and belong to this graph, target and cost model");
+  if(avoidanceLowerBounds && (avoidanceLowerBounds.state!=="complete" || avoidanceLowerBounds.target!==end || avoidanceLowerBounds.graph!==graph || avoidanceLowerBounds.edgeCost!==avoidanceCost)) throw new TypeError("Avoidance bounds must belong to this graph, target and avoidance model");
   const fuelApproachIndexes=new WeakMap();
   // A legal station exit can rejoin the approach a few junctions away. Retain
   // the approach history so that this does not hide a repeated road.
@@ -67,6 +68,9 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     // Weight > 1 is explicit candidate-generation guidance: feasible results
     // retain hard constraints but no minimum-cost optimality is claimed.
     label.priority=label.cost+estimate*heuristicWeight;
+    const unavoidable=avoidanceLowerBounds?avoidanceLowerBounds.distances[label.node]:0;
+    if(unavoidable===Infinity)return;
+    label.avoidancePriority=label.avoidance+unavoidable;
     if(!budget.check())return;
     const key=graph.stateKey(label.node,label.turnState)+(preferOnwardFuel?`|retreat:${label.retreatCursor?.labelId??0}`:"")+(retainFuelApproach?`|approach:${label.fuelApproach?.arc?`${label.fuelApproach.arc.from}:${label.fuelApproach.arc.id}:${label.fuelApproach.node}`:"none"}`:"")+(dirtEntryCost?`|dirt:${label.onDirt?1:0}`:"");
     const frontier=frontiers.get(key) || [];

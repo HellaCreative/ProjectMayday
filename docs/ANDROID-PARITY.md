@@ -1037,3 +1037,6 @@ GET /api/fuel-chain now reads version metadata without loading the compatibility
 
 ## NS–PE bridge-region candidate
 For routes whose selected regions include NS and PE, also load NB so the Confederation Bridge alternative is available alongside the direct ferry adjacency. Within-province PE and NS/NB selection remain unchanged. This is a live candidate pending hosted verification and native parity; no pack bytes or road eligibility changed. Android and offline Swift must carry the same required-region rule before calling this complete.
+
+## Unavoidable-exposure lower-bound candidate
+Fuel search may use reverse nonnegative avoidance-cost lower bounds in its priority queue, retaining actual accumulated avoidance for dominance and results. Bounds must match graph, target and cost function and relax fuel/turn restrictions only for an admissible estimate; forward fuel and legal-turn checks remain mandatory. Capped reverse bounds remain lower bounds, never corridor limits. Candidate passes 226 JS tests, including unchanged optimal result and a state-limit reproduction. Native parity and physical acceptance remain pending; not promoted to public routing.

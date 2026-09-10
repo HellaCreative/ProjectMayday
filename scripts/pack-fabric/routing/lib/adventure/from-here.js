@@ -173,9 +173,13 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(reverse.state!=="complete")return incomplete(reverse.reason);
   const bounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost,budget,reverseCosts:reverse.reverseCosts,stopAt:start});
   if(bounds.state!=="complete")return incomplete(bounds.reason);
+  // Bound unavoidable destination exposure too, so a required urban arrival
+  // does not expand every zero-exposure rural fuel state before reaching it.
+  const avoidanceBounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost:avoidanceCost,budget,stopAt:start});
+  if(avoidanceBounds.state!=="complete")return incomplete(avoidanceBounds.reason);
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();
-  const result=searchFuelRide({graph,start,end,initialTurnState:initial.state,edgeCost,budget,fuel:request.fuel,lowerBounds:bounds,avoidanceCost,maxFuelLabels,fuelHeuristicWeight,preferOnwardFuel,retainFuelApproach,dirtEntryCost,fuelFirst,allowZeroRefillAdvisory,
+  const result=searchFuelRide({graph,start,end,initialTurnState:initial.state,edgeCost,budget,fuel:request.fuel,lowerBounds:bounds,avoidanceLowerBounds:avoidanceBounds,avoidanceCost,maxFuelLabels,fuelHeuristicWeight,preferOnwardFuel,retainFuelApproach,dirtEntryCost,fuelFirst,allowZeroRefillAdvisory,
     onRoadCandidate:road=>{const rendered=materializeRoute({pack,geom,result:road,budget});if(rendered.state==="complete"){recordExposure(rendered,road);fallback=rendered;}}});
   timing.searchAndAdvisoryMs=Math.round(performance.now()-phase);
   if(result.road.state!=="found")return incomplete(result.road.reason);
