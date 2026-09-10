@@ -141,3 +141,12 @@ test('national window includes cross-border requests without widening Atlantic-o
  assert.equal(requestWindowMs(['wa']),90000);
  assert.equal(requestWindowMs(['ns']),20000);
 });
+
+
+test('native cross-region combined forward window is admitted while graph-only feelers remain unsupported',()=>{
+ const body={profile:'dirt',locations:[{lat:44.764859,lon:-63.340236},{lat:45.501832,lon:-71.981272}],options:{mapZoom:7.5},fuel:{usableRangeMeters:180000,firstLegMaxMeters:180000,forwardFeeler:true,routeFirstPlan:true,allowPartialWindow:true,windowMaxStops:1,windowTimeBudgetMs:90000}};
+ const env={DIRT_ADVENTURE_CANARY:'national-v1'};
+ assert.equal(canarySupported(body,'fuel',env),true);
+ for(const patch of [{routeFirstPlan:false},{allowPartialWindow:false},{windowMaxStops:4},{minimumFuelStops:1},{requireFuelStopBeforeEnd:true},{probeFirstReachableStation:true}])
+  assert.equal(canarySupported({...body,fuel:{...body.fuel,...patch}},'fuel',env),false);
+});

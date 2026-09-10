@@ -1064,3 +1064,16 @@ The experimental reverse exposure bound is prepared only when an outgoing
 edge at the destination has positive exposure cost. Otherwise ordinary bounds
 and exact forward exposure accounting remain; this is guidance preparation,
 not a relaxation of urban or road eligibility rules.
+
+
+### Native cross-region request compatibility — September 10
+
+Owner log dirt-app-debug-2026-09-10T182737Z proves the NS→QC request sends
+forwardFeeler=true alongside routeFirstPlan=true, allowPartialWindow=true,
+windowMaxStops=1. Accept this specific combined-geometry forward-window shape
+in the regional engine. Return the same fully fuel-proved candidate partitioned
+at the first pump with windowComplete=false when more remains; never report a
+fuel-free fallback as a verified chain. Pure graph-only feelers, forced stops,
+and other unsupported controls remain explicitly rejected. Existing iOS accepts
+returned route geometry and advances from that pump with preserved arrival
+history. Android must use the same contract. Real multi-window replay pending.

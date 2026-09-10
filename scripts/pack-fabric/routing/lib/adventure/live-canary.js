@@ -22,7 +22,8 @@ function canarySupported(body,kind,environment=process.env) {
  const o=body.options||{},f=body.fuel||{};
  if(body.accessPolicy?.motorizedPermissive===false)return false;
  if(o.avoidEdgeIds?.length||o.maxPathMeters!=null||o.regionalHopMinimumMeters?.length||o.cleanMetroMultiplier!=null)return false;
- if(kind==='fuel'&&(f.requireFuelStopBeforeEnd||f.minimumFuelStops>0||f.destinationFuelUsedLimitMeters!=null||f.forwardFeeler||f.probeFirstReachableStation))return false;
+ const combinedForwardWindow=f.forwardFeeler===true&&f.routeFirstPlan===true&&f.allowPartialWindow===true&&f.windowMaxStops===1;
+ if(kind==='fuel'&&(f.requireFuelStopBeforeEnd||f.minimumFuelStops>0||f.destinationFuelUsedLimitMeters!=null||(f.forwardFeeler&&!combinedForwardWindow)||f.probeFirstReachableStation))return false;
  return true;
 }
 function routeResponse(segments,profile,identity,diagnostics,point=null) {
