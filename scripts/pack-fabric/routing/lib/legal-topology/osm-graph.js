@@ -8,6 +8,7 @@ const { evaluateMotorcycleAccess } = require("./motorcycle-access");
 const { travelDirectionV4, legalDirectedArcs } = require("./direction");
 const { isBarrierNode, evaluateBarrier, decisionCode } = require("./barriers");
 const { parseRestrictionRelation } = require("./restrictions");
+const { repairRepeatedSource } = require("./repeated-source-repair");
 const { collectConditionalRules, accessCodeFromRules } = require("./conditional");
 const { classify, leafFieldsFromProps } = require("../../adapters/osm-roads");
 const { surfaceForCosting, accessForPolicy } = require("../../schema/enums");
@@ -309,6 +310,7 @@ function buildGraphFromOsm(osm, options = {}) {
   }
 
   const restrictionParse = [];
+  const repeatedSources = [];
   const restrictionWayIds = new Set();
   for (const rel of osm.relations || []) {
     const parsed = parseRestrictionRelation(rel);
@@ -317,12 +319,15 @@ function buildGraphFromOsm(osm, options = {}) {
       continue;
     }
     restrictionParse.push(parsed.restriction);
+    if (String(parsed.restriction.fromWayId) === String((parsed.restriction.viaWayIds || [])[0])) repeatedSources.push(rel);
     restrictionWayIds.add(String(parsed.restriction.fromWayId));
     restrictionWayIds.add(String(parsed.restriction.toWayId));
     for (const id of parsed.restriction.viaWayIds || []) restrictionWayIds.add(String(id));
     for (const id of parsed.restriction.viaNodeIds) markSplit(id);
   }
   if (packedNodes) osm.relations.length = 0;
+  const repairWayIds = new Set(repeatedSources.flatMap(r => r.members.filter(m => m.type === "way").map(m => String(m.ref))));
+  const repairWays = new Map(ways.filter(w => repairWayIds.has(String(w.id))).map(w => [String(w.id), { nodeIds: w.nodeIds.map(String) }]));
   touch = null;
 
   const graphNodes = [];
@@ -535,6 +540,33 @@ function buildGraphFromOsm(osm, options = {}) {
     }
   }
 
+  const restrictionRepairs = [];
+  if (repeatedSources.length) {
+    const indexed = read => new Proxy({}, { get: (_, key) => /^\d+$/.test(String(key)) ? read(Number(key)) : undefined });
+    const sourcePack = {
+      osmNodeIds: indexed(i => graphNodes[i].osmNodeId),
+      edgeFrom: indexed(i => edges[i].from), edgeTo: indexed(i => edges[i].to),
+      edgeAccess: indexed(i => i % 2 ? edges[Math.floor(i / 2)].accessReverse : edges[Math.floor(i / 2)].accessForward)
+    };
+    for (const relation of repeatedSources) {
+      const originalRows = restrictions.filter(r => r.osmRelationId === String(relation.id));
+      if (!originalRows.length) continue; // Already reported as unresolved above.
+      const repair = repairRepeatedSource({ relation, ways: repairWays, nodes: { get: nodeForId }, pack: sourcePack, edgeIndexes: wayEdgeIndex });
+      const replacementRows = repair.type === "resolved" ? [{ ...originalRows[0], fromEdge: repair.fromEdge, toEdge: repair.toEdge,
+        viaNode: repair.viaNode, viaEdges: repair.viaEdges, viaWayIds: repair.viaWayIds, viaWayCount: repair.viaEdges.length }] : [];
+      if (repair.type === "quarantine") {
+        repair.excludedEdges = repair.wayIds.flatMap(w => wayEdgeIndex.get(w)).map(i => ({ edge: i, priorAccess: [edges[i].accessForward, edges[i].accessReverse] }));
+        for (const row of repair.excludedEdges) { edges[row.edge].accessForward = 2; edges[row.edge].accessReverse = 2; }
+      }
+      let inserted = false, write = 0;
+      for (const row of restrictions) {
+        if (row.osmRelationId !== String(relation.id)) restrictions[write++] = row;
+        else if (!inserted) { for (const replacement of replacementRows) restrictions[write++] = replacement; inserted = true; }
+      }
+      restrictions.length = write;
+      restrictionRepairs.push({ relation, originalRows, ...repair });
+    }
+  }
   if (packedNodes) packedNodes.clear();
 
   return {
@@ -542,6 +574,7 @@ function buildGraphFromOsm(osm, options = {}) {
     edges,
     barriers,
     restrictions,
+    restrictionRepairs,
     conditionals,
     rejected,
     timezone,

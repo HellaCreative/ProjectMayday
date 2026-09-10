@@ -84,6 +84,7 @@ function traversable(code) {
 }
 
 function encodeGraphV4(graph, provenance, geometryBuffer) {
+  if (graph.restrictionRepairs && graph.restrictionRepairs.length) provenance = { ...provenance, restrictionRepairs: graph.restrictionRepairs };
   const nodes = graph.nodes || [];
   const edges = graph.edges || [];
   const nodeCount = nodes.length;
