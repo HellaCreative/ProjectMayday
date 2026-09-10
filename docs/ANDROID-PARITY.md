@@ -1054,3 +1054,8 @@ It does not prove the fewest refills across other equal-cost road alternatives.
 If this witness fails, retain integrated fuel search. Forced/required stops and
 prior itinerary history stay on the existing path. Android/native parity and
 physical acceptance remain pending; do not promote this experimental flag.
+
+The private regional experiment uses the standard three-objective shared pool
+(paved, dirt-10, dirt-30), not NB's six-objective expansion, outside the accepted
+NS/NB-only coverage. All three must pass fuel proof within the unchanged app
+budget. NS/NB and continuation history retain their existing pools.
