@@ -58,12 +58,25 @@ struct FuelPlanningProgressWatchdog {
     }
 }
 
+enum FuelPlanningWindowPolicy {
+    static func milliseconds(regions: [String], live: Bool) -> Int {
+        let atlantic: Set<String> = ["ns", "nb", "pe", "nl"]
+        return live && regions.contains(where: { !atlantic.contains($0) }) ? 60_000 : 20_000
+    }
+
+    static func transportSeconds(milliseconds: Int) -> TimeInterval {
+        max(1, Double(milliseconds) / 1_000 + (milliseconds > 20_000 ? 10 : 3))
+    }
+
+    @MainActor static func milliseconds(points: [RouteCoordinate], live: Bool) -> Int {
+        milliseconds(regions: GraphPackStore.endpointProvinceIds(
+            containingAny: points.map(\.locationCoordinate)
+        ), live: live)
+    }
+}
+
 @MainActor
 final class ItineraryBuilder {
-    /// Hard live window, not a delay target. Small rides still return as soon
-    /// as proved; dense Ontario/Quebec requests get enough room to prove both
-    /// sides of one pump without reaching Vercel's platform timeout.
-    private static let liveFuelWindowBudgetMs = 20_000
     private var currentGeneration: Int?
     /// Current map zoom for V4 tap-radius. Set by the planner before `build`.
     var mapZoom: Double?
@@ -366,7 +379,11 @@ final class ItineraryBuilder {
 
         // Actual construction always receives its complete budget regardless
         // of whether an optional look-ahead probe succeeded, failed, or timed out.
-        let fuelDeadline = fuelReplan ? Date().addingTimeInterval(20) : .distantFuture
+        let replanBudgetMs = FuelPlanningWindowPolicy.milliseconds(
+            points: itinerary.waypoints.map(\.coordinate), live: selectedSource.name == "live"
+        )
+        let fuelDeadline = fuelReplan
+            ? Date().addingTimeInterval(Double(replanBudgetMs) / 1_000) : .distantFuture
 
         let onwardFuelDistance = distanceToNextFuelOpportunity(
             itinerary: itinerary,
@@ -389,7 +406,7 @@ final class ItineraryBuilder {
             if fuelReplan, Date() >= fuelDeadline {
                 let failedIndex = min(max(0, finalStartIndex), itinerary.legs.count - 1)
                 let failedID = itinerary.legs[failedIndex].id
-                let message = "Fuel planning reached its 20-second itinerary budget."
+                let message = "Fuel planning reached its itinerary time budget."
                 committed = fuelAttemptBase
                 var markedUnknown = false
                 for index in finalStartIndex..<lastBuildable {
@@ -843,7 +860,12 @@ final class ItineraryBuilder {
         // This is an inactivity watchdog, not a cap on total itinerary time.
         // Long routes may legitimately need many quick fuel hops; every proven
         // forward leg renews the window while stalled searches still terminate.
-        var progressWatchdog = FuelPlanningProgressWatchdog()
+        let itineraryWindowMs = FuelPlanningWindowPolicy.milliseconds(
+            points: itinerary.waypoints.map(\.coordinate), live: source.name == "live"
+        )
+        var progressWatchdog = FuelPlanningProgressWatchdog(
+            inactivityInterval: itineraryWindowMs > 20_000 ? 75 : 28
+        )
 
         if let resume {
             RoutingDebugLog.shared.event(
@@ -1110,7 +1132,9 @@ final class ItineraryBuilder {
                     && !crossesProvinceBoundary
                 let chain: FuelChainResponse
                 let requestBudgetMs = min(
-                    Self.liveFuelWindowBudgetMs,
+                    FuelPlanningWindowPolicy.milliseconds(
+                        points: [current, riderDestination.coordinate], live: source.name == "live"
+                    ),
                     max(100, progressWatchdog.remainingMilliseconds())
                 )
                 RoutingDebugLog.shared.event(
@@ -1904,7 +1928,7 @@ final class ItineraryBuilder {
         while true {
             let remainingBudgetMs = Int(fuelDeadline.timeIntervalSinceNow * 1_000)
             guard remainingBudgetMs > 0 else {
-                throw RoutingError.server("Fuel planning reached its 20-second itinerary budget.")
+                throw RoutingError.server("Fuel planning reached its itinerary time budget.")
             }
             windowIndex += 1
             guard windowIndex <= 16 else {
@@ -1959,7 +1983,9 @@ final class ItineraryBuilder {
                         ? (usesWindows ? min(4, max(1, remainingStops + 1)) : nil)
                         : 1,
                     allowPartialWindow: usesWindows,
-                    windowTimeBudgetMs: min(Self.liveFuelWindowBudgetMs, remainingBudgetMs),
+                    windowTimeBudgetMs: min(FuelPlanningWindowPolicy.milliseconds(
+                        points: [windowStart, to], live: source.name == "live"
+                    ), remainingBudgetMs),
                     requiredFirstStationId: requiredStationID
                 ), zoom: DirtSnapRequestContext.mapZoom))
             } catch {

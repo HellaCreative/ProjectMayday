@@ -1543,3 +1543,22 @@ private func fuelStop(_ id: String, at point: RouteCoordinate) -> FuelChainStop 
         name: id, brand: nil, address: nil, graphMeters: nil
     )
 }
+
+@MainActor
+struct FuelPlanningWindowPolicyTests {
+    @Test func atlanticAndOfflineKeepExistingDeadline() {
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["ns", "nb", "pe", "nl"], live: true) == 20_000)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["wa"], live: false) == 20_000)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: [], live: true) == 20_000)
+        #expect(FuelPlanningWindowPolicy.transportSeconds(milliseconds: 20_000) == 23)
+    }
+    @Test func nationalAndMixedWindowsAllowColdPackPreparation() {
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["wa"], live: true) == 60_000)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["nb", "me"], live: true) == 60_000)
+        #expect(FuelPlanningWindowPolicy.transportSeconds(milliseconds: 60_000) == 70)
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        let watchdog = FuelPlanningProgressWatchdog(inactivityInterval: 75, now: start)
+        #expect(!watchdog.isExpired(at: start.addingTimeInterval(70)))
+        #expect(watchdog.isExpired(at: start.addingTimeInterval(75)))
+    }
+}

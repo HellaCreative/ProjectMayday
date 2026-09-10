@@ -7,6 +7,28 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
+    @Test func profileRebuildReplacesDisplayedGeometryAtTheSameEndpoints() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.automaticPlanningEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        source.profileGeometry = [.dirt: [point(0), point(0.7), point(1)],
+                                  .balanced: [point(0), point(0.4), point(1)],
+                                  .cleanest: [point(0), point(1)]]
+        for profile: RouteProfile in [.dirt, .balanced, .cleanest] {
+            let priorGeneration = map.routeGeneration
+            model.apply(.replaceAll(waypoints: [point(0), point(1)], profile: profile,
+                allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+            await model.waitForCanonicalBuildForTesting()
+            #expect(source.routeRequests.last?.profile == profile)
+            #expect(model.activeResponses.first?.coordinates == source.profileGeometry[profile])
+            #expect(map.routeSegments.flatMap(\.coordinates) == source.profileGeometry[profile])
+            #expect(map.routeGeneration > priorGeneration)
+        }
+    }
+
     @Test func progressNotificationMatchesAutomaticFuelPlanningState() {
         let fuelOn = FuelRangePrefs.Snapshot(
             tankMeters: 260_000,
@@ -741,6 +763,7 @@ private final class PlannerFakeRoutingSource: RoutingSource {
     var routeRequests: [RouteRequest] = []
     var fuelChainRequests: [FuelChainRequest] = []
     var distanceOverrides: [String: Double] = [:]
+    var profileGeometry: [RouteProfile: [RouteCoordinate]] = [:]
     var fuelStops: [FuelChainStop] = []
     var stationCandidates: [FuelStationCandidate] = []
     var routeError: Error?
@@ -759,7 +782,7 @@ private final class PlannerFakeRoutingSource: RoutingSource {
             status: "complete", error: nil, message: nil,
             distanceMeters: meters,
             estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
-            geometry: [endpoints.0, endpoints.1], segments: nil,
+            geometry: profileGeometry[req.profile] ?? [endpoints.0, endpoints.1], segments: nil,
             stats: RouteStats(dirtPercent: 80, pavedPercent: 20),
             maneuvers: nil, warnings: nil,
             dirtPercentValue: nil, pavedPercentValue: nil

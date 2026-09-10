@@ -191,7 +191,7 @@ final class RoutingClient {
         // windows. A stalled window must fail quickly so the client can retry
         // or backtrack without waiting for a platform 504.
         let requestedBudget = request.fuel.windowTimeBudgetMs.map {
-            max(1, Double($0) / 1_000 + 3)
+            FuelPlanningWindowPolicy.transportSeconds(milliseconds: $0)
         }
         let defaultWindowTimeout = request.fuel.windowMaxStops == nil ? timeout : 6
         // The server owns the planning deadline. Leave enough transport grace
@@ -204,6 +204,9 @@ final class RoutingClient {
             + "allowUnknown=\(request.accessPolicy.motorizedUnknown ? 1 : 0) "
             + "mapZoom=\(request.options?.mapZoom.map { String(format: "%.1f", $0) } ?? "-") "
             + "points=\(Self.coordinateSummary(request.locations)) "
+            + "wander=\(request.options?.ridePreferences.map { String(format: "%.3f", $0.wander) } ?? "default") "
+            + "avoidCities=\(request.options?.ridePreferences.map { $0.avoidCities ? "1" : "0" } ?? "default") "
+            + "avoidHighways=\(request.options?.ridePreferences.map { $0.avoidHighways ? "1" : "0" } ?? "default") "
             + "usable=\(Int(request.fuel.usableRangeMeters))m "
             + "first=\(Int(request.fuel.firstLegMaxMeters))m "
             + "minimumStops=\(request.fuel.minimumFuelStops) "

@@ -1403,7 +1403,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 state.selectPlannerPin(dirtAnnotation.markerID)
             }
             guard newState == .ending else { return }
-            state.onPlannerPinDragEnd?(dirtAnnotation.markerID, annotation.coordinate)
+            finishPlannerPinMove(dirtAnnotation.markerID, coordinate: annotation.coordinate)
             // Keep selection so the rider can nudge again; chrome stays on.
         }
 
