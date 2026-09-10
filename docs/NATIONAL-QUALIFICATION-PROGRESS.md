@@ -103,3 +103,14 @@ avoidCitiesfalse / avoidHighwaysfalse, WASeattle→Bellevue:
 Both retained accepted weightedcandidate selection; no fastpath used.
 https://pack-fabric-nzuuqxstt-goricksmith-7678s-projects.vercel.app
 Evidence /tmp/dirt-wa-preview6.json and /tmp/dirt-wa-preview6-warm.json.
+
+2026-09-10: Explicit wander now adds a continuous extra-distance charge to each
+existing surface objective: 30 * (1 - wander)^2 per metre. It no longer filters
+the completed pool down to the shortest (usually paved) route at zero. Selected
+surface ranking and existing candidate count stay intact; wander 1 retains the
+original objective. Sixty combinations of two reported NS destinations, three
+profiles, five wander values and both unknown settings completed (max 1.37s
+locally). Dirt at zero remains dirt-seeking; route changes have natural plateaus.
+Release fabric-v4-20260909-02 exact graph/geometry/fuel identities admitted for
+all 63 regions; corrected 19 graphs and unchanged 44 passed reader checks.
+Production experimental zero-refill advisory must remain OFF.

@@ -14,7 +14,7 @@ async function loadRegionRows(regionIds,loadRegion) {
 }
 function enabledRegions(environment) {
  const mode=environment.DIRT_ADVENTURE_CANARY;
- if(mode==='national-v1')return Object.keys(require('./verified-pack-revisions.json')['fabric-v4-20260909-01']);
+ if(mode==='national-v1')return Object.keys(require('./verified-pack-revisions.json')['fabric-v4-20260909-02']);
  return mode==='ns-nb-v1'?['ns','nb']:mode==='ns-v1'?['ns']:[];
 }
 function canarySupported(body,kind,environment=process.env) {

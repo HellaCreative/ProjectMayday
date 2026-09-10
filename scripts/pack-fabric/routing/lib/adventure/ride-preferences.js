@@ -5,17 +5,15 @@ function validatePreferences(value) {
  if(value.preferDifferentRoads!=null&&typeof value.preferDifferentRoads!=='boolean')throw new TypeError('Invalid return road preference');
  return {wander:value.wander,avoidCities:value.avoidCities,avoidHighways:value.avoidHighways,...(value.preferDifferentRoads===true?{preferDifferentRoads:true}:{})};
 }
-// Wander narrows the proven shared pool; it never invents distance or relaxes
-// access/fuel constraints. At 1 the accepted profile selection is unchanged.
-function wanderCandidates(rows,wander=1) {
- if(!rows.length||wander===1)return rows;
- const exposure=r=>r.result.road.avoidanceMeters??r.result.road.urbanMeters??0;
- const minimum=Math.min(...rows.map(exposure));
- const eligible=rows.filter(r=>exposure(r)<=minimum+1e-6);
- const distances=eligible.map(r=>r.result.road.distanceMeters);
- const low=Math.min(...distances),high=Math.max(...distances);
- const limit=low+(high-low)*wander;
- return eligible.filter(r=>r.result.road.distanceMeters<=limit+1e-6);
+// Wander changes the cost of extra distance while preserving each surface
+// objective. Filtering the finished pool by shortest distance turned zero into
+// a hidden paved profile. A positive distance charge instead discourages detours
+// continuously; the chosen surface profile still ranks every feasible result.
+function wanderEdgeCost(base,wander=1) {
+ if(!Number.isFinite(wander)||wander<0||wander>1)throw new TypeError('Invalid wander');
+ if(wander===1)return base;
+ const distancePenalty=30*(1-wander)**2;
+ return arc=>base(arc)+arc.distanceMeters*distancePenalty;
 }
 const highwayCosts=new WeakMap();
 function preferenceEdgeCost(base,preferences) {
@@ -23,4 +21,4 @@ function preferenceEdgeCost(base,preferences) {
  if(!highwayCosts.has(base))highwayCosts.set(base,arc=>base(arc)*(/^(motorway|trunk|primary)(?:_link)?$|^freeway$/.test(arc.roadClassLeaf||"")?10:1));
  return highwayCosts.get(base);
 }
-module.exports={validatePreferences,wanderCandidates,preferenceEdgeCost};
+module.exports={validatePreferences,wanderEdgeCost,preferenceEdgeCost};

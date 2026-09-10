@@ -1,9 +1,14 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {validatePreferences,wanderCandidates}=require('./ride-preferences');
-const row=(id,distance,exposure=0)=>({id,result:{road:{distanceMeters:distance,avoidanceMeters:exposure}}});
-test('default wander retains the accepted pool exactly',()=>{const rows=[row('a',100),row('b',300)];assert.equal(wanderCandidates(rows),rows);});
-test('wander expands eligible distance monotonically without overriding avoidance',()=>{const rows=[row('a',100),row('b',200),row('c',300),row('city',50,10)];assert.deepEqual(wanderCandidates(rows,0).map(r=>r.id),['a']);assert.deepEqual(wanderCandidates(rows,.5).map(r=>r.id),['a','b']);});
+const {validatePreferences,wanderEdgeCost}=require('./ride-preferences');
+test('maximum wander retains accepted objective exactly',()=>{const base=a=>a.distanceMeters;assert.equal(wanderEdgeCost(base),base);});
+test('lower wander raises extra-distance cost continuously without erasing surface preference',()=>{
+ const base=a=>a.distanceMeters*(a.surface==='dirt'?1:30);
+ const costs=[0,.25,.5,.75,1].map(w=>wanderEdgeCost(base,w));
+ for(const cost of costs)assert.ok(cost({distanceMeters:100,surface:'dirt'})<cost({distanceMeters:100,surface:'paved'}));
+ const extra=costs.map(cost=>cost({distanceMeters:200,surface:'dirt'})-cost({distanceMeters:100,surface:'dirt'}));
+ for(let i=1;i<extra.length;i++)assert.ok(extra[i]<extra[i-1]);
+});
 test('malformed preferences cannot be silently ignored',()=>{assert.equal(validatePreferences(null),null);for(const wander of [-1,2,NaN,Infinity])assert.throws(()=>validatePreferences({wander,avoidCities:true,avoidHighways:false}));assert.throws(()=>validatePreferences({wander:1,avoidCities:'false',avoidHighways:false}));});
 const {buildGraphFromOsm}=require('../legal-topology/osm-graph');
 const {encodeFromOsmGraph,decodeGraphV4}=require('../pack-v4');
