@@ -143,3 +143,19 @@ https://pack-fabric-o05hhg34d-goricksmith-7678s-projects.vercel.app .
 225 focused adventure tests pass.63/63 corrected-reader admission evidence
 /tmp/dirt-63-reader-corrected.json. This qualifies published pack admission plus
 representative live routes, not every possible itinerary or concurrent load.
+
+## Production handoff
+Both https://pack-fabric.vercel.app and https://dirt-mayday.vercel.app now
+serve23d8f2563702c5004cc0942a340007149e03ec09 with fabric-v4-20260909-02,
+national-v1 (all63), proved-national-v1 (hard Atlantic exclusion). Both projects
+use the4GiB performance tier. Public production NS zero-wander Dirt COMPLETE
+2645ms; public WA default COMPLETE33297ms. Evidence /tmp/dirt-prod-ns-final.json
+and /tmp/dirt-prod-wa-final.json. Immutable production deployment:
+https://dirt-mayday-r5ktutu0f-goricksmith-7678s-projects.vercel.app .
+National window90s, transport100s; Atlantic20s/23s unchanged. The six non-secret
+region/release/proof environment settings are persisted for future preview and
+production deployments. Source changes still require an intentional deployment.
+Qualification includes63 reader admissions,225 focused tests,60 wander cases,
+WA default cold and CA default cold full-pool success, plus public production
+checks. It does not prove every possible itinerary or production concurrency.
+Apple upload/signing and subscription configuration remain parent-owned.
