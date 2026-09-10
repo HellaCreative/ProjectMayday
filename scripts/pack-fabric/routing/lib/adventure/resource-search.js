@@ -218,4 +218,27 @@ function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=n
   }
   return {state:"complete",target,graph,edgeCost,distances,coverage:"exact"};
 }
-module.exports={searchResourcePath,buildLowerBounds,prepareReverseCosts};
+// Feasibility relaxation: ignore turn history and route preferences, retain
+// eligible directed roads and exact fuel range. Failure proves no fuel chain
+// in this matched graph; success alone is not a routable-turn proof.
+function probeFuelConnectivity({graph,start,end,fuel,budget}) {
+ validateFuel(fuel,{requireInitial:true});
+ const remaining=new Float64Array(graph.nodeCount);remaining.fill(-1);
+ const heap=new Heap();remaining[start]=fuel.initialUsableMeters;heap.push({node:start,remaining:fuel.initialUsableMeters,priority:-fuel.initialUsableMeters});
+ let cur,expanded=0;
+ while((cur=heap.pop())) {
+  if(cur.remaining<remaining[cur.node])continue;
+  if(!budget.consume())return {state:'incomplete',reason:budget.snapshot().reason,expanded};
+  expanded++;
+  if(cur.node===end)return {state:'reachable_relaxation',expanded};
+  const usable=graph.stationAt(cur.node)?fuel.usableRangeMeters:cur.remaining;
+  for(const arc of graph.outgoing(cur.node)) {
+   if(!budget.consume())return {state:'incomplete',reason:budget.snapshot().reason,expanded};
+   if(!fuelCovers(usable,arc.distanceMeters))continue;
+   const next=Math.max(0,usable-arc.distanceMeters);
+   if(next>remaining[arc.to]){remaining[arc.to]=next;heap.push({node:arc.to,remaining:next,priority:-next});}
+  }
+ }
+ return {state:'unreachable_relaxation',expanded};
+}
+module.exports={searchResourcePath,buildLowerBounds,prepareReverseCosts,probeFuelConnectivity};

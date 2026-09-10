@@ -1102,3 +1102,27 @@ Within one shared-candidate request, identical projected topology, pack object,
 exposure cost function, destination and bound stopping node may reuse the same
 immutable avoidance-distance array. Cancellation still wins. Do not reuse across
 changed maps, endpoints or preference costs. This changes computation only.
+
+## September 10: regional live fuel completion repair
+
+DEV-only JavaScript qualification. A fuel-proved candidate for the requested
+objective may be returned when another objective exhausts its search budget;
+`alternative_search_limited` explicitly identifies the incomplete comparison.
+Clean must have a proved paved-objective candidate. No unverified fuel route
+is promoted by this exception. Existing NS/NB-only behavior stays unchanged.
+
+The regional opt-in may certify refills on a legal fixed road with repeats,
+including a continuation carrying arrival turn history. It preserves reserve,
+station-access evidence, arrival restrictions and destination fuel escape.
+It does not claim globally optimal retracing. Optional approach refinement must
+not exhaust the search after such a fixed-road proof.
+
+A directed fuel-connectivity relaxation may prove failure in the currently
+matched graph. `mapped_fuel_range_gap` distinguishes that evidence from an
+unfinished search; it is not proof that no real-world station exists. A
+successful relaxation never substitutes for full turn-aware routing and fuel
+proof. Larger-range diagnostic tests do not change the rider's saved range.
+
+No pack, native binary, or production promotion is part of this qualification.
+After owner DEV acceptance, Swift and Android must reproduce these outcomes;
+neither native parity nor physical acceptance is claimed by automated tests.

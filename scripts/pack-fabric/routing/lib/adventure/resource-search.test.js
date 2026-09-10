@@ -207,3 +207,11 @@ test('rural endpoint beyond a required town also needs an urban bound',()=>{
  assert.equal(result.state,'found');assert.deepEqual(result.arcs,baseline.arcs);
  assert.equal(result.avoidanceCost,baseline.avoidanceCost);
 });
+
+test('relaxed fuel connectivity distinguishes missing range from expensive preferences',()=>{
+ const {probeFuelConnectivity}=require('./resource-search');
+ const g=graph([[0,1,4],[1,2,4],[2,3,4]],[1,2]);g.nodeCount=4;
+ assert.equal(probeFuelConnectivity({graph:g,start:0,end:3,fuel:{initialUsableMeters:4,usableRangeMeters:4},budget:budget()}).state,'reachable_relaxation');
+ g.stationAt=()=>null;
+ assert.equal(probeFuelConnectivity({graph:g,start:0,end:3,fuel:{initialUsableMeters:4,usableRangeMeters:4},budget:budget()}).state,'unreachable_relaxation');
+});

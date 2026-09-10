@@ -7,7 +7,7 @@ const {searchResourcePath}=require("./resource-search");
 // The inexpensive road candidate is retained for advisory display. The fuel
 // search then constructs a feasible ride with refills in its state; it doesn't
 // search for pumps near that candidate and repeatedly insert new detours.
-function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,avoidanceLowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,fuelFirst=false,allowZeroRefillAdvisory=false,allowPassingRefillAdvisory=false}) {
+function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,avoidanceLowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,fuelFirst=false,allowZeroRefillAdvisory=false,allowPassingRefillAdvisory=false,allowRepeatedPassingRoute=false}) {
   if(fuel!=null)validateFuel(fuel);
   const base={graph,start,end,edgeCost,budget,lowerBounds,avoidanceLowerBounds,initialTurnState,avoidanceCost,dirtEntryCost};
   let road;
@@ -62,7 +62,8 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,a
         goalEvidence:escape.evidence,diagnostics:{...candidate.diagnostics,zeroRefillAdvisory:true,zeroRefillProof:"minimum-objective-zero-retrace-with-legal-escape"}};
     }
   }
-  // Candidate-only fast path: certify fuel on the exact no-repeat road optimum.
+  // Certify fuel on the exact legal road candidate. Regional completion may
+  // also retain a repeated-road candidate; that proves feasibility, not optimal retrace.
   // No roads or detours are inserted. Refills are minimal on this fixed path;
   // no global refill tie-break optimality across equal-cost roads is claimed.
   if(!result&&allowPassingRefillAdvisory) {
@@ -74,7 +75,7 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,a
       intervals.push([lo,hi]);seen.set(arc.id,intervals);return true;
     });
     if(candidate.diagnostics)candidate.diagnostics.passingRefillAttempt=noRepeat?'escape_check':'road_repeats_or_incomplete';
-    if(noRepeat) {
+    if(noRepeat||(allowRepeatedPassingRoute&&candidate.state==='found')) {
       const escape=acceptGoal({node:end,turnState:candidate.endTurnState,remainingUsableMeters:fuel.usableRangeMeters});
       candidate.diagnostics.passingRefillAttempt=escape.accepted?'schedule_check':'escape_unproved';
       if(escape.accepted) {
@@ -93,7 +94,7 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,a
         if(possible&&fuelCovers(reach,target)&&budget.check())result={...candidate,visits,
           remainingUsableMeters:Math.max(0,reach-candidate.distanceMeters),goalEvidence:escape.evidence,
           diagnostics:{...candidate.diagnostics,passingRefillAdvisory:true,
-            passingRefillProof:'minimum-road-objective-zero-retrace-fixed-path-fuel-and-legal-escape'}};
+            passingRefillProof:noRepeat?'minimum-road-objective-zero-retrace-fixed-path-fuel-and-legal-escape':'fixed-road-fuel-and-legal-escape'}};
       }
     }
   }
@@ -105,7 +106,7 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,a
   // containing repeated roads. Refills remain part of that new search, never
   // inserted into finished geometry. Preserve the feasible result if the
   // bounded refinement cannot improve it; diagnostics expose that outcome.
-  if(retainFuelApproach&&preferOnwardFuel) {
+  if(retainFuelApproach&&preferOnwardFuel&&!(allowRepeatedPassingRoute&&result.diagnostics?.passingRefillAdvisory)) {
     const repetition=route=>{
       const seen=new Set();let meters=0;
       for(const arc of route.arcs){

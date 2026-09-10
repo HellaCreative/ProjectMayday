@@ -164,3 +164,21 @@ test('native one-pump window retains fuel-proved geometry and marks the remainin
  assert.ok(r.routes[0].distanceMeters<=1100);assert.equal(r.destinationEscapeMeters,null);
  assert.deepEqual(r.routes[0].geometry,pool.selected.road.geometry.slice(0,r.routes[0].geometry.length));
 });
+
+test('partial comparison requires a fuel-proved candidate for the requested profile',()=>{
+ const {profileFuelReady}=require('./live-canary');
+ const pool={candidates:[{id:'paved',fuel:'unverified'},{id:'dirt-10',fuel:'provisional_station_access'},{id:'dirt-30',fuel:'verified'}]};
+ assert.equal(profileFuelReady(pool,'dirt'),true);
+ assert.equal(profileFuelReady(pool,'balanced'),true);
+ assert.equal(profileFuelReady(pool,'cleanest'),false);
+ assert.equal(profileFuelReady(pool,'unknown'),false);
+ for(const row of pool.candidates)row.fuel='unverified';
+ assert.equal(profileFuelReady(pool,'dirt'),false);
+});
+
+test('proved mapped fuel disconnection is distinct from an unfinished search',()=>{
+ const pool={selected:null,candidates:[{fuelConnectivity:{state:'unreachable_relaxation'}}],search:{poolComplete:false}};
+ assert.equal(toLiveResponse(pool,{profile:'cleanest'},'fuel',[]).error,'mapped_fuel_range_gap');
+ pool.candidates.push({fuelConnectivity:{state:'incomplete'}});
+ assert.equal(toLiveResponse(pool,{profile:'cleanest'},'fuel',[]).error,'adventure_search_incomplete');
+});

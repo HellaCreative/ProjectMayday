@@ -168,3 +168,15 @@ test('projected station splits are continuous road, not repeated edge travel',()
  assert.equal(result.road.diagnostics.passingRefillAdvisory,true);
  assert.deepEqual(result.road.visits,[{stationId:'P',atMeters:6}]);
 });
+
+test('opt-in repeated-road proof retains exact fuel and legal escape requirements',()=>{
+ const arcs=[{id:0,from:'A',to:'P',distanceMeters:6},{id:0,from:'P',to:'R',distanceMeters:8},{id:1,from:'R',to:'D',distanceMeters:7},{id:2,from:'D',to:'Q',distanceMeters:2}];
+ const g={outgoing:n=>arcs.filter(a=>a.from===n),stationAt:n=>['P','R','Q'].includes(n)?{id:n}:null,transition:()=>({allowed:true,state:null}),stateKey:n=>n};
+ const options={allowPassingRefillAdvisory:true,allowRepeatedPassingRoute:true};
+ const result=ride(g,options);
+ assert.equal(result.road.diagnostics.passingRefillProof,'fixed-road-fuel-and-legal-escape');
+ assert.deepEqual(result.road.visits.map(v=>v.stationId),['P','R']);
+ assert.equal(result.fuel.arrivalUsableMeters,3);
+ g.stationAt=n=>n==='Q'?{id:n}:null;
+ assert.equal(ride(g,options).fuel.state,'unverified');
+});
