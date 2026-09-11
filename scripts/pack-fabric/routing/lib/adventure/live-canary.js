@@ -5,6 +5,8 @@ const {summarizeSurface,surfaceKind}=require('./surface');
 const {withServiceIdentity}=require('../service-contract');
 const {qualifiedPack,nbSupplement}=require('./pack-revision-qualification');
 const sharedContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024});
+const candidateContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:true,fastNeutralTurns:true});
+const {sourceKey,reusableRuntime}=require('./joined-runtime-reuse');
 let joinedCache=null;
 const {joinV4}=require('./join-v4');
 const warning={code:'adventure_preview',message:'DEV routing preview. Fuel stops are planned from mapped station locations; entrances, exits and current availability are not verified.'};
@@ -67,7 +69,9 @@ function requestWindowMs(regionIds,requested) {
  const maximum=regionIds.some(id=>!['ns','nb','pe','nl'].includes(id))?90000:20000;
  return Math.min(maximum,Math.max(100,Number(requested||maximum)));
 }
-async function adventureCanaryRequest(body,kind,{environment=process.env,load=null,context=sharedContext}={}) {
+async function adventureCanaryRequest(body,kind,{environment=process.env,load=null,context=null}={}) {
+ const reusePreparation=environment.DIRT_ROUTING_PREPARATION==='shared-v1';
+ context=context||(reusePreparation?candidateContext:sharedContext);
  if(body.options?.ridePreferences!=null) {
   const r=require('../../regional/select').resolveGraphRequest(body);
   if(!canarySupported(body,kind,environment)||!r.ok||!r.regionIds.length||r.regionIds.some(id=>!enabledRegions(environment).includes(id)))
@@ -94,6 +98,14 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const loadTiming={regions:[],joinMs:0,joinCacheHit:false};
  const data=load?await load(resolution):await (async()=>{
   const {loadGraphsForRequest}=require('../graph'),{loadRegionFuel}=require('../fuel-data');
+  const {graphCdnBaseUrlForRegion}=require('../../regional/select');
+  const sources=resolution.regionIds.map(regionId=>({regionId,graphSource:resolveGraphRequest({regionId}).graphPaths[0],fuelSource:`${graphCdnBaseUrlForRegion(regionId)}/${regionId}/fuel.v1.json`}));
+  if(reusePreparation) {
+   const reused=reusableRuntime(joinedCache,sources);
+   if(reused){loadTiming.joinCacheHit=true;loadTiming.sourceReuse=true;return reused;}
+   joinedCache=null;
+   context.preparationCache.clear();context.reverseCostCache.clear();context.stationMatchCache.clear();
+  }
   const rows=await loadRegionRows(resolution.regionIds,async regionId=>{
    const regionStarted=Date.now();
    const single=resolveGraphRequest({regionId});
@@ -101,10 +113,13 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
    loadTiming.regions.push({regionId,elapsedMs:Date.now()-regionStarted});
    return {...runtime,stations:fuel.stations,identity:runtime.packIdentity.map(p=>({...p,...fuel.packIdentity}))};
   });
-  if(rows.length===1)return rows[0];
+  if(rows.length===1){
+   if(reusePreparation&&rows[0].identity.every(qualifiedPack))joinedCache={sourceKey:sourceKey(sources),data:rows[0]};
+   return rows[0];
+  }
   if(rows.some(r=>r.identity.some(p=>!qualifiedPack(p))))return {pack:{graphBinaryVersion:0}};
   const key=JSON.stringify(rows.flatMap(r=>r.identity));
-  if(!joinedCache||joinedCache.key!==key||rows.some((r,i)=>joinedCache.inputs[i]!==r.pack)) {
+  if(!joinedCache||!joinedCache.inputs||joinedCache.key!==key||rows.some((r,i)=>joinedCache.inputs[i]!==r.pack)) {
    joinedCache=null;
    const joinStarted=Date.now();
    console.log("adventure join begin",JSON.stringify({regions:resolution.regionIds,nodes:rows.reduce((n,r)=>n+r.pack.nodeCount,0),edges:rows.reduce((n,r)=>n+r.pack.edgeCount,0),rss:process.memoryUsage().rss}));
@@ -112,7 +127,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
    const stationMap=new Map();for(const row of rows)for(const station of row.stations){const prior=stationMap.get(station.id);if(prior&&(prior.lat!==station.lat||prior.lon!==station.lon))throw Error('Conflicting canonical station coordinates');stationMap.set(station.id,station);}
    loadTiming.joinMs=Date.now()-joinStarted;
    console.log("adventure join complete",JSON.stringify({elapsedMs:loadTiming.joinMs,rss:process.memoryUsage().rss}));
-   joinedCache={key,inputs:rows.map(r=>r.pack),data:{pack:joined.pack,geom:joined.geom,stations:[...stationMap.values()],identity:rows.flatMap(r=>r.identity)}};
+   joinedCache={key,sourceKey:reusePreparation?sourceKey(sources):null,inputs:rows.map(r=>r.pack),data:{pack:joined.pack,geom:joined.geom,stations:[...stationMap.values()],identity:rows.flatMap(r=>r.identity)}};
   }else loadTiming.joinCacheHit=true;
   return joinedCache.data;
  })();

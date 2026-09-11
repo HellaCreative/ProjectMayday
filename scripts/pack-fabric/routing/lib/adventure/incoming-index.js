@@ -53,9 +53,9 @@ function projectedIncoming({pack,graph,splitEdges,affectedNodes,allowUnknown,end
   if(incomplete)return {state:'incomplete',reason:budget.snapshot().reason};
  }
  for(const list of overlay.values())list.sort((a,b)=>b.arc.from-a.arc.from||b.order-a.order);
- const leaves=pack.enums;
+ const leaves=pack.enums,empty=Object.freeze([]);
  return {state:'complete',overlayArcs:[...overlay.values()].reduce((n,a)=>n+a.length,0),forEachIncoming(node,visit) {
-  const added=overlay.get(node)||[];let i=0,at=node<pack.nodeCount?index.heads[node]:-1;
+  const added=overlay.get(node)||empty;let i=0,at=node<pack.nodeCount?index.heads[node]:-1;
   while(at!==-1||i<added.length) {
    const from=at===-1?-1:index.sources[at],extra=added[i];
    if(extra&&(extra.arc.from>from||(extra.arc.from===from&&extra.order>at))) {

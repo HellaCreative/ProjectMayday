@@ -20,3 +20,14 @@ Scope: owner-authorized private implementation and qualification; no stable DEV,
 5. Added actual live-canary matrix runner with explicit fixed flags, staged timings, cold/repeated requests, proof hashes, surface data, first-hop fuel validation, continuation history and retained/peak memory. Initial artifact-directory creation bug was fixed before retaining results; these failed output attempts are not performance evidence.
 
 Matrix inputs: `matrix-inputs.json`. Initial comparison outputs: `/tmp/dirt-perf/`. Continue recording results and refinements here; do not declare the mission complete from this initial implementation.
+
+## V1 checkpoint and broad local qualification
+
+- Implementation checkpoint `5700968`: shared incoming CSR plus neutral restriction fast path, both opt-in.
+- 24 cases × baseline/candidate × one process-cold and two warm runs = 144 completed requests. All per-window proof signatures and first-run compressed full proof bodies match exactly. All geometry continuity, access and fuel-range checks pass. Matrix covers short/long NS, long QC and NS→NB, all three profiles and fuel on/off at 378 km. `v1-summary.json` records paired timings and process peaks. Raw evidence currently `/tmp/dirt-performance-matrix/`; preserve before final handback.
+- Consistent speed benefit; peak RSS is not uniformly lower. QC road-only peaks sometimes rise despite smaller retained typed arrays. Do not claim universal memory improvement.
+- Refined candidate removes per-node empty array churn and releases obsolete graph references from request-owned guidance cache. An immutable-source guard allows already qualified joined runtime reuse before source-reader fetches; mutable/local paths cannot use it. Feature gate: `DIRT_ROUTING_PREPARATION=shared-v1`. Default remains unchanged.
+- 250 adventure tests pass after refinement. Initial refined QC Clean road: 5.577 s cold, 2.929/2.866 s warm, 912.6 MiB process peak; exactness and repeated cold trials still to qualify.
+- Long-route phase 3 now running in `/tmp/dirt-performance-long/`. Local loader models ideal joined reuse; hosted reuse requires separate qualification.
+- Private deployment route memory reset from inherited repair's 4096 MiB to accepted DEV's 2048 MiB for fair comparisons and no capacity increase. No deployment created yet.
+- No Swift or Android behavior change is claimed: this is a gated JavaScript preparation experiment preserving existing outcomes; native parity remains an owner review item before adoption.

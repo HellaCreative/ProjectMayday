@@ -1,0 +1,242 @@
+[
+  {
+    "case": "ns-long-balanced-fuel",
+    "coldBefore": 885.4048329999999,
+    "coldAfter": 779.552041,
+    "warmBefore": 484.5555835,
+    "warmAfter": 365.4973539999999,
+    "peakBefore": 267.328125,
+    "peakAfter": 239.96875,
+    "exact": true
+  },
+  {
+    "case": "ns-long-balanced-road",
+    "coldBefore": 1296.945958,
+    "coldAfter": 997.8959580000001,
+    "warmBefore": 911.314104,
+    "warmAfter": 594.7677505,
+    "peakBefore": 280.765625,
+    "peakAfter": 252.5625,
+    "exact": true
+  },
+  {
+    "case": "ns-long-cleanest-fuel",
+    "coldBefore": 899.894834,
+    "coldAfter": 782.351708,
+    "warmBefore": 500.60270850000006,
+    "warmAfter": 349.74260449999997,
+    "peakBefore": 264.765625,
+    "peakAfter": 235.25,
+    "exact": true
+  },
+  {
+    "case": "ns-long-cleanest-road",
+    "coldBefore": 1317.179208,
+    "coldAfter": 1038.298917,
+    "warmBefore": 905.6146454999999,
+    "warmAfter": 566.1177289999999,
+    "peakBefore": 281.3125,
+    "peakAfter": 272.9375,
+    "exact": true
+  },
+  {
+    "case": "ns-long-dirt-fuel",
+    "coldBefore": 878.383333,
+    "coldAfter": 781.342,
+    "warmBefore": 482.88672899999995,
+    "warmAfter": 344.22,
+    "peakBefore": 268.90625,
+    "peakAfter": 241.40625,
+    "exact": true
+  },
+  {
+    "case": "ns-long-dirt-road",
+    "coldBefore": 1316.110333,
+    "coldAfter": 1014.8827499999999,
+    "warmBefore": 911.338479,
+    "warmAfter": 555.0079374999999,
+    "peakBefore": 281.65625,
+    "peakAfter": 265.484375,
+    "exact": true
+  },
+  {
+    "case": "ns-short-balanced-fuel",
+    "coldBefore": 858.6621250000001,
+    "coldAfter": 704.574666,
+    "warmBefore": 448.63497949999993,
+    "warmAfter": 282.99147899999997,
+    "peakBefore": 253.140625,
+    "peakAfter": 228.234375,
+    "exact": true
+  },
+  {
+    "case": "ns-short-balanced-road",
+    "coldBefore": 817.5154170000001,
+    "coldAfter": 620.072625,
+    "warmBefore": 351.51529149999993,
+    "warmAfter": 201.0521245,
+    "peakBefore": 209.3125,
+    "peakAfter": 191.96875,
+    "exact": true
+  },
+  {
+    "case": "ns-short-cleanest-fuel",
+    "coldBefore": 848.939458,
+    "coldAfter": 761.473833,
+    "warmBefore": 451.18652099999997,
+    "warmAfter": 289.7535625,
+    "peakBefore": 258.515625,
+    "peakAfter": 226.8125,
+    "exact": true
+  },
+  {
+    "case": "ns-short-cleanest-road",
+    "coldBefore": 744.592541,
+    "coldAfter": 617.1487079999999,
+    "warmBefore": 352.85997949999995,
+    "warmAfter": 203.9118335,
+    "peakBefore": 209.453125,
+    "peakAfter": 191.296875,
+    "exact": true
+  },
+  {
+    "case": "ns-short-dirt-fuel",
+    "coldBefore": 860.9812499999999,
+    "coldAfter": 705.58375,
+    "warmBefore": 443.91497899999996,
+    "warmAfter": 285.191188,
+    "peakBefore": 256.234375,
+    "peakAfter": 232,
+    "exact": true
+  },
+  {
+    "case": "ns-short-dirt-road",
+    "coldBefore": 747.486708,
+    "coldAfter": 617.4765,
+    "warmBefore": 354.68556249999995,
+    "warmAfter": 204.070312,
+    "peakBefore": 209.25,
+    "peakAfter": 192.75,
+    "exact": true
+  },
+  {
+    "case": "nsnb-balanced-fuel",
+    "coldBefore": 2441.8468749999997,
+    "coldAfter": 2105.8485419999997,
+    "warmBefore": 1541.8084789999998,
+    "warmAfter": 1137.5456875,
+    "peakBefore": 390.328125,
+    "peakAfter": 353.859375,
+    "exact": true
+  },
+  {
+    "case": "nsnb-balanced-road",
+    "coldBefore": 2611.4444160000003,
+    "coldAfter": 2084.168,
+    "warmBefore": 1667.5081454999997,
+    "warmAfter": 1105.5502915,
+    "peakBefore": 437.578125,
+    "peakAfter": 382.71875,
+    "exact": true
+  },
+  {
+    "case": "nsnb-cleanest-fuel",
+    "coldBefore": 2467.415916,
+    "coldAfter": 2093.478833,
+    "warmBefore": 1480.6954375000003,
+    "warmAfter": 1141.6110004999998,
+    "peakBefore": 383.46875,
+    "peakAfter": 347.6875,
+    "exact": true
+  },
+  {
+    "case": "nsnb-cleanest-road",
+    "coldBefore": 2620.7645,
+    "coldAfter": 2132.186667,
+    "warmBefore": 1667.4251875000004,
+    "warmAfter": 1131.8042290000003,
+    "peakBefore": 437.890625,
+    "peakAfter": 384.234375,
+    "exact": true
+  },
+  {
+    "case": "nsnb-dirt-fuel",
+    "coldBefore": 2449.4212500000003,
+    "coldAfter": 2107.316833,
+    "warmBefore": 1493.2123745000001,
+    "warmAfter": 1143.4131455,
+    "peakBefore": 381.125,
+    "peakAfter": 351.15625,
+    "exact": true
+  },
+  {
+    "case": "nsnb-dirt-road",
+    "coldBefore": 2597.691875,
+    "coldAfter": 2089.1866250000003,
+    "warmBefore": 1661.5097289999997,
+    "warmAfter": 1113.683271,
+    "peakBefore": 438.34375,
+    "peakAfter": 381.84375,
+    "exact": true
+  },
+  {
+    "case": "qc-long-balanced-fuel",
+    "coldBefore": 14665.63875,
+    "coldAfter": 12694.010458,
+    "warmBefore": 12605.574396,
+    "warmAfter": 10395.369771000001,
+    "peakBefore": 1250.484375,
+    "peakAfter": 1297.25,
+    "exact": true
+  },
+  {
+    "case": "qc-long-balanced-road",
+    "coldBefore": 7239.1401670000005,
+    "coldAfter": 5454.032833,
+    "warmBefore": 4756.109,
+    "warmAfter": 3052.3664159999994,
+    "peakBefore": 891.9375,
+    "peakAfter": 912.078125,
+    "exact": true
+  },
+  {
+    "case": "qc-long-cleanest-fuel",
+    "coldBefore": 14857.869292,
+    "coldAfter": 12826.033958,
+    "warmBefore": 12613.702167,
+    "warmAfter": 10499.918146,
+    "peakBefore": 1197.359375,
+    "peakAfter": 1147.25,
+    "exact": true
+  },
+  {
+    "case": "qc-long-cleanest-road",
+    "coldBefore": 7424.354582999999,
+    "coldAfter": 5698.9628330000005,
+    "warmBefore": 4918.3928750000005,
+    "warmAfter": 3020.385666,
+    "peakBefore": 763.734375,
+    "peakAfter": 1005.15625,
+    "exact": true
+  },
+  {
+    "case": "qc-long-dirt-fuel",
+    "coldBefore": 14574.663333999999,
+    "coldAfter": 12596.484709,
+    "warmBefore": 12782.336417000002,
+    "warmAfter": 10387.437666499998,
+    "peakBefore": 1372.9375,
+    "peakAfter": 1259.171875,
+    "exact": true
+  },
+  {
+    "case": "qc-long-dirt-road",
+    "coldBefore": 7409.9989590000005,
+    "coldAfter": 5420.148958000001,
+    "warmBefore": 4789.9160215,
+    "warmAfter": 2872.5888124999997,
+    "peakBefore": 793.671875,
+    "peakAfter": 912.125,
+    "exact": true
+  }
+]
