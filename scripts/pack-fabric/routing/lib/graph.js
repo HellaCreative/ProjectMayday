@@ -129,7 +129,8 @@ function materializeRuntimeV2(
   loadDiagnostics = null
 ) {
   const gridStarted = Date.now();
-  const { edgeGrid, GRID } = buildEdgeGridFromGeom(geom, pack.undirectedEdgeCount);
+  const deferGrid=pack.graphBinaryVersion===4&&process.env.DIRT_ROUTING_PREPARATION==='compact-v3';
+  const { edgeGrid, GRID } = deferGrid?{}:buildEdgeGridFromGeom(geom, pack.undirectedEdgeCount);
   const loadMs = Date.now() - started;
 
   // Search uses findPathV2 (CSR). matchPoint reads pack/geom directly.
@@ -160,6 +161,7 @@ function materializeRuntimeV2(
       schemaVersion: pack.schemaVersion
     }
   };
+  if(deferGrid)require("./deferred-edge-grid").attachDeferredEdgeGrid(runtime,geom,pack.undirectedEdgeCount,buildEdgeGridFromGeom);
   putCached(cacheKey, runtime);
   return runtime;
 }

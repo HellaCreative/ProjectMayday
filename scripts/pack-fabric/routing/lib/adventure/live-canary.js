@@ -71,7 +71,7 @@ function requestWindowMs(regionIds,requested) {
  return Math.min(maximum,Math.max(100,Number(requested||maximum)));
 }
 async function adventureCanaryRequest(body,kind,{environment=process.env,load=null,context=null}={}) {
- const compactPreparation=environment.DIRT_ROUTING_PREPARATION==='compact-v2';
+ const compactPreparation=['compact-v2','compact-v3'].includes(environment.DIRT_ROUTING_PREPARATION);
  const reusePreparation=compactPreparation||environment.DIRT_ROUTING_PREPARATION==='shared-v1';
  context=context||(compactPreparation?compactContext:reusePreparation?candidateContext:sharedContext);
  if(body.options?.ridePreferences!=null) {
@@ -112,8 +112,8 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
    const regionStarted=Date.now();
    const single=resolveGraphRequest({regionId});
    const [runtime,fuel]=await Promise.all([loadGraphsForRequest(single,{locations:body.locations,profile:body.profile}),loadRegionFuel(regionId)]);
-   loadTiming.regions.push({regionId,elapsedMs:Date.now()-regionStarted});
-   return {...runtime,stations:fuel.stations,identity:runtime.packIdentity.map(p=>({...p,...fuel.packIdentity}))};
+   loadTiming.regions.push({regionId,elapsedMs:Date.now()-regionStarted,sourcePreparation:runtime.loadDiagnostics});
+   return {...(reusePreparation?{pack:runtime.pack,geom:runtime.geom}:runtime),stations:fuel.stations,identity:runtime.packIdentity.map(p=>({...p,...fuel.packIdentity}))};
   });
   if(rows.length===1){
    if(reusePreparation&&rows[0].identity.every(qualifiedPack))joinedCache={sourceKey:sourceKey(sources),data:rows[0]};

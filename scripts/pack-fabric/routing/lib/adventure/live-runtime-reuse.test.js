@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const revisions=require('./verified-pack-revisions.json');
-for(const mode of ['shared-v1','compact-v2'])test(mode+': live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources',async t=>{
+for(const mode of ['shared-v1','compact-v2','compact-v3'])test(mode+': live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources',async t=>{
  const select=require('../../regional/select'),graphs=require('../graph'),fuel=require('../fuel-data');
  const ride=require('./ride-alternatives'),join=require('./join-v4');
  let base='https://example.test/v4/releases/fabric-v4-20260909-02',reads=0,joins=0;
@@ -9,7 +9,7 @@ for(const mode of ['shared-v1','compact-v2'])test(mode+': live loader reuses a q
  t.mock.method(select,'resolveGraphRequest',body=>({ok:true,regionIds:body.regionId?[body.regionId]:ids,graphPaths:[`${base}/${body.regionId||'ns'}/graph.v4.bin`]}));
  t.mock.method(select,'graphCdnBaseUrlForRegion',()=>base);
  t.mock.method(graphs,'loadGraphsForRequest',async r=>{
-  reads++;const regionId=r.regionIds[0];return {pack:{graphBinaryVersion:4,nodeCount:2,edgeCount:1,edgeTargets:[1]},geom:{},packIdentity:[{regionId,releaseId,...revisions[releaseId][regionId],graphSource:`${base}/${regionId}/graph.v4.bin`,geometrySource:`${base}/${regionId}/geometry.v1.bin`}]};
+  reads++;const regionId=r.regionIds[0];return {get edgeGrid(){throw Error('Adventure must not read the legacy grid');},pack:{graphBinaryVersion:4,nodeCount:2,edgeCount:1,edgeTargets:[1]},geom:{},packIdentity:[{regionId,releaseId,...revisions[releaseId][regionId],graphSource:`${base}/${regionId}/graph.v4.bin`,geometrySource:`${base}/${regionId}/geometry.v1.bin`}]};
  });
  t.mock.method(fuel,'loadRegionFuel',async regionId=>({stations:[],packIdentity:{fuelSource:`${base}/${regionId}/fuel.v1.json`,fuelSha256:revisions[releaseId][regionId].fuelSha256}}));
  t.mock.method(join,'joinV4',()=>{joins++;return {pack:{graphBinaryVersion:4,edgeCount:2},geom:{}};});

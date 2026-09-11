@@ -10,31 +10,39 @@ const {resolveGraphRequest}=require('../routing/regional/select');
 const {qualifiedPack}=require('../routing/lib/adventure/pack-revision-qualification');
 const cases=require('../../../docs/experiments/routing-performance-2026-09-10/matrix-inputs.json');
 const [caseId,variant,out,repeatsArg='3']=process.argv.slice(2),fixture=cases.find(c=>c.id===caseId);
-if(!fixture||!['baseline','incoming','neutral','combined','compact','compact-join'].includes(variant)||!out)throw Error('CASE baseline|incoming OUTPUT [REPEATS] required');
+if(!fixture||!['baseline','incoming','neutral','combined','compact','compact-join','runtime-baseline','runtime-candidate'].includes(variant)||!out)throw Error('CASE baseline|incoming OUTPUT [REPEATS] required');
 fs.mkdirSync(path.dirname(out),{recursive:true});
 const root=process.env.PERFORMANCE_PACK_ROOT||'/tmp/dirt-performance-packs',releaseId='fabric-v4-20260909-02';
 const environment={DIRT_ADVENTURE_CANARY:'national-v1',DIRT_PASSING_REFILL_ADVISORY:'candidate-v1',DIRT_FUEL_COMPLETION_POLICY:'feasible-v1',DIRT_FUEL_CONNECTIVITY_PROBE:'candidate-v1',DIRT_ZERO_REFILL_ADVISORY:'proved-national-v1'};
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
-const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:['incoming','combined','compact','compact-join'].includes(variant),fastNeutralTurns:['neutral','combined','compact','compact-join'].includes(variant),compactPreparation:['compact','compact-join'].includes(variant)});
+const runtimeModel=variant.startsWith('runtime-'),runtimeCandidate=variant==='runtime-candidate';
+const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:['incoming','combined','compact','compact-join','runtime-candidate'].includes(variant),fastNeutralTurns:['neutral','combined','compact','compact-join','runtime-candidate'].includes(variant),compactPreparation:['compact','compact-join','runtime-candidate'].includes(variant)});
 const packCache=new Map();let joinedCache=null,loadTrace=[];
 function loadRegion(id) {
- const cached=packCache.get(id);if(cached){loadTrace.push({id,cacheHit:true});return cached;}
+ const cached=packCache.get(id);if(cached){packCache.delete(id);packCache.set(id,cached);loadTrace.push({id,cacheHit:true});return cached;}
  const at=performance.now(),folder=path.join(root,id),g=fs.readFileSync(path.join(folder,'graph.v4.bin')),geo=fs.readFileSync(path.join(folder,'geometry.v1.bin')),f=fs.readFileSync(path.join(folder,'fuel.v1.json')),readMs=performance.now()-at;
  const validate=performance.now(),identity={regionId:id,releaseId,graphSha256:hash(g),geometrySha256:hash(geo),fuelSha256:hash(f)};
  if(!qualifiedPack(identity))throw Error('Unqualified immutable pack '+id);
  const validationMs=performance.now()-validate,decode=performance.now(),row={pack:decodeGraphV4(g,geo),geom:decodeGeometryV1(geo),stations:JSON.parse(f).stations,identity:[identity]};
- packCache.set(id,row);loadTrace.push({id,cacheHit:false,readMs,validationMs,decodeMs:performance.now()-decode,readBytes:g.length+geo.length+f.length});return row;
+ const decodeMs=performance.now()-decode,gridAt=performance.now();
+ if(variant==='runtime-baseline')Object.assign(row,require('../routing/lib/geometry-edge-grid').buildEdgeGridFromGeom(row.geom,row.pack.edgeCount));
+ const legacyGridMs=performance.now()-gridAt;
+ packCache.set(id,row);if(runtimeModel)while(packCache.size>3)packCache.delete(packCache.keys().next().value);
+ loadTrace.push({id,cacheHit:false,readMs,validationMs,decodeMs,legacyGridMs,readBytes:g.length+geo.length+f.length});return row;
 }
 async function load(resolution) {
+ const sourceKey=resolution.regionIds.join(',');
+ if(runtimeCandidate&&joinedCache?.sourceKey===sourceKey){loadTrace.push({joinCacheHit:true,sourceReuse:true});return joinedCache.data;}
+ if(runtimeCandidate){joinedCache=null;context.preparationCache.clear();context.reverseCostCache.clear();context.stationMatchCache.clear();}
  const rows=resolution.regionIds.map(loadRegion);
- if(rows.length===1)return rows[0];
+ if(rows.length===1){if(runtimeCandidate)joinedCache={sourceKey,data:rows[0]};return rows[0];}
  const key=JSON.stringify(rows.flatMap(r=>r.identity));
- if(joinedCache?.key===key){loadTrace.push({joinCacheHit:true});return joinedCache.data;}
+ if(joinedCache?.key===key&&(!runtimeModel||rows.every((r,i)=>joinedCache.rows[i]===r))){loadTrace.push({joinCacheHit:true});return joinedCache.data;}
  joinedCache=null;const at=performance.now();
- const joined=joinV4(rows,{compactNodes:variant==='compact-join',budget:createBudget({deadlineAtMs:Date.now()+90000,maxExpansions:Math.max(20000000,rows.reduce((n,r)=>n+r.pack.nodeCount+r.pack.edgeCount+r.pack.edgeTargets.length,0)+1)})});
+ const joined=joinV4(rows,{compactNodes:variant==='compact-join'||runtimeCandidate,budget:createBudget({deadlineAtMs:Date.now()+90000,maxExpansions:Math.max(20000000,rows.reduce((n,r)=>n+r.pack.nodeCount+r.pack.edgeCount+r.pack.edgeTargets.length,0)+1)})});
  const stations=new Map();for(const row of rows)for(const s of row.stations){const p=stations.get(s.id);if(p&&(p.lat!==s.lat||p.lon!==s.lon))throw Error('Conflicting canonical station');stations.set(s.id,s);}
  const data={pack:joined.pack,geom:joined.geom,stations:[...stations.values()],identity:rows.flatMap(r=>r.identity)};
- joinedCache={key,data};loadTrace.push({joinCacheHit:false,joinMs:performance.now()-at,joinedNodes:joined.pack.nodeCount,joinedEdges:joined.pack.edgeCount});return data;
+ joinedCache={key,sourceKey,rows,data};loadTrace.push({joinCacheHit:false,joinMs:performance.now()-at,joinedNodes:joined.pack.nodeCount,joinedEdges:joined.pack.edgeCount});return data;
 }
 function proof(result){return {status:result?.status,error:result?.error,windowComplete:result?.windowComplete,stops:result?.stops,
  destinationEscapeMeters:result?.destinationEscapeMeters,fuelAccessEvidence:result?.fuelAccessEvidence,
@@ -56,8 +64,8 @@ function validate(result,request) {
  return {continuous:true,access:true,range:true};
 }
 (async()=>{
- const sources=fs.readdirSync(path.join(__dirname,'../routing/lib/adventure')).filter(f=>f.endsWith('.js')&&!f.endsWith('.test.js')).sort().map(f=>[f,hash(fs.readFileSync(path.join(__dirname,'../routing/lib/adventure',f)))]);
- const report={caseId,variant,fixture,environment,sourceHashes:sources,scope:'Local full immutable pack loader and actual live-canary candidate pool; single retained joined graph. No hosted speed claim.',node:process.version,runs:[]};
+ const sources=fs.readdirSync(path.join(__dirname,'../routing/lib/adventure')).filter(f=>f.endsWith('.js')&&!f.endsWith('.test.js')).concat(['../graph.js','../deferred-edge-grid.js','../geometry-edge-grid.js','../pack-v4.js']).sort().map(f=>[f,hash(fs.readFileSync(path.join(__dirname,'../routing/lib/adventure',f)))]);
+ const report={caseId,variant,fixture,environment,sourceHashes:sources,scope:runtimeModel?'Local disk model of hosted three-region reader LRU and legacy spatial preparation; actual live-canary pool. No hosted timing claim.':'Local full immutable pack loader and actual live-canary candidate pool; ideal single retained joined graph. No hosted speed claim.',node:process.version,runs:[]};
  const checkpoint=()=>{fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,JSON.stringify(report,null,2));};
  for(let run=0;run<Number(repeatsArg);run++) {
   let request=structuredClone(fixture.request),history=[],excluded=[],windows=[],proofs=[],meters=0,stops=0,complete=false;

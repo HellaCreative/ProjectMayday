@@ -1,4 +1,8 @@
 "use strict";
+function tracePhase(phase,objectiveId,pack) {
+  if(process.env.DIRT_ROUTING_TRACE==='memory-v1')console.log('adventure phase',JSON.stringify({phase,objectiveId,regionId:pack.regionId,memory:process.memoryUsage(),peakRssKiB:process.resourceUsage().maxRSS}));
+}
+
 const {normalizeRequest}=require("./contracts");
 const {createReverseCostCache}=require("./reverse-cost-cache");
 const {createPreparationCache}=require("./preparation-cache");
@@ -36,10 +40,11 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     return {request,provenance,road:fallback||{state:"unverified"},fuel:{state:"unverified",reason},
       stage,stationDiagnostics,timing:{...timing,totalMs:Math.round(performance.now()-at)},search:budget.snapshot()};
   }
+  tracePhase("begin",objectiveId,pack);
   const prepared=preparationCache.prepare({pack,geom,revision,areas:classification.areas,budget:preparationBudget});
   provenance.preparationWork={...preparationBudget.snapshot(),separateAllowance:preparationBudget!==budget};
   if(prepared.state!=="complete")return incomplete(prepared.reason);
-  timing.preparationMs=Math.round(performance.now()-at);provenance.preparationCacheHit=prepared.cacheHit;
+  timing.preparationMs=Math.round(performance.now()-at);tracePhase("preparationMs",objectiveId,pack);provenance.preparationCacheHit=prepared.cacheHit;
   const {index,urban}=prepared.prepared;
   const isMotorway=arc=>/^(motorway|motorway_link|freeway)$/.test(arc.roadClassLeaf||"");
   // Minimize exposure before ride cost. Necessary connections stay available;
@@ -128,7 +133,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     return pointFromMatch(`anchor-${i}`,selected[i],geom,budget,binding);
   });
   if(points.some(p=>!p))return incomplete(budget.snapshot().reason);
-  timing.endpointMatchingMs=Math.round(performance.now()-phase);
+  timing.endpointMatchingMs=Math.round(performance.now()-phase);tracePhase("endpointMatchingMs",objectiveId,pack);
   stage="station_matching";phase=performance.now();
   const matched=stationMatchCache.match({pack,geom,revision,index,stations,maxMeters:stationRadiusMeters,allowUnknown,budget});
   provenance.stationMatchingCacheHit=matched.cacheHit;
@@ -155,12 +160,12 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     }
     occupied.set(key,row.stationId);points.push(point);
   }
-  timing.stationMatchingMs=Math.round(performance.now()-phase);
+  timing.stationMatchingMs=Math.round(performance.now()-phase);tracePhase("stationMatchingMs",objectiveId,pack);
   stage="projected_graph";phase=performance.now();
   const graph=createProjectedGraph(pack,{points,budget,allowUnknown,allowProvisionalStations:true,fastNeutralTurns,
     endpointEdges:points.slice(0,2).map(p=>p.edgeIndex)});
   if(graph.state!=="complete")return incomplete(graph.reason);
-  timing.projectedGraphMs=Math.round(performance.now()-phase);
+  timing.projectedGraphMs=Math.round(performance.now()-phase);tracePhase("projectedGraphMs",objectiveId,pack);
   const start=graph.pointNodes.get("anchor-0"),end=graph.pointNodes.get("anchor-1");
   const arrival=directedArrival(pack,history.edges,points[0]);
   if(arrival.state!=='complete')return incomplete(arrival.reason);
@@ -184,11 +189,11 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(avoidanceReverse&&avoidanceReverse.state!=="complete")return incomplete(avoidanceReverse.reason);
   const avoidanceBounds=useAvoidanceLowerBounds?(avoidanceBoundsCache?avoidanceBoundsCache.prepare:buildLowerBounds)({graph,nodeCount:graph.nodeCount,target:end,edgeCost:avoidanceCost,budget,stopAt:start,reverseCosts:avoidanceReverse?.reverseCosts}):null;
   if(avoidanceBounds && avoidanceBounds.state!=="complete")return incomplete(avoidanceBounds.reason);
-  timing.reverseBoundsMs=Math.round(performance.now()-phase);
+  timing.reverseBoundsMs=Math.round(performance.now()-phase);tracePhase("reverseBoundsMs",objectiveId,pack);
   stage="fuel_search";phase=performance.now();
   const result=searchFuelRide({graph,start,end,initialTurnState:initial.state,edgeCost,budget,fuel:request.fuel,lowerBounds:bounds,avoidanceLowerBounds:avoidanceBounds,avoidanceCost,maxFuelLabels,fuelHeuristicWeight,preferOnwardFuel,retainFuelApproach,dirtEntryCost,fuelFirst,allowZeroRefillAdvisory,allowPassingRefillAdvisory,allowRepeatedPassingRoute,
     onRoadCandidate:road=>{const rendered=materializeRoute({pack,geom,result:road,budget});if(rendered.state==="complete"){recordExposure(rendered,road);fallback=rendered;}}});
-  timing.searchAndAdvisoryMs=Math.round(performance.now()-phase);
+  timing.searchAndAdvisoryMs=Math.round(performance.now()-phase);tracePhase("searchAndAdvisoryMs",objectiveId,pack);
   if(result.road.state!=="found")return incomplete(result.road.reason);
   if(!["provisional_station_access","verified_on_supplied_station_access"].includes(result.fuel.state)) {
     return {...incomplete(result.fuel.reason||result.fuel.state),fuel:result.fuel,search:{...budget.snapshot(),fuelSearch:{...result.road.diagnostics,...(result.fuelSearch?{failedFuelSearch:result.fuelSearch.diagnostics}:{})}}};
@@ -206,7 +211,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     return {...v,riderAnchorIds,movable:riderAnchorIds.length===0,station:stationById.get(v.stationId),roadMatch:bindingById.get(v.stationId)?.match||null};
   });
   const qualityAudit=auditRideShape({segments:road.segments,budget});
-  timing.geometryAndProofMs=Math.round(performance.now()-phase);
+  timing.geometryAndProofMs=Math.round(performance.now()-phase);tracePhase("geometryAndProofMs",objectiveId,pack);
   return {request,provenance,road,qualityAudit,fuel:{...proof,plannedRefills:stops,destinationEscape:escape},stage:"complete",
     stationDiagnostics,timing:{...timing,totalMs:Math.round(performance.now()-at)},
     search:{...budget.snapshot(),fuelSearch:{...result.road.diagnostics,...(result.fuelSearch?{failedFuelSearch:result.fuelSearch.diagnostics}:{})},escapeSearches:result.escapeSearches},
