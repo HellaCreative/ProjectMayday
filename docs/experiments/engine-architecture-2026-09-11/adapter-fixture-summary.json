@@ -1,0 +1,121 @@
+{
+  "cases": 6,
+  "walks": 5982,
+  "mismatches": 0,
+  "endpointRoutes": 18,
+  "fuelFixture": [
+    {
+      "state": "found",
+      "reason": null,
+      "seconds": 0.018490417,
+      "labels": 18,
+      "expanded": 17,
+      "distance": 5658.827455156516,
+      "weight": 5658.827455156516,
+      "remainingUsableMeters": 1638.1725448434836,
+      "escapeStation": "end",
+      "steps": [
+        {
+          "meters": 1362.0,
+          "from": 5,
+          "to": 0,
+          "engineEdge": 0,
+          "sourceKey": 0,
+          "geometry": "LINESTRING (-63 45, -62.990002 45.009998)"
+        },
+        {
+          "meters": 680.9891832424278,
+          "from": 0,
+          "to": 8,
+          "engineEdge": 17,
+          "sourceKey": 2,
+          "geometry": "LINESTRING (-62.990002 45.009998, -62.985001 45.004999)"
+        },
+        {
+          "meters": 0.0,
+          "from": 8,
+          "to": 8,
+          "engineEdge": -1,
+          "refill": "via"
+        },
+        {
+          "meters": 681.0108167575722,
+          "from": 8,
+          "to": 1,
+          "engineEdge": 18,
+          "sourceKey": 2,
+          "geometry": "LINESTRING (-62.985001 45.004999, -62.979999 45)"
+        },
+        {
+          "meters": 1573.0,
+          "from": 1,
+          "to": 3,
+          "engineEdge": 6,
+          "sourceKey": 6,
+          "geometry": "LINESTRING (-62.979999 45, -62.959999 45)"
+        },
+        {
+          "meters": 0.0,
+          "from": 3,
+          "to": 3,
+          "engineEdge": -1,
+          "refill": "branch"
+        },
+        {
+          "meters": 1361.8274551565164,
+          "from": 3,
+          "to": 10,
+          "engineEdge": 21,
+          "sourceKey": 10,
+          "geometry": "LINESTRING (-62.959999 45, -62.950002 45.009997)"
+        }
+      ],
+      "escape": [
+        {
+          "meters": 0.17254484348335863,
+          "from": 10,
+          "to": 4,
+          "engineEdge": 22,
+          "sourceKey": 10,
+          "geometry": "LINESTRING (-62.950002 45.009997, -62.950001 45.009998)"
+        }
+      ],
+      "matchedStations": 3,
+      "stationAccessEvidence": "legal_road_projection"
+    },
+    {
+      "state": "unreachable",
+      "reason": "no_feasible_chain",
+      "seconds": 0.000941792,
+      "labels": 1,
+      "expanded": 1,
+      "distance": 0.0,
+      "weight": 0.0,
+      "remainingUsableMeters": 0.0,
+      "escapeStation": null,
+      "steps": [],
+      "escape": [],
+      "matchedStations": 3,
+      "stationAccessEvidence": "legal_road_projection"
+    },
+    {
+      "state": "unreachable",
+      "reason": "no_feasible_chain",
+      "seconds": 0.000571833,
+      "labels": 2,
+      "expanded": 2,
+      "distance": 0.0,
+      "weight": 0.0,
+      "remainingUsableMeters": 0.0,
+      "escapeStation": null,
+      "steps": [],
+      "escape": [],
+      "matchedStations": 2,
+      "stationAccessEvidence": "legal_road_projection"
+    },
+    {
+      "error": "java.lang.IllegalArgumentException: Continuation import not yet implemented; refusing to discard history"
+    }
+  ],
+  "scope": "Synthetic integration checks, not real-region or performance qualification"
+}

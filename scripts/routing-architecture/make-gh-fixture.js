@@ -7,7 +7,15 @@ const root=process.argv[2];fs.mkdirSync(root,{recursive:true});
 const nodes=Array.from({length:6},(_,i)=>({id:i+1,lon:-63+i*.01,lat:45+(i%2)*.01}));
 const ways=[[1,2],[2,3],[3,4],[3,5],[4,6],[5,6]].map((nodeIds,i)=>({id:i+10,nodeIds,tags:{highway:'unclassified',access:'yes',surface:i%2?'gravel':'asphalt'}}));
 const b=encodeFromOsmGraph(buildGraphFromOsm({nodes,ways}),{regionId:'ns',sourceEpoch:'fixture'});const pack=decodeGraphV4(b.graphBuffer,b.geomBuffer);
-pack.restrictions=[{fromEdge:0,viaEdges:[1],toEdge:2,only:false,viaNode:1}];
+const variant=process.argv[3]||"no";const viaNode=pack.edgeTo[0];
+const variants={
+ no:[{fromEdge:0,viaEdges:[1],toEdge:2,only:false,viaNode}],
+ only:[{fromEdge:0,viaEdges:[1],toEdge:2,only:true,viaNode}],
+ branches:[{fromEdge:0,viaEdges:[1],toEdge:2,only:true,viaNode},{fromEdge:0,viaEdges:[1],toEdge:3,only:true,viaNode}],
+ together:[{fromEdge:0,toEdge:1,only:true,viaNode},{fromEdge:0,viaEdges:[1],toEdge:2,only:true,viaNode}],
+ longer:[{fromEdge:0,viaEdges:[1],toEdge:2,only:true,viaNode},{fromEdge:0,viaEdges:[1,2],toEdge:4,only:true,viaNode}],
+ overlapping:[{fromEdge:0,viaEdges:[1,2],toEdge:4,only:false,viaNode},{fromEdge:1,viaEdges:[2],toEdge:4,only:false,viaNode:pack.edgeTo[1]}]
+};pack.restrictions=variants[variant];if(!pack.restrictions)throw Error("Unknown fixture variant");
 const sections={};function write(n,a){let v=Buffer.from(a.buffer,a.byteOffset,a.byteLength);fs.writeFileSync(path.join(root,n+'.bin'),v);sections[n]={file:n+'.bin',type:Buffer.isBuffer(a)?"Uint8Array":a.constructor.name,bytes:v.length,sha256:crypto.createHash('sha256').update(v).digest('hex')};}
 for(let n of ['nodeCoords','edgeFrom','edgeTo','edgeMeters','edgeAccess','edgeSurfaceLeaf','edgeRoadClassLeaf'])write(n,pack[n]);write('sourceRegions',new Uint16Array(pack.edgeCount));write('sourceEdges',Uint32Array.from({length:pack.edgeCount},(_,i)=>i));fs.writeFileSync(path.join(root,'geometry.bin'),b.geomBuffer);
 fs.writeFileSync(path.join(root,'verified-input.json'),JSON.stringify({root,nodeCount:pack.nodeCount,edgeCount:pack.edgeCount,sections,geometryPaths:[path.join(root,'geometry.bin')],surfaceKinds:pack.enums.surfaceLeafNames.map(l=>({paved:0,dirt:1,unknown:2}[surfaceKind(l)])),roadClasses:pack.enums.roadClassLeafNames,restrictions:compile(pack)}));

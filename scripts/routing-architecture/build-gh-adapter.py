@@ -28,5 +28,5 @@ extension='''        setInternalRestrictions(internalRestrictions, encBits);
 '''
 s=s.replace(needle,extension+needle)
 b=r/'tools/gh-adapter';b.mkdir(exist_ok=True);(b/'RestrictionSetter.java').write_text(s)
-subprocess.run(['/opt/homebrew/opt/openjdk/bin/javac','-cp',str(r/'tools/graphhopper-web-11.0.jar'),'-d',str(b),str(b/'RestrictionSetter.java'),str(here/'VerifiedHopper.java')],check=True)
+subprocess.run(['/opt/homebrew/opt/openjdk/bin/javac','-cp',str(r/'tools/graphhopper-web-11.0.jar'),'-d',str(b),str(b/'RestrictionSetter.java'),str(here/'VerifiedHopper.java'),str(here/'FuelSearch.java')],check=True)
 (b/'build-identity.json').write_text(json.dumps({'upstreamSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'extensionSha256':hashlib.sha256(s.encode()).hexdigest(),'adapterSha256':hashlib.sha256((here/'VerifiedHopper.java').read_bytes()).hexdigest()},indent=2))
