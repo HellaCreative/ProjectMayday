@@ -70,18 +70,48 @@ projection, not verified physical pump access.
 
 ## Guidance refinement and subsequent qualification
 
-In progress: private per-objective landmark guidance on the unchanged six-region
-graph. Kilometer cost units avoid native landmark-storage overflow; external
-cost units are preserved. Preparation runs one objective per process, then
-serving loads all four indexes. Preparation allows endpoint/unknown access, so
-the index remains a lower bound when request restrictions or positive distance
-penalties are added. It does not apply the fixed urban mask to normal profiles.
+Private per-objective landmark guidance is prepared on the unchanged six-region
+graph. Kilometer cost units avoid native storage overflow; external cost units
+are preserved. Preparation took 985.8 seconds across four bounded processes and
+added 1.633 GiB of landmark files. Eight base graph files match before/after source
+and target hashes. Preparation allows endpoint/unknown access, retaining a lower
+bound when request restrictions or positive distance penalties are added.
 
-The normalization fixture passes1044 checks:1028 restriction walks plus16 road/
-fuel cases across four objectives. Geometry and fuel proofs match the existing
-fixture exactly; numeric costs agree within1e-5. Nineteen broker, HTTP and shared
-selection tests pass. Full-route performance and capacity qualification follow
-the preparation receipt; the new index is not yet promoted by this report.
+Summed objective/distance lower bounds reduced repeated alternative search work.
+A subsequent private extension of pinned GraphHopper AStar seeds every legal
+departure choice and searches all legal destinations together, reducing repeated
+endpoint-pair exploration. The underlying edge-state relaxation, turn costs and
+path extraction remain upstream. No endpoint option or road was removed.
+
+| Full unmasked NS→WV four-objective pool | Seconds | Peak group RSS |
+| --- | ---: | ---: |
+| Original distance guidance | 90-second deadline, incomplete | 2743.5 MiB |
+| Per-objective indexes | 89.141 | 3028.1 MiB |
+| Added summed guidance, separate endpoints | 72.330 fresh / 58.020 after regional work | 2962.0 / 3203.8 MiB |
+| Combined endpoints | 39.395 fresh / 39.491 after regional work | 3189.6 / 2952.3 MiB |
+
+These are local observations with unflushed OS caches, not hosted measurements.
+The combined version's four returned WV candidates match the previous version's
+coordinates, refill positions, distance, cost, surface totals and escape. Two raw
+source-edge decompositions differ but describe the identical rider geometry.
+The normalization/combined fixture passes 1044 checks. Actual populated landmark
+tables also pass 96 directed-path checks and 24 combined endpoint minima against
+independent Dijkstra. Six regional/full-WV pools complete in the latest matrix;
+all candidate road/fuel source audits pass. Nineteen broker/HTTP/selection tests
+pass. Full fuel proofs still mean legal road projections, not physical pump access.
+
+Earlier concurrency tests used summed guidance with separate endpoint searches:
+500 distinct full WV requests with two workers produced 2 successes, 490 admission
+rejections and 8 deadlines. Three/four workers produced no complete responses.
+Group peaks were 3309–3697 MiB. Mixed 24-request workloads produced 23/24 at 0.5
+requests/sec and 22/24 at 0.25/sec. Neither rate establishes a reliable capacity
+floor. Failures were deadline saturation, not out-of-memory crashes. Increasing
+worker counts was rejected for that version.
+
+Combined-endpoint concurrency is not yet measured. The owner redirected work to
+the bounded [device-first workload experiment](DEVICE-WORKLOAD.md), preserving
+these results. Commercial capacity remains unqualified; single-route speedups
+must not be promoted into a 500-independent-request claim.
 
 ## Reproduction and evidence
 

@@ -37,6 +37,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
  byte[] stressMask;
  final double costScale;
  final boolean additiveLandmarkGuidance;
+ final boolean multiEndpointSearch;
  VerifiedHopper(Path descriptor,Path target) throws Exception {
   this.descriptor=descriptor;input=JSON.readTree(descriptor.toFile());
   loopFile=target.resolve("dirt-loop-tails.json");
@@ -52,6 +53,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   boolean stressLandmarks=Boolean.getBoolean("dirt.stressLandmarks");
   boolean objectiveKilometers=Boolean.getBoolean("dirt.objectiveLandmarkKilometers");
   additiveLandmarkGuidance=Boolean.getBoolean("dirt.additiveLandmarkGuidance");
+  multiEndpointSearch=Boolean.getBoolean("dirt.multiEndpointSearch");
   if(additiveLandmarkGuidance&&!objectiveLandmarks)throw new IOException("Additive guidance requires separate objective and distance landmark indexes");
   if(objectiveKilometers&&!objectiveLandmarks)throw new IOException("Kilometer objective landmarks require objective-specific preparation");
   costScale=stressLandmarks||objectiveKilometers?1000:1;
@@ -242,7 +244,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   public WeightApproximator reverse(){return new SumGuidance(objective.reverse(),distance.reverse(),factor);}
   public double getSlack(){return objective.getSlack()+factor*distance.getSlack();}
  }
- void strengthenAdditiveGuidance(RoutingAlgorithm algorithm,QueryGraph graph,String name,double lambda){
+ WeightApproximator additiveBound(QueryGraph graph,String name,double lambda){
   if(!additiveLandmarkGuidance||!Double.isFinite(lambda)||lambda<0)throw new IllegalArgumentException("Invalid additive guidance configuration");
   var objective=getLandmarks().get(name);var distance=getLandmarks().get("distance");
   int count=Math.max(1,Math.min(12,objective.getLandmarkCount()/2));
@@ -252,7 +254,23 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   var b=com.graphhopper.routing.lm.DirtLandmarkAccess.distanceBound(graph,graph.wrapWeighting(distance.getWeighting()),distance,count);
   // For every eligible path P, cost(P)=base(P)+lambda*distance(P).
   // Independent lower bounds can be added; both use the same internal units.
-  ((AStar)algorithm).setApproximation(new SumGuidance(a,b,lambda));
+  return new SumGuidance(a,b,lambda);
+ }
+ void strengthenAdditiveGuidance(RoutingAlgorithm algorithm,QueryGraph graph,String name,double lambda){
+  ((AStar)algorithm).setApproximation(additiveBound(graph,name,lambda));
+ }
+ record EndpointSearch(com.graphhopper.routing.Path path,int visited,boolean complete){}
+ EndpointSearch searchEndpoints(QueryGraph graph,Weighting w,String name,double lambda,List<Integer> from,List<Integer> to,long millis){
+  if(from.isEmpty()||to.isEmpty())return new EndpointSearch(new com.graphhopper.routing.Path(graph),0,true);
+  if(millis<=0)return new EndpointSearch(new com.graphhopper.routing.Path(graph),0,false);
+  long until=System.nanoTime()+millis*1000000L;
+  var lm=getLandmarks().get(name);int count=Math.max(1,Math.min(12,lm.getLandmarkCount()/2));
+  Map<Integer,WeightApproximator> bounds=new LinkedHashMap<>();
+  for(int target:to)bounds.put(target,additiveLandmarkGuidance&&lambda>0?additiveBound(graph,name,lambda):com.graphhopper.routing.lm.LMApproximator.forLandmarks(graph,graph.wrapWeighting(w),lm,count));
+  var algorithm=new com.graphhopper.routing.DirtMultiEndpointAStar(graph,graph.wrapWeighting(w),TraversalMode.EDGE_BASED);
+  algorithm.setMaxVisitedNodes(12000000);algorithm.setTimeoutMillis(millis);
+  var result=algorithm.calcPaths(from,bounds);
+  return new EndpointSearch(result,algorithm.getVisitedNodes(),algorithm.getVisitedNodes()<12000000&&System.nanoTime()<until);
  }
  void strengthenDistanceGuidance(RoutingAlgorithm algorithm,QueryGraph graph,Weighting scalar,String name,double lambda){
   if(costScale!=1)throw new IllegalArgumentException("Scaled distance guidance requires the original metre-based distance landmark artifact");
@@ -300,7 +318,10 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   FuelSearch.Result result=null;com.graphhopper.routing.Path best=null;boolean roadComplete=true;int roadVisited=0;List<String> roadFailures=new ArrayList<>();
   if(!q.path("forceResourceSearch").asBoolean(false)){
    boolean flexible=q.path("flexible").asBoolean(false);RoutingAlgorithmFactory factory=flexible?new RoutingAlgorithmFactorySimple():new LMRoutingAlgorithmFactory(getLandmarks().get(name));
-   for(int a:from.stream().map(Snap::getClosestNode).distinct().toList())for(int b:to.stream().map(Snap::getClosestNode).distinct().toList()){
+   if(multiEndpointSearch&&!flexible){
+    try{var trial=searchEndpoints(graph,w,name,0,from.stream().map(Snap::getClosestNode).distinct().toList(),to.stream().map(Snap::getClosestNode).distinct().toList(),(deadline-System.nanoTime())/1000000);roadVisited=trial.visited();roadComplete=trial.complete();if(trial.path().isFound())best=trial.path();}
+    catch(Exception ex){roadComplete=false;roadFailures.add(ex.toString());}
+   }else for(int a:from.stream().map(Snap::getClosestNode).distinct().toList())for(int b:to.stream().map(Snap::getClosestNode).distinct().toList()){
     long millis=(deadline-System.nanoTime())/1000000;if(millis<=0){roadComplete=false;continue;}
     var options=new AlgorithmOptions().setAlgorithm(flexible?"dijkstrabi":"astar").setTraversalMode(TraversalMode.EDGE_BASED).setMaxVisitedNodes(12000000).setTimeoutMillis(millis);
     var algo=factory.createAlgo(graph,w,options);try{var candidate=algo.calcPath(a,b);roadVisited+=algo.getVisitedNodes();if(algo.getVisitedNodes()>=12000000||System.nanoTime()>=deadline)roadComplete=false;if(candidate.isFound()&&(best==null||candidate.getWeight()<best.getWeight()))best=candidate;}catch(Exception ex){roadComplete=false;roadFailures.add(ex.toString());}
@@ -326,7 +347,10 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
     Weighting scalar=createWeighting(getProfile(name),new PMap().putObject("cancellable",true).putObject("allow_unknown",q.path("allowUnknown").asBoolean(false)).putObject("wander",q.path("wander").asDouble(1)).putObject("distance_penalty",lambda));
     var factory=new LMRoutingAlgorithmFactory(getLandmarks().get(name));
     com.graphhopper.routing.Path selected=null;boolean complete=true;int visited=0;
-    for(int a:from.stream().map(Snap::getClosestNode).distinct().toList())for(int b:to.stream().map(Snap::getClosestNode).distinct().toList()){
+    if(multiEndpointSearch){
+     try{var trial=searchEndpoints(graph,scalar,name,lambda,from.stream().map(Snap::getClosestNode).distinct().toList(),to.stream().map(Snap::getClosestNode).distinct().toList(),(deadline-System.nanoTime())/1000000);visited=trial.visited();complete=trial.complete();if(trial.path().isFound())selected=trial.path();}
+     catch(Exception ex){complete=false;roadFailures.add(ex.toString());}
+    }else for(int a:from.stream().map(Snap::getClosestNode).distinct().toList())for(int b:to.stream().map(Snap::getClosestNode).distinct().toList()){
      long millis=(deadline-System.nanoTime())/1000000;if(millis<=0){complete=false;continue;}
      var options=new AlgorithmOptions().setAlgorithm("astar").setTraversalMode(TraversalMode.EDGE_BASED).setMaxVisitedNodes(12000000).setTimeoutMillis(millis);
      var algo=factory.createAlgo(graph,scalar,options);

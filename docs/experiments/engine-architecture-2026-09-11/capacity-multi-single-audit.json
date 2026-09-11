@@ -1,0 +1,23 @@
+{
+  "sources": [
+    {
+      "run": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/capacity-multi-wv-single.json",
+      "records": 5,
+      "fullSuccess": 1,
+      "submitted": 1
+    }
+  ],
+  "checks": [
+    {
+      "region": "wv",
+      "kind": "fuel",
+      "count": 4,
+      "returncode": 0,
+      "output": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/capacity-multi-single-audit.json.wv.fuel.audit.json"
+    }
+  ],
+  "strictMaskProofChecks": 0,
+  "uniqueProofs": 4,
+  "passed": true,
+  "scope": "Continuous V4 road/turn/access and range/refill/escape audits. Physical station entrances remain provisional."
+}

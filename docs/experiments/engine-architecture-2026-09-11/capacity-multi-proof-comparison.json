@@ -1,0 +1,50 @@
+[
+  {
+    "profile": "dirt30",
+    "exactSteps": false,
+    "exactEscape": true,
+    "weightDelta": 0.0,
+    "distanceDelta": 0.0,
+    "remainingDelta": 0.0,
+    "stepCounts": [
+      6904,
+      6903
+    ]
+  },
+  {
+    "profile": "dirt10",
+    "exactSteps": false,
+    "exactEscape": true,
+    "weightDelta": 0.0,
+    "distanceDelta": 0.0,
+    "remainingDelta": 0.0,
+    "stepCounts": [
+      7376,
+      7377
+    ]
+  },
+  {
+    "profile": "paved",
+    "exactSteps": true,
+    "exactEscape": true,
+    "weightDelta": 0.0,
+    "distanceDelta": 0.0,
+    "remainingDelta": 0.0,
+    "stepCounts": [
+      13284,
+      13284
+    ]
+  },
+  {
+    "profile": "distance",
+    "exactSteps": true,
+    "exactEscape": true,
+    "weightDelta": 0.0,
+    "distanceDelta": 0.0,
+    "remainingDelta": 0.0,
+    "stepCounts": [
+      7338,
+      7338
+    ]
+  }
+]

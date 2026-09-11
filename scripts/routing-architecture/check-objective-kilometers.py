@@ -1,14 +1,16 @@
 """Check cost normalization against the existing directed-turn/fuel fixture."""
-import gzip,hashlib,json,pathlib,shutil,subprocess
+import gzip,hashlib,json,pathlib,shutil,subprocess,argparse
 from adapter_identity import ensure_current
 r=pathlib.Path('/Users/richardsmith/.codex/experiments/routing-architecture-20260911');build=ensure_current(r)
+p=argparse.ArgumentParser();p.add_argument('--multi',action='store_true');options=p.parse_args()
 descriptor=r/'data/verified-fixture-no/verified-input.json'
 source=r/'data/gh-verified-fixture-directed-v3-no';target=r/'data/gh-verified-fixture-objective-km-v1'
-out=r/'results/hybrid-objective-km-fixture.json'
-if target.exists() or out.exists():raise RuntimeError('Preserve earlier fixture evidence')
-shutil.copytree(source,target)
-for p in target.glob('landmarks_*'):p.unlink()
-(target/'dirt-input.identity').write_text('directed-v2-loop-objective-lm-km:'+hashlib.sha256(descriptor.read_bytes()).hexdigest())
+out=r/('results/hybrid-multi-endpoint-fixture.json' if options.multi else 'results/hybrid-objective-km-fixture.json')
+if out.exists() or target.exists() and not options.multi:raise RuntimeError('Preserve earlier fixture evidence')
+if not options.multi:
+ shutil.copytree(source,target)
+ for p in target.glob('landmarks_*'):p.unlink()
+ (target/'dirt-input.identity').write_text('directed-v2-loop-objective-lm-km:'+hashlib.sha256(descriptor.read_bytes()).hexdigest())
 walks=json.loads(descriptor.with_name('walk-checks.json').read_text())
 base={'start':[-63,45],'end':[-62.950002,45.009997]}
 stations=[{'id':'via','position':[-62.9850006,45.00499916]},{'id':'branch','position':[-62.9599991,45]},{'id':'end','position':[-62.950001,45.009998]}]
@@ -23,7 +25,10 @@ def run(graph,flags):
  rows=[json.loads(x[7:]) for x in p.stdout.splitlines() if x.startswith('RESULT ')]
  assert p.returncode==0 and len(rows)==len(queries),(p.returncode,p.stderr,rows)
  return rows
-old=run(source,[]);new=run(target,['-Ddirt.objectiveLandmarks=true','-Ddirt.objectiveLandmarkKilometers=true'])
+flags=['-Ddirt.objectiveLandmarks=true','-Ddirt.objectiveLandmarkKilometers=true']
+if options.multi:
+ flags+=['-Ddirt.additiveLandmarkGuidance=true'];old=run(target,flags);new=run(target,flags+['-Ddirt.multiEndpointSearch=true'])
+else:old=run(source,[]);new=run(target,flags)
 checks=[]
 for q,a,b in zip(queries,old,new):
  assert 'error' not in a and 'error' not in b,(q,a,b)

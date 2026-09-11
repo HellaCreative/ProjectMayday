@@ -1,0 +1,30 @@
+{
+  "sources": [
+    {
+      "run": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/capacity-multi-matrix.json",
+      "records": 24,
+      "fullSuccess": 6,
+      "submitted": 6
+    }
+  ],
+  "checks": [
+    {
+      "region": "wv",
+      "kind": "road",
+      "count": 4,
+      "returncode": 0,
+      "output": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/capacity-multi-matrix-audit.json.wv.road.audit.json"
+    },
+    {
+      "region": "wv",
+      "kind": "fuel",
+      "count": 20,
+      "returncode": 0,
+      "output": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/capacity-multi-matrix-audit.json.wv.fuel.audit.json"
+    }
+  ],
+  "strictMaskProofChecks": 0,
+  "uniqueProofs": 24,
+  "passed": true,
+  "scope": "Continuous V4 road/turn/access and range/refill/escape audits. Physical station entrances remain provisional."
+}

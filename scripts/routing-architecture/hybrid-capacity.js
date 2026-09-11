@@ -3,13 +3,14 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
 const {monitorEventLoopDelay}=require('node:perf_hooks');
 const {startHybridRides}=require('./hybrid-rides-service');
 const {startHybridHttp}=require('./hybrid-http');
-const {values}=require('node:util').parseArgs({options:{out:{type:'string'},dataset:{type:'string',default:'strict-wv'},mode:{type:'string',default:'baseline'},workers:{type:'string',default:'1'},scenario:{type:'string',default:'identical'},count:{type:'string',default:'500'},rate:{type:'string',default:'0.5'},'baseline-guidance':{type:'boolean',default:false}}});
+const {values}=require('node:util').parseArgs({options:{out:{type:'string'},dataset:{type:'string',default:'strict-wv'},mode:{type:'string',default:'baseline'},workers:{type:'string',default:'1'},scenario:{type:'string',default:'identical'},count:{type:'string',default:'500'},rate:{type:'string',default:'0.5'},'baseline-guidance':{type:'boolean',default:false},'endpoint-search':{type:'string',default:'auto'}}});
 const root='/Users/richardsmith/.codex/experiments/routing-architecture-20260911',out=values.out;
 if(!out||fs.existsSync(out))throw new Error('Supply a new output path');
 const count=Number(values.count),workers=Number(values.workers);if(!Number.isInteger(count)||count<1||count>500)throw new Error('count 1..500');
 const sustained=values.scenario==='sustained',rate=Number(values.rate);
 if(!['strict-wv','nsnb','wv','wv-objective'].includes(values.dataset)||!['baseline','broker'].includes(values.mode)||!['identical','warm','unique','mixed','sustained'].includes(values.scenario))throw new Error('Unknown benchmark configuration');
 if(!Number.isFinite(rate)||rate<=0||rate>50)throw new Error('rate must be >0..50');
+if(!['auto','combined','separate'].includes(values['endpoint-search']))throw new Error('endpoint-search must be auto, combined, or separate');
 if(['mixed','sustained'].includes(values.scenario)&&!['wv','wv-objective'].includes(values.dataset))throw new Error('Mixed cases require the full unmasked six-region graph');
 const rows=[],controls=new Map(),started=performance.now(),nodeCpu=process.cpuUsage(),delay=monitorEventLoopDelay({resolution:20});delay.enable();
 let service,endpoint,broker,sampledNodePeak=0,stage='starting';
@@ -47,7 +48,7 @@ async function request(port,q,id,agent){
  const strict=values.dataset==='strict-wv',small=values.dataset==='nsnb',objective=values.dataset==='wv-objective';
  const log=fs.createWriteStream(out+'.engine.log');
  try{
-  service=await startHybridRides({descriptor:path.join(root,`data/verified-${small?'nsnb':'wv'}/verified-input.json`),artifact:path.join(root,strict?'data/gh-verified-wv-strict-lm-km-v2':small?'data/gh-verified-nsnb-directed-v2-objective':objective?'data/gh-verified-wv-objective-lm-km-v1':'data/gh-verified-wv-directed-v2'),objectiveLandmarks:small||objective,objectiveKilometers:objective,additiveGuidance:objective&&!values['baseline-guidance'],strictMask:strict?path.join(root,'unified-stress/blocked-source-edges.bin'):null,workers,onLog:line=>log.write(line+'\n')});
+  service=await startHybridRides({descriptor:path.join(root,`data/verified-${small?'nsnb':'wv'}/verified-input.json`),artifact:path.join(root,strict?'data/gh-verified-wv-strict-lm-km-v2':small?'data/gh-verified-nsnb-directed-v2-objective':objective?'data/gh-verified-wv-objective-lm-km-v1':'data/gh-verified-wv-directed-v2'),objectiveLandmarks:small||objective,objectiveKilometers:objective,additiveGuidance:objective&&!values['baseline-guidance'],multiEndpoints:values['endpoint-search']==='auto'?objective:values['endpoint-search']==='combined',strictMask:strict?path.join(root,'unified-stress/blocked-source-edges.bin'):null,workers,onLog:line=>log.write(line+'\n')});
   report.command=service.command;report.buildIdentity=service.buildIdentity;
   const runCandidate=service.runCandidate;
   service.runCandidate=async(q,o)=>{

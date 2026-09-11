@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const {spawn}=require('node:child_process'),readline=require('node:readline');
 const {HybridRides}=require('./hybrid-rides');
 const ROOT='/Users/richardsmith/.codex/experiments/routing-architecture-20260911';
-async function startHybridRides({descriptor,artifact,objectiveLandmarks=false,objectiveKilometers=false,additiveGuidance=objectiveKilometers,strictMask=null,workers=1,onLog=()=>{}}){
+async function startHybridRides({descriptor,artifact,objectiveLandmarks=false,objectiveKilometers=false,additiveGuidance=objectiveKilometers,multiEndpoints=objectiveKilometers,strictMask=null,workers=1,onLog=()=>{}}){
  if(!Number.isSafeInteger(workers)||workers<1||workers>4)throw new TypeError('workers must be 1..4');
  if(objectiveKilometers&&!objectiveLandmarks||strictMask&&objectiveLandmarks)throw new TypeError('Incompatible landmark configuration');
  // A serving launch must never become an unplanned graph/index build.
@@ -20,6 +20,7 @@ async function startHybridRides({descriptor,artifact,objectiveLandmarks=false,ob
  if(objectiveLandmarks)args.push('-Ddirt.objectiveLandmarks=true');
  if(objectiveKilometers)args.push('-Ddirt.objectiveLandmarkKilometers=true');
  if(additiveGuidance)args.push('-Ddirt.additiveLandmarkGuidance=true');
+ if(multiEndpoints)args.push('-Ddirt.multiEndpointSearch=true');
  if(strictMask)args.push('-Ddirt.stressLandmarks=true',`-Ddirt.stressMask=${strictMask}`);
  args.push('-cp',path.join(ROOT,'tools/gh-adapter')+':'+path.join(ROOT,'tools/graphhopper-web-11.0.jar'),'ConcurrentVerifiedHopper',descriptor,artifact,String(workers));
  const child=spawn('/opt/homebrew/opt/openjdk/bin/java',args,{stdio:['pipe','pipe','pipe']});
@@ -49,7 +50,7 @@ async function startHybridRides({descriptor,artifact,objectiveLandmarks=false,ob
   child.stdin.write(JSON.stringify({...query,hybrid:true,requestId:id})+'\n');
  });
  const graphIdentity=fs.readFileSync(path.join(artifact,'dirt-input.identity'),'utf8');
- const rides=new HybridRides({runCandidate,identity:graphIdentity+':'+buildIdentity,strictCostMask:!!strictMask});
+ const rides=new HybridRides({runCandidate,identity:graphIdentity+':'+buildIdentity+`:sum=${additiveGuidance}:multi=${multiEndpoints}`,strictCostMask:!!strictMask});
  return {rides,runCandidate,identity:rides.identity,strictCostMask:!!strictMask,child,buildIdentity,command:[child.spawnfile,...args],async close(){
   if(!exited){child.stdin.end();
    await new Promise(resolve=>{let hardTimer;const timer=setTimeout(()=>{forcedClose=true;child.kill();hardTimer=setTimeout(()=>child.kill('SIGKILL'),2000);},10000);child.once('exit',()=>{clearTimeout(timer);clearTimeout(hardTimer);resolve();});});

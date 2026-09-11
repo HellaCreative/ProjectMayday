@@ -1,0 +1,42 @@
+[
+  {
+    "profile": "dirt30",
+    "sameCoordinates": true,
+    "coordinateCounts": [
+      38000,
+      38000
+    ],
+    "sameRefillsAndDistances": true,
+    "sameSurfaceMeters": true
+  },
+  {
+    "profile": "dirt10",
+    "sameCoordinates": true,
+    "coordinateCounts": [
+      31973,
+      31973
+    ],
+    "sameRefillsAndDistances": true,
+    "sameSurfaceMeters": true
+  },
+  {
+    "profile": "paved",
+    "sameCoordinates": true,
+    "coordinateCounts": [
+      48300,
+      48300
+    ],
+    "sameRefillsAndDistances": true,
+    "sameSurfaceMeters": true
+  },
+  {
+    "profile": "distance",
+    "sameCoordinates": true,
+    "coordinateCounts": [
+      29425,
+      29425
+    ],
+    "sameRefillsAndDistances": true,
+    "sameSurfaceMeters": true
+  }
+]
