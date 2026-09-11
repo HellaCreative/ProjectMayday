@@ -1238,3 +1238,16 @@ improves from 3.49% to 9.53% known dirt, still below acceptable Dirt character.
 Richer feasible corridor generation, riding coherence, urban policy and physical
 station access remain acceptance work. The private boundary labels station access
 provisional and does not enable navigation or declare full profile/app parity.
+
+Richard subsequently directed hybrid-only development, retirement of competing
+experiments and immediate commercial-capacity work. Active bespoke graph-search
+development is sunset; the accepted deployed implementation remains the recovery
+baseline until a qualified hybrid replacement is approved. This is a development
+decision, not a production migration. Retired derived artifacts reclaimed
+27.10 GiB, with working hybrid inputs, checkpoints and small evidence preserved.
+The first real 500-request loopback test exposed the single-selection admission
+limit. The private broker now bounds workers, waiting jobs and output-cache bytes,
+and shares identical in-flight requests. Five hundred shared responses require
+one calculation and must not be claimed as 500 independent route builds. Local
+overload tests and all further qualification limits are tracked with this private
+capacity candidate; hosted scaling and physical fuel access remain unqualified.

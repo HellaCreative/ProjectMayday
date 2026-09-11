@@ -1,0 +1,160 @@
+{
+  "source": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/gh-verified-wv-directed-v2",
+  "target": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/gh-verified-wv-objective-lm-km-v1",
+  "descriptor": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/verified-wv/verified-input.json",
+  "identity": "directed-v2-loop-objective-lm-km:f09331fd91d9bc5e11635966f92872157196d581ec6d2977fc90c429a44c005b",
+  "buildIdentity": "72a09ef793bbc59c5c6820ff727b21bafebae134ba3b153b16d6d54755c59a1f",
+  "stages": [
+    {
+      "profile": "distance",
+      "command": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-Xmx2g",
+        "-Ddirt.objectiveLandmarks=true",
+        "-Ddirt.objectiveLandmarkKilometers=true",
+        "-Ddirt.prepareProfile=distance",
+        "-cp",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/tools/gh-adapter:/Users/richardsmith/.codex/experiments/routing-architecture-20260911/tools/graphhopper-web-11.0.jar",
+        "VerifiedHopper",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/verified-wv/verified-input.json",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/gh-verified-wv-objective-lm-km-v1"
+      ],
+      "guard": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-objective-lm-recipe.json.distance.guard.json",
+      "returncode": 0,
+      "wallSeconds": 229.91578750003828
+    },
+    {
+      "profile": "paved",
+      "command": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-Xmx2g",
+        "-Ddirt.objectiveLandmarks=true",
+        "-Ddirt.objectiveLandmarkKilometers=true",
+        "-Ddirt.prepareProfile=paved",
+        "-cp",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/tools/gh-adapter:/Users/richardsmith/.codex/experiments/routing-architecture-20260911/tools/graphhopper-web-11.0.jar",
+        "VerifiedHopper",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/verified-wv/verified-input.json",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/gh-verified-wv-objective-lm-km-v1"
+      ],
+      "guard": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-objective-lm-recipe.json.paved.guard.json",
+      "returncode": 0,
+      "wallSeconds": 287.06044658401515
+    },
+    {
+      "profile": "dirt10",
+      "command": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-Xmx2g",
+        "-Ddirt.objectiveLandmarks=true",
+        "-Ddirt.objectiveLandmarkKilometers=true",
+        "-Ddirt.prepareProfile=dirt10",
+        "-cp",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/tools/gh-adapter:/Users/richardsmith/.codex/experiments/routing-architecture-20260911/tools/graphhopper-web-11.0.jar",
+        "VerifiedHopper",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/verified-wv/verified-input.json",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/gh-verified-wv-objective-lm-km-v1"
+      ],
+      "guard": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-objective-lm-recipe.json.dirt10.guard.json",
+      "returncode": 0,
+      "wallSeconds": 230.4634240840096
+    },
+    {
+      "profile": "dirt30",
+      "command": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-Xmx2g",
+        "-Ddirt.objectiveLandmarks=true",
+        "-Ddirt.objectiveLandmarkKilometers=true",
+        "-Ddirt.prepareProfile=dirt30",
+        "-cp",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/tools/gh-adapter:/Users/richardsmith/.codex/experiments/routing-architecture-20260911/tools/graphhopper-web-11.0.jar",
+        "VerifiedHopper",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/verified-wv/verified-input.json",
+        "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/gh-verified-wv-objective-lm-km-v1"
+      ],
+      "guard": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-objective-lm-recipe.json.dirt30.guard.json",
+      "returncode": 0,
+      "wallSeconds": 238.3867497909814
+    }
+  ],
+  "scope": "Isolated search-guidance files only. Identical graph geometry, topology and turns; cost unit divided by1000 for landmark storage. Per-objective lower bounds retain all legal request roads.",
+  "baseFileChecks": {
+    "nodes": {
+      "beforeSha256": "cc228c78560bf34e1c2c98c98bfd50f54d63b190ae6dd6293d3821e03fec6507",
+      "sourceSha256": "cc228c78560bf34e1c2c98c98bfd50f54d63b190ae6dd6293d3821e03fec6507",
+      "targetSha256": "cc228c78560bf34e1c2c98c98bfd50f54d63b190ae6dd6293d3821e03fec6507"
+    },
+    "edges": {
+      "beforeSha256": "1e868a0f8444cf8ede9c2fb08524a5fce9da1da7abb87d866ae58cd0762496fe",
+      "sourceSha256": "1e868a0f8444cf8ede9c2fb08524a5fce9da1da7abb87d866ae58cd0762496fe",
+      "targetSha256": "1e868a0f8444cf8ede9c2fb08524a5fce9da1da7abb87d866ae58cd0762496fe"
+    },
+    "geometry": {
+      "beforeSha256": "635588833ec0ece872804fc65681353c0f0d6fe58b96b9b6545f9976de8ff954",
+      "sourceSha256": "635588833ec0ece872804fc65681353c0f0d6fe58b96b9b6545f9976de8ff954",
+      "targetSha256": "635588833ec0ece872804fc65681353c0f0d6fe58b96b9b6545f9976de8ff954"
+    },
+    "turn_costs": {
+      "beforeSha256": "e016c2d58f8cd90cee4f9771d3be17fd9657d4d757be2df9c4cae38298f3b473",
+      "sourceSha256": "e016c2d58f8cd90cee4f9771d3be17fd9657d4d757be2df9c4cae38298f3b473",
+      "targetSha256": "e016c2d58f8cd90cee4f9771d3be17fd9657d4d757be2df9c4cae38298f3b473"
+    },
+    "location_index": {
+      "beforeSha256": "178033f009bb5944845aded72712e33cede6fa995e38fcc1f2cb332266440c2b",
+      "sourceSha256": "178033f009bb5944845aded72712e33cede6fa995e38fcc1f2cb332266440c2b",
+      "targetSha256": "178033f009bb5944845aded72712e33cede6fa995e38fcc1f2cb332266440c2b"
+    },
+    "edgekv_keys": {
+      "beforeSha256": "ad77ca8a9165b94f85d6b1c4bf185eeb5e93b6831084c560ef97536bf33978e1",
+      "sourceSha256": "ad77ca8a9165b94f85d6b1c4bf185eeb5e93b6831084c560ef97536bf33978e1",
+      "targetSha256": "ad77ca8a9165b94f85d6b1c4bf185eeb5e93b6831084c560ef97536bf33978e1"
+    },
+    "edgekv_vals": {
+      "beforeSha256": "ec982dd8c491d04c8463b3c294b24323402118a1ce0eb5012d659c92f4484a82",
+      "sourceSha256": "ec982dd8c491d04c8463b3c294b24323402118a1ce0eb5012d659c92f4484a82",
+      "targetSha256": "ec982dd8c491d04c8463b3c294b24323402118a1ce0eb5012d659c92f4484a82"
+    },
+    "dirt-loop-tails.json": {
+      "beforeSha256": "ff426bbaa54d658394e0b8f8966ccf2010a93817076e423d235fcee6934afc8c",
+      "sourceSha256": "ff426bbaa54d658394e0b8f8966ccf2010a93817076e423d235fcee6934afc8c",
+      "targetSha256": "ff426bbaa54d658394e0b8f8966ccf2010a93817076e423d235fcee6934afc8c"
+    }
+  },
+  "baseFilesUnchanged": true,
+  "landmarks": {
+    "landmarks_distance": {
+      "bytes": 430964836,
+      "sha256": "735b7a77b328aa997880e6952dc0e01433ff0924ccee40833a0d97abd5291836"
+    },
+    "landmarks_subnetwork_paved": {
+      "bytes": 7340132,
+      "sha256": "5b3a967b808328d55dbebcb6e2c67bda38ed4b07fd9c3e38e778478c49616b0d"
+    },
+    "landmarks_dirt10": {
+      "bytes": 430964836,
+      "sha256": "db0ee2e1f3fd887f472336692e7eaa611181b4ca273db0bf7f04769604fa76a2"
+    },
+    "landmarks_paved": {
+      "bytes": 430964836,
+      "sha256": "f1be1e3d9850fe94ea7e58e73a6f391dbcbce92d3388e5d2787828ef11af001d"
+    },
+    "landmarks_subnetwork_dirt10": {
+      "bytes": 7340132,
+      "sha256": "5b3a967b808328d55dbebcb6e2c67bda38ed4b07fd9c3e38e778478c49616b0d"
+    },
+    "landmarks_subnetwork_dirt30": {
+      "bytes": 7340132,
+      "sha256": "5b3a967b808328d55dbebcb6e2c67bda38ed4b07fd9c3e38e778478c49616b0d"
+    },
+    "landmarks_subnetwork_distance": {
+      "bytes": 7340132,
+      "sha256": "5b3a967b808328d55dbebcb6e2c67bda38ed4b07fd9c3e38e778478c49616b0d"
+    },
+    "landmarks_dirt30": {
+      "bytes": 430964836,
+      "sha256": "5bf7deb2bf49faaf2d92d10db74d983115e69c1d84fd4d6a1ef4fd26ad69a8e4"
+    }
+  },
+  "complete": true
+}

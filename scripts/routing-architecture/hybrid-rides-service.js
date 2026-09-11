@@ -3,7 +3,13 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const {spawn}=require('node:child_process'),readline=require('node:readline');
 const {HybridRides}=require('./hybrid-rides');
 const ROOT='/Users/richardsmith/.codex/experiments/routing-architecture-20260911';
-async function startHybridRides({descriptor,artifact,objectiveLandmarks=false,strictMask=null,onLog=()=>{}}){
+async function startHybridRides({descriptor,artifact,objectiveLandmarks=false,objectiveKilometers=false,additiveGuidance=objectiveKilometers,strictMask=null,workers=1,onLog=()=>{}}){
+ if(!Number.isSafeInteger(workers)||workers<1||workers>4)throw new TypeError('workers must be 1..4');
+ if(objectiveKilometers&&!objectiveLandmarks||strictMask&&objectiveLandmarks)throw new TypeError('Incompatible landmark configuration');
+ // A serving launch must never become an unplanned graph/index build.
+ const required=['properties','dirt-input.identity','nodes','edges','geometry','turn_costs','location_index'];
+ for(const profile of objectiveLandmarks?['distance','paved','dirt10','dirt30']:['distance'])required.push('landmarks_'+profile,'landmarks_subnetwork_'+profile);
+ for(const name of required)if(!fs.statSync(path.join(artifact,name),{throwIfNoEntry:false})?.isFile())throw new Error(`Unprepared engine artifact: ${name}`);
  const buildPath=path.join(ROOT,'tools/gh-adapter/build-identity.json'),build=JSON.parse(fs.readFileSync(buildPath));
  for(const [filename,wanted] of Object.entries(build.files)){
   const h=crypto.createHash('sha256');for await(const chunk of fs.createReadStream(filename))h.update(chunk);
@@ -12,14 +18,16 @@ async function startHybridRides({descriptor,artifact,objectiveLandmarks=false,st
  const buildIdentity=crypto.createHash('sha256').update(fs.readFileSync(buildPath)).digest('hex');
  const args=['-Xmx2g'];
  if(objectiveLandmarks)args.push('-Ddirt.objectiveLandmarks=true');
+ if(objectiveKilometers)args.push('-Ddirt.objectiveLandmarkKilometers=true');
+ if(additiveGuidance)args.push('-Ddirt.additiveLandmarkGuidance=true');
  if(strictMask)args.push('-Ddirt.stressLandmarks=true',`-Ddirt.stressMask=${strictMask}`);
- args.push('-cp',path.join(ROOT,'tools/gh-adapter')+':'+path.join(ROOT,'tools/graphhopper-web-11.0.jar'),'ConcurrentVerifiedHopper',descriptor,artifact,'1');
+ args.push('-cp',path.join(ROOT,'tools/gh-adapter')+':'+path.join(ROOT,'tools/graphhopper-web-11.0.jar'),'ConcurrentVerifiedHopper',descriptor,artifact,String(workers));
  const child=spawn('/opt/homebrew/opt/openjdk/bin/java',args,{stdio:['pipe','pipe','pipe']});
- const waiting=new Map();let serial=0,readyResolve,readyReject,exited=false;
+ const waiting=new Map();let serial=0,readyResolve,readyReject,exited=false,exitStatus=null,forcedClose=false;
  const ready=new Promise((resolve,reject)=>{readyResolve=resolve;readyReject=reject;});
  const startupTimer=setTimeout(()=>{readyReject(new Error('Engine startup timeout'));child.kill();},30000);
  const fail=error=>{readyReject(error);for(const p of waiting.values())p.reject(error);waiting.clear();};
- child.on('error',fail);child.on('exit',(code,signal)=>{exited=true;fail(new Error(`Engine exited: ${code??signal}`));});
+ child.on('error',fail);child.on('exit',(code,signal)=>{exited=true;exitStatus={code,signal};fail(new Error(`Engine exited: ${code??signal}`));});
  child.stdin.on('error',fail);
  readline.createInterface({input:child.stderr}).on('line',onLog);
  readline.createInterface({input:child.stdout}).on('line',line=>{
@@ -42,9 +50,11 @@ async function startHybridRides({descriptor,artifact,objectiveLandmarks=false,st
  });
  const graphIdentity=fs.readFileSync(path.join(artifact,'dirt-input.identity'),'utf8');
  const rides=new HybridRides({runCandidate,identity:graphIdentity+':'+buildIdentity,strictCostMask:!!strictMask});
- return {rides,child,buildIdentity,command:[child.spawnfile,...args],async close(){
-  if(exited)return;child.stdin.end();
-  await new Promise(resolve=>{const timer=setTimeout(()=>child.kill(),10000);child.once('exit',()=>{clearTimeout(timer);resolve();});});
+ return {rides,runCandidate,identity:rides.identity,strictCostMask:!!strictMask,child,buildIdentity,command:[child.spawnfile,...args],async close(){
+  if(!exited){child.stdin.end();
+   await new Promise(resolve=>{let hardTimer;const timer=setTimeout(()=>{forcedClose=true;child.kill();hardTimer=setTimeout(()=>child.kill('SIGKILL'),2000);},10000);child.once('exit',()=>{clearTimeout(timer);clearTimeout(hardTimer);resolve();});});
+  }
+  return {...exitStatus,forcedClose};
  }};
 }
 if(require.main===module){

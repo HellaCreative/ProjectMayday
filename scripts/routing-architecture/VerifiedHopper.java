@@ -36,6 +36,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
  JsonNode stationDataset;
  byte[] stressMask;
  final double costScale;
+ final boolean additiveLandmarkGuidance;
  VerifiedHopper(Path descriptor,Path target) throws Exception {
   this.descriptor=descriptor;input=JSON.readTree(descriptor.toFile());
   loopFile=target.resolve("dirt-loop-tails.json");
@@ -49,10 +50,14 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   }
   boolean objectiveLandmarks=Boolean.getBoolean("dirt.objectiveLandmarks");
   boolean stressLandmarks=Boolean.getBoolean("dirt.stressLandmarks");
-  costScale=stressLandmarks?1000:1;
+  boolean objectiveKilometers=Boolean.getBoolean("dirt.objectiveLandmarkKilometers");
+  additiveLandmarkGuidance=Boolean.getBoolean("dirt.additiveLandmarkGuidance");
+  if(additiveLandmarkGuidance&&!objectiveLandmarks)throw new IOException("Additive guidance requires separate objective and distance landmark indexes");
+  if(objectiveKilometers&&!objectiveLandmarks)throw new IOException("Kilometer objective landmarks require objective-specific preparation");
+  costScale=stressLandmarks||objectiveKilometers?1000:1;
   if(stressLandmarks&&(stressMask==null||objectiveLandmarks))throw new IOException("Stress landmarks require the pinned mask and distance-profile preparation configuration");
   if(stressMask!=null&&objectiveLandmarks)throw new IOException("Stress weights cannot use unrelated objective landmark preparation");
-  identity=(stressLandmarks?"directed-v2-loop-stress-lm-km:"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(stressMask))+":":objectiveLandmarks?"directed-v2-loop-objective-lm:":"directed-v2-loop-distance-lm:")+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(descriptor)));
+  identity=(stressLandmarks?"directed-v2-loop-stress-lm-km:"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(stressMask))+":":objectiveKilometers?"directed-v2-loop-objective-lm-km:":objectiveLandmarks?"directed-v2-loop-objective-lm:":"directed-v2-loop-distance-lm:")+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(descriptor)));
   if(Files.exists(target.resolve("properties"))&&(!Files.exists(artifactIdentity)||!Files.readString(artifactIdentity).equals(identity)))throw new IOException("Existing graph identity mismatch");
   for(String n:List.of("edgeSurfaceLeaf","edgeRoadClassLeaf","edgeAccess"))if(!input.path("sections").path(n).path("type").asText().equals("Uint8Array"))throw new IOException("Unexpected section type "+n);
   if(!input.path("sections").path("edgeMeters").path("type").asText().equals("Uint32Array"))throw new IOException("Unexpected meters type");
@@ -76,8 +81,13 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   c.putObject("prepare.ch.threads",1);c.putObject("prepare.lm.threads",1);c.putObject("prepare.lm.landmarks",16);
   c.putObject("routing.max_visited_nodes",12000000);
   c.setProfiles(NAMES.stream().map(n->new Profile(n).setWeighting("custom").setTurnCostsConfig(new TurnCostsConfig(List.of("motorcycle"),0))).toList());
-  // LM is prepared on the distance lower bound, with all endpoint/unknown access.
-  c.setLMProfiles(NAMES.stream().map(n->objectiveLandmarks||n.equals("distance")?new LMProfile(n):new LMProfile(n).setPreparationProfile("distance")).toList());
+  // Preparation permits all endpoint/unknown access, so each objective remains
+  // a lower bound when request access, wander or distance penalties are added.
+  // Preparing one objective per process bounds preparation residency. Serving
+  // omits this property and loads the complete four-objective index.
+  String prepareProfile=System.getProperty("dirt.prepareProfile");
+  if(prepareProfile!=null&&(!objectiveKilometers||!NAMES.contains(prepareProfile)))throw new IOException("Single-profile preparation requires kilometer objective landmarks and a known profile");
+  c.setLMProfiles(NAMES.stream().filter(n->prepareProfile==null||n.equals(prepareProfile)).map(n->objectiveLandmarks||n.equals("distance")?new LMProfile(n):new LMProfile(n).setPreparationProfile("distance")).toList());
   c.setCHProfiles(List.of());
   init(c);
  }
@@ -226,6 +236,24 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   public WeightApproximator reverse(){return new MaxGuidance(original.reverse(),distance.reverse(),factor);}
   public double getSlack(){return Math.max(original.getSlack(),factor*distance.getSlack());}
  }
+ static record SumGuidance(WeightApproximator objective,WeightApproximator distance,double factor) implements WeightApproximator {
+  public double approximate(int node){return objective.approximate(node)+factor*distance.approximate(node);}
+  public void setTo(int node){objective.setTo(node);distance.setTo(node);}
+  public WeightApproximator reverse(){return new SumGuidance(objective.reverse(),distance.reverse(),factor);}
+  public double getSlack(){return objective.getSlack()+factor*distance.getSlack();}
+ }
+ void strengthenAdditiveGuidance(RoutingAlgorithm algorithm,QueryGraph graph,String name,double lambda){
+  if(!additiveLandmarkGuidance||!Double.isFinite(lambda)||lambda<0)throw new IllegalArgumentException("Invalid additive guidance configuration");
+  var objective=getLandmarks().get(name);var distance=getLandmarks().get("distance");
+  int count=Math.max(1,Math.min(12,objective.getLandmarkCount()/2));
+  // Each term uses its own preparation weighting, including the virtual-target
+  // adjustment. Using the scalar weighting here would count lambda twice.
+  var a=com.graphhopper.routing.lm.DirtLandmarkAccess.distanceBound(graph,graph.wrapWeighting(objective.getWeighting()),objective,count);
+  var b=com.graphhopper.routing.lm.DirtLandmarkAccess.distanceBound(graph,graph.wrapWeighting(distance.getWeighting()),distance,count);
+  // For every eligible path P, cost(P)=base(P)+lambda*distance(P).
+  // Independent lower bounds can be added; both use the same internal units.
+  ((AStar)algorithm).setApproximation(new SumGuidance(a,b,lambda));
+ }
  void strengthenDistanceGuidance(RoutingAlgorithm algorithm,QueryGraph graph,Weighting scalar,String name,double lambda){
   if(costScale!=1)throw new IllegalArgumentException("Scaled distance guidance requires the original metre-based distance landmark artifact");
   var access=getEncodingManager().getIntEncodedValue("dirt_access");
@@ -302,7 +330,8 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
      long millis=(deadline-System.nanoTime())/1000000;if(millis<=0){complete=false;continue;}
      var options=new AlgorithmOptions().setAlgorithm("astar").setTraversalMode(TraversalMode.EDGE_BASED).setMaxVisitedNodes(12000000).setTimeoutMillis(millis);
      var algo=factory.createAlgo(graph,scalar,options);
-     if(q.path("scaledDistanceGuidance").asBoolean(false))strengthenDistanceGuidance(algo,graph,scalar,name,lambda);
+     if(additiveLandmarkGuidance)strengthenAdditiveGuidance(algo,graph,name,lambda);
+     else if(q.path("scaledDistanceGuidance").asBoolean(false))strengthenDistanceGuidance(algo,graph,scalar,name,lambda);
      try{var path=algo.calcPath(a,b);visited+=algo.getVisitedNodes();if(algo.getVisitedNodes()>=12000000||System.nanoTime()>=deadline)complete=false;if(path.isFound()&&(selected==null||path.getWeight()<selected.getWeight()))selected=path;}catch(Exception ex){complete=false;roadFailures.add(ex.toString());}
     }
     alternativeSeconds+=(System.nanoTime()-alternativeAt)/1e9;long certificateAt=System.nanoTime();

@@ -124,7 +124,7 @@ class HybridRides {
     limitations:['best of generated candidates, not global optimum','physical station access remains provisional','urban necessity and full riding coherence not qualified']};
    // Cache one complete pool, independent of requested riding style. Serialized
    // bytes are bounded; this does not cap topology, graph memory or total RSS.
-   if(result.poolComplete){const json=JSON.stringify(result);this.cache=Buffer.byteLength(json)<=this.maxCacheBytes?{key,json}:null;}
+   if(result.poolComplete&&this.maxCacheBytes>0){const json=JSON.stringify(result);this.cache=Buffer.byteLength(json)<=this.maxCacheBytes?{key,json}:null;}
    return this.finish(result,q,started,false);
   }finally{this.busy=false;}
  }
@@ -134,4 +134,4 @@ class HybridRides {
    cacheHit,selectionSeconds:(performance.now()-started)/1000};
  }
 }
-module.exports={HybridRides,evaluateCandidate,chooseRides,normalizeRequest,surfaceOf};
+module.exports={HybridRides,evaluateCandidate,chooseRides,normalizeRequest,surfaceOf,poolKey};

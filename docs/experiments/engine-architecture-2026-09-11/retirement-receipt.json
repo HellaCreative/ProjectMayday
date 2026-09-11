@@ -1,0 +1,473 @@
+{
+  "authorization": "Owner September 11: sunset bespoke development, remove obsolete experiments, prioritize hybrid commercial capacity. Live bespoke deployment and hybrid working inputs are preserved.",
+  "phase": "removed",
+  "entries": [
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/valhalla-spike",
+      "files": 833,
+      "logicalBytes": 8664598186,
+      "allocatedBytes": 8691339264
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/osrm-spike",
+      "files": 169,
+      "logicalBytes": 1593633,
+      "allocatedBytes": 1818624
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/sources/valhalla",
+      "files": 9520,
+      "logicalBytes": 546849665,
+      "allocatedBytes": 573349888
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/sources/osrm",
+      "files": 1206,
+      "logicalBytes": 23974799,
+      "allocatedBytes": 26832896
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/valhalla-atlantic",
+      "files": 628,
+      "logicalBytes": 197917448,
+      "allocatedBytes": 199335936
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/valhalla-eastern",
+      "files": 3,
+      "logicalBytes": 4961705256,
+      "allocatedBytes": 4961710080
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/graphhopper-atlantic",
+      "files": 13,
+      "logicalBytes": 244366133,
+      "allocatedBytes": 242282496
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/graphhopper-eastern",
+      "files": 13,
+      "logicalBytes": 2718999728,
+      "allocatedBytes": 2718998528
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/gh-verified-wv-strict-lm-v1",
+      "files": 12,
+      "logicalBytes": 1950695441,
+      "allocatedBytes": 1950736384
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.cell_metrics",
+      "files": 1,
+      "logicalBytes": 66302976,
+      "allocatedBytes": 66306048
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.cells",
+      "files": 1,
+      "logicalBytes": 978432,
+      "allocatedBytes": 978944
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.cnbg",
+      "files": 1,
+      "logicalBytes": 11519488,
+      "allocatedBytes": 11522048
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.cnbg_to_ebg",
+      "files": 1,
+      "logicalBytes": 11523072,
+      "allocatedBytes": 11526144
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.datasource_names",
+      "files": 1,
+      "logicalBytes": 69632,
+      "allocatedBytes": 69632
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.ebg",
+      "files": 1,
+      "logicalBytes": 62116864,
+      "allocatedBytes": 62119936
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.ebg_nodes",
+      "files": 1,
+      "logicalBytes": 17404416,
+      "allocatedBytes": 17408000
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.edges",
+      "files": 1,
+      "logicalBytes": 18127872,
+      "allocatedBytes": 18128896
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.enw",
+      "files": 1,
+      "logicalBytes": 16842752,
+      "allocatedBytes": 16842752
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.fileIndex",
+      "files": 1,
+      "logicalBytes": 90701880,
+      "allocatedBytes": 90705920
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.geometry",
+      "files": 1,
+      "logicalBytes": 157084672,
+      "allocatedBytes": 157085696
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.icd",
+      "files": 1,
+      "logicalBytes": 17787392,
+      "allocatedBytes": 17788928
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.maneuver_overrides",
+      "files": 1,
+      "logicalBytes": 5120,
+      "allocatedBytes": 8192
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.mldgr",
+      "files": 1,
+      "logicalBytes": 65598464,
+      "allocatedBytes": 65601536
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.names",
+      "files": 1,
+      "logicalBytes": 1229824,
+      "allocatedBytes": 1232896
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.nbg_nodes",
+      "files": 1,
+      "logicalBytes": 57594880,
+      "allocatedBytes": 57597952
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.partition",
+      "files": 1,
+      "logicalBytes": 11233280,
+      "allocatedBytes": 11235328
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.properties",
+      "files": 1,
+      "logicalBytes": 6144,
+      "allocatedBytes": 8192
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.ramIndex",
+      "files": 1,
+      "logicalBytes": 367104,
+      "allocatedBytes": 368640
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.restrictions",
+      "files": 1,
+      "logicalBytes": 4096,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.timestamp",
+      "files": 1,
+      "logicalBytes": 3584,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.tld",
+      "files": 1,
+      "logicalBytes": 4608,
+      "allocatedBytes": 8192
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.tls",
+      "files": 1,
+      "logicalBytes": 7168,
+      "allocatedBytes": 8192
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.turn_duration_penalties",
+      "files": 1,
+      "logicalBytes": 5179392,
+      "allocatedBytes": 5181440
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.turn_penalties_index",
+      "files": 1,
+      "logicalBytes": 31058432,
+      "allocatedBytes": 31059968
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osrm.turn_weight_penalties",
+      "files": 1,
+      "logicalBytes": 5179392,
+      "allocatedBytes": 5181440
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.cell_metrics",
+      "files": 1,
+      "logicalBytes": 1525957632,
+      "allocatedBytes": 1525960704
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.cells",
+      "files": 1,
+      "logicalBytes": 14132736,
+      "allocatedBytes": 14135296
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.cnbg",
+      "files": 1,
+      "logicalBytes": 141943808,
+      "allocatedBytes": 141946880
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.cnbg_to_ebg",
+      "files": 1,
+      "logicalBytes": 142051328,
+      "allocatedBytes": 142053376
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.datasource_names",
+      "files": 1,
+      "logicalBytes": 69632,
+      "allocatedBytes": 69632
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.ebg",
+      "files": 1,
+      "logicalBytes": 776462336,
+      "allocatedBytes": 776462336
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.ebg_nodes",
+      "files": 1,
+      "logicalBytes": 208201728,
+      "allocatedBytes": 208203776
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.edges",
+      "files": 1,
+      "logicalBytes": 226480128,
+      "allocatedBytes": 226480128
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.enw",
+      "files": 1,
+      "logicalBytes": 204429824,
+      "allocatedBytes": 204431360
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.fileIndex",
+      "files": 1,
+      "logicalBytes": 760774280,
+      "allocatedBytes": 760774656
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.geometry",
+      "files": 1,
+      "logicalBytes": 1328562688,
+      "allocatedBytes": 1328566272
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.icd",
+      "files": 1,
+      "logicalBytes": 145479680,
+      "allocatedBytes": 145481728
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.maneuver_overrides",
+      "files": 1,
+      "logicalBytes": 5120,
+      "allocatedBytes": 8192
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.mldgr",
+      "files": 1,
+      "logicalBytes": 813037568,
+      "allocatedBytes": 813039616
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.names",
+      "files": 1,
+      "logicalBytes": 8153600,
+      "allocatedBytes": 8155136
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.nbg_nodes",
+      "files": 1,
+      "logicalBytes": 472014848,
+      "allocatedBytes": 472014848
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.partition",
+      "files": 1,
+      "logicalBytes": 136315904,
+      "allocatedBytes": 136318976
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.properties",
+      "files": 1,
+      "logicalBytes": 6144,
+      "allocatedBytes": 8192
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.ramIndex",
+      "files": 1,
+      "logicalBytes": 3036672,
+      "allocatedBytes": 3039232
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.restrictions",
+      "files": 1,
+      "logicalBytes": 4096,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.timestamp",
+      "files": 1,
+      "logicalBytes": 3584,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.tld",
+      "files": 1,
+      "logicalBytes": 8704,
+      "allocatedBytes": 12288
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.tls",
+      "files": 1,
+      "logicalBytes": 14336,
+      "allocatedBytes": 16384
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.turn_duration_penalties",
+      "files": 1,
+      "logicalBytes": 64708608,
+      "allocatedBytes": 64708608
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.turn_penalties_index",
+      "files": 1,
+      "logicalBytes": 388231168,
+      "allocatedBytes": 388231168
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osrm.turn_weight_penalties",
+      "files": 1,
+      "logicalBytes": 64708608,
+      "allocatedBytes": 64708608
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/atlantic-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 253883602,
+      "allocatedBytes": 253886464
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/eastern-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 562948218,
+      "allocatedBytes": 562950144
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/me-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 90738939,
+      "allocatedBytes": 90742784
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/nb-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 66308335,
+      "allocatedBytes": 66310144
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/nb-roads-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 12662824,
+      "allocatedBytes": 12664832
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/ns-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 98991703,
+      "allocatedBytes": 98992128
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/ns-roads-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 25781587,
+      "allocatedBytes": 25784320
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/ny-roads-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 129882476,
+      "allocatedBytes": 129884160
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/on-roads-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 115802669,
+      "allocatedBytes": 115806208
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/pa-roads-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 145621102,
+      "allocatedBytes": 145625088
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/qc-roads-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 95721620,
+      "allocatedBytes": 95723520
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/wv-roads-260907.osm.pbf",
+      "files": 1,
+      "logicalBytes": 32425091,
+      "allocatedBytes": 32428032
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/admin-atlantic.sqlite",
+      "files": 1,
+      "logicalBytes": 7303168,
+      "allocatedBytes": 7303168
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/data/admin-eastern.sqlite",
+      "files": 1,
+      "logicalBytes": 10903552,
+      "allocatedBytes": 10903552
+    }
+  ],
+  "sourceRevisions": {
+    "valhalla": {
+      "head": "a60c7cbfc83e073f50887cd27e0109d02e6b64e5",
+      "status": ""
+    },
+    "osrm": {
+      "head": "d63a1df9c25c84f2edf304de8bc7b691aa9020f9",
+      "status": ""
+    }
+  },
+  "archivedNotes": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/retirement-20260911/retired-notes-and-patches.tar.gz",
+  "freeBytesBefore": 98386706432,
+  "preserved": "All results/reports/checkpoints; GraphHopper hybrid artifacts/sources/tools; original V4 joins and packs outside this root; live/DEV/repo baselines.",
+  "removedAtUnixSeconds": 1789141452.0135329,
+  "freeBytesAfter": 127483854848,
+  "freeBytesIncrease": 29097148416,
+  "note": "Disposable artifacts deleted by owner authorization. Historical source/checkpoints and small result evidence remain; old retired binary paths are intentionally unavailable. Recreate from pinned recipes only if owner reopens engine competition."
+}

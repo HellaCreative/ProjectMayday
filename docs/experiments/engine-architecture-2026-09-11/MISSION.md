@@ -1,3 +1,26 @@
+## Current owner direction — hybrid only, capacity first
+
+Richard has selected GraphHopper plus DIRT's itinerary, surface selection and
+fuel logic. End competing-engine experiments and active development of the
+bespoke graph-search replacement. Preserve the accepted live engine until the
+hybrid qualifies; do not remove deployed fallback code or publish a replacement.
+Prioritize commercial capacity, including an honest 500-request stress test,
+then improve the measured bottlenecks. Rejections and deadline failures are not
+successful route builds. Shared/cache responses must be distinguished from
+independent computations. Continue fuel integration while its measured cost is
+small, and retain the physical-access qualification boundary.
+
+Owner authorized retirement of obsolete experiment artifacts. The September 11
+retirement recovered 27.10 GiB while preserving working hybrid graphs, immutable
+source inputs, all Git checkpoints, small historical evidence and a deletion
+manifest. No paid infrastructure, publication, native app, source-pack replacement
+or remote operation is authorized by this direction.
+
+The original architectural comparison request below is historical context. It
+does not authorize restarting retired competing-engine work.
+
+---
+
 Continue **Explore fog of war search** with a broader architectural mission.
 
 Your previous work produced useful preparation improvements. Preserve that work, but it did not resolve the central problem: long national routes still exhaust memory, and production scalability remains unproven.

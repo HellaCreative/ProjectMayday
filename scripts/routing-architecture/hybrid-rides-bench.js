@@ -5,22 +5,23 @@ const {values}=require('node:util').parseArgs({options:{dataset:{type:'string'},
 const root='/Users/richardsmith/.codex/experiments/routing-architecture-20260911';
 const dataset=values.dataset??'nsnb',out=values.out;
 assert(out&&!fs.existsSync(out),'Use an unused output filename');
-assert(['nsnb','wv','strict-wv'].includes(dataset));
+assert(['nsnb','wv','strict-wv','wv-objective'].includes(dataset));
 const fixtures=JSON.parse(fs.readFileSync(path.join(__dirname,'../../docs/experiments/routing-performance-2026-09-10/matrix-inputs.json')));
-const settings=dataset==='nsnb'?
+const settings=dataset==='nsnb'||dataset==='wv-objective'?
  [{id:'ns-short-balanced-road'}, {id:'ns-long-dirt-road',fuel:{usableRangeMeters:193121.28,initialUsableMeters:193121.28}},
   {id:'nsnb-balanced-road',fuel:{usableRangeMeters:180000,initialUsableMeters:90000}},
   {id:'nsnb-balanced-road',fuel:{usableRangeMeters:193121.28,initialUsableMeters:193121.28}}]:
  [{id:dataset==='wv'?'qc-long-dirt-road':'wv-road',fuel:{usableRangeMeters:193121.28,initialUsableMeters:193121.28}}];
+if(dataset==='wv-objective')settings.push(...['qc-long-dirt-road','wv-road'].map(id=>({id,fuel:{usableRangeMeters:193121.28,initialUsableMeters:193121.28}})));
 const raw=[],auditFuel=[],auditRoad=[],report={dataset,scope:'Shared candidate selection; provisional station access and additive generation, not full product qualification.',runs:[]};
 (async()=>{
- const strict=dataset==='strict-wv',region=dataset==='nsnb'?'nsnb':'wv';
+ const strict=dataset==='strict-wv',region=dataset==='nsnb'?'nsnb':'wv',objective=dataset==='wv-objective';
  const log=fs.createWriteStream(out+'.log');let service;
  try{
   const start=performance.now();
   service=await startHybridRides({descriptor:path.join(root,`data/verified-${region}/verified-input.json`),
-   artifact:path.join(root,strict?'data/gh-verified-wv-strict-lm-km-v2':region==='nsnb'?'data/gh-verified-nsnb-directed-v2-objective':'data/gh-verified-wv-directed-v2'),
-   objectiveLandmarks:region==='nsnb',strictMask:strict?path.join(root,'unified-stress/blocked-source-edges.bin'):null,onLog:line=>log.write(line+'\n')});
+   artifact:path.join(root,strict?'data/gh-verified-wv-strict-lm-km-v2':region==='nsnb'?'data/gh-verified-nsnb-directed-v2-objective':objective?'data/gh-verified-wv-objective-lm-km-v1':'data/gh-verified-wv-directed-v2'),
+   objectiveLandmarks:region==='nsnb'||objective,objectiveKilometers:objective,strictMask:strict?path.join(root,'unified-stress/blocked-source-edges.bin'):null,onLog:line=>log.write(line+'\n')});
   report.initializationSeconds=(performance.now()-start)/1000;report.buildIdentity=service.buildIdentity;report.command=service.command;
   for(const item of settings){
    const locations=fixtures.find(f=>f.id===item.id).request.locations;
