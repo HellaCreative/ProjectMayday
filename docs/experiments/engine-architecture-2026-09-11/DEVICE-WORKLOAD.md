@@ -1,5 +1,13 @@
 # Device-first workload experiment
 
+Update: the owner authorized the separate lab app on **White, iPhone 16** and
+supplied two completed physical runs. Both six-check suites pass (13.974 and
+14.343 seconds); all eight completed road results exactly match the native
+baseline and pass source audits. See [physical results and candidate](PHONE-LAB.md).
+The desktop-only statements below describe the preceding diagnostic phase.
+Fuel/history, multi-region capability, full app integration and general resource
+budgets remain unqualified.
+
 The owner chose device-first planning with **no automatic server escalation**.
 An ambitious personal route can consume a bounded device budget. At the limit,
 stop, retain the last valid itinerary and report incomplete calculation. Online
@@ -174,8 +182,9 @@ Large evidence/build root:
 Use new output directories for every native build; source snapshots and receipts
 must remain paired. The source checkout is the main SIDECAR Dirt folder and can
 contain work newer than the experiment branch. Never replace its files with these
-snapshots. No physical device is authorized by this report; identify a specific
-test phone and obtain the owner's installation authorization before device use.
+snapshots. The owner subsequently authorized the private six-check test on White
+(iPhone 16); that authorization persists. Other devices, including RED, remain
+outside this authorization. See PHONE-LAB.md for the installed separate bundle.
 
 SIDECAR briefly disconnected during setup. The policy prototype was preserved on
 internal storage, then copied back byte-for-byte when the owner reconnected it.

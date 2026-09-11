@@ -15,6 +15,12 @@ requires authorization for that particular device; Red is not authorized. The
 current online routing/download policy, accepted app, packs and live services
 remain unchanged during this private experiment.
 
+September 11 hardware authorization: the owner explicitly authorized the separate
+phone lab on White, corrected to **iPhone 16**, and supplied two completed runs.
+Both NS road/control suites and eight independent road audits pass. Authorization
+for that test on White persists; do not ask again. This does not authorize RED or
+replacing the accepted DIRT app. See [physical evidence](PHONE-LAB.md).
+
 See [device workload evidence](DEVICE-WORKLOAD.md). Earlier hybrid/capacity work
 and its checkpoints remain preserved, including unresolved commercial throughput.
 

@@ -47,6 +47,12 @@ Device-first addition (private, see DEVICE-WORKLOAD.md):
 - [x] Run six native NS road controls and independent source/turn audits on macOS.
 - [x] Reproduce cancellation lag, improve it in isolated native source, and verify
   exact preservation across all six repeated routes with successful recovery.
-- [ ] Native lifecycle integration, full data-preparation cancellation and pressure
-  budgets; physical-device capacity, heat, battery and UI responsiveness.
+- [x] Separate native phone lab with lifecycle stop handlers, sampled resources,
+  immutable source/data identities, serial work and retained completed candidate.
+- [x] Two authorized White iPhone 16 regional road suites; eight exact-baseline
+  road audits; deliberate cancellation/deadline recovery; initial phone memory,
+  thermal-state, battery-level and main-thread scheduling observations.
+- [ ] Accepted app lifecycle integration, full data-preparation cancellation,
+  larger-region/multi-region validation, real pressure qualification, sustained
+  battery/heat and calibrated resource budgets. See PHONE-LAB.md for limits.
 - [ ] Full native/server fuel, arrival-history, waypoint and preference parity.

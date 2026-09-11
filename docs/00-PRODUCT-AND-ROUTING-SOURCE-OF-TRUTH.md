@@ -1263,8 +1263,13 @@ not substitutes for tested resource, data and feature coverage.
 
 The [device workload prototype](experiments/engine-architecture-2026-09-11/DEVICE-WORKLOAD.md)
 passes16 policy tests and six repeated native road-source audits on macOS, with
-an isolated cancellation improvement. No iPhone performance, native fuel/history
-parity or mobile memory budget is qualified. Existing online/offline selection,
+an isolated cancellation improvement. The separate [phone lab](experiments/engine-architecture-2026-09-11/PHONE-LAB.md)
+then completed two owner-authorized White iPhone 16 regional road suites in
+13.974 and14.343 seconds. All eight completed road results exactly match the
+native baseline and pass independent road audits. This is initial regional
+fuel-off hardware evidence; full app performance, native fuel/history parity,
+multi-region execution and a general mobile memory budget remain unqualified.
+Existing online/offline selection,
 pack-download flows and accepted iOS/Android behavior remain unchanged. This is
 an experimental execution contract with no current Android product change;
 accepted future integration must carry the same bounded/incomplete/constraint-

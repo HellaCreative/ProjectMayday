@@ -214,3 +214,34 @@ and was copied back with hashes when the owner reconnected it. No data loss or
 app/source-pack modification. Evidence: DEVICE-WORKLOAD.md and
  device-workload-evidence.json. The hardware-target question is pending; no Red
 operation or physical-device installation is authorized.
+
+
+## Authorized White iPhone 16 phone-lab milestone
+
+The owner authorized a separate private phone app, corrected the target from
+iPhone17 to White/iPhone16, and supplied two completed exports. RED was never
+operated. Built from the pinned native-v6-cancel source snapshot and unchanged NS
+bytes, with a UIKit control screen, serial work, latched stop state, sample-based
+resource guards, background/memory-warning handling and local evidence export.
+Existing wildcard development signing was used locally; no portal operation or
+accepted app replacement. No product Android behavior changed.
+
+Physical iPhone16/iOS26.6.2: two six-check suites13.974s/14.343s. Clean0.200–0.213s,
+Dirt3.977–4.082s, Balanced9.197–9.469s. Four intentional interruptions return
+incomplete at~100ms (20ms trigger,~80ms overshoot). Eight completed road results
+are EXACT versus the earlier native baseline and all8 independent direction,
+access, continuous-turn and distance audits pass. Peak footprint201.860MiB; peak
+resident296.563MiB; thermal state nominal; main-thread100ms heartbeat max101.043ms.
+45% battery readout unchanged is not an endurance result. No phone OOM/pressure
+was induced. Simulated memory-warning handling and actual simulator Stop-button
+interaction preserve recovery and prior candidates. Simulator copied out/cleaned
+and shut down; no clones.
+
+This demonstrates only one regional fixture across three profiles, fuel off,
+Allow Unknown false. Full app overhead, complete prep cancellation, actual memory
+pressure, larger/multi-region routing, fuel/ordered-history parity and general
+resource limits remain unqualified. Capability policy still has no production
+qualified-device entry; no automatic server escalation. GraphHopper–DIRT remains
+the controlled server foundation. PHONE-LAB.md and phone-lab-evidence.json pin
+inputs, final source manifest, signed executable and raw logs/audits. Final bundle
+local.dirt.experiments.phonelab20260911 remains on White with completed workers.

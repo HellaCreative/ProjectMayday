@@ -1,0 +1,404 @@
+{
+  "scope": "Two bounded physical iPhone16 NS road suites, not complete app/fuel/multi-region/continental/capacity qualification.",
+  "phone": "White / iPhone16 / iPhone17,3 / iOS26.6.2 (23G90)",
+  "authorization": "Owner explicitly authorized White after correction of the originally stated iPhone17. RED not operated.",
+  "manifest": {
+    "version": 1,
+    "snapshotReceiptSHA256": "a4fc8ac52d42e2baa0dc6a1e4fff5296059f9da30048c129cf82cdeb8277f314",
+    "sourceHashes": {
+      "OnDeviceRouter.swift": "c40a546200c6dafd7bdc6d6a30d3bafb54dbe40eb5fe7902556e99a8c8d1371c",
+      "RoutingModels.swift": "43200d493d2a8661c247a04b18ea7178f016fc4662732a5bd695b8ef84e54c90",
+      "SurfaceFamily.swift": "cabd5cca8bd8794dff53fde2057bfc345919abbe1726c1ac5a6137d0f46b907e",
+      "CustomerEndpointAccess.swift": "2cf85af44f7145cd9a6a0ccbe9dae3717b384c4395e8929e4e8e0ced80aef696",
+      "GraphV2Pack.swift": "c93f8c1a3c22f7d729f5b03b6f82e2ee80f4018c0748a68a4c2ea02a486b4b1b",
+      "OnDevicePathPruning.swift": "3ff28c7d6a56cc4ad11e5df02e869aa00222049c01ad4f7518e1ee1a6e7547c6",
+      "GraphV4Pack.swift": "83a0e4de2c2441be1fe4e1e77df4a7a9801f222c335ac0320c7e6e7ad2f5c333",
+      "FuelGap.swift": "4b35cef2806b99d0e0a0ba679de3a7511c86f8083bedc51779db6a0891a58bdc",
+      "PathRetrace.swift": "f9d319a8720a61627431255e02d5a103bf670ed9abdb8ed0768692ef4bbcde95",
+      "RoadCompass.swift": "ce00deaad90988c46a4e94e0aa97af2e9bd33e51f61a0596b19acef5bad79479",
+      "UrbanCore.swift": "68f06506175de2106c91fbe4be3a8cf49a21f15e64dd04a2cd911f688c2fd9ec",
+      "PackedFuel.swift": "82c9145f290053ace62baac4ddcd618895769a7b4027035db49ba352f3a9768c",
+      "POIFeature.swift": "00c27a57ede830748a48a0c20d621de82aa45e94805ff957572c3d833c495e8e",
+      "OnDeviceProfileCosts.swift": "c9e86d249e1062ccb18d51a4cfc8ea794cbb5df42f35daa417b36a51e5b938b6",
+      "RoadTier.swift": "089e58f97f9d82039d21b037943097f8335a8e618392df74be958164a2cc34a3",
+      "HopSearchPolicy.swift": "3a851d8615238e0ed15d4f564c0eaa37443159c4736fbd27fc54c25c7df08b97",
+      "GeoMath.swift": "6ae079d5ce42eff87a52f8e6ee14bb8250325fc8dc8f9d49d72892a3aecc2427",
+      "GeometryV1Pack.swift": "5a72bd73c18272aef8d9f777bc431cfc6afe78677502a5faf319fde8182fd03a",
+      "FuelItinerary.swift": "475ed0d0f1461adeba413b405788bf25a5d8af60128fd7d8a106f117e74922b7",
+      "RidePreferences.swift": "89c0f1ef895f3ab2fbb4f46cf8ddbf2dc2a0e72202e22836e05978297e2710d9",
+      "PhoneProbe.swift": "70d360bc7566c814049ecc1d6fc8a31cd6e33e9591e9c859a1420bcc3bf0f3d7",
+      "ProbeControl.swift": "f7aba2e036317f186f3a1ce664b56379d89dcb13fa005d693b7069d66c3c89f8"
+    },
+    "resourceHashes": {
+      "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+      "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+      "UrbanSettlements.json": "ebb0383d62dbe22e985bbd3b2c3193d25bfc97f26dbd761b269cc6182bc19831",
+      "queries.json": "efb6c649361ae20593c487110f69c9b4112058f5276a81ebbe82fff12033b454"
+    },
+    "fixtureSourceSHA256": "04bcc38fa29cd312bc404d4c7f369d32ce6f722ae21a60175c7d2eb3940bfa05",
+    "scope": "NS roads only; same cancellation snapshot as native-v6; no native fuel proof."
+  },
+  "manifestSHA256": "2f0372d3351a4899f2d06a0214a4bf2cf272c8f028247f6b9c37a5fb5a719e4e",
+  "signedExecutableSHA256": "3f23f66cc331fdd20e9f97ea7a053faf81bb870cf28bfc33d4db51d84992c54f",
+  "signedAppBytes": 41083071,
+  "rawRoot": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload",
+  "files": {
+    "white-run-1.jsonl": "ebbe9d199f7653b6fa03d23be16b77143eebe909bcd2a790361c1ac1525aaa78",
+    "white-run-2.jsonl": "ce120560cfce17dd9a528fd14d903b4dcec45e8f518647a8a16fdc546c00f072",
+    "white-run-1-source-audit.json": "f5ccb29101bce369733cd530769608902ed42b53fc593ef5ba67dce8254fed50",
+    "white-run-2-source-audit.json": "91875f853de95d4455a4e0554f166fb931812180cefb58b91caa6eb4da6e8af2",
+    "phone-sim-suite-v3.jsonl": "e68d8ccac764575e663ab020c805a3913feaffa3f40b6ace7b0d0d073508fae0",
+    "phone-sim-suite-v4.jsonl": "26c87e32d48722e4a1bb0a54a52df7cf196ba64d2f8758dadfab18b6b4e54a9c",
+    "phone-sim-memory-warning-v3.jsonl": "5864fa51a9a1c97058da922c7026c3077fea1c9bc65efda480addddb6914783a",
+    "phone-sim-user-cancel-v3.jsonl": "d3035cbcf6aa166b6dc221ba154b14d32216074050b9b4fa17d3f4382bd1a41a",
+    "phone-sim-source-audit-v3.json": "cfe9d042b565d7798194992f0a9dd8cef95f7b303c8af90a41eb573958dd147e",
+    "phone-ios-v5/build.json": "37f856d88317fc8e4a659af6589f4b42fe94b2ea705ae044a8995df8f10e825b",
+    "phone-white-v5-signed/signing.json": "9c5f58b8341dafe6fdc81ae9ee1c4d230eea7cbbee35f8f75e5a4007f3e08a8f",
+    "phone-simulator-before.json": "87b7900128ecb5b066bd1fe6e6cfc3984c129f1f16b7ab0ab28ef5c53b77824d",
+    "phone-sim-ready.png": "1061e6e1595a2b4fda6b4d382c2278e4f838235027741e0979f8f74e18e22b18",
+    "phone-sim-export.png": "639964516c1b17857ea06644436e45f7ec88ba4081b5805008d291cb170b2b1d"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "summary": {
+        "logSHA256": "ebbe9d199f7653b6fa03d23be16b77143eebe909bcd2a790361c1ac1525aaa78",
+        "simulator": false,
+        "hardwareIdentifier": "iPhone17,3",
+        "os": "Version 26.6.2 (Build 23G90)",
+        "sessionCompleted": true,
+        "outcome": "complete",
+        "endToEndSeconds": 13.974008375000267,
+        "loaded": {
+          "decodeAndIdentitySeconds": 0.08410058333538473,
+          "edges": 220770,
+          "geometryBytes": 23954228,
+          "graphBytes": 15012189,
+          "metrics": {
+            "availableDirtyMemoryMiB": 3351.3117599487305,
+            "memoryReadSucceeded": true,
+            "physicalFootprintMiB": 24.68824005126953,
+            "processCPUSeconds": 0.196643,
+            "residentMiB": 83.015625,
+            "thermalState": 0,
+            "uptime": 54678.55971229167
+          },
+          "nodes": 187354,
+          "stage": "loaded"
+        },
+        "sampledPeakPhysicalFootprintMiB": 201.8602523803711,
+        "sampledPeakResidentMiB": 264.109375,
+        "minimumAvailableDirtyMemoryMiB": 3174.139747619629,
+        "maxThermalState": 0,
+        "sampleCount": 140,
+        "maxUIHeartbeatIntervalSeconds": 0.10097512499487493,
+        "medianUIHeartbeatIntervalSeconds": 0.09999958333355607,
+        "batteryLevelStart": 0.44999998807907104,
+        "batteryLevelEnd": 0.44999998807907104,
+        "queries": [
+          {
+            "distanceMeters": 194532.43467928388,
+            "knownDirtPercent": 0,
+            "query": {
+              "allowUnknown": false,
+              "case": "Clean baseline",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "clean",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "searchSeconds": 0.2126796666707378,
+            "state": "found",
+            "roadResultSHA256": "0ea236fb062cbfe0810de555ba162fa6f3f8c92625b5bc415268292bdba1ffb7"
+          },
+          {
+            "query": {
+              "allowUnknown": false,
+              "cancelAfterMillis": 20,
+              "case": "Dirt cancellation",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "dirt",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "reason": "scheduled_cancel",
+            "scheduledCancelToReturnSeconds": 0.08030095833237283,
+            "searchSeconds": 0.1002920416649431,
+            "state": "incomplete",
+            "stopObservedToReturnSeconds": 0.039410750003298745
+          },
+          {
+            "distanceMeters": 194532.43467928388,
+            "knownDirtPercent": 0,
+            "query": {
+              "allowUnknown": false,
+              "case": "Clean recovery",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "clean",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "searchSeconds": 0.19990629166568397,
+            "state": "found",
+            "roadResultSHA256": "0ea236fb062cbfe0810de555ba162fa6f3f8c92625b5bc415268292bdba1ffb7"
+          },
+          {
+            "deadlineOvershootSeconds": 0.08061066667141858,
+            "query": {
+              "allowUnknown": false,
+              "case": "Dirt time budget",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "dirt",
+              "searchBudgetMillis": 20,
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "reason": "time_budget",
+            "searchSeconds": 0.10060241666360525,
+            "state": "incomplete",
+            "stopObservedToReturnSeconds": 0.03960433333122637
+          },
+          {
+            "distanceMeters": 202314.43467928388,
+            "knownDirtPercent": 66,
+            "query": {
+              "allowUnknown": false,
+              "case": "Dirt recovery",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "dirt",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "searchSeconds": 3.9770797500023036,
+            "state": "found",
+            "roadResultSHA256": "a2b18ec96e8f931d6c6b5196c58a434b39aadc32da6d6dcdf887b1619894ab8e"
+          },
+          {
+            "distanceMeters": 187997.58495563228,
+            "knownDirtPercent": 54,
+            "query": {
+              "allowUnknown": false,
+              "case": "Balanced baseline",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "balanced",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "searchSeconds": 9.197203125004307,
+            "state": "found",
+            "roadResultSHA256": "00cb05f68edfeca34d5c80878bf04849ac370306046e7fe30f1754a6ae1a2071"
+          }
+        ],
+        "limits": "Sampled peaks can miss allocation spikes. Heartbeat is a UI-thread scheduling proxy, not frame-rate measurement. Coarse battery level on a short run cannot establish battery drain. Fuel, full app overhead, long-haul and sustained heat remain unqualified."
+      },
+      "allFourRoadResultsExactlyMatchNativeBaseline": true,
+      "independentSourceAuditPassed": true,
+      "sourceAuditSHA256": "f5ccb29101bce369733cd530769608902ed42b53fc593ef5ba67dce8254fed50"
+    },
+    {
+      "run": 2,
+      "summary": {
+        "logSHA256": "ce120560cfce17dd9a528fd14d903b4dcec45e8f518647a8a16fdc546c00f072",
+        "simulator": false,
+        "hardwareIdentifier": "iPhone17,3",
+        "os": "Version 26.6.2 (Build 23G90)",
+        "sessionCompleted": true,
+        "outcome": "complete",
+        "endToEndSeconds": 14.342964750001556,
+        "loaded": {
+          "decodeAndIdentitySeconds": 0.0826184999968973,
+          "edges": 220770,
+          "geometryBytes": 23954228,
+          "graphBytes": 15012189,
+          "metrics": {
+            "availableDirtyMemoryMiB": 3359.8741912841797,
+            "memoryReadSucceeded": true,
+            "physicalFootprintMiB": 16.125808715820312,
+            "processCPUSeconds": 14.401033,
+            "residentMiB": 135.171875,
+            "thermalState": 0,
+            "uptime": 54713.21880083334
+          },
+          "nodes": 187354,
+          "stage": "loaded"
+        },
+        "sampledPeakPhysicalFootprintMiB": 174.57904815673828,
+        "sampledPeakResidentMiB": 296.5625,
+        "minimumAvailableDirtyMemoryMiB": 3201.4209518432617,
+        "maxThermalState": 0,
+        "sampleCount": 144,
+        "maxUIHeartbeatIntervalSeconds": 0.10104316666547675,
+        "medianUIHeartbeatIntervalSeconds": 0.0999997916733264,
+        "batteryLevelStart": 0.44999998807907104,
+        "batteryLevelEnd": 0.44999998807907104,
+        "queries": [
+          {
+            "distanceMeters": 194532.43467928388,
+            "knownDirtPercent": 0,
+            "query": {
+              "allowUnknown": false,
+              "case": "Clean baseline",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "clean",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "searchSeconds": 0.2128539583281963,
+            "state": "found",
+            "roadResultSHA256": "0ea236fb062cbfe0810de555ba162fa6f3f8c92625b5bc415268292bdba1ffb7"
+          },
+          {
+            "query": {
+              "allowUnknown": false,
+              "cancelAfterMillis": 20,
+              "case": "Dirt cancellation",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "dirt",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "reason": "scheduled_cancel",
+            "scheduledCancelToReturnSeconds": 0.08017341667436995,
+            "searchSeconds": 0.10016466667002533,
+            "state": "incomplete",
+            "stopObservedToReturnSeconds": 0.039209125003253575
+          },
+          {
+            "distanceMeters": 194532.43467928388,
+            "knownDirtPercent": 0,
+            "query": {
+              "allowUnknown": false,
+              "case": "Clean recovery",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "clean",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "searchSeconds": 0.2001853750043665,
+            "state": "found",
+            "roadResultSHA256": "0ea236fb062cbfe0810de555ba162fa6f3f8c92625b5bc415268292bdba1ffb7"
+          },
+          {
+            "deadlineOvershootSeconds": 0.08058608333521988,
+            "query": {
+              "allowUnknown": false,
+              "case": "Dirt time budget",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "dirt",
+              "searchBudgetMillis": 20,
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "reason": "time_budget",
+            "searchSeconds": 0.10057841666275635,
+            "state": "incomplete",
+            "stopObservedToReturnSeconds": 0.039718416664982215
+          },
+          {
+            "distanceMeters": 202314.43467928388,
+            "knownDirtPercent": 66,
+            "query": {
+              "allowUnknown": false,
+              "case": "Dirt recovery",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "dirt",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "searchSeconds": 4.0816490833312855,
+            "state": "found",
+            "roadResultSHA256": "a2b18ec96e8f931d6c6b5196c58a434b39aadc32da6d6dcdf887b1619894ab8e"
+          },
+          {
+            "distanceMeters": 187997.58495563228,
+            "knownDirtPercent": 54,
+            "query": {
+              "allowUnknown": false,
+              "case": "Balanced baseline",
+              "end": [
+                -62.18066,
+                45.3933
+              ],
+              "profile": "balanced",
+              "start": [
+                -63.34024,
+                44.76481
+              ]
+            },
+            "searchSeconds": 9.46866187499836,
+            "state": "found",
+            "roadResultSHA256": "00cb05f68edfeca34d5c80878bf04849ac370306046e7fe30f1754a6ae1a2071"
+          }
+        ],
+        "limits": "Sampled peaks can miss allocation spikes. Heartbeat is a UI-thread scheduling proxy, not frame-rate measurement. Coarse battery level on a short run cannot establish battery drain. Fuel, full app overhead, long-haul and sustained heat remain unqualified."
+      },
+      "allFourRoadResultsExactlyMatchNativeBaseline": true,
+      "independentSourceAuditPassed": true,
+      "sourceAuditSHA256": "91875f853de95d4455a4e0554f166fb931812180cefb58b91caa6eb4da6e8af2"
+    }
+  ],
+  "limitations": [
+    "One regional fixture, three profiles, fuel off, Allow Unknown false.",
+    "Explicit endpoint approach lines are not source-road or pump access proof.",
+    "Two runs do not qualify sustained heat, battery, allocation spikes, true cold storage or calibrated safe memory budgets.",
+    "Memory-warning event and visible Stop were functionally exercised in simulator; no actual pressure/OOM was induced on White.",
+    "20ms request interruptions return at about100ms; preparation remains partly noncooperative.",
+    "Initial device-copy snapshot of run2 was incomplete because it was copied during the run; owner export is complete and is the evidence used here.",
+    "No accepted app, published packs, live environment, Apple portal, GitHub or paid infrastructure changed."
+  ]
+}
