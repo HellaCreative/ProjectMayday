@@ -79,8 +79,9 @@ Private Dev app candidate:
   cancellation in the isolated DIRT Dev worktree; Release/stable app untouched.
 - [x] Compile simulator and arm64 White/iPhone 16 builds; install the private
   `com.mayday.dirt.dev` bundle on White.
-- [ ] Launch on an unlocked White device and run the bounded route/fuel matrix;
-  no device route has been executed from this app build yet.
+- [ ] Launch on an unlocked White device and run the bounded NS→NB route/fuel
+  matrix. The first attempt ran beyond five minutes without a profile result;
+  checkpoint `cc8d9dc` adds a bounded response and cancellation propagation.
 - [ ] Resolve or baseline the unrelated `forwardFeeler` optional-value test
   failure before any promotion decision.
 - [ ] Integrate the geometry index and continuity publication gate only after
