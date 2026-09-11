@@ -1,0 +1,891 @@
+{
+  "scope": "Private geometry/topology paging + persistent exact spatial preparation. Demand topology uses a separate byte cap (64 bytes per geometry-cap edge), not a bound on unique explored road IDs. Restrictions, fuel, and spatial/reverse indexes remain resident. Current preparation and joins still touch the whole topology. Fresh-process verification reads all source bytes. Local filesystem measurements are not remote range-request costs or live qualification.",
+  "prepared": {
+    "identity": [
+      {
+        "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+        "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+        "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+      }
+    ],
+    "ms": 211.83225,
+    "verification": {
+      "regions": [
+        {
+          "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+          "ids": {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          },
+          "bytes": 39110368,
+          "ms": 23.848291000000003
+        }
+      ],
+      "ids": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        }
+      ],
+      "bytes": 39110368,
+      "ms": 23.848291000000003
+    },
+    "readBytes": 78220736,
+    "joinMs": 0.0013339999999999463,
+    "artifactBytes": 8397362,
+    "artifactSha256": "25cdc068e4f4a9855069b94c1e27fbb621238e5eafb0656164cca3fd20dcaa9e",
+    "peakProcessMiB": 126.234375
+  },
+  "rows": [
+    {
+      "mode": "full",
+      "identity": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        }
+      ],
+      "edges": 220770,
+      "nodes": 187354,
+      "sourceBytes": [
+        {
+          "graph.v4.bin": 15012189,
+          "geometry.v1.bin": 23954228,
+          "fuel.v1.json": 143951
+        }
+      ],
+      "verification": {
+        "regions": [
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+            "ids": {
+              "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+              "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+              "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+            },
+            "bytes": 39110368,
+            "ms": 20.477624999999996
+          }
+        ],
+        "ids": [
+          {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          }
+        ],
+        "bytes": 39110368,
+        "ms": 20.477624999999996
+      },
+      "loadMs": 33.797875000000005,
+      "joinMs": 0.001333000000002471,
+      "loadedReadBytes": 39110368,
+      "rssAfterLoadMiB": 90.0625,
+      "indexBytes": 0,
+      "peakProcessMiB": 234.15625,
+      "runs": [
+        {
+          "kind": "cold-request",
+          "searchMs": 649.644833,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 219193.68234217868,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 249,
+            "endpointMatchingMs": 15,
+            "stationMatchingMs": 62,
+            "projectedGraphMs": 4,
+            "reverseBoundsMs": 171,
+            "searchAndAdvisoryMs": 145,
+            "geometryAndProofMs": 2,
+            "totalMs": 648
+          },
+          "signature": "e5e02c4f3b9373ae6e0e305757e3a7dece1ff4761f52b3429e28fc6a535e1d8a",
+          "geometry": null,
+          "cacheHits": {
+            "preparation": false,
+            "stations": false,
+            "reverse": false
+          },
+          "topology": [
+            null
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 204.484375,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "identical-repeat",
+          "searchMs": 184.67383400000006,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 219193.68234217868,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 1,
+            "stationMatchingMs": 2,
+            "projectedGraphMs": 4,
+            "reverseBoundsMs": 33,
+            "searchAndAdvisoryMs": 141,
+            "geometryAndProofMs": 3,
+            "totalMs": 184
+          },
+          "signature": "e5e02c4f3b9373ae6e0e305757e3a7dece1ff4761f52b3429e28fc6a535e1d8a",
+          "geometry": null,
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": true
+          },
+          "topology": [
+            null
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 230.765625,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "edited-destination",
+          "searchMs": 236.9727499999999,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 268255.85254010337,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 1,
+            "stationMatchingMs": 1,
+            "projectedGraphMs": 2,
+            "reverseBoundsMs": 202,
+            "searchAndAdvisoryMs": 26,
+            "geometryAndProofMs": 4,
+            "totalMs": 237
+          },
+          "signature": "c778feb4b8fdcc2066d8f4bfbd8910c3c383e44ff07cbf685ddf0f7078143ee7",
+          "geometry": null,
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": false
+          },
+          "topology": [
+            null
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 206.390625,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        }
+      ]
+    },
+    {
+      "mode": "demand-5000",
+      "identity": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        }
+      ],
+      "edges": 220770,
+      "nodes": 187354,
+      "sourceBytes": [
+        {
+          "graph.v4.bin": 15012189,
+          "geometry.v1.bin": 23954228,
+          "fuel.v1.json": 143951
+        }
+      ],
+      "verification": {
+        "regions": [
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+            "ids": {
+              "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+              "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+              "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+            },
+            "bytes": 39110368,
+            "ms": 20.244415999999998
+          }
+        ],
+        "ids": [
+          {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          }
+        ],
+        "bytes": 39110368,
+        "ms": 20.244415999999998
+      },
+      "loadMs": 47.407625,
+      "joinMs": 0.005583999999998923,
+      "loadedReadBytes": 143951,
+      "rssAfterLoadMiB": 73.265625,
+      "indexBytes": 8397362,
+      "peakProcessMiB": 242.25,
+      "runs": [
+        {
+          "kind": "cold-request",
+          "searchMs": 4410.3217079999995,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 219193.68234217868,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 296,
+            "endpointMatchingMs": 246,
+            "stationMatchingMs": 534,
+            "projectedGraphMs": 44,
+            "reverseBoundsMs": 2725,
+            "searchAndAdvisoryMs": 561,
+            "geometryAndProofMs": 3,
+            "totalMs": 4409
+          },
+          "signature": "e5e02c4f3b9373ae6e0e305757e3a7dece1ff4761f52b3429e28fc6a535e1d8a",
+          "geometry": {
+            "reads": 65192,
+            "bytesRead": 3456212,
+            "hits": 5460,
+            "misses": 65190,
+            "residentBytes": 281088,
+            "peakResidentBytes": 282136,
+            "peakResidentEdges": 5000,
+            "peakReadPlusResidentBytes": 282136,
+            "offsetBytes": 883084,
+            "requestBytes": 2573112,
+            "requestReads": 65190
+          },
+          "cacheHits": {
+            "preparation": false,
+            "stations": false,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 414893,
+              "bytesRead": 3398861869,
+              "hits": 9651690,
+              "misses": 414886,
+              "peakResidentBytes": 319488,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 233.796875,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "identical-repeat",
+          "searchMs": 651.4738749999997,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 219193.68234217868,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 7,
+            "stationMatchingMs": 2,
+            "projectedGraphMs": 30,
+            "reverseBoundsMs": 28,
+            "searchAndAdvisoryMs": 580,
+            "geometryAndProofMs": 3,
+            "totalMs": 651
+          },
+          "signature": "e5e02c4f3b9373ae6e0e305757e3a7dece1ff4761f52b3429e28fc6a535e1d8a",
+          "geometry": {
+            "reads": 65413,
+            "bytesRead": 3487124,
+            "hits": 8009,
+            "misses": 65411,
+            "residentBytes": 305048,
+            "peakResidentBytes": 305048,
+            "peakResidentEdges": 5000,
+            "peakReadPlusResidentBytes": 305048,
+            "offsetBytes": 883084,
+            "requestBytes": 30912,
+            "requestReads": 221
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": true
+          },
+          "topology": [
+            {
+              "reads": 481981,
+              "bytesRead": 3948446765,
+              "hits": 10531547,
+              "misses": 481974,
+              "peakResidentBytes": 319488,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 239.5625,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "edited-destination",
+          "searchMs": 2791.8195829999995,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 268255.85254010337,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 4,
+            "stationMatchingMs": 1,
+            "projectedGraphMs": 33,
+            "reverseBoundsMs": 2655,
+            "searchAndAdvisoryMs": 93,
+            "geometryAndProofMs": 4,
+            "totalMs": 2792
+          },
+          "signature": "c778feb4b8fdcc2066d8f4bfbd8910c3c383e44ff07cbf685ddf0f7078143ee7",
+          "geometry": {
+            "reads": 65480,
+            "bytesRead": 3497308,
+            "hits": 10814,
+            "misses": 65478,
+            "residentBytes": 312776,
+            "peakResidentBytes": 312776,
+            "peakResidentEdges": 5000,
+            "peakReadPlusResidentBytes": 312776,
+            "offsetBytes": 883084,
+            "requestBytes": 10184,
+            "requestReads": 67
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 786784,
+              "bytesRead": 6445392941,
+              "hits": 17774627,
+              "misses": 786777,
+              "peakResidentBytes": 319488,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 242.1875,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        }
+      ]
+    },
+    {
+      "mode": "demand-10000",
+      "identity": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        }
+      ],
+      "edges": 220770,
+      "nodes": 187354,
+      "sourceBytes": [
+        {
+          "graph.v4.bin": 15012189,
+          "geometry.v1.bin": 23954228,
+          "fuel.v1.json": 143951
+        }
+      ],
+      "verification": {
+        "regions": [
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+            "ids": {
+              "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+              "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+              "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+            },
+            "bytes": 39110368,
+            "ms": 20.661625
+          }
+        ],
+        "ids": [
+          {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          }
+        ],
+        "bytes": 39110368,
+        "ms": 20.661625
+      },
+      "loadMs": 48.11645800000001,
+      "joinMs": 0.0015839999999940346,
+      "loadedReadBytes": 143951,
+      "rssAfterLoadMiB": 73.1875,
+      "indexBytes": 8397362,
+      "peakProcessMiB": 247.875,
+      "runs": [
+        {
+          "kind": "cold-request",
+          "searchMs": 4361.636833,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 219193.68234217868,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 379,
+            "endpointMatchingMs": 293,
+            "stationMatchingMs": 551,
+            "projectedGraphMs": 29,
+            "reverseBoundsMs": 2675,
+            "searchAndAdvisoryMs": 429,
+            "geometryAndProofMs": 4,
+            "totalMs": 4360
+          },
+          "signature": "e5e02c4f3b9373ae6e0e305757e3a7dece1ff4761f52b3429e28fc6a535e1d8a",
+          "geometry": {
+            "reads": 57315,
+            "bytesRead": 3160716,
+            "hits": 13337,
+            "misses": 57313,
+            "residentBytes": 435584,
+            "peakResidentBytes": 523008,
+            "peakResidentEdges": 10000,
+            "peakReadPlusResidentBytes": 523008,
+            "offsetBytes": 883084,
+            "requestBytes": 2277616,
+            "requestReads": 57313
+          },
+          "cacheHits": {
+            "preparation": false,
+            "stations": false,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 280602,
+              "bytesRead": 2298749997,
+              "hits": 9785981,
+              "misses": 280595,
+              "peakResidentBytes": 638976,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 244.90625,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "identical-repeat",
+          "searchMs": 483.2803750000003,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 219193.68234217868,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 5,
+            "stationMatchingMs": 2,
+            "projectedGraphMs": 23,
+            "reverseBoundsMs": 31,
+            "searchAndAdvisoryMs": 418,
+            "geometryAndProofMs": 3,
+            "totalMs": 483
+          },
+          "signature": "e5e02c4f3b9373ae6e0e305757e3a7dece1ff4761f52b3429e28fc6a535e1d8a",
+          "geometry": {
+            "reads": 57536,
+            "bytesRead": 3191628,
+            "hits": 15886,
+            "misses": 57534,
+            "residentBytes": 457432,
+            "peakResidentBytes": 523008,
+            "peakResidentEdges": 10000,
+            "peakReadPlusResidentBytes": 523008,
+            "offsetBytes": 883084,
+            "requestBytes": 30912,
+            "requestReads": 221
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": true
+          },
+          "topology": [
+            {
+              "reads": 307126,
+              "bytesRead": 2516034605,
+              "hits": 10706402,
+              "misses": 307119,
+              "peakResidentBytes": 638976,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 247.03125,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "edited-destination",
+          "searchMs": 2766.3311249999997,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 268255.85254010337,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 5,
+            "stationMatchingMs": 1,
+            "projectedGraphMs": 23,
+            "reverseBoundsMs": 2665,
+            "searchAndAdvisoryMs": 66,
+            "geometryAndProofMs": 5,
+            "totalMs": 2766
+          },
+          "signature": "c778feb4b8fdcc2066d8f4bfbd8910c3c383e44ff07cbf685ddf0f7078143ee7",
+          "geometry": {
+            "reads": 57603,
+            "bytesRead": 3201812,
+            "hits": 18691,
+            "misses": 57601,
+            "residentBytes": 465288,
+            "peakResidentBytes": 523008,
+            "peakResidentEdges": 10000,
+            "peakReadPlusResidentBytes": 523008,
+            "offsetBytes": 883084,
+            "requestBytes": 10184,
+            "requestReads": 67
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 520482,
+              "bytesRead": 4263846957,
+              "hits": 18040929,
+              "misses": 520475,
+              "peakResidentBytes": 638976,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 247.8125,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        }
+      ]
+    },
+    {
+      "mode": "demand-30000",
+      "identity": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        }
+      ],
+      "edges": 220770,
+      "nodes": 187354,
+      "sourceBytes": [
+        {
+          "graph.v4.bin": 15012189,
+          "geometry.v1.bin": 23954228,
+          "fuel.v1.json": 143951
+        }
+      ],
+      "verification": {
+        "regions": [
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+            "ids": {
+              "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+              "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+              "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+            },
+            "bytes": 39110368,
+            "ms": 19.289375
+          }
+        ],
+        "ids": [
+          {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          }
+        ],
+        "bytes": 39110368,
+        "ms": 19.289375
+      },
+      "loadMs": 45.26275,
+      "joinMs": 0.0013750000000030127,
+      "loadedReadBytes": 143951,
+      "rssAfterLoadMiB": 73.3125,
+      "indexBytes": 8397362,
+      "peakProcessMiB": 327.90625,
+      "runs": [
+        {
+          "kind": "cold-request",
+          "searchMs": 3749.131417,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 219193.68234217868,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 187,
+            "endpointMatchingMs": 355,
+            "stationMatchingMs": 481,
+            "projectedGraphMs": 18,
+            "reverseBoundsMs": 2334,
+            "searchAndAdvisoryMs": 368,
+            "geometryAndProofMs": 3,
+            "totalMs": 3748
+          },
+          "signature": "e5e02c4f3b9373ae6e0e305757e3a7dece1ff4761f52b3429e28fc6a535e1d8a",
+          "geometry": {
+            "reads": 54745,
+            "bytesRead": 3086940,
+            "hits": 15907,
+            "misses": 54743,
+            "residentBytes": 1320864,
+            "peakResidentBytes": 1320952,
+            "peakResidentEdges": 30000,
+            "peakReadPlusResidentBytes": 1320952,
+            "offsetBytes": 883084,
+            "requestBytes": 2203840,
+            "requestReads": 54743
+          },
+          "cacheHits": {
+            "preparation": false,
+            "stations": false,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 105103,
+              "bytesRead": 861062189,
+              "hits": 9961480,
+              "misses": 105096,
+              "peakResidentBytes": 1916928,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 297.59375,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "identical-repeat",
+          "searchMs": 425.5827079999999,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 219193.68234217868,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 6,
+            "stationMatchingMs": 2,
+            "projectedGraphMs": 16,
+            "reverseBoundsMs": 32,
+            "searchAndAdvisoryMs": 365,
+            "geometryAndProofMs": 4,
+            "totalMs": 425
+          },
+          "signature": "e5e02c4f3b9373ae6e0e305757e3a7dece1ff4761f52b3429e28fc6a535e1d8a",
+          "geometry": {
+            "reads": 54745,
+            "bytesRead": 3086940,
+            "hits": 18677,
+            "misses": 54743,
+            "residentBytes": 1320864,
+            "peakResidentBytes": 1320952,
+            "peakResidentEdges": 30000,
+            "peakReadPlusResidentBytes": 1320952,
+            "offsetBytes": 883084,
+            "requestBytes": 0,
+            "requestReads": 0
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": true
+          },
+          "topology": [
+            {
+              "reads": 111546,
+              "bytesRead": 913843245,
+              "hits": 10901982,
+              "misses": 111539,
+              "peakResidentBytes": 1916928,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 316.828125,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "edited-destination",
+          "searchMs": 2361.2342500000004,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 268255.85254010337,
+          "stops": [
+            "osm:n11306260881"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 3,
+            "stationMatchingMs": 2,
+            "projectedGraphMs": 16,
+            "reverseBoundsMs": 2273,
+            "searchAndAdvisoryMs": 64,
+            "geometryAndProofMs": 3,
+            "totalMs": 2361
+          },
+          "signature": "c778feb4b8fdcc2066d8f4bfbd8910c3c383e44ff07cbf685ddf0f7078143ee7",
+          "geometry": {
+            "reads": 54812,
+            "bytesRead": 3097124,
+            "hits": 21482,
+            "misses": 54810,
+            "residentBytes": 1329288,
+            "peakResidentBytes": 1329288,
+            "peakResidentEdges": 30000,
+            "peakReadPlusResidentBytes": 1329288,
+            "offsetBytes": 883084,
+            "requestBytes": 10184,
+            "requestReads": 67
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 184067,
+              "bytesRead": 1507935277,
+              "hits": 18377344,
+              "misses": 184060,
+              "peakResidentBytes": 1916928,
+              "metadataBytes": 115749,
+              "uniquePages": 1346
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 6256632,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 327.84375,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "checkpoint": "bf8f740509b7448373a3bb24e46f11bca6968c7a",
+  "node": "v22.17.0",
+  "sourceSha256": {
+    "scripts/pack-fabric/bench/compare-selective-loading.js": "14ce39c667fedabeea59acc2ecb17d3f2d6af4172678bec97744b26e4e267ec1",
+    "scripts/pack-fabric/bench/working-set.test.js": "6d25cb2b8b1d24f11fb33ce173193051cd64c93ca6021c703b699e17d21c94e0",
+    "scripts/pack-fabric/bench/working-set/demand-graph.js": "1dc2e02db38475fa48b2fcc97f844ae70b0a5b40c01c69978580d37e28ddbf61",
+    "scripts/pack-fabric/bench/working-set/spatial-index.js": "0f755649326e7cae7191f3eacde2c38fc0195fab78741462ad8cfaaac7145399",
+    "scripts/pack-fabric/bench/working-set/geometry.js": "0c9a166e325ca8fdd4ccf574d6986d392dbb2d782b778e0199f60b2707ee610d"
+  }
+}

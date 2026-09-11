@@ -1190,3 +1190,17 @@ frozen algorithms remain the fallback outside the explicit DEV canary scope.
 Loop, richer exploration/variation controls and actual refuel confirmation remain
 unimplemented UI/behavior milestones. Continue to live DEV device testing without
 repeated approval; production publication and GitHub push remain outside scope.
+
+
+## September 10 private selective-loading investigation
+
+Local experiments at private routing checkpoint `bf8f740` compare unchanged NS
+and NS/NB packs with 5k/10k/30k geometry caches, reusable exact spatial preparation,
+and an experimental disk-backed topology reader. Road/refill/escape signatures match
+their controlled single-objective baselines; fuel access remains provisional.
+Reusable preparation helps, but paging current topology slows these fixtures and
+does not reduce peak process memory. Full joining and reverse preparation remain
+the barriers to expanding working areas. No runtime, pack, app or deployment
+change is accepted by this experiment; accepted DEV source remains `139a173`.
+Measurements, limitations and proposed next experiments:
+[private selective-loading report](experiments/selective-loading-2026-09-10/README.md).

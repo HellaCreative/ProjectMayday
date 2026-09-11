@@ -1,0 +1,867 @@
+{
+  "scope": "Private geometry/topology paging + persistent exact spatial preparation. Demand topology uses a separate byte cap (64 bytes per geometry-cap edge), not a bound on unique explored road IDs. Restrictions, fuel, and spatial/reverse indexes remain resident. Current preparation and joins still touch the whole topology. Fresh-process verification reads all source bytes. Local filesystem measurements are not remote range-request costs or live qualification.",
+  "prepared": {
+    "identity": [
+      {
+        "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+        "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+        "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+      },
+      {
+        "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+        "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+        "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+      }
+    ],
+    "ms": 643.5632919999999,
+    "verification": {
+      "regions": [
+        {
+          "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+          "ids": {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          },
+          "bytes": 39110368,
+          "ms": 19.987792
+        },
+        {
+          "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/nb",
+          "ids": {
+            "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+            "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+            "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+          },
+          "bytes": 23573047,
+          "ms": 16.250667
+        }
+      ],
+      "ids": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        },
+        {
+          "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+          "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+          "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+        }
+      ],
+      "bytes": 62683415,
+      "ms": 36.238459
+    },
+    "readBytes": 125366830,
+    "joinMs": 313.50179099999997,
+    "artifactBytes": 15939227,
+    "artifactSha256": "e62e15b4b2a13651d4ecffd6f2832141688efedfefbc2449eca84b640c1aa790",
+    "peakProcessMiB": 260.5
+  },
+  "rows": [
+    {
+      "mode": "full",
+      "identity": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        },
+        {
+          "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+          "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+          "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+        }
+      ],
+      "edges": 416884,
+      "nodes": 353088,
+      "sourceBytes": [
+        {
+          "graph.v4.bin": 15012189,
+          "geometry.v1.bin": 23954228,
+          "fuel.v1.json": 143951
+        },
+        {
+          "graph.v4.bin": 13033846,
+          "geometry.v1.bin": 10396492,
+          "fuel.v1.json": 142709
+        }
+      ],
+      "verification": {
+        "regions": [
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+            "ids": {
+              "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+              "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+              "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+            },
+            "bytes": 39110368,
+            "ms": 20.01375
+          },
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/nb",
+            "ids": {
+              "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+              "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+              "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+            },
+            "bytes": 23573047,
+            "ms": 12.060082999999999
+          }
+        ],
+        "ids": [
+          {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          },
+          {
+            "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+            "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+            "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+          }
+        ],
+        "bytes": 62683415,
+        "ms": 32.073833
+      },
+      "loadMs": 340.98954200000003,
+      "joinMs": 282.08783400000004,
+      "loadedReadBytes": 62683415,
+      "rssAfterLoadMiB": 193.84375,
+      "indexBytes": 0,
+      "peakProcessMiB": 301.140625,
+      "runs": [
+        {
+          "kind": "cold-request",
+          "searchMs": 951.6053339999999,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 571611.5454274996,
+          "stops": [
+            "osm:n11306260881",
+            "osm:w428976289",
+            "osm:n5302098545"
+          ],
+          "timing": {
+            "preparationMs": 403,
+            "endpointMatchingMs": 17,
+            "stationMatchingMs": 134,
+            "projectedGraphMs": 7,
+            "reverseBoundsMs": 322,
+            "searchAndAdvisoryMs": 62,
+            "geometryAndProofMs": 4,
+            "totalMs": 950
+          },
+          "signature": "6f2ee59a9fe80e83fc5481a2d9787b8e1e60518b22f6650d0cae6d3d9c9d1b76",
+          "geometry": null,
+          "cacheHits": {
+            "preparation": false,
+            "stations": false,
+            "reverse": false
+          },
+          "topology": [
+            null,
+            null
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 11378240,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 294.078125,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "identical-repeat",
+          "searchMs": 156.559667,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 571611.5454274996,
+          "stops": [
+            "osm:n11306260881",
+            "osm:w428976289",
+            "osm:n5302098545"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 1,
+            "stationMatchingMs": 5,
+            "projectedGraphMs": 5,
+            "reverseBoundsMs": 91,
+            "searchAndAdvisoryMs": 50,
+            "geometryAndProofMs": 3,
+            "totalMs": 156
+          },
+          "signature": "6f2ee59a9fe80e83fc5481a2d9787b8e1e60518b22f6650d0cae6d3d9c9d1b76",
+          "geometry": null,
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": true
+          },
+          "topology": [
+            null,
+            null
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 11378240,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 301.140625,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        }
+      ]
+    },
+    {
+      "mode": "demand-5000",
+      "identity": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        },
+        {
+          "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+          "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+          "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+        }
+      ],
+      "edges": 416884,
+      "nodes": 353088,
+      "sourceBytes": [
+        {
+          "graph.v4.bin": 15012189,
+          "geometry.v1.bin": 23954228,
+          "fuel.v1.json": 143951
+        },
+        {
+          "graph.v4.bin": 13033846,
+          "geometry.v1.bin": 10396492,
+          "fuel.v1.json": 142709
+        }
+      ],
+      "verification": {
+        "regions": [
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+            "ids": {
+              "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+              "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+              "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+            },
+            "bytes": 39110368,
+            "ms": 19.602500000000003
+          },
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/nb",
+            "ids": {
+              "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+              "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+              "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+            },
+            "bytes": 23573047,
+            "ms": 12.199832999999998
+          }
+        ],
+        "ids": [
+          {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          },
+          {
+            "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+            "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+            "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+          }
+        ],
+        "bytes": 62683415,
+        "ms": 31.802333
+      },
+      "loadMs": 2054.0210420000003,
+      "joinMs": 1969.176959,
+      "loadedReadBytes": 286660,
+      "rssAfterLoadMiB": 292.640625,
+      "indexBytes": 15939227,
+      "peakProcessMiB": 412.734375,
+      "runs": [
+        {
+          "kind": "cold-request",
+          "searchMs": 1555.733292,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 571611.5454274996,
+          "stops": [
+            "osm:n11306260881",
+            "osm:w428976289",
+            "osm:n5302098545"
+          ],
+          "timing": {
+            "preparationMs": 460,
+            "endpointMatchingMs": 17,
+            "stationMatchingMs": 692,
+            "projectedGraphMs": 8,
+            "reverseBoundsMs": 305,
+            "searchAndAdvisoryMs": 65,
+            "geometryAndProofMs": 7,
+            "totalMs": 1554
+          },
+          "signature": "6f2ee59a9fe80e83fc5481a2d9787b8e1e60518b22f6650d0cae6d3d9c9d1b76",
+          "geometry": {
+            "reads": 139161,
+            "bytesRead": 6528416,
+            "hits": 7151,
+            "misses": 139157,
+            "residentBytes": 236832,
+            "peakResidentBytes": 269024,
+            "peakResidentEdges": 5000,
+            "peakReadPlusResidentBytes": 269024,
+            "offsetBytes": 1668096,
+            "requestBytes": 4848448,
+            "requestReads": 138881
+          },
+          "cacheHits": {
+            "preparation": false,
+            "stations": false,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 31487,
+              "bytesRead": 257999917,
+              "hits": 4533209,
+              "misses": 31480,
+              "peakResidentBytes": 155648,
+              "metadataBytes": 115749,
+              "uniquePages": 1710
+            },
+            {
+              "reads": 28567,
+              "bytesRead": 234107427,
+              "hits": 3923350,
+              "misses": 28561,
+              "peakResidentBytes": 155648,
+              "metadataBytes": 135715,
+              "uniquePages": 1480
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 11378240,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 405.328125,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "identical-repeat",
+          "searchMs": 157.7144999999996,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 571611.5454274996,
+          "stops": [
+            "osm:n11306260881",
+            "osm:w428976289",
+            "osm:n5302098545"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 3,
+            "stationMatchingMs": 3,
+            "projectedGraphMs": 6,
+            "reverseBoundsMs": 89,
+            "searchAndAdvisoryMs": 50,
+            "geometryAndProofMs": 6,
+            "totalMs": 157
+          },
+          "signature": "6f2ee59a9fe80e83fc5481a2d9787b8e1e60518b22f6650d0cae6d3d9c9d1b76",
+          "geometry": {
+            "reads": 139318,
+            "bytesRead": 6545104,
+            "hits": 10951,
+            "misses": 139314,
+            "residentBytes": 247376,
+            "peakResidentBytes": 269024,
+            "peakResidentEdges": 5000,
+            "peakReadPlusResidentBytes": 269024,
+            "offsetBytes": 1668096,
+            "requestBytes": 16688,
+            "requestReads": 157
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": true
+          },
+          "topology": [
+            {
+              "reads": 31833,
+              "bytesRead": 260834349,
+              "hits": 4537253,
+              "misses": 31826,
+              "peakResidentBytes": 155648,
+              "metadataBytes": 115749,
+              "uniquePages": 1710
+            },
+            {
+              "reads": 28619,
+              "bytesRead": 234533411,
+              "hits": 3924184,
+              "misses": 28613,
+              "peakResidentBytes": 155648,
+              "metadataBytes": 135715,
+              "uniquePages": 1480
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 11378240,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 412.671875,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        }
+      ]
+    },
+    {
+      "mode": "demand-10000",
+      "identity": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        },
+        {
+          "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+          "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+          "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+        }
+      ],
+      "edges": 416884,
+      "nodes": 353088,
+      "sourceBytes": [
+        {
+          "graph.v4.bin": 15012189,
+          "geometry.v1.bin": 23954228,
+          "fuel.v1.json": 143951
+        },
+        {
+          "graph.v4.bin": 13033846,
+          "geometry.v1.bin": 10396492,
+          "fuel.v1.json": 142709
+        }
+      ],
+      "verification": {
+        "regions": [
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+            "ids": {
+              "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+              "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+              "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+            },
+            "bytes": 39110368,
+            "ms": 19.481458
+          },
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/nb",
+            "ids": {
+              "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+              "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+              "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+            },
+            "bytes": 23573047,
+            "ms": 11.70375
+          }
+        ],
+        "ids": [
+          {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          },
+          {
+            "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+            "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+            "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+          }
+        ],
+        "bytes": 62683415,
+        "ms": 31.185208
+      },
+      "loadMs": 2229.1121249999997,
+      "joinMs": 2151.435458,
+      "loadedReadBytes": 286660,
+      "rssAfterLoadMiB": 294.203125,
+      "indexBytes": 15939227,
+      "peakProcessMiB": 416.15625,
+      "runs": [
+        {
+          "kind": "cold-request",
+          "searchMs": 1730.010625,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 571611.5454274996,
+          "stops": [
+            "osm:n11306260881",
+            "osm:w428976289",
+            "osm:n5302098545"
+          ],
+          "timing": {
+            "preparationMs": 611,
+            "endpointMatchingMs": 18,
+            "stationMatchingMs": 706,
+            "projectedGraphMs": 7,
+            "reverseBoundsMs": 309,
+            "searchAndAdvisoryMs": 70,
+            "geometryAndProofMs": 7,
+            "totalMs": 1728
+          },
+          "signature": "6f2ee59a9fe80e83fc5481a2d9787b8e1e60518b22f6650d0cae6d3d9c9d1b76",
+          "geometry": {
+            "reads": 136236,
+            "bytesRead": 6434896,
+            "hits": 10076,
+            "misses": 136232,
+            "residentBytes": 416760,
+            "peakResidentBytes": 483832,
+            "peakResidentEdges": 10000,
+            "peakReadPlusResidentBytes": 483832,
+            "offsetBytes": 1668096,
+            "requestBytes": 4754928,
+            "requestReads": 135956
+          },
+          "cacheHits": {
+            "preparation": false,
+            "stations": false,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 29298,
+              "bytesRead": 240067629,
+              "hits": 4535398,
+              "misses": 29291,
+              "peakResidentBytes": 319488,
+              "metadataBytes": 115749,
+              "uniquePages": 1710
+            },
+            {
+              "reads": 24898,
+              "bytesRead": 204050979,
+              "hits": 3927019,
+              "misses": 24892,
+              "peakResidentBytes": 319488,
+              "metadataBytes": 135715,
+              "uniquePages": 1480
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 11378240,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 411.359375,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "identical-repeat",
+          "searchMs": 165.0629170000002,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 571611.5454274996,
+          "stops": [
+            "osm:n11306260881",
+            "osm:w428976289",
+            "osm:n5302098545"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 3,
+            "stationMatchingMs": 3,
+            "projectedGraphMs": 7,
+            "reverseBoundsMs": 88,
+            "searchAndAdvisoryMs": 59,
+            "geometryAndProofMs": 5,
+            "totalMs": 165
+          },
+          "signature": "6f2ee59a9fe80e83fc5481a2d9787b8e1e60518b22f6650d0cae6d3d9c9d1b76",
+          "geometry": {
+            "reads": 136393,
+            "bytesRead": 6451584,
+            "hits": 13876,
+            "misses": 136389,
+            "residentBytes": 429264,
+            "peakResidentBytes": 483832,
+            "peakResidentEdges": 10000,
+            "peakReadPlusResidentBytes": 483832,
+            "offsetBytes": 1668096,
+            "requestBytes": 16688,
+            "requestReads": 157
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": true
+          },
+          "topology": [
+            {
+              "reads": 29578,
+              "bytesRead": 242361389,
+              "hits": 4539508,
+              "misses": 29571,
+              "peakResidentBytes": 319488,
+              "metadataBytes": 115749,
+              "uniquePages": 1710
+            },
+            {
+              "reads": 24906,
+              "bytesRead": 204116515,
+              "hits": 3927897,
+              "misses": 24900,
+              "peakResidentBytes": 319488,
+              "metadataBytes": 135715,
+              "uniquePages": 1480
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 11378240,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 416.09375,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        }
+      ]
+    },
+    {
+      "mode": "demand-30000",
+      "identity": [
+        {
+          "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+          "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+          "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+        },
+        {
+          "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+          "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+          "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+        }
+      ],
+      "edges": 416884,
+      "nodes": 353088,
+      "sourceBytes": [
+        {
+          "graph.v4.bin": 15012189,
+          "geometry.v1.bin": 23954228,
+          "fuel.v1.json": 143951
+        },
+        {
+          "graph.v4.bin": 13033846,
+          "geometry.v1.bin": 10396492,
+          "fuel.v1.json": 142709
+        }
+      ],
+      "verification": {
+        "regions": [
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/ns",
+            "ids": {
+              "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+              "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+              "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+            },
+            "bytes": 39110368,
+            "ms": 19.596334
+          },
+          {
+            "directory": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs/nb",
+            "ids": {
+              "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+              "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+              "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+            },
+            "bytes": 23573047,
+            "ms": 11.524833000000001
+          }
+        ],
+        "ids": [
+          {
+            "graph.v4.bin": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+            "geometry.v1.bin": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+            "fuel.v1.json": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+          },
+          {
+            "graph.v4.bin": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+            "geometry.v1.bin": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+            "fuel.v1.json": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+          }
+        ],
+        "bytes": 62683415,
+        "ms": 31.121167
+      },
+      "loadMs": 2508.704083,
+      "joinMs": 2427.647958,
+      "loadedReadBytes": 286660,
+      "rssAfterLoadMiB": 297.15625,
+      "indexBytes": 15939227,
+      "peakProcessMiB": 424.546875,
+      "runs": [
+        {
+          "kind": "cold-request",
+          "searchMs": 1649.9691669999997,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 571611.5454274996,
+          "stops": [
+            "osm:n11306260881",
+            "osm:w428976289",
+            "osm:n5302098545"
+          ],
+          "timing": {
+            "preparationMs": 665,
+            "endpointMatchingMs": 18,
+            "stationMatchingMs": 576,
+            "projectedGraphMs": 8,
+            "reverseBoundsMs": 305,
+            "searchAndAdvisoryMs": 70,
+            "geometryAndProofMs": 5,
+            "totalMs": 1648
+          },
+          "signature": "6f2ee59a9fe80e83fc5481a2d9787b8e1e60518b22f6650d0cae6d3d9c9d1b76",
+          "geometry": {
+            "reads": 117824,
+            "bytesRead": 5808576,
+            "hits": 28488,
+            "misses": 117820,
+            "residentBytes": 1137032,
+            "peakResidentBytes": 1263616,
+            "peakResidentEdges": 30000,
+            "peakReadPlusResidentBytes": 1263616,
+            "offsetBytes": 1668096,
+            "requestBytes": 4128608,
+            "requestReads": 117544
+          },
+          "cacheHits": {
+            "preparation": false,
+            "stations": false,
+            "reverse": false
+          },
+          "topology": [
+            {
+              "reads": 15756,
+              "bytesRead": 129131565,
+              "hits": 4548940,
+              "misses": 15749,
+              "peakResidentBytes": 958464,
+              "metadataBytes": 115749,
+              "uniquePages": 1710
+            },
+            {
+              "reads": 13403,
+              "bytesRead": 109883939,
+              "hits": 3938514,
+              "misses": 13397,
+              "peakResidentBytes": 958464,
+              "metadataBytes": 135715,
+              "uniquePages": 1480
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 11378240,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 417.71875,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        },
+        {
+          "kind": "identical-repeat",
+          "searchMs": 156.45958299999984,
+          "road": "complete",
+          "fuel": "provisional_station_access",
+          "stage": "complete",
+          "distanceMeters": 571611.5454274996,
+          "stops": [
+            "osm:n11306260881",
+            "osm:w428976289",
+            "osm:n5302098545"
+          ],
+          "timing": {
+            "preparationMs": 0,
+            "endpointMatchingMs": 4,
+            "stationMatchingMs": 3,
+            "projectedGraphMs": 5,
+            "reverseBoundsMs": 90,
+            "searchAndAdvisoryMs": 50,
+            "geometryAndProofMs": 4,
+            "totalMs": 156
+          },
+          "signature": "6f2ee59a9fe80e83fc5481a2d9787b8e1e60518b22f6650d0cae6d3d9c9d1b76",
+          "geometry": {
+            "reads": 117824,
+            "bytesRead": 5808576,
+            "hits": 32445,
+            "misses": 117820,
+            "residentBytes": 1137032,
+            "peakResidentBytes": 1263616,
+            "peakResidentEdges": 30000,
+            "peakReadPlusResidentBytes": 1263616,
+            "offsetBytes": 1668096,
+            "requestBytes": 0,
+            "requestReads": 0
+          },
+          "cacheHits": {
+            "preparation": true,
+            "stations": true,
+            "reverse": true
+          },
+          "topology": [
+            {
+              "reads": 15884,
+              "bytesRead": 130180141,
+              "hits": 4553202,
+              "misses": 15877,
+              "peakResidentBytes": 958464,
+              "metadataBytes": 115749,
+              "uniquePages": 1710
+            },
+            {
+              "reads": 13411,
+              "bytesRead": 109949475,
+              "hits": 3939392,
+              "misses": 13405,
+              "peakResidentBytes": 958464,
+              "metadataBytes": 135715,
+              "uniquePages": 1480
+            }
+          ],
+          "reverse": {
+            "entries": 1,
+            "residentBytes": 11378240,
+            "maxBytes": 67108864
+          },
+          "rssMiB": 424.484375,
+          "matchesBaseline": true,
+          "fuelCoverageComplete": true
+        }
+      ]
+    }
+  ]
+}
