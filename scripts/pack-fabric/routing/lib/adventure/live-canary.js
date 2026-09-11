@@ -7,6 +7,7 @@ const {qualifiedPack,nbSupplement}=require('./pack-revision-qualification');
 const sharedContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024});
 const candidateContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:true,fastNeutralTurns:true});
 const compactContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:true,fastNeutralTurns:true,compactPreparation:true});
+const refinedContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:true,fastNeutralTurns:true,compactPreparation:true,reuseBounds:true});
 const {sourceKey,reusableRuntime}=require('./joined-runtime-reuse');
 let joinedCache=null;
 const {joinV4}=require('./join-v4');
@@ -71,9 +72,9 @@ function requestWindowMs(regionIds,requested) {
  return Math.min(maximum,Math.max(100,Number(requested||maximum)));
 }
 async function adventureCanaryRequest(body,kind,{environment=process.env,load=null,context=null}={}) {
- const compactPreparation=['compact-v2','compact-v3'].includes(environment.DIRT_ROUTING_PREPARATION);
+ const compactPreparation=['compact-v2','compact-v3','compact-v4'].includes(environment.DIRT_ROUTING_PREPARATION);
  const reusePreparation=compactPreparation||environment.DIRT_ROUTING_PREPARATION==='shared-v1';
- context=context||(compactPreparation?compactContext:reusePreparation?candidateContext:sharedContext);
+ context=context||(environment.DIRT_ROUTING_PREPARATION==='compact-v4'?refinedContext:compactPreparation?compactContext:reusePreparation?candidateContext:sharedContext);
  if(body.options?.ridePreferences!=null) {
   const r=require('../../regional/select').resolveGraphRequest(body);
   if(!canarySupported(body,kind,environment)||!r.ok||!r.regionIds.length||r.regionIds.some(id=>!enabledRegions(environment).includes(id)))

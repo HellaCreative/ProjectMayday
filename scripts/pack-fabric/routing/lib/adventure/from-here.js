@@ -22,7 +22,7 @@ const {proveFuel}=require("./fuel-proof");
 // explicitly provisional station access; they never become physical entrance
 // proof. Caller supplies the experimental cost model, not a hidden final style.
 function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudget=budget,edgeCost,objectiveId,
-  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,ridePreferences=null,additionalUrbanAreas=[],preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,arrivalHistory=null,fuelFirst=false,allowZeroRefillAdvisory=false,allowPassingRefillAdvisory=false,useAvoidanceLowerBounds=false,avoidanceBoundsCache=null,fuelConnectivityProbe=false,allowRepeatedPassingRoute=false,fastNeutralTurns=false}) {
+  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,ridePreferences=null,additionalUrbanAreas=[],preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,arrivalHistory=null,fuelFirst=false,allowZeroRefillAdvisory=false,allowPassingRefillAdvisory=false,useAvoidanceLowerBounds=false,avoidanceBoundsCache=null,fuelConnectivityProbe=false,allowRepeatedPassingRoute=false,fastNeutralTurns=false,costBoundsWorkspace=null}) {
   if(preparationBudget.snapshot().deadlineAtMs>budget.snapshot().deadlineAtMs)throw new TypeError("Preparation cannot outlive the request deadline");
   const request=normalizeRequest(input);
   if(request.mode!=="from_here")throw new TypeError("From Here requires exactly two fixed rider anchors");
@@ -180,7 +180,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   const reverse=reverseCostCache.prepare({graph,revision,edgeCost,budget});
   provenance.reversePreparationCacheHit=reverse.cacheHit;
   if(reverse.state!=="complete")return incomplete(reverse.reason);
-  const bounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost,budget,reverseCosts:reverse.reverseCosts,stopAt:start});
+  const bounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost,budget,reverseCosts:reverse.reverseCosts,stopAt:start,distanceStorage:costBoundsWorkspace?.acquire(graph.nodeCount)||null});
   if(bounds.state!=="complete")return incomplete(bounds.reason);
   // A rural pin can sit beyond unavoidable town access. Inspecting only its
   // adjacent arcs misses that exposure and exhausts the rural fuel frontier.

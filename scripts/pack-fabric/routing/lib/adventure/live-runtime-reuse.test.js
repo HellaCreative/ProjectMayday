@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const revisions=require('./verified-pack-revisions.json');
-for(const mode of ['shared-v1','compact-v2','compact-v3'])test(mode+': live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources',async t=>{
+for(const mode of ['shared-v1','compact-v2','compact-v3','compact-v4'])test(mode+': live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources',async t=>{
  const select=require('../../regional/select'),graphs=require('../graph'),fuel=require('../fuel-data');
  const ride=require('./ride-alternatives'),join=require('./join-v4');
  let base='https://example.test/v4/releases/fabric-v4-20260909-02',reads=0,joins=0;

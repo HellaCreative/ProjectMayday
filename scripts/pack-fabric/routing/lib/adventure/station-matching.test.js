@@ -79,3 +79,13 @@ test('compact cell membership preserves exact candidate order, broad roads, date
  // First pass needs 3 units per two-point road; reject during packing too.
  assert.equal(buildEdgeIndex({edgeCount:1},{polyline:()=>[[0,0],[.02,0]]},budget(5),{compact:true}).state,'incomplete');
 });
+
+
+test('compact bounds use source precision exactly and fall back for double precision geometry',()=>{
+ const {pack,geom}=fixture(),a=buildEdgeIndex(pack,geom,budget()),b=buildEdgeIndex(pack,geom,budget(),{compact:true});
+ assert.equal(b.diagnostics.boundsBytes,pack.edgeCount*16);
+ for(const lon of [-64,-63.99,-63.98])assert.deepEqual(b.query({lat:45,lon},150),a.query({lat:45,lon},150));
+ const p={edgeCount:1},g={polyline:()=>[[.01000000000001,0],[.01000000000002,0]]};
+ const precise=buildEdgeIndex(p,g,budget(),{compact:true});assert.equal(precise.diagnostics.boundsBytes,32);
+ assert.deepEqual(precise.query({lat:0,lon:.01000000000002},.0000000001),buildEdgeIndex(p,g,budget()).query({lat:0,lon:.01000000000002},.0000000001));
+});

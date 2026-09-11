@@ -11,12 +11,15 @@ const {qualifiedPack}=require('../routing/lib/adventure/pack-revision-qualificat
 const cases=require('../../../docs/experiments/routing-performance-2026-09-10/matrix-inputs.json');
 const [caseId,variant,out,repeatsArg='3']=process.argv.slice(2),fixture=cases.find(c=>c.id===caseId);
 if(!fixture||!['baseline','incoming','neutral','combined','compact','compact-join','runtime-baseline','runtime-candidate'].includes(variant)||!out)throw Error('CASE baseline|incoming OUTPUT [REPEATS] required');
+// Multi-window replays are correctness/stress checks; one cold and one warm
+// replay suffice here. Smaller single-window comparisons retain three runs.
+const repetitions=fixture.request.fuel?.windowMaxStops===1?Math.min(2,Number(repeatsArg)):Number(repeatsArg);
 fs.mkdirSync(path.dirname(out),{recursive:true});
 const root=process.env.PERFORMANCE_PACK_ROOT||'/tmp/dirt-performance-packs',releaseId='fabric-v4-20260909-02';
 const environment={DIRT_ADVENTURE_CANARY:'national-v1',DIRT_PASSING_REFILL_ADVISORY:'candidate-v1',DIRT_FUEL_COMPLETION_POLICY:'feasible-v1',DIRT_FUEL_CONNECTIVITY_PROBE:'candidate-v1',DIRT_ZERO_REFILL_ADVISORY:'proved-national-v1'};
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
 const runtimeModel=variant.startsWith('runtime-'),runtimeCandidate=variant==='runtime-candidate';
-const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:['incoming','combined','compact','compact-join','runtime-candidate'].includes(variant),fastNeutralTurns:['neutral','combined','compact','compact-join','runtime-candidate'].includes(variant),compactPreparation:['compact','compact-join','runtime-candidate'].includes(variant)});
+const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:['incoming','combined','compact','compact-join','runtime-candidate'].includes(variant),fastNeutralTurns:['neutral','combined','compact','compact-join','runtime-candidate'].includes(variant),compactPreparation:['compact','compact-join','runtime-candidate'].includes(variant),reuseBounds:['compact-join','runtime-candidate'].includes(variant)});
 const packCache=new Map();let joinedCache=null,loadTrace=[];
 function loadRegion(id) {
  const cached=packCache.get(id);if(cached){packCache.delete(id);packCache.set(id,cached);loadTrace.push({id,cacheHit:true});return cached;}
@@ -65,9 +68,9 @@ function validate(result,request) {
 }
 (async()=>{
  const sources=fs.readdirSync(path.join(__dirname,'../routing/lib/adventure')).filter(f=>f.endsWith('.js')&&!f.endsWith('.test.js')).concat(['../graph.js','../deferred-edge-grid.js','../geometry-edge-grid.js','../pack-v4.js']).sort().map(f=>[f,hash(fs.readFileSync(path.join(__dirname,'../routing/lib/adventure',f)))]);
- const report={caseId,variant,fixture,environment,sourceHashes:sources,scope:runtimeModel?'Local disk model of hosted three-region reader LRU and legacy spatial preparation; actual live-canary pool. No hosted timing claim.':'Local full immutable pack loader and actual live-canary candidate pool; ideal single retained joined graph. No hosted speed claim.',node:process.version,runs:[]};
+ const report={caseId,variant,fixture,environment,repetitions,sourceHashes:sources,scope:runtimeModel?'Local disk model of hosted three-region reader LRU and legacy spatial preparation; actual live-canary pool. No hosted timing claim.':'Local full immutable pack loader and actual live-canary candidate pool; ideal single retained joined graph. No hosted speed claim.',node:process.version,runs:[]};
  const checkpoint=()=>{fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,JSON.stringify(report,null,2));};
- for(let run=0;run<Number(repeatsArg);run++) {
+ for(let run=0;run<repetitions;run++) {
   let request=structuredClone(fixture.request),history=[],excluded=[],windows=[],proofs=[],meters=0,stops=0,complete=false;
   for(let window=0;window<24;window++) {
    loadTrace=[];const at=performance.now(),result=await adventureCanaryRequest(request,request.fuel?'fuel':'route',{environment,load,context}),ms=performance.now()-at;

@@ -129,7 +129,7 @@ function materializeRuntimeV2(
   loadDiagnostics = null
 ) {
   const gridStarted = Date.now();
-  const deferGrid=pack.graphBinaryVersion===4&&process.env.DIRT_ROUTING_PREPARATION==='compact-v3';
+  const deferGrid=pack.graphBinaryVersion===4&&['compact-v3','compact-v4'].includes(process.env.DIRT_ROUTING_PREPARATION);
   const { edgeGrid, GRID } = deferGrid?{}:buildEdgeGridFromGeom(geom, pack.undirectedEdgeCount);
   const loadMs = Date.now() - started;
 

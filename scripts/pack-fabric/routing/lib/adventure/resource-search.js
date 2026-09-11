@@ -187,14 +187,15 @@ function prepareReverseCosts({graph,nodeCount,edgeCost,budget,maxBytes=256*1024*
   }
   return {state:"complete",graph,nodeCount,edgeCost,heads,chunks,chunkSize,arcCount,byteLength};
 }
-function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=null,maxReverseBytes,stopAt=null}) {
+function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=null,maxReverseBytes,stopAt=null,distanceStorage=null}) {
   if(!Number.isInteger(target)||target<0||target>=nodeCount)throw new TypeError("Valid bound target required");
   if(stopAt!==null&&(!Number.isInteger(stopAt)||stopAt<0||stopAt>=nodeCount))throw new TypeError("Valid bound stopping node required");
   if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason};
   const reverse=reverseCosts||prepareReverseCosts({graph,nodeCount,edgeCost,budget,maxBytes:maxReverseBytes});
   if(reverseCosts&&(reverse.state!=="complete"||reverse.graph!==graph||reverse.edgeCost!==edgeCost||reverse.nodeCount!==nodeCount))throw new TypeError("Reverse costs must belong to this graph and cost model");
   if(reverse.state!=="complete")return reverse;
-  const distances=new Float64Array(nodeCount);distances.fill(Infinity);distances[target]=0;
+  if(distanceStorage!==null&&(!(distanceStorage instanceof Float64Array)||distanceStorage.length!==nodeCount))throw new TypeError('Exact-size float64 bound storage required');
+  const distances=distanceStorage||new Float64Array(nodeCount);distances.fill(Infinity);distances[target]=0;
   const heap=new Heap();heap.push({node:target,cost:0,priority:0});let cur;
   while((cur=heap.pop())) {
     if(cur.cost!==distances[cur.node])continue;

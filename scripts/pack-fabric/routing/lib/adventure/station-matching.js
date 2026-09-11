@@ -5,7 +5,8 @@ const {legalSnapDetailed}=require("../legal-topology/snap");
 // Coarse index only narrows the exact legal projection search. It never proves
 // station arrival or connects the station to a nearby road by a synthetic arc.
 function buildEdgeIndex(pack,geom,budget,{compact=false}={}) {
-  const size=.02,cells=new Map(),broad=new Set(),bounds=new Float64Array(pack.edgeCount*4),counts=[];
+  const size=.02,cells=new Map(),broad=new Set(),counts=[];
+  let bounds=compact?new Float32Array(pack.edgeCount*4):new Float64Array(pack.edgeCount*4);
   for(let edge=0;edge<pack.edgeCount;edge++) {
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
@@ -22,6 +23,9 @@ function buildEdgeIndex(pack,geom,budget,{compact=false}={}) {
       if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
       minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
     }
+    // Verified V4 coordinates are float32, so their extrema are exactly
+    // representable at that precision. Fall back losslessly for other inputs.
+    if(bounds instanceof Float32Array&&(Math.fround(minX)!==minX||Math.fround(minY)!==minY||Math.fround(maxX)!==maxX||Math.fround(maxY)!==maxY))bounds=Float64Array.from(bounds);
     const at=edge*4;bounds[at]=minX;bounds[at+1]=minY;bounds[at+2]=maxX;bounds[at+3]=maxY;
     if(!Number.isFinite(minX))continue;
     const a=Math.floor(minX/size),b=Math.floor(maxX/size),c=Math.floor(minY/size),d=Math.floor(maxY/size);
