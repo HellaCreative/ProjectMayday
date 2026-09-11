@@ -333,9 +333,40 @@ final class PackRoutingSource: RoutingSource {
             : returnedStopLimit
         var carriedHistory = Set(req.options?.priorEdgeIds ?? [])
         var carriedArrival = req.options?.arrivalEdgeId
+        let budgetDeadline = req.fuel.windowTimeBudgetMs.map {
+            Date().addingTimeInterval(max(0.001, Double($0) / 1_000))
+        }
+
+        func budgetExpired() -> Bool {
+            guard let budgetDeadline else { return false }
+            return Date() >= budgetDeadline
+        }
+
+        func budgetResponse(_ reason: String) -> FuelChainResponse {
+            FuelChainResponse(
+                status: "unknown",
+                error: "fuel_window_budget_exceeded",
+                message: "On-device fuel planning exceeded its bounded window budget.",
+                regionIds: GraphPackStore.regionIds(containingAny: [
+                    start.locationCoordinate, end.locationCoordinate
+                ]),
+                stops: Array(stops.prefix(returnedStopLimit)),
+                graphMeters: Array(graphMeters.prefix(returnedStopLimit)),
+                diagnostics: FuelChainDiagnostics(
+                    strategy: "pack-forward-budget-\(reason)",
+                    states: stops.count + 1,
+                    dijkstraPops: nil,
+                    matchedFuel: stations.count,
+                    elapsedMs: nil
+                ),
+                stationCandidates: stationCandidates,
+                windowComplete: false
+            )
+        }
 
         while stops.count <= maximumStops {
             try Task.checkCancellation()
+            if budgetExpired() { return budgetResponse("before-search") }
             let firstCap = stops.isEmpty
                 ? req.fuel.firstLegMaxMeters
                 : req.fuel.usableRangeMeters
@@ -346,6 +377,7 @@ final class PackRoutingSource: RoutingSource {
                 profile: req.profile,
                 allowUnknown: req.accessPolicy.motorizedUnknown
             )
+            if budgetExpired() { return budgetResponse("after-reachability") }
             let mustPump = stops.count < req.fuel.minimumFuelStops
                 || (stops.isEmpty && req.fuel.requireFuelStopBeforeEnd)
             let destinationLimit = req.fuel.destinationFuelUsedLimitMeters
@@ -368,6 +400,7 @@ final class PackRoutingSource: RoutingSource {
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true
                 )
+                if budgetExpired() { return budgetResponse("after-direct-route") }
                 if case .success(let route) = routed, route.distanceMeters <= firstCap + 1 {
                     directFallback = route.distanceMeters
                 }
@@ -423,6 +456,7 @@ final class PackRoutingSource: RoutingSource {
                 from: current.locationCoordinate,
                 toward: end.locationCoordinate
             )
+            if budgetExpired() { return budgetResponse("after-avoidance") }
             let ranked = FuelItinerary.rankedProgressFuel(
                 fuels: stations,
                 from: current,
@@ -440,6 +474,7 @@ final class PackRoutingSource: RoutingSource {
             // Reachability keeps the rider safe; profile quality decides which
             // safe pump is worth riding to.
             for (rank, candidate) in ranked.prefix(6).enumerated() {
+                if budgetExpired() { return budgetResponse("before-candidate-\(rank)") }
                 let urbanEntry = FuelItinerary.fuelStopRequiresUrbanEntry(
                     candidate,
                     start: current,
@@ -466,6 +501,7 @@ final class PackRoutingSource: RoutingSource {
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true
                 )
+                if budgetExpired() { return budgetResponse("after-candidate-\(rank)") }
                 guard case .success(let firstRoute) = firstResult,
                       firstRoute.distanceMeters <= firstCap + 1
                 else {
@@ -501,6 +537,7 @@ final class PackRoutingSource: RoutingSource {
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true
                 )
+                if budgetExpired() { return budgetResponse("after-continuation-\(rank)") }
                 let continuationRoute: OnDeviceRouter.Result?
                 if case .success(let route) = continuationResult,
                    route.distanceMeters <= destinationCap + 1 {

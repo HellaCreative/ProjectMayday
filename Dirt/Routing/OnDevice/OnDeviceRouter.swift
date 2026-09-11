@@ -514,6 +514,7 @@ nonisolated struct OnDeviceRouter {
         }
         let policyUnknown = allowUnknown && profile != .cleanest
         while let cur = heap.pop() {
+            if Task.isCancelled { return nil }
             if cur.cost != dist[cur.node] { continue }
             if cur.cost > maxMeters { break }
             let arcStart = Int(pack.nodeOffsets[cur.node])
@@ -1701,6 +1702,7 @@ nonisolated struct OnDeviceRouter {
             : nil
 
         while let cur = heap.pop() {
+            if Task.isCancelled { return .failure(.noPath) }
             if cur.cost != dist[cur.node] { continue }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
@@ -2161,6 +2163,7 @@ nonisolated struct OnDeviceRouter {
             : nil
 
         while let cur = heap.pop() {
+            if Task.isCancelled { return .failure(.noPath) }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
             if let deadline, (pops & 255) == 0, CFAbsoluteTimeGetCurrent() > deadline {
@@ -2569,6 +2572,7 @@ nonisolated struct OnDeviceRouter {
         dist[origin] = 0
         heap.push(node: origin, cost: 0)
         while let cur = heap.pop() {
+            if Task.isCancelled { return [] }
             if cur.cost != dist[cur.node] { continue }
             if cur.cost > capMeters { continue }
             if cur.node < n {

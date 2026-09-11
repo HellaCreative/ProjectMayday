@@ -185,6 +185,12 @@ final class GraphPackStore {
                     try? fm.removeItem(at: destSeams)
                     try? fm.copyItem(at: srcSeams, to: destSeams)
                 }
+                let srcFuel = regionURL.appendingPathComponent("fuel.v1.json")
+                if fm.fileExists(atPath: srcFuel.path) {
+                    let destFuel = dest.appendingPathComponent("fuel.v1.json")
+                    try? fm.removeItem(at: destFuel)
+                    try? fm.copyItem(at: srcFuel, to: destFuel)
+                }
                 continue
             }
             guard fm.fileExists(atPath: srcGraph.path) else { continue }
@@ -203,6 +209,12 @@ final class GraphPackStore {
             if fm.fileExists(atPath: srcGeom.path) {
                 try? fm.removeItem(at: destGeom)
                 try? fm.copyItem(at: srcGeom, to: destGeom)
+            }
+            let srcFuel = regionURL.appendingPathComponent("fuel.v1.json")
+            if fm.fileExists(atPath: srcFuel.path) {
+                let destFuel = dest.appendingPathComponent("fuel.v1.json")
+                try? fm.removeItem(at: destFuel)
+                try? fm.copyItem(at: srcFuel, to: destFuel)
             }
         }
     }
@@ -1018,7 +1030,7 @@ final class GraphPackStore {
         let metro = cleanMetroMultiplier
         let zoom = mapZoom
         let matchLimit = matchLimitMeters
-        return await Task.detached(priority: .userInitiated) {
+        let work = Task.detached(priority: .userInitiated) {
             var router = OnDeviceRouter(pack: packRef)
             router.sessionSeed = seed
             router.mapZoom = zoom
@@ -1038,7 +1050,11 @@ final class GraphPackStore {
                 avoidMotorways: avoidMotorways,
                 preferBackRoads: preferBackRoads
             )
-        }.value
+        }
+        return await withTaskCancellationHandler(
+            operation: { await work.value },
+            onCancel: { work.cancel() }
+        )
     }
 
     func shortestGraphMeters(
@@ -1051,12 +1067,16 @@ final class GraphPackStore {
         await ensureActivePackAsync(for: [from, to])
         guard let pack = activePack else { return nil }
         let packRef = pack
-        return await Task.detached(priority: .userInitiated) {
+        let work = Task.detached(priority: .userInitiated) {
             OnDeviceRouter(pack: packRef).shortestGraphMeters(
                 from: from, to: to, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
-        }.value
+        }
+        return await withTaskCancellationHandler(
+            operation: { await work.value },
+            onCancel: { work.cancel() }
+        )
     }
 
     func reachableFuelMeters(
@@ -1070,12 +1090,16 @@ final class GraphPackStore {
         await ensureActivePackAsync(for: [from, toward])
         guard let pack = activePack else { return [:] }
         let packRef = pack
-        return await Task.detached(priority: .userInitiated) {
+        let work = Task.detached(priority: .userInitiated) {
             OnDeviceRouter(pack: packRef).reachableGraphMeters(
                 from: from, toward: toward, pumps: pumps, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
-        }.value
+        }
+        return await withTaskCancellationHandler(
+            operation: { await work.value },
+            onCancel: { work.cancel() }
+        )
     }
 
     /// Immutable metadata view used only to rank already-reachable fuel stops.
