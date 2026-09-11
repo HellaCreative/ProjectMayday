@@ -152,5 +152,16 @@ automatic server request. The accepted app has not yet adopted this gate or patc
 Full native/server preference, waypoints, fuel-history, larger/multi-region and
 device qualification remain open. No production-qualified device record is added.
 
+### Rejected direct-search skip A/B
+
+The private v7 probe compared the optional `DIRT_FUEL_SKIP_UNUSED_DIRECT`
+switch both disabled and enabled. Dirt remained incomplete at 30.064 s versus
+30.038 s, with six road calls in both runs. Balanced remained incomplete at
+30.003 s versus 30.004 s, with eleven versus ten calls. The small call-count
+difference did not change the deadline or produce a complete candidate, so this
+switch is not the next optimization target. The raw runs are under the four
+`ab3-*` directories in the external evidence root; the result is recorded in
+`native-fuel-evidence.json`.
+
 Rollback is simply leaving this private candidate unintegrated. Preserve the
 White milestone and server checkpoint `e211ea9b88d8224bea45aab303ca86af2828a791`.

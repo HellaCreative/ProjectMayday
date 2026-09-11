@@ -29,6 +29,24 @@
     "dirtAndBalanced": "Hit 30-second diagnostic budget after repeated road calls; no complete candidate claimed.",
     "scope": "Native macOS facade, not phone or full-app qualification"
   },
+  "directSearchSkipAB": {
+    "scope": "Private native-fuel-v7 NS facade; two serial runs per profile; 30-second request budget",
+    "dirt": {
+      "skipUnusedDirectFalse": {"seconds": 30.064, "routeCalls": 6, "state": "incomplete"},
+      "skipUnusedDirectTrue": {"seconds": 30.038, "routeCalls": 6, "state": "incomplete"}
+    },
+    "balanced": {
+      "skipUnusedDirectFalse": {"seconds": 30.003, "routeCalls": 11, "state": "incomplete"},
+      "skipUnusedDirectTrue": {"seconds": 30.004, "routeCalls": 10, "state": "incomplete"}
+    },
+    "decision": "Rejected as a material optimization; candidate-leg searches remain the bottleneck.",
+    "rawEvidence": [
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ab3-dirt-skip0",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ab3-dirt-skip1",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ab3-balanced-skip0",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ab3-balanced-skip1"
+    ]
+  },
   "finalBuildReceipt": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-fuel-v7/build.json",
   "finalRawEvidence": [
     "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/continuity-v8/result.json",

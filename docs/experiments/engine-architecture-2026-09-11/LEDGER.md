@@ -268,3 +268,12 @@ the 12 index fixtures also pass in `index-fixtures-v8`. The gate preserves sourc
 identity, range, access, ordered turn state and fuel continuation, and fails closed
 on unsupported restriction scope and unmapped pump approaches. The actual accepted
 Swift app remains unchanged; this is a review candidate only.
+
+### Direct-search skip A/B (rejected)
+
+The native-fuel-v7 private probe compared the optional direct-search skip for
+the two cases that still exhaust the 30-second budget. Dirt was 30.064 s with
+the switch off and 30.038 s on, six calls both ways. Balanced was 30.003 s off
+and 30.004 s on, eleven versus ten calls. The result is not a material gain;
+repeated candidate-leg searches remain the bottleneck. Raw runs and the exact
+decision are recorded in `native-fuel-evidence.json`.
