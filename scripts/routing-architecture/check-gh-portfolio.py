@@ -3,7 +3,7 @@ import json,pathlib,subprocess,copy
 r=pathlib.Path('/Users/richardsmith/.codex/experiments/routing-architecture-20260911')
 f=r/'data/verified-fixture-no'
 cmd=['/opt/homebrew/opt/openjdk/bin/java','-Xmx256m','-cp',str(r/'tools/gh-adapter')+':'+str(r/'tools/graphhopper-web-11.0.jar'),'VerifiedHopper',str(f/'verified-input.json'),str(r/'data/gh-verified-fixture-directed-v3-no')]
-base={'start':[-63,45],'end':[-62.950002,45.009997],'profile':'distance','fuel':{'usableRangeMeters':3000,'initialUsableMeters':2200},'stations':[{'id':'via','position':[-62.9850006,45.00499916]},{'id':'branch','position':[-62.9599991,45]},{'id':'end','position':[-62.950001,45.009998]},{'id':'forbidden-branch','position':[-62.9700012,45.0099983]}]}
+base={'start':[-63,45],'end':[-62.950002,45.009997],'profile':'dirt10','fuel':{'usableRangeMeters':3000,'initialUsableMeters':2200},'stations':[{'id':'via','position':[-62.9850006,45.00499916]},{'id':'branch','position':[-62.9599991,45]},{'id':'end','position':[-62.950001,45.009998]},{'id':'forbidden-branch','position':[-62.9700012,45.0099983]}]}
 portfolio=copy.deepcopy(base);portfolio.update(fuelPortfolio=True,portfolioOnly=True,forceResourceSearch=True)
 excluded=copy.deepcopy(portfolio);excluded['excludedStationIds']=['via']
 low=copy.deepcopy(portfolio);low['fuel']['initialUsableMeters']=1000

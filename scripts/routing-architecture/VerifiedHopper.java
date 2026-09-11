@@ -34,11 +34,18 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
  final Map<Integer,Integer> loopTails=new HashMap<>(),loopOrigins=new HashMap<>();
  final Path loopFile;
  JsonNode stationDataset;
+ byte[] stressMask;
  VerifiedHopper(Path descriptor,Path target) throws Exception {
   this.descriptor=descriptor;input=JSON.readTree(descriptor.toFile());
   loopFile=target.resolve("dirt-loop-tails.json");
   if(Files.exists(loopFile)){JsonNode loops=JSON.readTree(loopFile.toFile());loops.fields().forEachRemaining(e->loopTails.put(Integer.parseInt(e.getKey()),e.getValue().asInt()));}
   artifactIdentity=target.resolve("dirt-input.identity");
+  String maskPath=System.getProperty("dirt.stressMask");
+  if(maskPath!=null){
+   Path mp=Path.of(maskPath);var receipt=JSON.readTree(mp.resolveSibling("mask-receipt.json").toFile());stressMask=Files.readAllBytes(mp);
+   if(stressMask.length!=input.path("edgeCount").asInt()||!receipt.path("sourceManifestSha256").equals(input.path("sourceManifestSha256"))||!receipt.path("maskSha256").asText().equals(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(stressMask))))throw new IOException("Stress mask identity mismatch");
+   if(!Files.exists(target.resolve("properties")))throw new IOException("Stress mask requires an existing prepared graph");
+  }
   boolean objectiveLandmarks=Boolean.getBoolean("dirt.objectiveLandmarks");
   identity=(objectiveLandmarks?"directed-v2-loop-objective-lm:":"directed-v2-loop-distance-lm:")+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(descriptor)));
   if(Files.exists(target.resolve("properties"))&&(!Files.exists(artifactIdentity)||!Files.readString(artifactIdentity).equals(identity)))throw new IOException("Existing graph identity mismatch");
@@ -122,9 +129,11 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
    return new Weighting() {
     public double calcMinWeightPerDistance(){return 0;}
     public double calcEdgeWeight(EdgeIteratorState e,boolean reverse){
+     if(stressMask!=null&&stressMask[e.get(source)/2]!=0)return Double.POSITIVE_INFINITY;
      int a=reverse?e.getReverse(access):e.get(access);
      if(a==2 || (!preparing && ((a==1&&!unknown)||(a>=3&&!endpoints.contains(e.get(source)/2)))))return Double.POSITIVE_INFINITY;
      double factor=switch(profile.getName()){case "paved"->e.get(paved);case "dirt10"->e.get(dirt)*(e.get(surface)==1?1:10);case "dirt30"->e.get(dirt)*(e.get(surface)==1?1:30);default->1;};
+     if(stressMask!=null)factor=e.get(surface)==1?1:500;
      return e.getDistance()*(factor+penalty);
     }
     public long calcEdgeMillis(EdgeIteratorState e,boolean r){return Math.round(e.getDistance()*1000);}
@@ -232,7 +241,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
    if(roadComplete&&best!=null)result=FuelSearch.certify(graph,w,best,stations,full,initial,deadline,maxLabels);
   }
   List<Map<String,Object>> portfolio=new ArrayList<>();
-  if(result==null&&q.path("fuelPortfolio").asBoolean(false)){
+  if(result==null&&!name.equals("distance")&&q.path("fuelPortfolio").asBoolean(false)){
    // Candidate generation only: scalarization does not prove constrained optimality.
    // Every accepted path is certified on the same exact turn-state query graph.
    for(double lambda:new double[]{0.25,1,3,10,30,100,300}){

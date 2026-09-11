@@ -31,9 +31,9 @@ b=r/'tools/gh-adapter';b.mkdir(exist_ok=True);(b/'RestrictionSetter.java').write
 querySource=r/'sources/graphhopper/core/src/main/java/com/graphhopper/routing/querygraph/QueryGraph.java'
 qs=querySource.read_text();old='private QueryGraph(BaseGraph graph, List<Snap> snaps)';assert qs.count(old)==1
 (b/'QueryGraph.java').write_text(qs.replace(old,'protected QueryGraph(BaseGraph graph, List<Snap> snaps)'))
-subprocess.run(['/opt/homebrew/opt/openjdk/bin/javac','-cp',str(r/'tools/graphhopper-web-11.0.jar'),'-d',str(b),str(b/'RestrictionSetter.java'),str(b/'QueryGraph.java'),str(here/'ExactQueryGraph.java'),str(here/'VerifiedHopper.java'),str(here/'FuelSearch.java')],check=True)
+subprocess.run(['/opt/homebrew/opt/openjdk/bin/javac','-cp',str(r/'tools/graphhopper-web-11.0.jar'),'-d',str(b),str(b/'RestrictionSetter.java'),str(b/'QueryGraph.java'),str(here/'ExactQueryGraph.java'),str(here/'VerifiedHopper.java'),str(here/'FuelSearch.java'),str(here/'ConcurrentVerifiedHopper.java')],check=True)
 identity_files = [source, querySource, b/'RestrictionSetter.java', b/'QueryGraph.java',
-                  here/'ExactQueryGraph.java', here/'VerifiedHopper.java', here/'FuelSearch.java',
+                  here/'ExactQueryGraph.java', here/'VerifiedHopper.java', here/'FuelSearch.java', here/'ConcurrentVerifiedHopper.java',
                   r/'tools/graphhopper-web-11.0.jar']
 (b/'build-identity.json').write_text(json.dumps({
     'files': {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in identity_files},

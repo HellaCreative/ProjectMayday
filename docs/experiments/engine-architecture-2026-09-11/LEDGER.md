@@ -94,3 +94,8 @@ Regional portfolio first Dirt10 run11.172s/481.75MiB group peak; Dirt30 run6.208
 Valhalla stage3 fails4GiB guard during local tile construction138.47s/4126.33MiB. Source shows read-only working sequences remain mapped across all tiles; investigate releasing mapped pages at tile boundaries without dropping data. First streaming fix remains a measured phase improvement, not full-build qualification.
 
 Verified WV prepared join exported10.24s/731.34MiB:6,595,291nodes,8,096,548edges,68,399compiled restrictions; original immutable six-region bytes. Stations export17.38s/1467.89MiB. GH distance-lower-bound import underway in separate gh-verified-wv-directed-v2 artifact under4GiB/1800s guard. No published data or product runtime changed.
+
+
+### Unified500x/hard urban/120-mile admission benchmark
+
+Owner authorized a pinned built-up dataset with coverage limits. Full evidence external unified-stress/RESULT.md,contract.json,results.json and rawguards. Bespoke strongest available incoming-index path finds road but hits500kfuel labels28.0s/2232.55MiB sampled; GH finds road seeds but nofuelcertificate before90s/2487.17MiB. Valhalla/OSRM exact regional adapters absent, not claimed native runtime failures. No candidate passed admission, so500-client load and CPU throttling were NOT measured. Full route physical infeasibility and architecture superiority are NOT established by these failures. Superseded harness/configuration failures retained. No production or native app changes.
