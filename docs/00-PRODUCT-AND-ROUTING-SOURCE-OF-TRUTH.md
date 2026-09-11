@@ -1251,3 +1251,22 @@ and shares identical in-flight requests. Five hundred shared responses require
 one calculation and must not be claimed as 500 independent route builds. Local
 overload tests and all further qualification limits are tracked with this private
 capacity candidate; hosted scaling and physical fuel access remain unqualified.
+
+
+### Private device-first planning experiment
+
+Richard has authorized investigating device-first planning with no automatic
+server escalation. Bound the requesting device's work, preserve its previous
+valid itinerary, and report incomplete calculation at a limit. Shared server
+execution is a controlled option. Region and straight-line distance are inputs,
+not substitutes for tested resource, data and feature coverage.
+
+The [device workload prototype](experiments/engine-architecture-2026-09-11/DEVICE-WORKLOAD.md)
+passes16 policy tests and six repeated native road-source audits on macOS, with
+an isolated cancellation improvement. No iPhone performance, native fuel/history
+parity or mobile memory budget is qualified. Existing online/offline selection,
+pack-download flows and accepted iOS/Android behavior remain unchanged. This is
+an experimental execution contract with no current Android product change;
+accepted future integration must carry the same bounded/incomplete/constraint-
+preservation outcome on both platforms. Do not port GraphHopper Java as part of
+this bounded experiment or remove the accepted live engine.

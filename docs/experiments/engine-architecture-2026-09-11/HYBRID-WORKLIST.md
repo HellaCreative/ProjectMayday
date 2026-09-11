@@ -38,3 +38,15 @@ bounds saved less than 1% of visits and added overhead; disabled by default.
 The stronger strict index requires a fixed compatible mask/cost family and cannot
 be generalized silently to product profiles. CH and predictive GPS warming remain
 unadopted; no daemon, infrastructure or deployment was introduced.
+
+
+Device-first addition (private, see DEVICE-WORKLOAD.md):
+
+- [x] Inventory existing native routing/fuel and current online-first selection.
+- [x] Compare three execution policies with explicit server admission and16 tests.
+- [x] Run six native NS road controls and independent source/turn audits on macOS.
+- [x] Reproduce cancellation lag, improve it in isolated native source, and verify
+  exact preservation across all six repeated routes with successful recovery.
+- [ ] Native lifecycle integration, full data-preparation cancellation and pressure
+  budgets; physical-device capacity, heat, battery and UI responsiveness.
+- [ ] Full native/server fuel, arrival-history, waypoint and preference parity.

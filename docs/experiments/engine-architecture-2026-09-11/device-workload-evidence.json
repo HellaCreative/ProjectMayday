@@ -1,0 +1,349 @@
+{
+  "state": "private_prototype_measured_on_macos",
+  "deviceQualified": false,
+  "fuelQualified": false,
+  "appChanged": false,
+  "policyTests": 16,
+  "sourceRoadAudits": {
+    "before": 6,
+    "after": 6,
+    "passed": true
+  },
+  "exactBeforeAfterLegs": true,
+  "cancellationSeconds": {
+    "before": 5.525097625039052,
+    "after": 0.20366875000763685
+  },
+  "peakGroupRssMiB": {
+    "baseline": 250.953125,
+    "controlledMatrix": 242.203125
+  },
+  "inputs": [
+    {
+      "file": "/tmp/dirt-performance-packs/ns/graph.v4.bin",
+      "bytes": 15012189,
+      "sha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d"
+    },
+    {
+      "file": "/tmp/dirt-performance-packs/ns/geometry.v1.bin",
+      "bytes": 23954228,
+      "sha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac"
+    },
+    {
+      "file": "/tmp/dirt-performance-packs/ns/fuel.v1.json",
+      "bytes": 143951,
+      "sha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+    }
+  ],
+  "build": {
+    "sourceRoot": "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt",
+    "files": {
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/RoutingModels.swift": "43200d493d2a8661c247a04b18ea7178f016fc4662732a5bd695b8ef84e54c90",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/GeoMath.swift": "6ae079d5ce42eff87a52f8e6ee14bb8250325fc8dc8f9d49d72892a3aecc2427",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/HopSearchPolicy.swift": "3a851d8615238e0ed15d4f564c0eaa37443159c4736fbd27fc54c25c7df08b97",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/UrbanCore.swift": "68f06506175de2106c91fbe4be3a8cf49a21f15e64dd04a2cd911f688c2fd9ec",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/PackedFuel.swift": "82c9145f290053ace62baac4ddcd618895769a7b4027035db49ba352f3a9768c",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/FuelItinerary.swift": "475ed0d0f1461adeba413b405788bf25a5d8af60128fd7d8a106f117e74922b7",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/GraphV2Pack.swift": "c93f8c1a3c22f7d729f5b03b6f82e2ee80f4018c0748a68a4c2ea02a486b4b1b",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/GraphV4Pack.swift": "83a0e4de2c2441be1fe4e1e77df4a7a9801f222c335ac0320c7e6e7ad2f5c333",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/GeometryV1Pack.swift": "5a72bd73c18272aef8d9f777bc431cfc6afe78677502a5faf319fde8182fd03a",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/OnDeviceRouter.swift": "f259155a8c0b74e3fb9d6df93e22eb5c5c932308027adaf98fbc5accfe010864",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/OnDeviceProfileCosts.swift": "c9e86d249e1062ccb18d51a4cfc8ea794cbb5df42f35daa417b36a51e5b938b6",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/OnDevicePathPruning.swift": "3ff28c7d6a56cc4ad11e5df02e869aa00222049c01ad4f7518e1ee1a6e7547c6",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/SurfaceFamily.swift": "cabd5cca8bd8794dff53fde2057bfc345919abbe1726c1ac5a6137d0f46b907e",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/RoadTier.swift": "089e58f97f9d82039d21b037943097f8335a8e618392df74be958164a2cc34a3",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/PathRetrace.swift": "f9d319a8720a61627431255e02d5a103bf670ed9abdb8ed0768692ef4bbcde95",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/RoadCompass.swift": "ce00deaad90988c46a4e94e0aa97af2e9bd33e51f61a0596b19acef5bad79479",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/OnDevice/CustomerEndpointAccess.swift": "2cf85af44f7145cd9a6a0ccbe9dae3717b384c4395e8929e4e8e0ced80aef696",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Features/RoutePlanning/RidePreferences.swift": "89c0f1ef895f3ab2fbb4f46cf8ddbf2dc2a0e72202e22836e05978297e2710d9",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Map/POIManager.swift": "088ac5615c08ca9beecd88474c89e993201703c39c9f0215ec56c0fb1e75b0f0",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Features/RoutePlanning/Itinerary/BuiltItinerary.swift": "040f78d5ad670c2a5b09cb1ba81efe598f879f4958ea09bfb82598bb4f52cd65",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/.build/engine-architecture/scripts/routing-architecture/device-workload/NativeWorkloadProbe.swift": "f9af399c97e302c262ee191231ea6aefe0e024c95f11f8a5905803783009b681",
+      "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/Dirt/Routing/UrbanSettlements.json": "ebb0383d62dbe22e985bbd3b2c3193d25bfc97f26dbd761b269cc6182bc19831"
+    },
+    "changedDuringBuild": [],
+    "returncode": 0,
+    "command": [
+      "xcrun",
+      "swiftc",
+      "-O",
+      "-parse-as-library",
+      "-D",
+      "DEVICE_CANCELLATION_PROTOTYPE",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/CustomerEndpointAccess.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/FuelGap.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/FuelItinerary.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/GeoMath.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/GeometryV1Pack.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/GraphV2Pack.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/GraphV4Pack.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/HopSearchPolicy.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/NativeWorkloadProbe.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/OnDevicePathPruning.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/OnDeviceProfileCosts.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/OnDeviceRouter.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/POIFeature.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/PackedFuel.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/PathRetrace.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/RidePreferences.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/RoadCompass.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/RoadTier.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/RoutingModels.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/SurfaceFamily.swift",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/UrbanCore.swift",
+      "-o",
+      "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/native-probe"
+    ],
+    "cancellationPrototype": true,
+    "compiledSwiftHashes": {
+      "OnDeviceRouter.swift": "c40a546200c6dafd7bdc6d6a30d3bafb54dbe40eb5fe7902556e99a8c8d1371c",
+      "RoutingModels.swift": "43200d493d2a8661c247a04b18ea7178f016fc4662732a5bd695b8ef84e54c90",
+      "NativeWorkloadProbe.swift": "f9af399c97e302c262ee191231ea6aefe0e024c95f11f8a5905803783009b681",
+      "SurfaceFamily.swift": "cabd5cca8bd8794dff53fde2057bfc345919abbe1726c1ac5a6137d0f46b907e",
+      "CustomerEndpointAccess.swift": "2cf85af44f7145cd9a6a0ccbe9dae3717b384c4395e8929e4e8e0ced80aef696",
+      "GraphV2Pack.swift": "c93f8c1a3c22f7d729f5b03b6f82e2ee80f4018c0748a68a4c2ea02a486b4b1b",
+      "OnDevicePathPruning.swift": "3ff28c7d6a56cc4ad11e5df02e869aa00222049c01ad4f7518e1ee1a6e7547c6",
+      "GraphV4Pack.swift": "83a0e4de2c2441be1fe4e1e77df4a7a9801f222c335ac0320c7e6e7ad2f5c333",
+      "FuelGap.swift": "4b35cef2806b99d0e0a0ba679de3a7511c86f8083bedc51779db6a0891a58bdc",
+      "PathRetrace.swift": "f9d319a8720a61627431255e02d5a103bf670ed9abdb8ed0768692ef4bbcde95",
+      "RoadCompass.swift": "ce00deaad90988c46a4e94e0aa97af2e9bd33e51f61a0596b19acef5bad79479",
+      "UrbanCore.swift": "68f06506175de2106c91fbe4be3a8cf49a21f15e64dd04a2cd911f688c2fd9ec",
+      "PackedFuel.swift": "82c9145f290053ace62baac4ddcd618895769a7b4027035db49ba352f3a9768c",
+      "POIFeature.swift": "00c27a57ede830748a48a0c20d621de82aa45e94805ff957572c3d833c495e8e",
+      "OnDeviceProfileCosts.swift": "c9e86d249e1062ccb18d51a4cfc8ea794cbb5df42f35daa417b36a51e5b938b6",
+      "RoadTier.swift": "089e58f97f9d82039d21b037943097f8335a8e618392df74be958164a2cc34a3",
+      "HopSearchPolicy.swift": "3a851d8615238e0ed15d4f564c0eaa37443159c4736fbd27fc54c25c7df08b97",
+      "GeoMath.swift": "6ae079d5ce42eff87a52f8e6ee14bb8250325fc8dc8f9d49d72892a3aecc2427",
+      "GeometryV1Pack.swift": "5a72bd73c18272aef8d9f777bc431cfc6afe78677502a5faf319fde8182fd03a",
+      "FuelItinerary.swift": "475ed0d0f1461adeba413b405788bf25a5d8af60128fd7d8a106f117e74922b7",
+      "RidePreferences.swift": "89c0f1ef895f3ab2fbb4f46cf8ddbf2dc2a0e72202e22836e05978297e2710d9"
+    },
+    "scope": "Native source on macOS. Not an iPhone capacity qualification."
+  },
+  "evidence": [
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v4/build.json",
+      "bytes": 6357,
+      "sha256": "7aaca3ff08add44c980df5e342e85f114ba7fd8c262afd1b68c3e04423785f56"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v5/build.json",
+      "bytes": 6357,
+      "sha256": "630e335ce9df6e9d879357aa3b5e494187b6c43cdf0bf76353cc5911526f17da"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-v6-cancel/build.json",
+      "bytes": 8616,
+      "sha256": "a4fc8ac52d42e2baa0dc6a1e4fff5296059f9da30048c129cf82cdeb8277f314"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-road-v1.guard.json",
+      "bytes": 6275,
+      "sha256": "5d8119849c36d483a379908c4c75b3b17483ee8082b32850d2ae8d26da8644d7"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-road-v1.guard.log",
+      "bytes": 3446575,
+      "sha256": "9f034e718f8accf033c3879433888b2fe523a0f305621bb8448244d5945a38c1"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-road-audit-v1.json",
+      "bytes": 3702,
+      "sha256": "9f4a2561b488a5d9732e6af907896bbee2f0e3913b630bd37a5b83659d2ecb28"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-cancel-v1.guard.json",
+      "bytes": 2144,
+      "sha256": "2c3eee25034c62a1cd23a30c689e4c70f125a3005079ade0d09df499f68f88af"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-cancel-v1.guard.log",
+      "bytes": 627176,
+      "sha256": "75f99ddbf7117ddd95798611fcc68a0c6019917afd904e368bbb71c81fec0584"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-bounded-v1.guard.json",
+      "bytes": 2142,
+      "sha256": "dc600eab14fc9a83d9a04dc6ba67b8a6ed822f047c4250a7ebbd0226ad7ea12d"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-bounded-v1.guard.log",
+      "bytes": 627714,
+      "sha256": "f8797a4fe376f1c0d6aed9122baa9309ff2bad615e46215ec2df45d6faac7ec9"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-controlled-matrix-v1.guard.json",
+      "bytes": 6396,
+      "sha256": "27c39239b0201146b679a045065d335739f824d575d08521557535cfdd36c2c8"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-controlled-matrix-v1.guard.log",
+      "bytes": 3446576,
+      "sha256": "bccbc4c8b6cc4cf9aeddf4da4277212303cac1adf570dbdca5c017aee0690cfe"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-native-controlled-audit-v1.json",
+      "bytes": 3699,
+      "sha256": "b93beab18548238ba21c3d4a8daf0f46bdc70b66c6ce456819902eb2a7b67054"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-control-comparison.json",
+      "bytes": 2445,
+      "sha256": "8aa60cd2acccbc89ad601d4efda1ce43105104bb5ef8eb0322befa61d1b28d54"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/policy-tests-v3.tap",
+      "bytes": 3590,
+      "sha256": "bbe6690bbcc5284121d0ba62ff88b93a99cd231024e46dbad576244e44c0c3bf"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/local-pack-inventory.json",
+      "bytes": 3509,
+      "sha256": "6b5d4e0e26a11a4c99375f418da6a182e340f66187db0c4d90c97627100b10c6"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/workload-assumptions.json",
+      "bytes": 3092,
+      "sha256": "3cdc1d3a83f3dd4551c21e003bd338650c3383a7e24dd5826a11ddaa71483ff8"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-road-queries.json",
+      "bytes": 1206,
+      "sha256": "04bcc38fa29cd312bc404d4c7f369d32ce6f722ae21a60175c7d2eb3940bfa05"
+    },
+    {
+      "path": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/ns-bounded-queries.json",
+      "bytes": 866,
+      "sha256": "9a7b01cfbefd94fc5e5df4777fe137f67059bf1548b0bf9beb89785e76d7446e"
+    }
+  ],
+  "nativeComparison": [
+    {
+      "query": {
+        "allowUnknown": false,
+        "case": "ns-short-balanced-road",
+        "end": [
+          -62.18066,
+          45.3933
+        ],
+        "profile": "dirt",
+        "start": [
+          -63.34024,
+          44.76481
+        ]
+      },
+      "exactLegs": true,
+      "distanceDelta": 0.0,
+      "dirtPercentDelta": 0,
+      "baselineSeconds": 5.622596499975771,
+      "controlledSeconds": 5.583587333327159
+    },
+    {
+      "query": {
+        "allowUnknown": false,
+        "case": "ns-short-balanced-road",
+        "end": [
+          -62.18066,
+          45.3933
+        ],
+        "profile": "balanced",
+        "start": [
+          -63.34024,
+          44.76481
+        ]
+      },
+      "exactLegs": true,
+      "distanceDelta": 0.0,
+      "dirtPercentDelta": 0,
+      "baselineSeconds": 11.391670458368026,
+      "controlledSeconds": 11.68782187497709
+    },
+    {
+      "query": {
+        "allowUnknown": false,
+        "case": "ns-short-balanced-road",
+        "end": [
+          -62.18066,
+          45.3933
+        ],
+        "profile": "clean",
+        "start": [
+          -63.34024,
+          44.76481
+        ]
+      },
+      "exactLegs": true,
+      "distanceDelta": 0.0,
+      "dirtPercentDelta": 0,
+      "baselineSeconds": 0.36564366664970294,
+      "controlledSeconds": 0.5039037917158566
+    },
+    {
+      "query": {
+        "allowUnknown": false,
+        "case": "ns-long-dirt-road",
+        "end": [
+          -65.60197,
+          43.47454
+        ],
+        "profile": "dirt",
+        "start": [
+          -63.34023,
+          44.76484
+        ]
+      },
+      "exactLegs": true,
+      "distanceDelta": 0.0,
+      "dirtPercentDelta": 0,
+      "baselineSeconds": 11.540326166665182,
+      "controlledSeconds": 12.304732999997213
+    },
+    {
+      "query": {
+        "allowUnknown": false,
+        "case": "ns-long-dirt-road",
+        "end": [
+          -65.60197,
+          43.47454
+        ],
+        "profile": "balanced",
+        "start": [
+          -63.34023,
+          44.76484
+        ]
+      },
+      "exactLegs": true,
+      "distanceDelta": 0.0,
+      "dirtPercentDelta": 0,
+      "baselineSeconds": 11.746181041642558,
+      "controlledSeconds": 11.691169500001706
+    },
+    {
+      "query": {
+        "allowUnknown": false,
+        "case": "ns-long-dirt-road",
+        "end": [
+          -65.60197,
+          43.47454
+        ],
+        "profile": "clean",
+        "start": [
+          -63.34023,
+          44.76484
+        ]
+      },
+      "exactLegs": true,
+      "distanceDelta": 0.0,
+      "dirtPercentDelta": 0,
+      "baselineSeconds": 0.6466532499762252,
+      "controlledSeconds": 0.655669333296828
+    }
+  ],
+  "limitations": [
+    "macOS timings and sampled RSS only",
+    "fuel/history/custom preference parity unqualified",
+    "memory pressure/decoding cancellation incomplete",
+    "no active production device qualification record",
+    "no automatic server escalation"
+  ]
+}

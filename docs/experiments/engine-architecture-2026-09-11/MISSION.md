@@ -1,3 +1,23 @@
+## Current addition — device-first planning experiment
+
+The owner authorized a bounded device/server workload experiment, then clarified
+that ambitious planning should consume the requesting device's budget without
+automatically escalating to the shared server. At a tested resource limit, stop
+cleanly, retain the last valid itinerary and explain that computation is incomplete.
+Server use is a separately controlled option. Do not equate incomplete work with
+no route or no fuel. Preserve full constraints and continuation history when
+splitting or handing off a trip.
+
+Keep GraphHopper–DIRT as the server foundation. Reuse the current native engine
+for the bounded local experiment; do not port Java or restart engine selection.
+No iPhone is qualified by desktop timing. Physical-device operation/installation
+requires authorization for that particular device; Red is not authorized. The
+current online routing/download policy, accepted app, packs and live services
+remain unchanged during this private experiment.
+
+See [device workload evidence](DEVICE-WORKLOAD.md). Earlier hybrid/capacity work
+and its checkpoints remain preserved, including unresolved commercial throughput.
+
 ## Current owner direction — hybrid only, capacity first
 
 Richard has selected GraphHopper plus DIRT's itinerary, surface selection and

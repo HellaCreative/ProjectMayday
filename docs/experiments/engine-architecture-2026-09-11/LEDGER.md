@@ -176,3 +176,41 @@ only; no app, Android, pack, deployment or remote change. Hybrid is the selected
 development foundation based on improved route admission, not a full replacement
 or500-client qualification. Earlier bespoke28slabel exhaustion and priorGH90s
 fuel timeout remain distinct comparison outcomes.
+
+
+## Combined endpoint search and device-first workload milestone
+
+Private checkpoint e211ea9 combines legal endpoint searches over the prepared
+objective landmark graph. Complete unmasked NS→WV selection fell from 72.330s
+fresh / 58.020s warm to 39.395s fresh / 39.491s after regional work. Four WV
+candidate geometries, fuel positions, costs, distances and escape paths match;
+two source decompositions differ only in representation. Full six-pool matrix
+passes 24 independent candidate audits (4 road, 20 fuel). Fixture checks1044,
+real Dijkstra comparisons96 plus24 combined minima, and19 JavaScript checks pass.
+Earlier 500-distinct and sustained load failures remain recorded; new combined
+search concurrency is unqualified. No live deployment changed.
+
+Owner then authorized a bounded device/server experiment and clarified no automatic
+server escalation for ambitious personal planning. Added a policy/state-machine
+reference with16 controlled tests, preserved full constraint fingerprints,
+acknowledged cancellation, stale-result rejection and retained last-valid route.
+Actual phone limits remain unset. Supported fallback requires explicit admission.
+
+Snapshotted the main checkout's native Swift sources into a standalone macOS
+probe; actual input/output source hashes are retained. Six NS road cases complete,
+250.953MiB sampled group peak,1.027s decode,0.366–11.746s search. Independent V4
+source-direction/access/turn/distance audits pass all six. The approach geometry
+is separately labelled; no fuel-chain or iPhone qualification is claimed.
+Native cancellation continued5.525s after cancellation. Private generated-source
+checks in five search loops and road guidance reduce the observed tail to0.204s.
+A20ms search budget returns incomplete after0.215s, exposing uninterruptible
+preparation. Recovery works; repeat six-case native matrix has exact legs for all
+routes and six passing source audits. Resource-pressure handling, full decode/
+preparation cancellation, native fuel/history/custom-settings parity and physical
+hardware measurements remain necessary before app integration.
+
+SIDECAR briefly disconnected; isolated policy work continued on internal storage
+and was copied back with hashes when the owner reconnected it. No data loss or
+app/source-pack modification. Evidence: DEVICE-WORKLOAD.md and
+ device-workload-evidence.json. The hardware-target question is pending; no Red
+operation or physical-device installation is authorized.
