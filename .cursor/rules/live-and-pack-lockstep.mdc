@@ -59,6 +59,6 @@ node scripts/pack-fabric/scripts/ship-routing.js --live
 node scripts/pack-fabric/scripts/ship-routing.js --assert --region <region>
 ```
 
-Workspace: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
+Workspace: `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`
 
 API: `https://dirt-mayday.vercel.app/api/route`

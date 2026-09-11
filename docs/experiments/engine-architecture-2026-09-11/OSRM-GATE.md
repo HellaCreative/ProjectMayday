@@ -63,3 +63,21 @@ python3 scripts/routing-architecture/osrm-spike/check.py
 ```
 
 Wrap the first command in the existing guarded-run.py (256 MiB, 120 s for this tiny fixture). Omit `--build` to reuse immutable synthetic engine artifacts. No production recovery action is needed: remove only this experiment’s scratch directory to retire the spike; preserved candidates and published packs were not changed.
+
+## Native HTTP concurrency harness
+
+`osrm-spike/concurrency.py` is ready for coordinated R-tier capacity runs. It launches exactly one local native `osrm-routed` through the existing wheel CLI, using `--algorithm MLD --mmap --ip 127.0.0.1 --port <ephemeral> --threads 2 <dataset>`. This maps immutable prepared files in one server; it does not create a System V shared-memory datastore. No import or new engine build is performed.
+
+Defaults are client concurrency 1, 2, 4 and 8, three rounds of32 mixed requests each, and two native workers held constant. The four default destinations are prior NS-short, NS-long, NS→NB and Bangor fixtures. Their rider profile and fuel settings are explicitly ignored by the ordinary-car dataset; this is R-tier only. Custom `--fixtures` and `--dataset eastern` allow the coordinator to supply covered long cases after successful preparation.
+
+The harness reports startup plus first request, warm controls, per-request HTTP latency and submission-to-dispatch client queue delay, throughput, maximum outstanding HTTP requests, route-proof stability, response bytes, sampled process-group RSS, idle retained RSS and bounded shutdown. It samples every100ms, enforces a2GiB server-group RSS limit,4GiB disk reserve and600s total deadline by default, and only terminates its own server process group. Requests have60s client timeouts. Short batches may have no in-batch RSS sample; empty samples are not zero memory. Exact native-search concurrency, internal server queue delay, per-request private memory and mmap bytes read are not directly measured.
+
+A tiny `--smoke` run completed two rounds at client levels1/2 with one native worker, stable proofs and orderly native shutdown. It sampled23.2MiB process-group peak; this is an API/lifecycle check, not a regional capacity finding. The disconnected-request probe confirms subsequent health, but does not establish native cancellation: synchronous `RunQuery` has no propagated client cancellation token. The raw server log retains native request durations and shutdown events.
+
+Scheduled Atlantic command:
+
+```text
+<isolated-python> scripts/routing-architecture/osrm-spike/concurrency.py --dataset atlantic --workers 2 --levels 1,2,4,8 --rounds 3 --requests 32 --out <scratch-directory>/concurrency-atlantic.json
+```
+
+Do not run this comparison while imports or other capacity runs are active. Compare repeated rounds and process starts; network-local startup and warm throughput do not establish hosted latency or production-user capacity. The ordinary-car dataset supplies a single fixed metric even though destination fixture labels include Dirt and Balanced.

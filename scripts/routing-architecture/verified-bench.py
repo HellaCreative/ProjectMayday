@@ -1,6 +1,6 @@
 """Verified-road integration benchmark, explicitly not yet city/fuel qualification."""
 import argparse,pathlib,json,subprocess,time,threading,queue,gzip,hashlib
-p=argparse.ArgumentParser();p.add_argument('--dataset',default='nsnb');p.add_argument('--objective-landmarks',action='store_true');p.add_argument('--profiles',nargs='+',default=['distance','paved','dirt10','dirt30']);p.add_argument('--case',default='nsnb-balanced-road');p.add_argument('--repeat',type=int,default=3);p.add_argument('--out',required=True);p.add_argument('--flexible',action='store_true');p.add_argument('--usable-range-meters',type=float);p.add_argument('--initial-usable-meters',type=float);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--dataset',default='nsnb');p.add_argument('--objective-landmarks',action='store_true');p.add_argument('--profiles',nargs='+',default=['distance','paved','dirt10','dirt30']);p.add_argument('--case',default='nsnb-balanced-road');p.add_argument('--repeat',type=int,default=3);p.add_argument('--out',required=True);p.add_argument('--flexible',action='store_true');p.add_argument('--usable-range-meters',type=float);p.add_argument('--initial-usable-meters',type=float);p.add_argument('--fuel-portfolio',action='store_true');p.add_argument('--portfolio-only',action='store_true');a=p.parse_args()
 r=pathlib.Path('/Users/richardsmith/.codex/experiments/routing-architecture-20260911');out=pathlib.Path(a.out);out.parent.mkdir(parents=True,exist_ok=True)
 fixtures=json.loads((pathlib.Path(__file__).resolve().parents[2]/'docs/experiments/routing-performance-2026-09-10/matrix-inputs.json').read_text());fixture=next(f for f in fixtures if f['id']==a.case);req=fixture['request'];loc=req['locations']
 cmd=['/opt/homebrew/opt/openjdk/bin/java','-Xmx2g','-cp',str(r/'tools/gh-adapter')+':'+str(r/'tools/graphhopper-web-11.0.jar'),'VerifiedHopper',str(r/f'data/verified-{a.dataset}/verified-input.json'),str(r/f'data/gh-verified-{a.dataset}-directed-v2')]
@@ -25,6 +25,7 @@ try:
   for profile in a.profiles:
    query={'start':[loc[0]['lon'],loc[0]['lat']],'end':[loc[-1]['lon'],loc[-1]['lat']],'profile':profile,'allowUnknown':req.get('accessPolicy',{}).get('motorizedUnknown',False),'wander':req.get('ridePreferences',{}).get('wander',1),'flexible':a.flexible}
    if a.usable_range_meters is not None:query['fuel']={'usableRangeMeters':a.usable_range_meters,'initialUsableMeters':a.initial_usable_meters if a.initial_usable_meters is not None else a.usable_range_meters}
+   query['fuelPortfolio']=a.fuel_portfolio or a.portfolio_only;query['portfolioOnly']=a.portfolio_only
    t=time.perf_counter();child.stdin.write(json.dumps(query)+'\n');child.stdin.flush();kind,result=messages.get(timeout=100);assert kind=='result',(kind,result)
    record={'run':i,'query':query,'endToEndSeconds':time.perf_counter()-t,'residentBytes':rss(),'result':result};results.append(record)
    print(json.dumps({k:v for k,v in record.items() if k!='result'}|{k:v for k,v in result.items() if k not in ['points','edges','steps','escape','roadSourceKeys']}),flush=True)

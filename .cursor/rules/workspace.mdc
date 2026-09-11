@@ -5,6 +5,6 @@ alwaysApply: true
 
 # One workspace
 
-Product, pack-fabric, and live `/api/route` live here: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`.
+Product, pack-fabric, and live `/api/route` live here: `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`.
 
 Do not open another folder to build Dirt.

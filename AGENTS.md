@@ -1,6 +1,6 @@
 # Dirt — start here
 
-**Develop only in this folder:** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
+**Develop only in this folder:** `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`
 
 Open `Dirt.xcodeproj`. Branch: `feature/routing-itinerary-rebuild`.
 
