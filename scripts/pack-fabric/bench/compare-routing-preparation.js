@@ -10,12 +10,12 @@ const {resolveGraphRequest}=require('../routing/regional/select');
 const {qualifiedPack}=require('../routing/lib/adventure/pack-revision-qualification');
 const cases=require('../../../docs/experiments/routing-performance-2026-09-10/matrix-inputs.json');
 const [caseId,variant,out,repeatsArg='3']=process.argv.slice(2),fixture=cases.find(c=>c.id===caseId);
-if(!fixture||!['baseline','incoming','neutral','combined'].includes(variant)||!out)throw Error('CASE baseline|incoming OUTPUT [REPEATS] required');
+if(!fixture||!['baseline','incoming','neutral','combined','compact','compact-join'].includes(variant)||!out)throw Error('CASE baseline|incoming OUTPUT [REPEATS] required');
 fs.mkdirSync(path.dirname(out),{recursive:true});
 const root=process.env.PERFORMANCE_PACK_ROOT||'/tmp/dirt-performance-packs',releaseId='fabric-v4-20260909-02';
 const environment={DIRT_ADVENTURE_CANARY:'national-v1',DIRT_PASSING_REFILL_ADVISORY:'candidate-v1',DIRT_FUEL_COMPLETION_POLICY:'feasible-v1',DIRT_FUEL_CONNECTIVITY_PROBE:'candidate-v1',DIRT_ZERO_REFILL_ADVISORY:'proved-national-v1'};
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
-const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:['incoming','combined'].includes(variant),fastNeutralTurns:['neutral','combined'].includes(variant)});
+const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:['incoming','combined','compact','compact-join'].includes(variant),fastNeutralTurns:['neutral','combined','compact','compact-join'].includes(variant),compactPreparation:['compact','compact-join'].includes(variant)});
 const packCache=new Map();let joinedCache=null,loadTrace=[];
 function loadRegion(id) {
  const cached=packCache.get(id);if(cached){loadTrace.push({id,cacheHit:true});return cached;}
@@ -31,7 +31,7 @@ async function load(resolution) {
  const key=JSON.stringify(rows.flatMap(r=>r.identity));
  if(joinedCache?.key===key){loadTrace.push({joinCacheHit:true});return joinedCache.data;}
  joinedCache=null;const at=performance.now();
- const joined=joinV4(rows,{budget:createBudget({deadlineAtMs:Date.now()+90000,maxExpansions:Math.max(20000000,rows.reduce((n,r)=>n+r.pack.nodeCount+r.pack.edgeCount+r.pack.edgeTargets.length,0)+1)})});
+ const joined=joinV4(rows,{compactNodes:variant==='compact-join',budget:createBudget({deadlineAtMs:Date.now()+90000,maxExpansions:Math.max(20000000,rows.reduce((n,r)=>n+r.pack.nodeCount+r.pack.edgeCount+r.pack.edgeTargets.length,0)+1)})});
  const stations=new Map();for(const row of rows)for(const s of row.stations){const p=stations.get(s.id);if(p&&(p.lat!==s.lat||p.lon!==s.lon))throw Error('Conflicting canonical station');stations.set(s.id,s);}
  const data={pack:joined.pack,geom:joined.geom,stations:[...stations.values()],identity:rows.flatMap(r=>r.identity)};
  joinedCache={key,data};loadTrace.push({joinCacheHit:false,joinMs:performance.now()-at,joinedNodes:joined.pack.nodeCount,joinedEdges:joined.pack.edgeCount});return data;
@@ -56,7 +56,8 @@ function validate(result,request) {
  return {continuous:true,access:true,range:true};
 }
 (async()=>{
- const report={caseId,variant,fixture,environment,scope:'Local full immutable pack loader and actual live-canary candidate pool; single retained joined graph. No hosted speed claim.',node:process.version,runs:[]};
+ const sources=fs.readdirSync(path.join(__dirname,'../routing/lib/adventure')).filter(f=>f.endsWith('.js')&&!f.endsWith('.test.js')).sort().map(f=>[f,hash(fs.readFileSync(path.join(__dirname,'../routing/lib/adventure',f)))]);
+ const report={caseId,variant,fixture,environment,sourceHashes:sources,scope:'Local full immutable pack loader and actual live-canary candidate pool; single retained joined graph. No hosted speed claim.',node:process.version,runs:[]};
  const checkpoint=()=>{fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,JSON.stringify(report,null,2));};
  for(let run=0;run<Number(repeatsArg);run++) {
   let request=structuredClone(fixture.request),history=[],excluded=[],windows=[],proofs=[],meters=0,stops=0,complete=false;

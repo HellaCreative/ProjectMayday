@@ -63,3 +63,19 @@ test('zero-copy decoded coordinate indexing equals polyline fallback',()=>{
  for(const lat of [44.999,45,45.005,45.01])for(const lon of [-64,-63.99,-63.98])
   assert.deepEqual(direct.query({lat,lon},150),fallback.query({lat,lon},150));
 });
+
+test('compact cell membership preserves exact candidate order, broad roads, dateline and polar queries',()=>{
+ const lines=[[[0,0],[.02,0]],[[.005,.008],[.015,.008]],[[.009,-.01],[.009,.01]],[[179.99,0],[180,0]],[[-180,0],[-179.99,0]],[[0,-80],[0,80]],[]];
+ const pack={edgeCount:lines.length},geom={polyline:i=>lines[i]};
+ const a=buildEdgeIndex(pack,geom,budget()),b=buildEdgeIndex(pack,geom,budget(),{compact:true});
+ assert.equal(b.state,'complete');assert.equal(b.diagnostics.representation,'compact-cell-memberships');
+ for(const point of [{lat:0,lon:.01},{lat:.008,lon:.01},{lat:0,lon:180},{lat:0,lon:-180},{lat:89.999,lon:0}])
+  for(const radius of [50,150,5000])assert.deepEqual(b.query(point,radius),a.query(point,radius));
+ for(const box of [{minLon:-.01,minLat:-.01,maxLon:.03,maxLat:.03},{minLon:179.9,minLat:0,maxLon:180,maxLat:.01}])
+  assert.deepEqual(b.queryBox(box,budget()),a.queryBox(box,budget()));
+ const {pack:p,geom:g}=fixture(),stations=[{id:'pump',lon:-63.99,lat:45.0001}];
+ const match=compact=>matchStations({pack:p,geom:g,stations,index:buildEdgeIndex(p,g,budget(),{compact}),maxMeters:150,budget:budget()});
+ assert.deepEqual(match(true),match(false));
+ // First pass needs 3 units per two-point road; reject during packing too.
+ assert.equal(buildEdgeIndex({edgeCount:1},{polyline:()=>[[0,0],[.02,0]]},budget(5),{compact:true}).state,'incomplete');
+});

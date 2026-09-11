@@ -953,5 +953,179 @@
     },
     "source": "Reconstructed owner-reported successful BC/YT device coordinates",
     "phase": 4
+  },
+  {
+    "id": "nsnb-accepted-180km",
+    "request": {
+      "profile": "dirt",
+      "locations": [
+        {
+          "lat": 44.764804,
+          "lon": -63.340199
+        },
+        {
+          "lat": 47.013162,
+          "lon": -65.244265
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 9.3
+      },
+      "fuel": {
+        "usableRangeMeters": 180000,
+        "firstLegMaxMeters": 180000,
+        "windowMaxStops": 12,
+        "windowTimeBudgetMs": 20000,
+        "allowPartialWindow": true,
+        "forwardFeeler": false,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true,
+        "minimumFuelStops": 0,
+        "requireFuelStopBeforeEnd": false
+      }
+    },
+    "source": "Accepted baseline request supplied by Routing Agent -08; unchanged controls",
+    "phase": 5
+  },
+  {
+    "id": "deep-accepted-windowed",
+    "request": {
+      "profile": "dirt",
+      "locations": [
+        {
+          "lat": 44.764833,
+          "lon": -63.34025
+        },
+        {
+          "lat": 48.490185,
+          "lon": -71.667607
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 8.4
+      },
+      "fuel": {
+        "usableRangeMeters": 378000,
+        "firstLegMaxMeters": 378000,
+        "windowMaxStops": 1,
+        "windowTimeBudgetMs": 90000,
+        "allowPartialWindow": true,
+        "forwardFeeler": true,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true,
+        "minimumFuelStops": 0,
+        "requireFuelStopBeforeEnd": false
+      }
+    },
+    "source": "Accepted baseline request supplied by Routing Agent -08; unchanged controls",
+    "phase": 5
+  },
+  {
+    "id": "clean-accepted-windowed",
+    "request": {
+      "profile": "cleanest",
+      "locations": [
+        {
+          "lat": 44.764808,
+          "lon": -63.340188
+        },
+        {
+          "lat": 48.290492,
+          "lon": -71.690475
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 4.8
+      },
+      "fuel": {
+        "usableRangeMeters": 378000,
+        "firstLegMaxMeters": 378000,
+        "windowMaxStops": 1,
+        "windowTimeBudgetMs": 90000,
+        "allowPartialWindow": true,
+        "forwardFeeler": true,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true,
+        "minimumFuelStops": 0,
+        "requireFuelStopBeforeEnd": false
+      }
+    },
+    "source": "Accepted baseline request supplied by Routing Agent -08; unchanged controls",
+    "phase": 5
+  },
+  {
+    "id": "ns-short-162km",
+    "request": {
+      "profile": "balanced",
+      "locations": [
+        {
+          "lat": 44.76481,
+          "lon": -63.34024
+        },
+        {
+          "lat": 45.3933,
+          "lon": -62.18066
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 9
+      },
+      "fuel": {
+        "usableRangeMeters": 162000,
+        "firstLegMaxMeters": 162000,
+        "windowMaxStops": 12,
+        "windowTimeBudgetMs": 90000,
+        "allowPartialWindow": true,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true
+      }
+    },
+    "source": "Expanded fuel-range/partial-initial-tank case",
+    "phase": 5
+  },
+  {
+    "id": "ns-short-partial-tank",
+    "request": {
+      "profile": "balanced",
+      "locations": [
+        {
+          "lat": 44.76481,
+          "lon": -63.34024
+        },
+        {
+          "lat": 45.3933,
+          "lon": -62.18066
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 9
+      },
+      "fuel": {
+        "usableRangeMeters": 180000,
+        "firstLegMaxMeters": 90000,
+        "windowMaxStops": 12,
+        "windowTimeBudgetMs": 90000,
+        "allowPartialWindow": true,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true
+      }
+    },
+    "source": "Expanded fuel-range/partial-initial-tank case",
+    "phase": 5
   }
 ]

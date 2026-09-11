@@ -4,8 +4,8 @@ const {legalSnapDetailed}=require("../legal-topology/snap");
 
 // Coarse index only narrows the exact legal projection search. It never proves
 // station arrival or connects the station to a nearby road by a synthetic arc.
-function buildEdgeIndex(pack,geom,budget) {
-  const size=.02,cells=new Map(),broad=new Set(),bounds=new Float64Array(pack.edgeCount*4);
+function buildEdgeIndex(pack,geom,budget,{compact=false}={}) {
+  const size=.02,cells=new Map(),broad=new Set(),bounds=new Float64Array(pack.edgeCount*4),counts=[];
   for(let edge=0;edge<pack.edgeCount;edge++) {
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
@@ -27,15 +27,41 @@ function buildEdgeIndex(pack,geom,budget) {
     const a=Math.floor(minX/size),b=Math.floor(maxX/size),c=Math.floor(minY/size),d=Math.floor(maxY/size);
     if((b-a+1)*(d-c+1)>1000){broad.add(edge);continue;}
     for(let x=a;x<=b;x++)for(let y=c;y<=d;y++) {
-      const key=`${x}:${y}`,list=cells.get(key)||[];list.push(edge);cells.set(key,list);
+      const key=`${x}:${y}`;
+      if(compact){let slot=cells.get(key);if(slot===undefined){slot=counts.length;cells.set(key,slot);counts.push(0);}counts[slot]++;}
+      else {const list=cells.get(key)||[];list.push(edge);cells.set(key,list);}
     }
   }
-  return {state:"complete",pack,geom,queryBox(box,work){
+  let offsets,members;
+  if(compact) {
+    offsets=new Uint32Array(counts.length+1);
+    for(let i=0;i<counts.length;i++){
+      if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
+      offsets[i+1]=offsets[i]+counts[i];
+      if(offsets[i+1]<offsets[i])throw new RangeError('Spatial memberships exceed uint32');
+    }
+    members=new Uint32Array(offsets[offsets.length-1]);counts.fill(0);
+    for(let edge=0;edge<pack.edgeCount;edge++) {
+      if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
+      const at=edge*4;if(broad.has(edge)||!Number.isFinite(bounds[at]))continue;
+      for(let x=Math.floor(bounds[at]/size);x<=Math.floor(bounds[at+2]/size);x++)
+        for(let y=Math.floor(bounds[at+1]/size);y<=Math.floor(bounds[at+3]/size);y++) {
+          if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
+          const slot=cells.get(`${x}:${y}`);members[offsets[slot]+counts[slot]++]=edge;
+        }
+    }
+    counts.length=0;
+  }
+  const empty=Object.freeze([]),cell=key=>{
+    const value=cells.get(key);
+    return value===undefined?empty:compact?members.subarray(offsets[value],offsets[value+1]):value;
+  };
+  return {state:"complete",pack,geom,diagnostics:{representation:compact?'compact-cell-memberships':'array-cell-memberships',cells:cells.size,boundsBytes:bounds.byteLength,membershipBytes:members?.byteLength??null,offsetBytes:offsets?.byteLength??null},queryBox(box,work){
     const edges=new Set(broad);
     for(let x=Math.floor(box.minLon/size);x<=Math.floor(box.maxLon/size);x++)
       for(let y=Math.floor(box.minLat/size);y<=Math.floor(box.maxLat/size);y++) {
         if(!work.consume())return null;
-        for(const edge of cells.get(`${x}:${y}`)||[]) {
+        for(const edge of cell(`${x}:${y}`)) {
           if(!work.consume())return null;
           edges.add(edge);
         }
@@ -51,7 +77,7 @@ function buildEdgeIndex(pack,geom,budget) {
     // Extremely broad polar queries fall back to all edges; no false omission.
     if(dx>1)return Array.from({length:pack.edgeCount},(_,i)=>i);
     for(const [lo,hi] of ranges)for(let x=Math.floor(lo/size);x<=Math.floor(hi/size);x++)
-      for(let y=Math.floor((lat-dy)/size);y<=Math.floor((lat+dy)/size);y++)for(const edge of cells.get(`${x}:${y}`)||[])edges.add(edge);
+      for(let y=Math.floor((lat-dy)/size);y<=Math.floor((lat+dy)/size);y++)for(const edge of cell(`${x}:${y}`))edges.add(edge);
     // Exact source bounds cheaply reject roads from the same coarse cell that
     // cannot intersect the conservative search rectangle. Keep every segment
     // crossing, including those whose endpoints lie outside that rectangle.

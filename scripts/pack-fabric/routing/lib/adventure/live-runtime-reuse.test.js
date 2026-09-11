@@ -1,0 +1,30 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const revisions=require('./verified-pack-revisions.json');
+for(const mode of ['shared-v1','compact-v2'])test(mode+': live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources',async t=>{
+ const select=require('../../regional/select'),graphs=require('../graph'),fuel=require('../fuel-data');
+ const ride=require('./ride-alternatives'),join=require('./join-v4');
+ let base='https://example.test/v4/releases/fabric-v4-20260909-02',reads=0,joins=0;
+ const ids=['ns','nb'],releaseId='fabric-v4-20260909-02';
+ t.mock.method(select,'resolveGraphRequest',body=>({ok:true,regionIds:body.regionId?[body.regionId]:ids,graphPaths:[`${base}/${body.regionId||'ns'}/graph.v4.bin`]}));
+ t.mock.method(select,'graphCdnBaseUrlForRegion',()=>base);
+ t.mock.method(graphs,'loadGraphsForRequest',async r=>{
+  reads++;const regionId=r.regionIds[0];return {pack:{graphBinaryVersion:4,nodeCount:2,edgeCount:1,edgeTargets:[1]},geom:{},packIdentity:[{regionId,releaseId,...revisions[releaseId][regionId],graphSource:`${base}/${regionId}/graph.v4.bin`,geometrySource:`${base}/${regionId}/geometry.v1.bin`}]};
+ });
+ t.mock.method(fuel,'loadRegionFuel',async regionId=>({stations:[],packIdentity:{fuelSource:`${base}/${regionId}/fuel.v1.json`,fuelSha256:revisions[releaseId][regionId].fuelSha256}}));
+ t.mock.method(join,'joinV4',()=>{joins++;return {pack:{graphBinaryVersion:4,edgeCount:2},geom:{}};});
+ t.mock.method(ride,'buildRideAlternatives',()=>({selected:null,candidates:[],search:{poolComplete:false}}));
+ delete require.cache[require.resolve('./live-canary')];
+ const {adventureCanaryRequest}=require('./live-canary');
+ const body={profile:'balanced',locations:[{lat:44.7,lon:-63.3},{lat:46,lon:-65}],options:{mapZoom:8}};
+ const environment={DIRT_ADVENTURE_CANARY:'national-v1',DIRT_ROUTING_PREPARATION:mode};
+ const first=await adventureCanaryRequest(body,'route',{environment});
+ const second=await adventureCanaryRequest(body,'route',{environment});
+ assert.equal(reads,2);assert.equal(joins,1);assert.equal(first.debug.adventureLoad.sourceReuse,undefined);assert.equal(second.debug.adventureLoad.sourceReuse,true);
+ base='https://another.test/v4/releases/fabric-v4-20260909-02';
+ const third=await adventureCanaryRequest(body,'route',{environment});
+ assert.equal(reads,4);assert.equal(joins,2);assert.equal(third.debug.adventureLoad.sourceReuse,undefined);
+ base='https://another.test/candidates/test';
+ await adventureCanaryRequest(body,'route',{environment});await adventureCanaryRequest(body,'route',{environment});
+ assert.equal(reads,8);assert.equal(joins,4);
+});

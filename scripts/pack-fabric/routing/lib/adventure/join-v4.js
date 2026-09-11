@@ -16,7 +16,7 @@ function joinedReaders(regions,source,nodeIds,from,to,aliases){
   coordinateRange:e=>{const s=source(e),g=regions[s.region].geom;return g.offsets&&g.coords?{coords:g.coords,start:g.offsets[s.edge],end:g.offsets[s.edge+1]}:null;}
  };
 }
-function joinV4(regions,{budget}) {
+function joinV4(regions,{budget,compactNodes=false}) {
  if(regions.length<2)throw new TypeError('At least two source regions required');
  if(new Set(regions.map(r=>r.pack.regionId)).size!==regions.length)throw new TypeError('Duplicate source region');
  const fail=message=>{throw new Error(`V4 join: ${message}`);};
@@ -24,7 +24,9 @@ function joinV4(regions,{budget}) {
  for(const {pack} of regions)if(pack.graphBinaryVersion!==4||!pack.provenance?.sourceEpoch||pack.provenance.sourceEpoch!==first.provenance.sourceEpoch)fail('incompatible source epoch or dictionaries');
  const surfaceNames=[...new Set(regions.flatMap(r=>r.pack.enums.surfaceLeafNames))],roadNames=[...new Set(regions.flatMap(r=>r.pack.enums.roadClassLeafNames))];
  const maxNodes=regions.reduce((n,r)=>n+r.pack.nodeCount,0),maxEdges=regions.reduce((n,r)=>n+r.pack.edgeCount,0);
- const nodes=new Map(),coords=new Float32Array(maxNodes*2),nodeMaps=[],edgeMaps=[],canonical=new Map(),nodeIds=[];
+ const nodes=new Map(),coords=new Float32Array(maxNodes*2),nodeMaps=[],edgeMaps=[],canonical=new Map();
+ const idStorage=compactNodes?new BigInt64Array(maxNodes):null;
+ const nodeIds=compactNodes?indexedView(maxNodes,i=>String(idStorage[i])):[];let nodeCount=0;
  const sourceRegions=new Uint16Array(maxEdges),sourceEdges=new Int32Array(maxEdges);let edgeCount=0;
  const source=sourceReader(sourceRegions,sourceEdges);
  const shared=new Uint8Array(maxNodes),lastNodeRegion=new Uint16Array(maxNodes);
@@ -34,9 +36,11 @@ function joinV4(regions,{budget}) {
   for(let i=0;i<pack.nodeCount;i++) {
    if(!budget.consume())fail(budget.snapshot().reason);
    const id=String(pack.osmNodeIds[i]);if(!id||id==='0')fail('ambiguous source node identity');
-   let n=nodes.get(id);const x=pack.nodeCoords[2*i],y=pack.nodeCoords[2*i+1];
+   const value=compactNodes?BigInt(id):null,numeric=compactNodes?Number(value):null;
+   const nodeKey=compactNodes?(Number.isSafeInteger(numeric)?numeric:value):id;
+   let n=nodes.get(nodeKey);const x=pack.nodeCoords[2*i],y=pack.nodeCoords[2*i+1];
    if(n!==undefined){if(lastNodeRegion[n]===region+1)fail('ambiguous source node identity');if(coords[2*n]!==x||coords[2*n+1]!==y)fail('shared node coordinate mismatch');sharedNodes++;shared[n]=1;}
-   else {n=nodeIds.length;nodes.set(id,n);nodeIds.push(id);coords[2*n]=x;coords[2*n+1]=y;}
+   else {n=nodeCount++;nodes.set(nodeKey,n);if(compactNodes)idStorage[n]=value;else nodeIds.push(id);coords[2*n]=x;coords[2*n+1]=y;}
    lastNodeRegion[n]=region+1;map[i]=n;
   }
  });
@@ -77,11 +81,11 @@ function joinV4(regions,{budget}) {
  });
  // Reserve CSR slots using source degrees, then deduplicate only within each
  // node's short adjacency list. Avoid allocating one Map per joined node.
- const capacities=new Int32Array(nodeIds.length);
+ const capacities=new Int32Array(nodeCount);
  regions.forEach(({pack},region)=>{for(let n=0;n<pack.nodeCount;n++)capacities[nodeMaps[region][n]]+=pack.nodeOffsets[n+1]-pack.nodeOffsets[n];});
- const starts=new Int32Array(nodeIds.length+1);
- for(let n=0;n<nodeIds.length;n++)starts[n+1]=starts[n]+capacities[n];
- const targetsStorage=new Int32Array(starts[nodeIds.length]),edgesStorage=new Int32Array(starts[nodeIds.length]),counts=new Int32Array(nodeIds.length);
+ const starts=new Int32Array(nodeCount+1);
+ for(let n=0;n<nodeCount;n++)starts[n+1]=starts[n]+capacities[n];
+ const targetsStorage=new Int32Array(starts[nodeCount]),edgesStorage=new Int32Array(starts[nodeCount]),counts=new Int32Array(nodeCount);
  regions.forEach(({pack},region)=>{for(let n=0;n<pack.nodeCount;n++)for(let j=pack.nodeOffsets[n];j<pack.nodeOffsets[n+1];j++) {
   if(!budget.consume())fail(budget.snapshot().reason);
   const node=nodeMaps[region][n],edge=edgeMaps[region][pack.edgeUndirectedIndex[j]],target=nodeMaps[region][pack.edgeTargets[j]];
@@ -90,8 +94,8 @@ function joinV4(regions,{budget}) {
   // Match Map.set semantics: retain insertion order and replace a duplicate's target.
   edgesStorage[at]=edge;targetsStorage[at]=target;if(at===end)counts[node]++;
  }});
- const offsets=new Int32Array(nodeIds.length+1);let used=0;
- for(let n=0;n<nodeIds.length;n++){
+ const offsets=new Int32Array(nodeCount+1);let used=0;
+ for(let n=0;n<nodeCount;n++){
   const end=starts[n]+counts[n];
   for(let at=starts[n];at<end;at++){edgesStorage[used]=edgesStorage[at];targetsStorage[used++]=targetsStorage[at];}
   offsets[n+1]=used;
@@ -109,8 +113,8 @@ function joinV4(regions,{budget}) {
  const readers=joinedReaders(regions,source,nodeIds,from,to,aliases);
  const pack={graphBinaryVersion:4,regionId:regions.map(r=>r.pack.regionId).join('+'),regionIds:regions.map(r=>r.pack.regionId),provenance:first.provenance,enums:{...first.enums,surfaceLeafNames:surfaceNames,roadClassLeafNames:roadNames},
   meta:{urbanCores:regions.flatMap(r=>r.pack.meta?.urbanCores||[]),settlements:regions.flatMap(r=>r.pack.meta?.settlements||[])},
-  nodeCount:nodeIds.length,edgeCount:edgeCount,undirectedEdgeCount:edgeCount,directedArcCount:targets.length,
-  nodeCoords:coords.subarray(0,nodeIds.length*2),osmNodeIds:nodeIds,osmWayIds:indexedView(edgeCount,readers.wayId),
+  nodeCount:nodeCount,edgeCount:edgeCount,undirectedEdgeCount:edgeCount,directedArcCount:targets.length,
+  nodeCoords:coords.subarray(0,nodeCount*2),osmNodeIds:compactNodes?indexedView(nodeCount,i=>String(idStorage[i])):nodeIds,osmWayIds:indexedView(edgeCount,readers.wayId),
   nodeOffsets:offsets,edgeTargets:targets,edgeUndirectedIndex:edgeIndices,edgeFrom:from.subarray(0,edgeCount),edgeTo:to.subarray(0,edgeCount),edgeMeters:meters.subarray(0,edgeCount),edgeAccess:access.subarray(0,edgeCount*2),edgeSurfaceLeaf:surface.subarray(0,edgeCount),edgeRoadClassLeaf:road.subarray(0,edgeCount),restrictions,
   edgeId:readers.edgeId,edgeAliases:readers.edgeAliases,edgeLeaves:readers.edgeLeaves,
   hasDirectedArc(a,b,e){for(let i=this.nodeOffsets[a];i<this.nodeOffsets[a+1];i++)if(this.edgeTargets[i]===b&&this.edgeUndirectedIndex[i]===e)return true;return false;}};

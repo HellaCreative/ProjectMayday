@@ -17,7 +17,7 @@ const objectives=Object.freeze([
  {id:'dirt-30',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:30)}
 ]);
 const expandedObjectives=Object.freeze([...objectives,{id:'mixed-2',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:2)},{id:'mixed-3',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:3)},{id:'mixed-5',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:5)}]);
-function createRideAlternativeContext({maxReverseBytes=64*1024*1024,useIncomingBounds=false,fastNeutralTurns=false}={}){return {fastNeutralTurns,releaseBoundsGraph:useIncomingBounds,preparationCache:createPreparationCache(),reverseCostCache:createReverseCostCache({maxBytes:maxReverseBytes,useIncomingBounds}),stationMatchCache:createStationMatchCache()};}
+function createRideAlternativeContext({maxReverseBytes=64*1024*1024,useIncomingBounds=false,fastNeutralTurns=false,compactPreparation=false}={}){return {fastNeutralTurns,releaseBoundsGraph:useIncomingBounds,preparationCache:createPreparationCache({compact:compactPreparation}),reverseCostCache:createReverseCostCache({maxBytes:maxReverseBytes,useIncomingBounds}),stationMatchCache:createStationMatchCache()};}
 const rankFor=profile=>(a,b)=>(a.result.road.avoidanceMeters??a.result.road.urbanMeters??0)-(b.result.road.avoidanceMeters??b.result.road.urbanMeters??0)||compareSurface(profile,a.result.road.surface,b.result.road.surface)||a.id.localeCompare(b.id);
 function refinementPreservesWinners(rows,id,replacement) {
  const next=rows.map(r=>r.id===id?{...r,result:replacement}:r);

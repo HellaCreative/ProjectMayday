@@ -77,3 +77,18 @@ test('compact joined geometry index matches materialized source geometry at a se
   assert.deepEqual(Array.from(range.coords.subarray(range.start,range.end)),joined.geom.polyline(e).flat());
  }
 });
+
+for(const highIds of [false,true])test('packed joined node identities preserve topology, aliases and restrictions; high IDs '+highIds,()=>{
+ const parts=fixtures();
+ if(highIds)for(const row of parts)row.pack.osmNodeIds=Array.from({length:row.pack.nodeCount},(_,i)=>String(9007199254740990n+BigInt(row.pack.osmNodeIds[i])));
+ parts[1].pack.restrictions=[{fromEdge:0,toEdge:1,viaNode:parts[1].pack.edgeTo[0],only:false,viaEdges:[]}];
+ const a=joinV4(parts,{budget:budget()}),b=joinV4(parts,{budget:budget(),compactNodes:true});
+ for(const field of ['nodeCoords','nodeOffsets','edgeTargets','edgeUndirectedIndex','edgeFrom','edgeTo','edgeMeters','edgeAccess','edgeSurfaceLeaf','edgeRoadClassLeaf'])assert.deepEqual(a.pack[field],b.pack[field],field);
+ assert.deepEqual(a.pack.restrictions,b.pack.restrictions);assert.deepEqual(a.nodeMaps,b.nodeMaps);assert.deepEqual(a.edgeMaps,b.edgeMaps);
+ assert.deepEqual(Array.from({length:b.pack.nodeCount},(_,i)=>b.pack.osmNodeIds[i]),a.pack.osmNodeIds);
+ for(let e=0;e<a.pack.edgeCount;e++){assert.equal(a.pack.edgeId(e),b.pack.edgeId(e));assert.deepEqual(a.pack.edgeAliases(e),b.pack.edgeAliases(e));}
+ const g=createV4Graph(b.pack),incoming=b.edgeMaps[0][1],outgoing=b.edgeMaps[1][1];
+ const turn=g.transition(0,{id:incoming,from:b.pack.edgeFrom[incoming],to:b.pack.edgeTo[incoming]});
+ assert.equal(g.transition(turn.state,{id:outgoing,from:b.pack.edgeFrom[outgoing],to:b.pack.edgeTo[outgoing]}).allowed,false);
+ assert.throws(()=>joinV4(parts,{compactNodes:true,budget:createBudget({deadlineAtMs:Date.now()+10000,maxExpansions:1})}),/V4 join/);
+});

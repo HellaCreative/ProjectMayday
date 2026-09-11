@@ -6,7 +6,7 @@ phase=int(sys.argv[2]);repeats=sys.argv[3] if len(sys.argv)>3 else '3'
 results=[]
 for case in cases:
  if case['phase']!=phase:continue
- for variant in ['baseline','combined']:
+ for variant in (sys.argv[4].split(',') if len(sys.argv)>4 else ['baseline','combined']):
   out=root/(case['id']+'-'+variant+'.json')
   if out.exists() and 'runs' in (existing:=json.load(out.open())) and existing['runs'] and 'active' not in existing:
    print('RESUME '+out.name,flush=True);continue

@@ -6,6 +6,7 @@ const {withServiceIdentity}=require('../service-contract');
 const {qualifiedPack,nbSupplement}=require('./pack-revision-qualification');
 const sharedContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024});
 const candidateContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:true,fastNeutralTurns:true});
+const compactContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:true,fastNeutralTurns:true,compactPreparation:true});
 const {sourceKey,reusableRuntime}=require('./joined-runtime-reuse');
 let joinedCache=null;
 const {joinV4}=require('./join-v4');
@@ -70,8 +71,9 @@ function requestWindowMs(regionIds,requested) {
  return Math.min(maximum,Math.max(100,Number(requested||maximum)));
 }
 async function adventureCanaryRequest(body,kind,{environment=process.env,load=null,context=null}={}) {
- const reusePreparation=environment.DIRT_ROUTING_PREPARATION==='shared-v1';
- context=context||(reusePreparation?candidateContext:sharedContext);
+ const compactPreparation=environment.DIRT_ROUTING_PREPARATION==='compact-v2';
+ const reusePreparation=compactPreparation||environment.DIRT_ROUTING_PREPARATION==='shared-v1';
+ context=context||(compactPreparation?compactContext:reusePreparation?candidateContext:sharedContext);
  if(body.options?.ridePreferences!=null) {
   const r=require('../../regional/select').resolveGraphRequest(body);
   if(!canarySupported(body,kind,environment)||!r.ok||!r.regionIds.length||r.regionIds.some(id=>!enabledRegions(environment).includes(id)))
@@ -123,7 +125,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
    joinedCache=null;
    const joinStarted=Date.now();
    console.log("adventure join begin",JSON.stringify({regions:resolution.regionIds,nodes:rows.reduce((n,r)=>n+r.pack.nodeCount,0),edges:rows.reduce((n,r)=>n+r.pack.edgeCount,0),rss:process.memoryUsage().rss}));
-   const joined=joinV4(rows,{budget:createBudget({deadlineAtMs,maxExpansions:Math.max(20000000,rows.reduce((n,r)=>n+r.pack.nodeCount+r.pack.edgeCount+r.pack.edgeTargets.length,0)+1)})});
+   const joined=joinV4(rows,{compactNodes:compactPreparation,budget:createBudget({deadlineAtMs,maxExpansions:Math.max(20000000,rows.reduce((n,r)=>n+r.pack.nodeCount+r.pack.edgeCount+r.pack.edgeTargets.length,0)+1)})});
    const stationMap=new Map();for(const row of rows)for(const station of row.stations){const prior=stationMap.get(station.id);if(prior&&(prior.lat!==station.lat||prior.lon!==station.lon))throw Error('Conflicting canonical station coordinates');stationMap.set(station.id,station);}
    loadTiming.joinMs=Date.now()-joinStarted;
    console.log("adventure join complete",JSON.stringify({elapsedMs:loadTiming.joinMs,rss:process.memoryUsage().rss}));
