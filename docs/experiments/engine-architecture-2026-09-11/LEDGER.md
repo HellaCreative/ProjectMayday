@@ -245,3 +245,26 @@ qualified-device entry; no automatic server escalation. GraphHopper–DIRT remai
 the controlled server foundation. PHONE-LAB.md and phone-lab-evidence.json pin
 inputs, final source manifest, signed executable and raw logs/audits. Final bundle
 local.dirt.experiments.phonelab20260911 remains on White with completed workers.
+
+## Native fuel preparation and continuity correction
+
+The next private candidate snapshots the actual `PackRoutingSource.fuelChain`
+method and improves only the preparation around it. A conservative geometry-bounds
+index reduces the 671-station NS matching comparison from 65.211 s broad matching
+to 0.838 s indexed first pass; bounded match caching repeats in 0.073 s. A full
+reference-area verification omits zero qualifying segments. Broad edges remain
+discoverable and eviction recomputes matches; no topology or decoded road graph is
+removed. Twelve index fixtures pass, including curved geometry, polar longitude,
+broad-edge allocation and empty results. Clean candidate fuel searches complete in
+3.34–3.86 s on the local macOS facade; Dirt and Balanced hit their 30 s diagnostic
+budget after repeated road calls. No phone fuel, hosted capacity, pump availability
+or complete itinerary success is claimed.
+
+The initial 21-case continuity receipt contained a diagnostic path weakness: its
+synthetic motor-vehicle-only restriction did not surface the unsupported mask to
+the gate. The result was rejected and not promoted. The corrected fresh
+`native-fuel-v7` build exposes the decoded masks and passes 22/22 continuity cases;
+the 12 index fixtures also pass in `index-fixtures-v8`. The gate preserves source
+identity, range, access, ordered turn state and fuel continuation, and fails closed
+on unsupported restriction scope and unmapped pump approaches. The actual accepted
+Swift app remains unchanged; this is a review candidate only.

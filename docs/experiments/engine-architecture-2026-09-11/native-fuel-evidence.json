@@ -1,0 +1,39 @@
+{
+  "scope": "Private macOS native-fuel diagnostic; actual captured PackRoutingSource.fuelChain and native router; single NS pack; no accepted app, phone fuel, hosted capacity or physical pump qualification",
+  "previousPhysicalCheckpoint": "4693beaab672cb84d96ded047fd3d07c56f7556b",
+  "finalProbe": "native-fuel-v7",
+  "finalContinuity": "continuity-v8",
+  "finalIndexFixtures": "index-fixtures-v8",
+  "continuityChecks": 22,
+  "continuityPassed": true,
+  "indexFixtureChecks": 12,
+  "indexFixturesPassed": true,
+  "initialContinuityReceipt": {
+    "checks": 21,
+    "accepted": false,
+    "reason": "Synthetic motor_vehicle restriction mask was not exposed by the diagnostic V2 reader path; this result was rejected and is not the final claim."
+  },
+  "matchingComparison": {
+    "stations": 671,
+    "broadReferenceSegments": 54242539,
+    "broadSeconds": 65.211,
+    "indexedFirstPassSeconds": 0.838,
+    "indexedCachedFirstPassSeconds": 0.805,
+    "indexedCachedRepeatSeconds": 0.073,
+    "omittedQualifyingReferenceSegments": 0,
+    "scope": "NS macOS serial comparison; local filesystem cache and process memory are not hosted or iPhone measurements"
+  },
+  "fuelMatrix": {
+    "source": "fuel-matrix-v5",
+    "cleanCandidateSeconds": [3.337, 3.857],
+    "dirtAndBalanced": "Hit 30-second diagnostic budget after repeated road calls; no complete candidate claimed.",
+    "scope": "Native macOS facade, not phone or full-app qualification"
+  },
+  "finalBuildReceipt": "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/native-fuel-v7/build.json",
+  "finalRawEvidence": [
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/continuity-v8/result.json",
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/index-fixtures-v8/result.json",
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/device-workload/fuel-matrix-v5/matrix.json"
+  ],
+  "integrationStatus": "Not integrated into accepted Swift app; GraphHopper remains controlled server foundation; no automatic server escalation."
+}

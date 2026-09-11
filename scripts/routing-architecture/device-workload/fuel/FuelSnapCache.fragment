@@ -1,0 +1,53 @@
+    // Cache only complete, profile-specific fuel matches. Eviction recomputes
+    // matches and never removes topology. No distance-map values are cached.
+    private final class FuelSnapCache: @unchecked Sendable {
+        static let shared = FuelSnapCache()
+        private let lock = NSLock()
+        private weak var owner: GraphV2Pack?
+        private weak var geometry: GeometryV1Pack?
+        private struct Entry { let snaps: [EdgeSnap]; var used: UInt64 }
+        private var entries: [String: Entry] = [:]
+        private var tick: UInt64 = 0
+        private func select(_ pack: GraphV2Pack) {
+            if owner !== pack || geometry !== pack.geometry {
+                entries.removeAll(keepingCapacity: false); owner = pack; geometry = pack.geometry
+            }
+        }
+        func get(_ key: String, pack: GraphV2Pack) -> [EdgeSnap]? {
+            lock.lock(); defer { lock.unlock() }; select(pack)
+            guard var entry = entries[key] else { return nil }
+            tick &+= 1; entry.used = tick; entries[key] = entry
+            return entry.snaps
+        }
+        func put(_ value: [EdgeSnap], key: String, pack: GraphV2Pack) {
+            lock.lock(); defer { lock.unlock() }; select(pack)
+            if entries[key] == nil, entries.count >= NativeFuelPreparation.cacheLimit,
+               let oldest = entries.min(by: { $0.value.used < $1.value.used })?.key {
+                entries.removeValue(forKey: oldest)
+            }
+            tick &+= 1; entries[key] = Entry(snaps: value, used: tick)
+        }
+    }
+    private func fuelSnaps(to point: CLLocationCoordinate2D, profile: RouteProfile, allowUnknown: Bool) -> [EdgeSnap] {
+        guard !executionCancelled() else { return [] }
+        let key = "\(point.longitude.bitPattern):\(point.latitude.bitPattern):\(profile.rawValue):\(allowUnknown)"
+        if NativeFuelPreparation.cached, let found = FuelSnapCache.shared.get(key, pack: pack) {
+            NativeFuelPreparation.recordHit(); return found
+        }
+        let found = nearestEdgeSnaps(to: point, allowUnknown: allowUnknown, profile: profile, maxMeters: Self.preferredMatchMeters)
+        guard !executionCancelled() else { return [] }
+        if NativeFuelPreparation.cached { FuelSnapCache.shared.put(found, key: key, pack: pack) }
+        return found
+    }
+    // Diagnostic representation for an exact match comparison, independent of
+    // reachability or fuel-stop ranking. Canonical order does not change search.
+    func diagnosticFuelMatches(to point: CLLocationCoordinate2D, profile: RouteProfile, allowUnknown: Bool) -> [[String: Any]] {
+        fuelSnaps(to: point, profile: profile, allowUnknown: allowUnknown).map {
+            ["edge": $0.edgeIndex, "forward": $0.forward, "distance": $0.distanceMeters,
+             "along": $0.distanceAlongM, "point": [$0.projected.longitude, $0.projected.latitude],
+             "segment": $0.segmentIndex, "score": $0.score, "access": $0.accessCode] as [String: Any]
+        }.sorted { lhs, rhs in
+            let l = lhs["edge"] as! Int, r = rhs["edge"] as! Int
+            return l == r ? (lhs["forward"] as! Bool && !(rhs["forward"] as! Bool)) : l < r
+        }
+    }

@@ -1,0 +1,108 @@
+// Private index experiment. Geometry is decoded transiently to build conservative
+// bounds; the index retains no road polylines. A cancelled build is never cached.
+private struct FuelMatchBounds {
+    var minLon: Double, maxLon: Double, minLat: Double, maxLat: Double
+    func intersects(_ other: Self) -> Bool {
+        guard minLat <= other.maxLat, maxLat >= other.minLat else { return false }
+        return [-360.0, 0, 360].contains { minLon <= other.maxLon + $0 && maxLon >= other.minLon + $0 }
+    }
+    static func around(_ point: CLLocationCoordinate2D, meters: Double) -> Self {
+        // 6,300 km is below the minimum WGS84 local curvature radius. This
+        // overestimates the enclosing angular circle; final distances still use
+        // the original CLLocation projection/distance code. Polar cases widen.
+        let delta = max(0, meters) / 6_300_000.0, lat = point.latitude * .pi / 180
+        let latitude = delta * 180 / .pi
+        let longitude = abs(lat) + delta >= .pi / 2 ? 180 : asin(min(1, sin(delta)/cos(lat))) * 180 / .pi
+        return Self(minLon: point.longitude-longitude, maxLon: point.longitude+longitude,
+                    minLat: max(-90, point.latitude-latitude), maxLat: min(90, point.latitude+latitude))
+    }
+}
+private nonisolated final class PackEdgeSpatialIndex: @unchecked Sendable {
+    static let shared = PackEdgeSpatialIndexCache()
+    static let cellDegrees: Double = 0.05
+    private let buckets: [Int64: [Int]]
+    private let bounds: [FuelMatchBounds]
+    private let broadEdges: [Int]
+    init?(pack: GraphV2Pack, cancelled: () -> Bool) {
+        var map: [Int64: [Int]] = [:], boxes: [FuelMatchBounds] = [], broad: [Int] = []
+        guard let fromArr = pack.edgeFrom, let toArr = pack.edgeTo else { return nil }
+        let cell = Self.cellDegrees
+        boxes.reserveCapacity(pack.undirectedEdgeCount)
+        for ei in 0..<pack.undirectedEdgeCount {
+            if cancelled() { return nil }
+            let a = Int(fromArr[ei]), b = Int(toArr[ei])
+            guard a >= 0, b >= 0, a < pack.nodeCount, b < pack.nodeCount else { return nil }
+            let aLon = Double(pack.nodeCoords[a*2]), aLat = Double(pack.nodeCoords[a*2+1])
+            let bLon = Double(pack.nodeCoords[b*2]), bLat = Double(pack.nodeCoords[b*2+1])
+            var box = FuelMatchBounds(minLon: min(aLon,bLon), maxLon: max(aLon,bLon), minLat: min(aLat,bLat), maxLat: max(aLat,bLat))
+            if NativeFuelPreparation.indexed, let geometry = pack.geometry {
+                for coordinate in geometry.polyline(edgeIndex: ei) {
+                    if cancelled() { return nil }
+                    box.minLon = min(box.minLon, coordinate.longitude); box.maxLon = max(box.maxLon, coordinate.longitude)
+                    box.minLat = min(box.minLat, coordinate.latitude); box.maxLat = max(box.maxLat, coordinate.latitude)
+                }
+            }
+            guard box.minLon.isFinite, box.maxLon.isFinite, box.minLat.isFinite, box.maxLat.isFinite else { return nil }
+            boxes.append(box)
+            let minX = Int(floor(box.minLon/cell)), maxX = Int(floor(box.maxLon/cell))
+            let minY = Int(floor(box.minLat/cell)), maxY = Int(floor(box.maxLat/cell))
+            // Long or dateline edges stay discoverable without huge bucket
+            // duplication. Every query checks their bounds, not their geometry.
+            if (maxX-minX+1)*(maxY-minY+1) > 4096 { broad.append(ei); continue }
+            for x in minX...maxX { for y in minY...maxY { map[Self.key(x:x,y:y), default: []].append(ei) } }
+        }
+        guard !cancelled() else { return nil }
+        buckets = map; bounds = boxes; broadEdges = broad
+    }
+    func edgeIndices(in area: FuelMatchBounds, cancelled: () -> Bool) -> [Int] {
+        var found = Set<Int>()
+        let y0 = Int(floor(area.minLat/Self.cellDegrees)), y1 = Int(floor(area.maxLat/Self.cellDegrees))
+        for shift in [-360.0, 0, 360] {
+            let x0 = Int(floor(max(-180, area.minLon+shift)/Self.cellDegrees))
+            let x1 = Int(floor(min(180, area.maxLon+shift)/Self.cellDegrees))
+            guard x0 <= x1 else { continue }
+            if (x1-x0+1)*(y1-y0+1) > buckets.count {
+                // Near poles or for wide queries, inspect existing buckets only.
+                for (key, edges) in buckets {
+                    if cancelled() { return [] }
+                    let x = Int(Int32(truncatingIfNeeded: key >> 32)), y = Int(Int32(truncatingIfNeeded: key))
+                    if x >= x0, x <= x1, y >= y0, y <= y1 { found.formUnion(edges) }
+                }
+            } else {
+                for x in x0...x1 { for y in y0...y1 {
+                    if cancelled() { return [] }
+                    if let edges = buckets[Self.key(x:x,y:y)] { found.formUnion(edges) }
+                } }
+            }
+        }
+        found.formUnion(broadEdges)
+        return found.filter { bounds[$0].intersects(area) }.sorted()
+    }
+    func edgeIndices(nearLat lat: Double, lon: Double, radiusCells: Int) -> [Int] {
+        let cx = Int(floor(lon/Self.cellDegrees)), cy = Int(floor(lat/Self.cellDegrees)), r = max(0,radiusCells)
+        var out: [Int] = []
+        for x in (cx-r)...(cx+r) { for y in (cy-r)...(cy+r) {
+            if r > 0, x > cx-r, x < cx+r, y > cy-r, y < cy+r { continue }
+            if let bucket = buckets[Self.key(x:x,y:y)] { out.append(contentsOf: bucket) }
+        } }
+        if r == 0 { out.append(contentsOf: broadEdges) }
+        return out
+    }
+    private static func key(x: Int, y: Int) -> Int64 { (Int64(x)&0xffff_ffff)<<32 | (Int64(y)&0xffff_ffff) }
+}
+private nonisolated final class PackEdgeSpatialIndexCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private weak var cachedPack: GraphV2Pack?
+    private weak var cachedGeometry: GeometryV1Pack?
+    private var cachedGrid: PackEdgeSpatialIndex?
+    func grid(for pack: GraphV2Pack, cancelled: () -> Bool) -> PackEdgeSpatialIndex? {
+        lock.lock()
+        if cachedPack === pack, cachedGeometry === pack.geometry, let grid = cachedGrid { lock.unlock(); return grid }
+        lock.unlock()
+        guard let built = PackEdgeSpatialIndex(pack: pack, cancelled: cancelled), !cancelled() else { return nil }
+        lock.lock(); defer { lock.unlock() }
+        if cachedPack === pack, cachedGeometry === pack.geometry, let grid = cachedGrid { return grid }
+        cachedPack = pack; cachedGeometry = pack.geometry; cachedGrid = built
+        return built
+    }
+}

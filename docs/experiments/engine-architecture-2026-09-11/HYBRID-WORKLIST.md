@@ -56,3 +56,19 @@ Device-first addition (private, see DEVICE-WORKLOAD.md):
   larger-region/multi-region validation, real pressure qualification, sustained
   battery/heat and calibrated resource budgets. See PHONE-LAB.md for limits.
 - [ ] Full native/server fuel, arrival-history, waypoint and preference parity.
+
+Native fuel preparation (private diagnostic, not app integration):
+
+- [x] Add conservative geometry bounds and a reusable per-pack edge index for
+  fuel matching; broad edges remain discoverable and cancelled builds are not
+  cached.
+- [x] Add bounded per-pack/profile/coordinate fuel-match caching with eviction;
+  cache limits apply to match metadata, never topology or road geometry.
+- [x] Verify matching completeness over all 671 NS stations and 54.24M broad
+  reference segments; 12 synthetic index fixtures pass.
+- [x] Add ordered source-walk fuel publication gate with zero turn-history resets;
+  corrected v7 probe passes 22/22 continuity cases, including unsupported
+  vehicle-scope fail-closed behavior and unmapped pump approaches.
+- [ ] Integrate this gate/index into the accepted Swift app and qualify actual
+  phone fuel, larger regions, physical pump access and complete preference/history
+  parity. The local Dirt/Balanced fuel candidates still hit the diagnostic budget.
