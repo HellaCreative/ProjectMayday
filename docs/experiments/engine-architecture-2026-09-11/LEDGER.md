@@ -149,3 +149,30 @@ build refusal. Twenty real diagnostic records validate. See HYBRID-REFINEMENT.md
 HYBRID-DIAGNOSTICS.md and hybrid-refinement-evidence.json for exact scope, failed
 approaches, recovery and raw evidence. Fuel remains integrated: about1 s repair
 versus44 s road/alternative work in the measured original-LM control.
+
+
+## First shared DIRT selection over the hybrid
+
+After c9e077b, implemented hybrid-rides.js using the existing DIRT surface
+comparator and fuel arithmetic over one shared GraphHopper candidate pool.
+Dirt/Balanced/Clean select the same generated feasible set; completed pool reuse
+avoids graph work on style edits. One serialized output cache is bounded to16MiB,
+not a topology/memory bound. Unknown surface remains separate and station access
+is explicitly provisional. Unsupported waypoints/history and missing initial
+fuel are refused. Java changes add scoring metadata only; engine costs unchanged.
+
+Integrated six-case matrix: four NS/NSNB pools0.699–1.818s, Quebec17.788s, strictWV
+36.644s.18cached style edits0.97–6.83ms local.21source audits pass including17fuel
+itineraries. Metadata independently matches source surface and DIRT backroad cost.
+StrictWV unchanged exactwalk/escape,zero maskededges.9focused tests and actual
+service cancel/busy/recovery/deadline/cache checks pass. Quebec selection fixes
+3.49%→9.53%dirt but remains too paved; finding richer feasible corridors is still
+required. Strong strictmask profiles share one fixed cost,so one seed is executed;
+coincident style choices there do not demonstrate product profile diversity.
+
+See HYBRID-SHARED-SELECTION.md and hybrid-shared-selection-evidence.json for raw
+inputs, outputs, limits, checks, source identities and recovery. Private milestone
+only; no app, Android, pack, deployment or remote change. Hybrid is the selected
+development foundation based on improved route admission, not a full replacement
+or500-client qualification. Earlier bespoke28slabel exhaustion and priorGH90s
+fuel timeout remain distinct comparison outcomes.

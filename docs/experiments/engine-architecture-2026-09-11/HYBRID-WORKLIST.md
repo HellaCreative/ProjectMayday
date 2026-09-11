@@ -16,9 +16,12 @@ checklist remains open where specified. See [evidence and limits](HYBRID-REFINEM
 - [x] Expand into dense Quebec, repeat NSNB four additive objectives, and compare
   strict WV serial and two concurrent requests with independent audits.
 - [x] Preserve rejected approaches, raw evidence, review report and checkpoint.
-- [ ] DIRT product character: share fuel-aware candidates across Dirt/Balanced/
-  Clean and apply the accepted final ranking. Quebec dirt30 has less known dirt
-  than dirt10 after different fuel fallbacks; penalty strength is insufficient.
+- [x] First shared DIRT selection: reuse the existing surface comparator and fuel
+  arithmetic across one common hybrid pool. Quebec now selects 9.53% known dirt
+  instead of 3.49%; local style edits reuse completed pools in 1–7 ms.
+- [ ] Complete DIRT product character: generate richer feasible corridors and
+  verify riding coherence and urban policy. The Quebec pool is still too paved;
+  correct ranking alone does not reach Dirt/Balanced targets.
 - [ ] Physical station entrances, continuation import, arbitrary rider waypoints,
   editing and destination fuel evidence beyond a legal road projection.
 - [ ] Broader ranges, fuel off/on, Ontario and additional accepted crossings;

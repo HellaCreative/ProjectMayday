@@ -206,7 +206,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   // Every directional alternative must finish before claiming the minimum.
   out.put("errors",failures);out.put("distance",best.getDistance());out.put("weight",best.getWeight()*costScale);out.put("points",best.calcPoints().toLineString(false).toString());
   var source=getEncodingManager().getIntEncodedValue("source_edge");var surface=getEncodingManager().getIntEncodedValue("surface_kind");
-  out.put("edges",best.calcEdges().stream().map(e->Map.of("sourceKey",e.get(source),"engineEdge",e.getEdge(),"meters",e.getDistance(),"surfaceKind",e.get(surface),"from",e.getBaseNode(),"to",e.getAdjNode())).toList());return out;
+  out.put("edges",best.calcEdges().stream().map(e->Map.of("sourceKey",e.get(source),"engineEdge",e.getEdge(),"meters",e.getDistance(),"surfaceKind",e.get(surface),"pavedBackroadCost",e.getDistance()*e.get(getEncodingManager().getIntEncodedValue("paved_factor")),"from",e.getBaseNode(),"to",e.getAdjNode())).toList());return out;
  }
  List<Snap> preparedStationSnaps(JsonNode station,Weighting w){
   int source=station.path("edgeIndex").asInt(-1);if(source<0||source>=input.path("edgeCount").asInt())throw new IllegalArgumentException("Invalid prepared station source");
@@ -346,7 +346,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
  List<Map<String,Object>> fuelSteps(QueryGraph graph,List<FuelSearch.Step> steps){
   List<Map<String,Object>> out=new ArrayList<>();var source=getEncodingManager().getIntEncodedValue("source_edge");
   for(var step:steps){if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("request_cancelled");Map<String,Object> row=new LinkedHashMap<>();row.put("meters",step.meters());row.put("from",step.from());row.put("to",step.to());row.put("engineEdge",step.edge());
-   if(step.refill()!=null)row.put("refill",step.refill());else{var e=graph.getEdgeIteratorState(step.edge(),step.to());row.put("sourceKey",e.get(source));row.put("geometry",e.fetchWayGeometry(FetchMode.ALL).toLineString(false).toString());}out.add(row);
+   if(step.refill()!=null)row.put("refill",step.refill());else{var e=graph.getEdgeIteratorState(step.edge(),step.to());row.put("sourceKey",e.get(source));row.put("surfaceKind",e.get(getEncodingManager().getIntEncodedValue("surface_kind")));row.put("pavedBackroadCost",step.meters()*e.get(getEncodingManager().getIntEncodedValue("paved_factor")));row.put("geometry",e.fetchWayGeometry(FetchMode.ALL).toLineString(false).toString());}out.add(row);
   }return out;
  }
  boolean accepts(JsonNode sequence) {

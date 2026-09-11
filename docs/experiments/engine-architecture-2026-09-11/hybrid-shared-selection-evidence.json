@@ -1,0 +1,136 @@
+{
+  "candidate": "hybrid-shared-selection-20260911-r3",
+  "precedingCheckpoint": "c9e077b698b71ac8b8a0b2e6eca2391d252113c8",
+  "compiledAdapterIdentitySha256": "88fcfdbec8d452d7f5213772650cd84952efcf055099d22e4627d3417e11ce23",
+  "scope": "Private first DIRT shared-style selection. Physical station access remains provisional; no full product or commercial capacity qualification.",
+  "evidence": {
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-audit-summary.json": {
+      "bytes": 308,
+      "sha256": "befb7ff98ab7833c8e08382df36e03f4dd9d5a92eaeb1844ac8bcb96bf0cc8a7"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-boundary-check.json": {
+      "bytes": 283,
+      "sha256": "cd92a9dcfed2a82ee0b886f0674ec7ec3367c8a8f6facf541188db52233d5075"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.fuel-audit.json": {
+      "bytes": 5318,
+      "sha256": "d60b5ae345cddeb72df4e4e0ef17ea5918acf1a228544ede9c6f6ca895a63de0"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.guard.json": {
+      "bytes": 1975,
+      "sha256": "f833f896282bc71ace0723cbed89f5386c577126d6e023526301cc5e2186a936"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.guard.log": {
+      "bytes": 6320,
+      "sha256": "e2ee2db61d86ec0b2709df84bcc9eeba55267083abb02bf0199ec5d75d8b5ce6"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.json": {
+      "bytes": 10930,
+      "sha256": "2707da509aaab75ba09ac8fdb92e6b5de077d10f1423fdce574de9dbfd23175e"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.json.fuel-audit-input.json.gz": {
+      "bytes": 1207455,
+      "sha256": "26cec614082536f21631e77ff1dd1c4f86ea488b944241714eb5cc09eb33c6e7"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.json.fuel-audit-input.json.gz.fuel-walks.gz": {
+      "bytes": 1125885,
+      "sha256": "d98a56df939f613164f250154516bb50411da5136f7eaf35ce3294689066c541"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.json.log": {
+      "bytes": 1263,
+      "sha256": "0878f0eb6bc5d159f361c3eaf27bf95ad074ca4e845ed56c57bbb7ebdb7d34e1"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.json.responses.json.gz": {
+      "bytes": 1422215,
+      "sha256": "8bee6366dd13df5a90f365858fd2020b8d8fc5e30db415b2fc8a0dfb615d90e7"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.json.road-audit-input.json.gz": {
+      "bytes": 206503,
+      "sha256": "8410e54bf4498e60075dc5f5342173e71ec0605010cf57ef940193ad899d0587"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-nsnb.road-audit.json": {
+      "bytes": 811,
+      "sha256": "f834585998ac225e184686ddd56637546726204d1f79044bf06d9a2db149cf1a"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.fuel-audit.json": {
+      "bytes": 1798,
+      "sha256": "331bd37af304f88a4f68129a5ab1de0c5b43b7be4554021552883d9829f83bf2"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.guard.json": {
+      "bytes": 3425,
+      "sha256": "d4c9ea0fb5dfbd75b7f7f8445f6f778ec933b9ab1251b66c7bebdb6946827fe9"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.guard.log": {
+      "bytes": 1614,
+      "sha256": "be445a6ce0c04c0a91340532d9352bb72724923fb48c13b6636980b93f90ffc2"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.json": {
+      "bytes": 3394,
+      "sha256": "c218e9374356e2e18170fd5681f0df1c8d019db302ec2717778ec38ae8ab0366"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.json.fuel-audit-input.json.gz": {
+      "bytes": 575030,
+      "sha256": "a66ac16b8e51170ebcdb26771f4ce5d393635018166047de93515d27f044551f"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.json.fuel-audit-input.json.gz.fuel-walks.gz": {
+      "bytes": 538484,
+      "sha256": "bda0de11619496dfe386934eaf06303f82389fb605bb5aeca385a4b02e97e12a"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.json.log": {
+      "bytes": 1275,
+      "sha256": "b255fa64e1adef441a90ec9d27cee9564e4fc63577ca47978cf9ff9dc1073b9c"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.json.responses.json.gz": {
+      "bytes": 577798,
+      "sha256": "e429d805799cc71cdb901856c7028c1883b25a8bc439ed4d77ff933d280797da"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-qc.json.road-audit-input.json.gz": {
+      "bytes": 22,
+      "sha256": "b49153039ab3d17e6eb1256bc1076131c306b30f3b77e951232beb47748fa564"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.fuel-audit.json": {
+      "bytes": 915,
+      "sha256": "29b83998d12d1c0b158db9f10a5ca450fd12f2bcd56699c62cbbd392a692c0f7"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.guard.json": {
+      "bytes": 5624,
+      "sha256": "ec982faffa8e5e5117fadc487f214c344cad8521a8f53a11b26ae5f3b4100f8a"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.guard.log": {
+      "bytes": 1611,
+      "sha256": "86b4bda836dd4e4379182bfd7cf464f750dbd4fb01a4c88a71b4e7c015b8e0c0"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.json": {
+      "bytes": 3571,
+      "sha256": "78724a4906000dffab0557d84534dcc8fc97629fe00da52e1631a3c1d0fadaa3"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.json.fuel-audit-input.json.gz": {
+      "bytes": 451328,
+      "sha256": "fafbaeea161f221a293750c1d02a6573103ab4154f01016655388ca20d1300d3"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.json.fuel-audit-input.json.gz.fuel-walks.gz": {
+      "bytes": 415469,
+      "sha256": "41fd603c27e52566aa511455ccd063bcd03c04e4c4ff77f8a29c33766e433d55"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.json.log": {
+      "bytes": 1275,
+      "sha256": "2bad4ce26a3b3610745fb0fa0d3561b2b4f8ef8e7b2d308d37dff7a7e29f297a"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.json.responses.json.gz": {
+      "bytes": 453444,
+      "sha256": "60caac7b37fea7e8c719b1806221769db15c28cd9c88e5695f671d6d3f6c1283"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-strict-wv.json.road-audit-input.json.gz": {
+      "bytes": 22,
+      "sha256": "b49153039ab3d17e6eb1256bc1076131c306b30f3b77e951232beb47748fa564"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/shared-rides-unit-checks.log": {
+      "bytes": 2042,
+      "sha256": "91c9fd6d1cc7f0a993d9c3b0b27845ced118bbf9a7fb5c4f7b81ef52589bbbb5"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/compiled-build-identities/88fcfdbec8d452d7f5213772650cd84952efcf055099d22e4627d3417e11ce23.json": {
+      "bytes": 2622,
+      "sha256": "88fcfdbec8d452d7f5213772650cd84952efcf055099d22e4627d3417e11ce23"
+    }
+  }
+}

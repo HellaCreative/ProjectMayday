@@ -1,5 +1,8 @@
 # Private hybrid refinement — September 11, 2026
 
+Preserved second-milestone report. The subsequent DIRT selection integration is
+recorded in [the shared-selection outcome](HYBRID-SHARED-SELECTION.md).
+
 This is a worthwhile second private candidate following
 `f3a10ffe10ae7f319af263073e7694bdbcb67afd`. It improves legal fuel excursions and
 strict long-route search, and adds bounded service cancellation and JVM diagnostics.

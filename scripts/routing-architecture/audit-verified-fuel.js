@@ -28,11 +28,12 @@ for(const record of records){
  const escapeStation=stations.get(r.escapeStation),last=r.escape.findLast(x=>x.geometry)||r.steps.findLast(x=>x.geometry);
  if(!escapeStation||!last||Math.hypot(...endpoint(last,true).map((v,i)=>v-escapeStation.position[i]))>0.00001)errors.push('escape station projection mismatch');
  const edges=[...r.steps,...r.escape].filter(x=>!x.refill);
- walks.push({...record,result:{edges:edges.map(x=>({...x,surfaceKind:undefined})),distance:edges.reduce((a,x)=>a+x.meters,0)}});
+ walks.push({...record,result:{edges,distance:edges.reduce((a,x)=>a+x.meters,0)}});
  reports.push({profile:q.profile,meters,refills:r.steps.filter(x=>x.refill).map(x=>x.refill),errors});
 }
-// The existing road oracle derives surface from immutable source data. Fuel steps
-// do not encode surfaceKind, so remove only that optional comparison in the oracle.
+// The road oracle derives surface and optional backroad scores from immutable
+// source data. Preserve new metadata so ranking evidence is independently checked;
+// legacy fuel records without these fields remain auditable.
 const derived=raw+'.fuel-walks.gz';fs.writeFileSync(derived,zlib.gzipSync(JSON.stringify(walks)));
 const audit=cp.spawnSync(process.execPath,[path.join(__dirname,'audit-verified-routes.js'),joined,derived],{encoding:'utf8'});
 console.log(JSON.stringify({fuel:reports,sourceWalks:audit.stdout?JSON.parse(audit.stdout):[],oracleStderr:audit.stderr},null,2));

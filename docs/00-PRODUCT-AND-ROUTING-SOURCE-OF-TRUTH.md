@@ -1228,3 +1228,13 @@ development direction. Quebec evidence shows additive penalty profiles can
 reverse dirt richness after fuel fallbacks; shared DIRT candidate ranking and
 physical station access remain open acceptance work. No publication or app
 qualification follows from this private milestone.
+
+The subsequent [private shared-selection integration](experiments/engine-architecture-2026-09-11/HYBRID-SHARED-SELECTION.md)
+now reuses DIRT's existing surface comparator and fuel arithmetic over one common
+GraphHopper candidate pool. Dirt sees every candidate available to Balanced;
+style changes reuse the completed pool. Twenty-one generated roads pass source
+audits, including seventeen continuous fuel itineraries. Quebec's selection
+improves from 3.49% to 9.53% known dirt, still below acceptable Dirt character.
+Richer feasible corridor generation, riding coherence, urban policy and physical
+station access remain acceptance work. The private boundary labels station access
+provisional and does not enable navigation or declare full profile/app parity.
