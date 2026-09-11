@@ -277,3 +277,21 @@ the switch off and 30.038 s on, six calls both ways. Balanced was 30.003 s off
 and 30.004 s on, eleven versus ten calls. The result is not a material gain;
 repeated candidate-leg searches remain the bottleneck. Raw runs and the exact
 decision are recorded in `native-fuel-evidence.json`.
+
+## Private Dev app integration candidate
+
+The next step moved into the real app boundary in the isolated worktree. The
+bounded native fuel-snap cache and cooperative pump-loop cancellation are active
+in `Dirt/Routing/OnDevice/OnDeviceRouter.swift`; the prior matcher remains
+available as an in-branch rollback path. The DIRT Dev simulator build succeeded,
+and the arm64 DIRT Dev build signed and installed on White/iPhone 16 as
+`com.mayday.dirt.dev`. After White was unlocked, it launched cleanly; StoreKit,
+the map style and the app root all appeared. No route has yet been executed
+from this app build.
+
+The focused test run had 49 passes and one existing request-shape failure in
+`atlanticDevRequestsCombinedFuelGeometry` (`forwardFeeler` optional `nil` versus
+expected `false`). The candidate diff only touches `OnDeviceRouter.swift`; this
+must be resolved or baselined before promotion. The app candidate is a timing
+and preparation test, not fuel qualification; the continuity gate, pump access,
+larger regions and Dirt/Balanced completion remain open.

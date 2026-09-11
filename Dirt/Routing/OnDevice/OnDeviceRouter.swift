@@ -1,6 +1,15 @@
 import CoreLocation
 import Foundation
 
+/// Active private hybrid fuel preparation for this isolated Dev candidate.
+/// The legacy matcher remains in the method as a rollback path, while this
+/// branch exercises bounded caching and cooperative fuel matching directly.
+/// This cache stores only completed fuel snap metadata and never road topology.
+nonisolated enum NativeFuelPreparation {
+    static let enabled = true
+    static let cacheLimit = 256
+}
+
 /// Zoom-aware tap radius. Screen distance, not a second road network.
 ///
 /// metersPerPoint ≈ 156543.03392 * cos(lat) / 2^zoom  (Web Mercator, 1 CSS point)
@@ -541,10 +550,7 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool
     ) -> Double? {
         var best = Double.infinity
-        let snaps = nearestEdgeSnaps(
-            to: point, allowUnknown: allowUnknown, profile: profile,
-            maxMeters: Self.preferredMatchMeters
-        )
+        let snaps = fuelSnaps(to: point, allowUnknown: allowUnknown, profile: profile)
         for snap in snaps {
             guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
             let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
@@ -577,6 +583,7 @@ nonisolated struct OnDeviceRouter {
         ) else { return [:] }
         var out: [String: Double] = [:]
         for pump in pumps {
+            if Task.isCancelled { return [:] }
             let ll = CLLocationCoordinate2D(latitude: pump.latitude, longitude: pump.longitude)
             if let m = graphMeters(to: ll, dist: dist, profile: profile, allowUnknown: allowUnknown),
                m <= maxMeters {
@@ -3587,6 +3594,63 @@ nonisolated struct OnDeviceRouter {
     }
 
     // MARK: - Snap
+
+    private final class FuelSnapCache: @unchecked Sendable {
+        static let shared = FuelSnapCache()
+        private let lock = NSLock()
+        private weak var owner: GraphV2Pack?
+        private weak var geometry: GeometryV1Pack?
+        private struct Entry { let snaps: [EdgeSnap]; var used: UInt64 }
+        private var entries: [String: Entry] = [:]
+        private var tick: UInt64 = 0
+
+        func get(_ key: String, pack: GraphV2Pack) -> [EdgeSnap]? {
+            lock.lock(); defer { lock.unlock() }
+            if owner !== pack || geometry !== pack.geometry {
+                entries.removeAll(keepingCapacity: false)
+                owner = pack; geometry = pack.geometry
+            }
+            guard var entry = entries[key] else { return nil }
+            tick &+= 1; entry.used = tick; entries[key] = entry
+            return entry.snaps
+        }
+
+        func put(_ snaps: [EdgeSnap], key: String, pack: GraphV2Pack) {
+            lock.lock(); defer { lock.unlock() }
+            if owner !== pack || geometry !== pack.geometry {
+                entries.removeAll(keepingCapacity: false)
+                owner = pack; geometry = pack.geometry
+            }
+            if entries[key] == nil, entries.count >= NativeFuelPreparation.cacheLimit,
+               let oldest = entries.min(by: { $0.value.used < $1.value.used })?.key {
+                entries.removeValue(forKey: oldest)
+            }
+            tick &+= 1; entries[key] = Entry(snaps: snaps, used: tick)
+        }
+    }
+
+    private func fuelSnaps(
+        to point: CLLocationCoordinate2D,
+        allowUnknown: Bool,
+        profile: RouteProfile
+    ) -> [EdgeSnap] {
+        guard NativeFuelPreparation.enabled else {
+            return nearestEdgeSnaps(
+                to: point, allowUnknown: allowUnknown, profile: profile,
+                maxMeters: Self.preferredMatchMeters
+            )
+        }
+        let key = "\(point.longitude.bitPattern):\(point.latitude.bitPattern):\(profile.rawValue):\(allowUnknown)"
+        if let cached = FuelSnapCache.shared.get(key, pack: pack) { return cached }
+        guard !Task.isCancelled else { return [] }
+        let snaps = nearestEdgeSnaps(
+            to: point, allowUnknown: allowUnknown, profile: profile,
+            maxMeters: Self.preferredMatchMeters
+        )
+        guard !Task.isCancelled else { return [] }
+        FuelSnapCache.shared.put(snaps, key: key, pack: pack)
+        return snaps
+    }
 
     private struct EdgeSnap {
         var edgeIndex: Int

@@ -72,3 +72,16 @@ Native fuel preparation (private diagnostic, not app integration):
 - [ ] Integrate this gate/index into the accepted Swift app and qualify actual
   phone fuel, larger regions, physical pump access and complete preference/history
   parity. The local Dirt/Balanced fuel candidates still hit the diagnostic budget.
+
+Private Dev app candidate:
+
+- [x] Activate bounded native fuel-snap caching and cooperative pump-loop
+  cancellation in the isolated DIRT Dev worktree; Release/stable app untouched.
+- [x] Compile simulator and arm64 White/iPhone 16 builds; install the private
+  `com.mayday.dirt.dev` bundle on White.
+- [ ] Launch on an unlocked White device and run the bounded route/fuel matrix;
+  no device route has been executed from this app build yet.
+- [ ] Resolve or baseline the unrelated `forwardFeeler` optional-value test
+  failure before any promotion decision.
+- [ ] Integrate the geometry index and continuity publication gate only after
+  the app-level preparation run preserves route and fuel behavior.
