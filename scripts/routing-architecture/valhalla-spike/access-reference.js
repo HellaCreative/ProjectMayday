@@ -1,0 +1,3 @@
+const {evaluateMotorcycleAccess}=require('../../pack-fabric/routing/lib/legal-topology/motorcycle-access');
+const cases={verified_motorcycle_override:{highway:'track',access:'no',motorcycle:'yes'},private:{highway:'unclassified',access:'private'},unknown_track:{highway:'track'},unknown_path:{highway:'path'},motorcycle_direction_denied:{highway:'unclassified','motorcycle:forward':'no',motorcycle:'yes'},motorcycle_yes_motorvehicle_forward_no:{highway:'unclassified',motorcycle:'yes','motor_vehicle:forward':'no'},destination:{highway:'unclassified',access:'destination'},explicit_denied:{highway:'unclassified',motorcycle:'no'}};
+console.log(JSON.stringify(Object.fromEntries(Object.entries(cases).map(([name,tags])=>[name,evaluateMotorcycleAccess(tags)])),null,2));

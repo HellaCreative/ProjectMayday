@@ -31,11 +31,16 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
  final Path artifactIdentity;
  final String identity;
  final Map<Integer,List<Integer>> sourceCopies=new HashMap<>();
+ final Map<Integer,Integer> loopTails=new HashMap<>(),loopOrigins=new HashMap<>();
+ final Path loopFile;
  JsonNode stationDataset;
  VerifiedHopper(Path descriptor,Path target) throws Exception {
   this.descriptor=descriptor;input=JSON.readTree(descriptor.toFile());
+  loopFile=target.resolve("dirt-loop-tails.json");
+  if(Files.exists(loopFile)){JsonNode loops=JSON.readTree(loopFile.toFile());loops.fields().forEachRemaining(e->loopTails.put(Integer.parseInt(e.getKey()),e.getValue().asInt()));}
   artifactIdentity=target.resolve("dirt-input.identity");
-  identity="directed-v1-distance-lm:"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(descriptor)));
+  boolean objectiveLandmarks=Boolean.getBoolean("dirt.objectiveLandmarks");
+  identity=(objectiveLandmarks?"directed-v2-loop-objective-lm:":"directed-v2-loop-distance-lm:")+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(descriptor)));
   if(Files.exists(target.resolve("properties"))&&(!Files.exists(artifactIdentity)||!Files.readString(artifactIdentity).equals(identity)))throw new IOException("Existing graph identity mismatch");
   for(String n:List.of("edgeSurfaceLeaf","edgeRoadClassLeaf","edgeAccess"))if(!input.path("sections").path(n).path("type").asText().equals("Uint8Array"))throw new IOException("Unexpected section type "+n);
   if(!input.path("sections").path("edgeMeters").path("type").asText().equals("Uint32Array"))throw new IOException("Unexpected meters type");
@@ -43,6 +48,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   if(Files.exists(stationFile)){stationDataset=JSON.readTree(stationFile.toFile());if(!stationDataset.path("sourceManifestSha256").equals(input.path("sourceManifestSha256"))||!stationDataset.path("sourceIdentity").equals(input.path("identity")))throw new IOException("Station source identity mismatch");}
   DefaultImportRegistry defaults=new DefaultImportRegistry();
   setImportRegistry(name -> switch(name) {
+   case "canonical_edge" -> ImportUnit.create(name,p->new IntEncodedValueImpl(name,31,false),null);
    case "source_edge" -> ImportUnit.create(name,p->new IntEncodedValueImpl(name,31,false),null);
    case "dirt_access" -> ImportUnit.create(name,p->new IntEncodedValueImpl(name,3,true),null);
    case "surface_kind" -> ImportUnit.create(name,p->new IntEncodedValueImpl(name,2,false),null);
@@ -54,12 +60,12 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   c.putObject("graph.location",target.toString());c.putObject("datareader.file",descriptor.toString());
   c.putObject("graph.dataaccess.default_type","MMAP");c.putObject("graph.sort",false);
   c.putObject("prepare.min_network_size",0);c.putObject("import.osm.ignored_highways","");
-  c.putObject("graph.encoded_values","source_edge,dirt_access,surface_kind,paved_factor,dirt_factor");
+  c.putObject("graph.encoded_values","canonical_edge,source_edge,dirt_access,surface_kind,paved_factor,dirt_factor");
   c.putObject("prepare.ch.threads",1);c.putObject("prepare.lm.threads",1);c.putObject("prepare.lm.landmarks",16);
   c.putObject("routing.max_visited_nodes",12000000);
   c.setProfiles(NAMES.stream().map(n->new Profile(n).setWeighting("custom").setTurnCostsConfig(new TurnCostsConfig(List.of("motorcycle"),0))).toList());
   // LM is prepared on the distance lower bound, with all endpoint/unknown access.
-  c.setLMProfiles(NAMES.stream().map(n->n.equals("distance")?new LMProfile(n):new LMProfile(n).setPreparationProfile("distance")).toList());
+  c.setLMProfiles(NAMES.stream().map(n->objectiveLandmarks||n.equals("distance")?new LMProfile(n):new LMProfile(n).setPreparationProfile("distance")).toList());
   c.setCHProfiles(List.of());
   init(c);
  }
@@ -73,27 +79,33 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
  @Override protected void importOSM() {
   try {
    createBaseGraphAndProperties();BaseGraph g=getBaseGraph();var em=getEncodingManager();
-   IntEncodedValue source=em.getIntEncodedValue("source_edge"),access=em.getIntEncodedValue("dirt_access"),surface=em.getIntEncodedValue("surface_kind"),paved=em.getIntEncodedValue("paved_factor"),dirt=em.getIntEncodedValue("dirt_factor");
+   IntEncodedValue canonical=em.getIntEncodedValue("canonical_edge"),source=em.getIntEncodedValue("source_edge"),access=em.getIntEncodedValue("dirt_access"),surface=em.getIntEncodedValue("surface_kind"),paved=em.getIntEncodedValue("paved_factor"),dirt=em.getIntEncodedValue("dirt_factor");
    ByteBuffer xy=section("nodeCoords"),from=section("edgeFrom"),to=section("edgeTo"),meters=section("edgeMeters"),a=section("edgeAccess"),s=section("edgeSurfaceLeaf"),roads=section("edgeRoadClassLeaf"),regions=section("sourceRegions"),local=section("sourceEdges");
    List<ByteBuffer> geometries=new ArrayList<>();for(JsonNode p:input.path("geometryPaths"))geometries.add(map(Path.of(p.asText())));
    int nodes=input.path("nodeCount").asInt(),edges=input.path("edgeCount").asInt();
    for(int n=0;n<nodes;n++)g.getNodeAccess().setNode(n,xy.getFloat(n*8+4),xy.getFloat(n*8));
+   record Tail(int key,int cloneNode,int original,double meters,PointList geometry){}List<Tail> tails=new ArrayList<>();
    for(int e=0;e<edges;e++) for(int direction=0;direction<2;direction++) {
     int kind=input.path("surfaceKinds").get(Byte.toUnsignedInt(s.get(e))).asInt();
     String road=input.path("roadClasses").get(Byte.toUnsignedInt(roads.get(e))).asText();
     int pf=switch(road){case "primary","primary_link"->4;case "trunk","trunk_link"->8;case "motorway","motorway_link","freeway"->32;case "service"->6;default->1;};
     int df=Set.of("motorway","motorway_link","freeway").contains(road)?8:1;
-    EdgeIteratorState edge=g.edge(direction==0?from.getInt(e*4):to.getInt(e*4),direction==0?to.getInt(e*4):from.getInt(e*4)).setDistance(Integer.toUnsignedLong(meters.getInt(e*4)));
+    int src=direction==0?from.getInt(e*4):to.getInt(e*4),dst=direction==0?to.getInt(e*4):from.getInt(e*4);boolean loop=src==dst;
+    if(loop){dst=nodes+tails.size();g.getNodeAccess().setNode(dst,g.getNodeAccess().getLat(src),g.getNodeAccess().getLon(src));}
+    EdgeIteratorState edge=g.edge(src,dst).setDistance(loop?0:Integer.toUnsignedLong(meters.getInt(e*4)));
     if(edge.getEdge()!=e*2+direction)throw new IllegalStateException("source edge ID drift");
-    edge.set(source,e*2+direction).set(access,Byte.toUnsignedInt(a.get(e*2+direction)),2).set(surface,kind).set(paved,pf*(kind==0?1:100)).set(dirt,df);
+    edge.set(canonical,edge.getEdge()).set(source,e*2+direction).set(access,Byte.toUnsignedInt(a.get(e*2+direction)),2).set(surface,kind).set(paved,pf*(kind==0?1:100)).set(dirt,df);
     ByteBuffer geom=geometries.get(Short.toUnsignedInt(regions.getShort(e*2)));int id=local.getInt(e*4),count=geom.getInt(8);boolean doubles=(geom.getShort(6)&1)!=0;
     int start=geom.getInt(16+id*4),end=geom.getInt(20+id*4),coords=16+(count+1)*4;coords=(coords+(doubles?7:3))&~(doubles?7:3);
     PointList line=new PointList(Math.max(0,(end-start)/2-2),false);
     for(int i=start+2;i<end-2;i+=2)line.add(doubles?geom.getDouble(coords+(i+1)*8):geom.getFloat(coords+(i+1)*4),doubles?geom.getDouble(coords+i*8):geom.getFloat(coords+i*4));
-    if(direction==1)line.reverse();edge.setWayGeometry(line);
+    if(direction==1)line.reverse();
+    if(loop)tails.add(new Tail(e*2+direction,dst,src,Integer.toUnsignedLong(meters.getInt(e*4)),line));else edge.setWayGeometry(line);
    }
+   for(Tail tail:tails){var head=g.getEdgeIteratorStateForKey(tail.key*2);var edge=g.edge(tail.cloneNode,tail.original).setDistance(tail.meters).setWayGeometry(tail.geometry);edge.setFlags(head.getFlags());edge.set(canonical,edge.getEdge());loopTails.put(tail.key,edge.getEdge());}
+   JSON.writeValue(loopFile.toFile(),loopTails);
    List<IntArrayList> keys=new ArrayList<>(),via=new ArrayList<>();List<com.carrotsearch.hppc.BitSet> bits=new ArrayList<>();
-   for(JsonNode r:input.path("restrictions")){IntArrayList k=new IntArrayList(),n=new IntArrayList();r.path("keys").forEach(x->k.add(x.asInt()*2));r.path("viaNodes").forEach(x->n.add(x.asInt()));keys.add(k);via.add(n);com.carrotsearch.hppc.BitSet b=new com.carrotsearch.hppc.BitSet();b.set(0,NAMES.size());bits.add(b);}
+   for(JsonNode r:input.path("restrictions")){IntArrayList k=new IntArrayList(),n=new IntArrayList();var originals=r.path("keys");for(int i=0;i<originals.size();i++){int key=originals.get(i).asInt(),tail=loopTails.getOrDefault(key,key);if(i==0)k.add(tail*2);else if(i==originals.size()-1)k.add(key*2);else{k.add(key*2);if(tail!=key)k.add(tail*2);}}for(int i=0;i<k.size()-1;i++)n.add(g.getEdgeIteratorStateForKey(k.get(i)).getAdjNode());keys.add(k);via.add(n);com.carrotsearch.hppc.BitSet b=new com.carrotsearch.hppc.BitSet();b.set(0,NAMES.size());bits.add(b);}
    new RestrictionSetter(g,NAMES.stream().map(n->em.getTurnBooleanEncodedValue(TurnRestriction.key(n))).toList()).setDirectedRestrictions(keys,via,bits);
    System.out.println("VERIFIED_IMPORT "+nodes+" nodes "+edges+" source edges "+g.getEdges()+" expanded edges "+keys.size()+" restrictions");
   } catch(Exception e){throw new RuntimeException(e);}
@@ -123,11 +135,13 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   };
  }
  void indexSourceCopies(){
-  var g=getBaseGraph();var source=getEncodingManager().getIntEncodedValue("source_edge");
-  for(int e=input.path("edgeCount").asInt()*2;e<g.getEdges();e++)sourceCopies.computeIfAbsent(g.getEdgeIteratorStateForKey(e*2).get(source),k->new ArrayList<>()).add(e);
+  var g=getBaseGraph();var canonical=getEncodingManager().getIntEncodedValue("canonical_edge");
+  for(int tail:loopTails.values()){var e=g.getEdgeIteratorStateForKey(tail*2);loopOrigins.put(e.getBaseNode(),e.getAdjNode());}
+  for(int e=input.path("edgeCount").asInt()*2+loopTails.size();e<g.getEdges();e++)sourceCopies.computeIfAbsent(g.getEdgeIteratorStateForKey(e*2).get(canonical),k->new ArrayList<>()).add(e);
  }
  void appendCopies(Snap original,List<Snap> result) {
-  result.add(original);int key=original.getClosestEdge().get(getEncodingManager().getIntEncodedValue("source_edge"));
+  if(original.getSnappedPosition()==Snap.Position.TOWER&&loopOrigins.containsKey(original.getClosestNode())){int node=loopOrigins.get(original.getClosestNode());original.setClosestNode(node);original.setWayIndex(original.getClosestEdge().getBaseNode()==node?0:original.getClosestEdge().fetchWayGeometry(FetchMode.ALL).size()-1);}
+  result.add(original);int key=original.getClosestEdge().get(getEncodingManager().getIntEncodedValue("canonical_edge"));
   for(int edge:sourceCopies.getOrDefault(key,List.of())){
    if(edge==original.getClosestEdge().getEdge())continue;
    Snap copy=new Snap(original.getQueryPoint().lat,original.getQueryPoint().lon);copy.setClosestNode(original.getClosestNode());copy.setQueryDistance(original.getQueryDistance());copy.setWayIndex(original.getWayIndex());copy.setSnappedPosition(original.getSnappedPosition());copy.setSnappedPoint(original.getSnappedPoint());
@@ -147,7 +161,7 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   List<Snap> result=new ArrayList<>();appendCopies(first,result);if(second.isValid())appendCopies(second,result);return result;
  }
  QueryGraph project(List<Snap> snaps){
-  QueryGraph graph=QueryGraph.create(getBaseGraph(),snaps);
+  QueryGraph graph=new ExactQueryGraph(getBaseGraph(),snaps);
   Map<Integer,Double> totals=new HashMap<>();Map<Integer,VirtualEdgeIteratorState> pieces=new HashMap<>();
   for(int id=getBaseGraph().getEdges();id<graph.getEdges();id++){
    var e=(VirtualEdgeIteratorState)graph.getEdgeIteratorStateForKey(id*2);if(pieces.putIfAbsent(e.getEdge(),e)!=null)continue;
@@ -182,10 +196,10 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
   double fraction=station.path("fraction").asDouble(Double.NaN);if(!Double.isFinite(fraction)||fraction<0||fraction>1)throw new IllegalArgumentException("Invalid station fraction");
   double lat=station.path("position").get(1).asDouble(),lon=station.path("position").get(0).asDouble();List<Snap> snaps=new ArrayList<>();
   for(int direction=0;direction<2;direction++){
-   var e=getBaseGraph().getEdgeIteratorStateForKey((source*2+direction)*2);if(!Double.isFinite(w.calcEdgeWeight(e,false)))continue;
+   int sourceKey=source*2+direction;var e=getBaseGraph().getEdgeIteratorStateForKey(loopTails.getOrDefault(sourceKey,sourceKey)*2);if(!Double.isFinite(w.calcEdgeWeight(e,false)))continue;
    int points=e.fetchWayGeometry(FetchMode.ALL).size(),index=station.path("match").path("segmentIndex").asInt();if(direction==1)index=points-2-index;
    Snap snap=new Snap(lat,lon);snap.setClosestEdge(e);snap.setQueryDistance(station.path("match").path("distanceM").asDouble());snap.setSnappedPoint(new com.graphhopper.util.shapes.GHPoint3D(lat,lon,Double.NaN));
-   double f=direction==0?fraction:1-fraction;
+   double f=direction==0?fraction:1-fraction;if(f==0&&loopTails.containsKey(sourceKey))f=1;
    snap.setClosestNode(f==1?e.getAdjNode():e.getBaseNode());snap.setWayIndex(f==0?0:f==1?points-1:index);snap.setSnappedPosition(f==0||f==1?Snap.Position.TOWER:Snap.Position.EDGE);appendCopies(snap,snaps);
   }return snaps;
  }
@@ -203,8 +217,29 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
    if(!matches.isEmpty()){bindings.add(Map.entry(id,matches));all.addAll(matches);}
   }
   QueryGraph graph=project(all);Map<Integer,String> stations=new HashMap<>();for(var binding:bindings)for(Snap point:binding.getValue())stations.putIfAbsent(point.getClosestNode(),binding.getKey());
-  JsonNode f=q.path("fuel");FuelSearch.Result result=FuelSearch.search(graph,w,from.stream().map(Snap::getClosestNode).distinct().toList(),new HashSet<>(to.stream().map(Snap::getClosestNode).toList()),stations,f.path("usableRangeMeters").asDouble(Double.NaN),f.path("initialUsableMeters").asDouble(Double.NaN),begin+90000000000L,Math.min(500000,q.path("maxLabels").asInt(100000)));
-  Map<String,Object> out=new LinkedHashMap<>();out.put("state",result.state());out.put("reason",result.reason());out.put("seconds",(System.nanoTime()-begin)/1e9);out.put("labels",result.labels());out.put("expanded",result.expanded());out.put("distance",result.meters());out.put("weight",result.cost());out.put("remainingUsableMeters",result.remaining());out.put("escapeStation",result.escapeStation());out.put("steps",fuelSteps(graph,result.steps()));out.put("escape",fuelSteps(graph,result.escape()));out.put("matchedStations",bindings.size());out.put("stationAccessEvidence","legal_road_projection");return out;
+  JsonNode f=q.path("fuel");double full=f.path("usableRangeMeters").asDouble(Double.NaN),initial=f.path("initialUsableMeters").asDouble(Double.NaN);
+  if(!Double.isFinite(full)||full<=0||!Double.isFinite(initial)||initial<0||initial>full)throw new IllegalArgumentException("Invalid usable fuel range");
+  long deadline=begin+90000000000L;int maxLabels=Math.min(500000,q.path("maxLabels").asInt(100000));
+  FuelSearch.Result result=null;com.graphhopper.routing.Path best=null;boolean roadComplete=true;int roadVisited=0;List<String> roadFailures=new ArrayList<>();
+  if(!q.path("forceResourceSearch").asBoolean(false)){
+   boolean flexible=q.path("flexible").asBoolean(false);RoutingAlgorithmFactory factory=flexible?new RoutingAlgorithmFactorySimple():new LMRoutingAlgorithmFactory(getLandmarks().get(name));
+   for(int a:from.stream().map(Snap::getClosestNode).distinct().toList())for(int b:to.stream().map(Snap::getClosestNode).distinct().toList()){
+    long millis=(deadline-System.nanoTime())/1000000;if(millis<=0){roadComplete=false;continue;}
+    var options=new AlgorithmOptions().setAlgorithm(flexible?"dijkstrabi":"astar").setTraversalMode(TraversalMode.EDGE_BASED).setMaxVisitedNodes(12000000).setTimeoutMillis(millis);
+    var algo=factory.createAlgo(graph,w,options);try{var candidate=algo.calcPath(a,b);roadVisited+=algo.getVisitedNodes();if(algo.getVisitedNodes()>=12000000||System.nanoTime()>=deadline)roadComplete=false;if(candidate.isFound()&&(best==null||candidate.getWeight()<best.getWeight()))best=candidate;}catch(Exception ex){roadComplete=false;roadFailures.add(ex.toString());}
+   }
+   if(roadComplete&&best!=null)result=FuelSearch.certify(graph,w,best,stations,full,initial,deadline,maxLabels);
+  }
+  if(result==null){
+   var landmarks=getLandmarks().get(name);List<com.graphhopper.routing.lm.LMApproximator> bounds=new ArrayList<>();
+   if(!q.path("disableFuelGuidance").asBoolean(false))for(int target:to.stream().map(Snap::getClosestNode).distinct().toList()){
+    var bound=com.graphhopper.routing.lm.LMApproximator.forLandmarks(graph,graph.wrapWeighting(w),landmarks,Math.max(1,Math.min(12,landmarks.getLandmarkCount()/2)));bound.setTo(target);bounds.add(bound);
+   }
+   // Minimum across destination states remains a lower bound; fuel constraints only add cost.
+   java.util.function.IntToDoubleFunction lowerBound=node->{double value=Double.POSITIVE_INFINITY;for(var bound:bounds)value=Math.min(value,bound.approximate(node));return Double.isFinite(value)?value:0;};
+   result=FuelSearch.search(graph,w,from.stream().map(Snap::getClosestNode).distinct().toList(),new HashSet<>(to.stream().map(Snap::getClosestNode).toList()),stations,full,initial,deadline,maxLabels,lowerBound);
+  }
+  Map<String,Object> out=new LinkedHashMap<>();out.put("state",result.state());out.put("reason",result.reason());out.put("seconds",(System.nanoTime()-begin)/1e9);out.put("labels",result.labels());out.put("expanded",result.expanded());out.put("distance",result.meters());out.put("weight",result.cost());out.put("remainingUsableMeters",result.remaining());out.put("escapeStation",result.escapeStation());out.put("steps",fuelSteps(graph,result.steps()));out.put("escape",fuelSteps(graph,result.escape()));out.put("matchedStations",bindings.size());out.put("roadVisited",roadVisited);out.put("roadFailures",roadFailures);out.put("roadBestDistance",best==null?null:best.getDistance());out.put("roadSourceKeys",best==null?List.of():best.calcEdges().stream().map(e->List.of(e.getEdge(),e.get(getEncodingManager().getIntEncodedValue("source_edge")))).toList());out.put("stationAccessEvidence","legal_road_projection");return out;
  }
  List<Map<String,Object>> fuelSteps(QueryGraph graph,List<FuelSearch.Step> steps){
   List<Map<String,Object>> out=new ArrayList<>();var source=getEncodingManager().getIntEncodedValue("source_edge");
@@ -214,14 +249,16 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
  }
  boolean accepts(JsonNode sequence) {
   if(sequence.isEmpty())return true;
-  Set<Integer> states=new HashSet<>();var g=getBaseGraph();var source=getEncodingManager().getIntEncodedValue("source_edge");
-  Weighting w=createWeighting(getProfile("distance"),new PMap().putObject("allow_unknown",true));
+  Set<Integer> states=new HashSet<>();var g=getBaseGraph();var source=getEncodingManager().getIntEncodedValue("source_edge");Weighting w=createWeighting(getProfile("distance"),new PMap().putObject("allow_unknown",true));
+  record Hop(int node,int incoming,int depth){}
   for(int pos=0;pos<sequence.size();pos++){
-   int key=sequence.get(pos).asInt(),id=key;var original=g.getEdgeIteratorStateForKey(key*2);Set<Integer> next=new HashSet<>();
-   var it=g.createEdgeExplorer().setBaseNode(original.getBaseNode());
-   while(it.next())if(it.get(source)==id&&it.getAdjNode()==original.getAdjNode()&&Double.isFinite(w.calcEdgeWeight(it,false))){
-    if(pos==0)next.add(it.getEdgeKey());
-    else for(int previous:states)if(g.getEdgeIteratorStateForKey(previous).getAdjNode()==it.getBaseNode()&&Double.isFinite(w.calcTurnWeight(previous/2,it.getBaseNode(),it.getEdge())))next.add(it.getEdgeKey());
+   int key=sequence.get(pos).asInt(),start=g.getEdgeIteratorStateForKey(key*2).getBaseNode(),end=g.getEdgeIteratorStateForKey(loopTails.getOrDefault(key,key)*2).getAdjNode();Set<Integer> next=new HashSet<>();ArrayDeque<Hop> todo=new ArrayDeque<>();
+   if(pos==0)todo.add(new Hop(start,-1,0));else for(int previous:states)if(g.getEdgeIteratorStateForKey(previous).getAdjNode()==start)todo.add(new Hop(start,previous/2,0));
+   while(!todo.isEmpty()){
+    Hop h=todo.removeFirst();var it=g.createEdgeExplorer().setBaseNode(h.node);
+    while(it.next())if(it.get(source)==key&&Double.isFinite(w.calcEdgeWeight(it,false))&&Double.isFinite(w.calcTurnWeight(h.incoming,h.node,it.getEdge()))){
+     if(it.getAdjNode()==end)next.add(it.getEdgeKey());else if(h.depth<2)todo.add(new Hop(it.getAdjNode(),it.getEdge(),h.depth+1));
+    }
    }
    states=next;
   }
