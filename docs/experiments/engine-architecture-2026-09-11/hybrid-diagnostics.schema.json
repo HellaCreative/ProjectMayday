@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DIRT private hybrid diagnostics v1",
+  "type": "object",
+  "required": [
+    "resources",
+    "phases"
+  ],
+  "properties": {
+    "resources": {
+      "type": "object",
+      "required": [
+        "heapUsedBeforeBytes",
+        "heapUsedAfterBytes",
+        "heapCommittedBytes",
+        "servingLifetimeSampledPeakHeapBytes",
+        "nonHeapUsedBytes",
+        "mappedBufferCapacityBytes",
+        "directBufferCapacityBytes",
+        "schemaVersion",
+        "heapSampleIntervalMillis",
+        "processGcCollectionsDuringRequest",
+        "processGcMillisDuringRequest",
+        "requestThreadAllocatedBytes",
+        "scope"
+      ],
+      "properties": {
+        "heapUsedBeforeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes."
+        },
+        "heapUsedAfterBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes."
+        },
+        "heapCommittedBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes."
+        },
+        "servingLifetimeSampledPeakHeapBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes."
+        },
+        "nonHeapUsedBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes."
+        },
+        "mappedBufferCapacityBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes; mapped capacity is virtual capacity, not residency."
+        },
+        "directBufferCapacityBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes."
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "heapSampleIntervalMillis": {
+          "const": 50
+        },
+        "processGcCollectionsDuringRequest": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "processGcMillisDuringRequest": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requestThreadAllocatedBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "phases": {
+      "type": "object",
+      "required": [
+        "matchingSeconds",
+        "queryGraphSeconds",
+        "roadSearchSeconds",
+        "alternativeSearchSeconds",
+        "fuelCertificateSeconds",
+        "fuelRepairSeconds",
+        "geometryAssemblySeconds"
+      ],
+      "properties": {
+        "matchingSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "queryGraphSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "roadAndCertificateSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "roadSearchSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "alternativeSearchSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "fuelCertificateSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "fuelRepairSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "geometryAssemblySeconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

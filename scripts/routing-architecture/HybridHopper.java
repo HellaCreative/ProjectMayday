@@ -6,6 +6,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 public final class HybridHopper {
  static Map<String,Object> route(VerifiedHopper hopper,JsonNode input){
+  var before=HybridTelemetry.read();
+  var result=routeBody(hopper,input);result.put("resources",HybridTelemetry.finish(before));return result;
+ }
+ static Map<String,Object> routeBody(VerifiedHopper hopper,JsonNode input){
   if(input.has("arrivalHistory"))throw new IllegalArgumentException("Continuation import unsupported; history cannot be discarded");
   ObjectNode q=input.deepCopy();q.put("hybrid",true);
   Map<String,Object> envelope=new LinkedHashMap<>();envelope.put("engine","dirt-graphhopper-hybrid-v1");envelope.put("sourceIdentity",hopper.identity);
@@ -15,6 +19,7 @@ public final class HybridHopper {
    var road=hopper.directedRoute(q);envelope.put("road",road);envelope.put("fuel",Map.of("status","not_requested"));
    envelope.put("state",road.containsKey("distance")?"road_only":"incomplete");return envelope;
   }
+  if(!q.has("refineFuelRepair"))q.put("refineFuelRepair",true);
   q.put("fuelRepair",true);q.put("fuelPortfolio",true);q.put("portfolioOnly",true);
   var fuel=hopper.fuelRoute(q);boolean verified="found".equals(fuel.get("state"));
   envelope.put("state",verified?"fuel_verified":"fuel_unresolved");

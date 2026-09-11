@@ -1,10 +1,12 @@
 """One long-route control and two concurrent replays, with a shared graph."""
-import pathlib,json,gzip,subprocess,threading,queue,time,hashlib
-r=pathlib.Path('/Users/richardsmith/.codex/experiments/routing-architecture-20260911');out=r/'results/hybrid-wv-load.json'
+import pathlib,json,gzip,subprocess,threading,queue,time,hashlib,argparse
+from adapter_identity import ensure_current
+r=pathlib.Path('/Users/richardsmith/.codex/experiments/routing-architecture-20260911');build_identity=ensure_current(r)
+p=argparse.ArgumentParser();p.add_argument('--out',default=str(r/'results/hybrid-wv-load.json'));p.add_argument('--artifact',default=str(r/'data/gh-verified-wv-directed-v2'));a=p.parse_args();out=pathlib.Path(a.out)
 if out.exists():raise RuntimeError('Preserve prior evidence; use a new output identity')
 q={'start':[-63.34018,44.76481],'end':[-80.19745,38.99357],'profile':'dirt30','allowUnknown':False,'hybrid':True,'fuel':{'usableRangeMeters':193121.28,'initialUsableMeters':193121.28}}
-cmd=['/opt/homebrew/opt/openjdk/bin/java','-Xmx2g','-cp',str(r/'tools/gh-adapter')+':'+str(r/'tools/graphhopper-web-11.0.jar'),'ConcurrentVerifiedHopper',str(r/'data/verified-wv/verified-input.json'),str(r/'data/gh-verified-wv-directed-v2'),'2']
-child=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1);messages=queue.Queue();log=out.with_suffix('.log').open('w');rows=[];report={'query':q,'workers':2,'clientCounts':[1,2],'runs':[]}
+cmd=['/opt/homebrew/opt/openjdk/bin/java','-Xmx2g','-cp',str(r/'tools/gh-adapter')+':'+str(r/'tools/graphhopper-web-11.0.jar'),'ConcurrentVerifiedHopper',str(r/'data/verified-wv/verified-input.json'),a.artifact,'2']
+child=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1);messages=queue.Queue();log=out.with_suffix('.log').open('w');rows=[];report={'buildIdentitySha256':build_identity,'command':cmd,'query':q,'workers':2,'clientCounts':[1,2],'runs':[]}
 def consume():
  for line in child.stdout:
   if line.startswith('READY '):messages.put(('ready',None))

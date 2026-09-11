@@ -1,5 +1,5 @@
 """Compile isolated extension against pinned GH 11 jar; never alter upstream source."""
-import pathlib,subprocess,hashlib,json
+import pathlib,subprocess,hashlib,json,tempfile,time
 r=pathlib.Path('/Users/richardsmith/.codex/experiments/routing-architecture-20260911');here=pathlib.Path(__file__).resolve().parent
 source=r/'sources/graphhopper/core/src/main/java/com/graphhopper/routing/util/parsers/RestrictionSetter.java'
 s=source.read_text();needle='        disableRedundantRestrictions(internalRestrictions, encBits);'
@@ -27,15 +27,19 @@ extension='''        setInternalRestrictions(internalRestrictions, encBits);
     private void setInternalRestrictions(List<InternalRestriction> internalRestrictions, List<BitSet> encBits) {
 '''
 s=s.replace(needle,extension+needle)
-b=r/'tools/gh-adapter';b.mkdir(exist_ok=True);(b/'RestrictionSetter.java').write_text(s)
+target=r/'tools/gh-adapter';b=pathlib.Path(tempfile.mkdtemp(prefix='gh-adapter-build-',dir=r/'tools')); (b/'RestrictionSetter.java').write_text(s)
 querySource=r/'sources/graphhopper/core/src/main/java/com/graphhopper/routing/querygraph/QueryGraph.java'
 qs=querySource.read_text();old='private QueryGraph(BaseGraph graph, List<Snap> snaps)';assert qs.count(old)==1
 (b/'QueryGraph.java').write_text(qs.replace(old,'protected QueryGraph(BaseGraph graph, List<Snap> snaps)'))
-subprocess.run(['/opt/homebrew/opt/openjdk/bin/javac','-cp',str(r/'tools/graphhopper-web-11.0.jar'),'-d',str(b),str(b/'RestrictionSetter.java'),str(b/'QueryGraph.java'),str(here/'ExactQueryGraph.java'),str(here/'VerifiedHopper.java'),str(here/'FuelSearch.java'),str(here/'FuelRepair.java'),str(here/'HybridHopper.java'),str(here/'ConcurrentVerifiedHopper.java')],check=True)
+subprocess.run(['/opt/homebrew/opt/openjdk/bin/javac','-cp',str(r/'tools/graphhopper-web-11.0.jar'),'-d',str(b),str(b/'RestrictionSetter.java'),str(b/'QueryGraph.java'),str(here/'ExactQueryGraph.java'),str(here/'VerifiedHopper.java'),str(here/'FuelSearch.java'),str(here/'FuelRepair.java'),str(here/'HybridHopper.java'),str(here/'HybridTelemetry.java'),str(here/'DirtLandmarkAccess.java'),str(here/'ConcurrentVerifiedHopper.java')],check=True)
 identity_files = [source, querySource, b/'RestrictionSetter.java', b/'QueryGraph.java',
-                  here/'ExactQueryGraph.java', here/'VerifiedHopper.java', here/'FuelSearch.java', here/'FuelRepair.java', here/'HybridHopper.java', here/'ConcurrentVerifiedHopper.java',
+                  here/'ExactQueryGraph.java', here/'VerifiedHopper.java', here/'FuelSearch.java', here/'FuelRepair.java', here/'HybridHopper.java', here/'HybridTelemetry.java', here/'DirtLandmarkAccess.java', here/'ConcurrentVerifiedHopper.java',
                   r/'tools/graphhopper-web-11.0.jar']
 (b/'build-identity.json').write_text(json.dumps({
-    'files': {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in identity_files},
+    'files': {str(target/path.name if path.parent==b else path): hashlib.sha256(path.read_bytes()).hexdigest() for path in identity_files},
     'scope': 'Pinned upstream inputs and every compiled private Java extension.'
 }, indent=2))
+
+if target.exists():target.rename(target.with_name("gh-adapter-previous-"+str(time.time_ns())))
+b.rename(target)
+print("BUILD_COMPLETE "+hashlib.sha256((target/"build-identity.json").read_bytes()).hexdigest())

@@ -1217,3 +1217,14 @@ its precise qualification limits are recorded in
 [the hybrid experiment](experiments/engine-architecture-2026-09-11/HYBRID.md).
 Additive engine profiles are not accepted Dirt/Balanced/Clean parity. No app or
 Android behavior changes are shipped by this private Java/Python experiment.
+
+The [second private hybrid candidate](experiments/engine-architecture-2026-09-11/HYBRID-REFINEMENT.md)
+retains successful fuel chains while comparing legal downstream excursions and
+adds stronger pinned-cost landmark guidance. Strict NS→WV first-request time
+fell from 48.0 to 35.9 seconds with identical road/fuel proof; two simultaneous
+requests took about 34.4 seconds each. These are local measurements. Fuel repair
+is currently about one second of that workload, so integrated fuel remains the
+development direction. Quebec evidence shows additive penalty profiles can
+reverse dirt richness after fuel fallbacks; shared DIRT candidate ranking and
+physical station access remain open acceptance work. No publication or app
+qualification follows from this private milestone.

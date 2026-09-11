@@ -2,7 +2,9 @@
 import argparse,pathlib,json,gzip,subprocess,threading,queue,time,hashlib,statistics
 p=argparse.ArgumentParser();p.add_argument('--hybrid',action='store_true');p.add_argument('--workers',type=int,default=2);p.add_argument('--levels',default='1,2,4');p.add_argument('--rounds',type=int,default=2);p.add_argument('--out',required=True);a=p.parse_args()
 levels=list(map(int,a.levels.split(',')));assert 1<=a.workers<=4 and max(levels)<=8 and min(levels)>=1 and 1<=a.rounds<=3
-r=pathlib.Path('/Users/richardsmith/.codex/experiments/routing-architecture-20260911');out=pathlib.Path(a.out);repo=pathlib.Path(__file__).resolve().parents[2]
+from adapter_identity import ensure_current
+r=pathlib.Path('/Users/richardsmith/.codex/experiments/routing-architecture-20260911');build_identity=ensure_current(r);out=pathlib.Path(a.out);repo=pathlib.Path(__file__).resolve().parents[2]
+if out.exists():raise RuntimeError('Preserve prior evidence; use a new output identity')
 fixtures={x['id']:x for x in json.loads((repo/'docs/experiments/routing-performance-2026-09-10/matrix-inputs.json').read_text())}
 cases=[]
 for case,profile in [('ns-short-balanced-road','paved'),('ns-short-balanced-road','dirt10'),('ns-long-dirt-road','dirt30'),('ns-long-dirt-road','paved'),('nsnb-balanced-road','dirt10'),('nsnb-balanced-road','dirt30')]:
@@ -15,7 +17,7 @@ def consume():
   elif line.startswith('RESULT '):messages.put(('result',json.loads(line[7:])))
   else:log.write(line);log.flush()
  messages.put(('exit',None))
-threading.Thread(target=consume,daemon=True).start();report={'command':cmd,'workers':a.workers,'cases':cases,'rounds':[],'scope':'Verified NSNB topology, additive profiles plus fuel certificate; not full Dirt/Balanced/Clean ranking, legacy continuation or national/hosted capacity. stdin/stdout transport and JSON decoding included. Queue delay is measured inside worker service; active routing calls include preparation and geometry assembly, not only graph expansion. Process-cold, warm OS cache. RSS does not isolate private memory per request.'};raw=[];serial=0
+threading.Thread(target=consume,daemon=True).start();report={'command':cmd,'buildIdentitySha256':build_identity,'workers':a.workers,'cases':cases,'rounds':[],'scope':'Verified NSNB topology, additive profiles plus fuel certificate; not full Dirt/Balanced/Clean ranking, legacy continuation or national/hosted capacity. stdin/stdout transport and JSON decoding included. Queue delay is measured inside worker service; active routing calls include preparation and geometry assembly, not only graph expansion. Process-cold, warm OS cache. RSS does not isolate private memory per request.'};raw=[];serial=0
 
 def rss():return int(subprocess.check_output(['ps','-o','rss=','-p',str(child.pid)],text=True).strip())*1024
 def batch(indices):

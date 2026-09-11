@@ -115,3 +115,37 @@ failed; two-seed repaired fallback solves it. Naive redundant fuel stops/avoidab
 excursions were refined. See HYBRID.md and pinned hybrid-evidence.json for scope,
 commands, failures, comparisons and recovery. No production, app, pack or remote
 change. Private Android parity not claimed.
+
+
+## Hybrid refinement: fuel alternatives, stronger LM and bounded service
+
+Following private v1 f3a10ffe, implemented incumbent-preserving same-node/downstream/
+objective fuel repairs, early retry, separate JVM/phase diagnostics, and service
+queue deadlines/cancellation. NSNB four objectives x3 pass independent fuel/source
+audits; dirt30 adds 27.602 km known dirt for 3.370 km route distance at similar
+0.512 s median. Paved/dirt10 improve objective cost but incur extra median latency.
+Quebec four objectives pass at 120-mile full initial range, 1.63–7.23 s, but dirt30
+is less dirt-rich than dirt10 after fuel fallbacks: full DIRT ranking remains open.
+
+Strict WV keeps exact v1 roads/refills/escape through seven refined/strong-index
+responses. Private cost/mask-specific LM preparation succeeds after uniform
+1/1000 cost normalization avoids a native storage-factor overflow. Eight copied
+base graph files remain hash-identical; published source bytes are unchanged.
+Stronger index: first request 35.9 s vs refined distance-LM control 48.0 s; three
+serial runs median30.5 s. New shared-graph test36.6 s control, two concurrent34.4 s
+each, peak2.86 GiB vs earlier50.3 s/3.19 GiB. All independent source/fuel/mask audits
+pass. No hosted/500-client, app, full-profile or physical pump-access qualification.
+
+Rejected broad early/objective exploration, downstream-only replacement, and
+scaled old distance bounds (<1% visit savings, added overhead). One initial
+scaled-guidance result used stale classes after compile failure and is explicitly
+invalidated. Build staging and source-identity launch checks prevent repeating it.
+One historical tiny boundary output was overwritten; all other v1 receipt hashes
+remain valid. Current named final fixtures and evidence are preserved separately.
+
+Final checks cover fuel/range/restrictions, legal downstream and prohibited turns,
+service cancellation/expiry/overflow/duplicates/recovery, idle-only GC and stale
+build refusal. Twenty real diagnostic records validate. See HYBRID-REFINEMENT.md,
+HYBRID-DIAGNOSTICS.md and hybrid-refinement-evidence.json for exact scope, failed
+approaches, recovery and raw evidence. Fuel remains integrated: about1 s repair
+versus44 s road/alternative work in the measured original-LM control.

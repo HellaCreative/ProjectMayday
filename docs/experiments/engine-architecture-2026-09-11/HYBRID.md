@@ -1,5 +1,8 @@
 # Private GraphHopper + DIRT hybrid candidate
 
+This is the preserved v1 report. The subsequent implementation, comparisons,
+rejected approaches and current limits are in [the refinement report](HYBRID-REFINEMENT.md).
+
 Owner selected this development direction on September 11. Keep GraphHopper's
 prepared graph and search; retain DIRT's immutable source topology, access and
 restriction checks, surface scoring, itinerary and fuel responsibilities.
