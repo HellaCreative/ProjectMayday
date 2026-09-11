@@ -1,0 +1,342 @@
+[
+  {
+    "case": "bangor-road",
+    "engine": "graphhopper",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 22.58533303393051,
+    "warmRangeMs": [
+      18.96454195957631,
+      28.810666990466416
+    ],
+    "startupPlusFirstMedianMs": 1386.8996240198612,
+    "maxObservedResidentMiB": 216.84375,
+    "proofStable": true,
+    "distanceMeters": 730719.192
+  },
+  {
+    "case": "bangor-road",
+    "engine": "graphhopper",
+    "mode": "flexible",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 657.8507919912226,
+    "warmRangeMs": [
+      615.480332984589,
+      722.2268329933286
+    ],
+    "startupPlusFirstMedianMs": 2125.926042033825,
+    "maxObservedResidentMiB": 565.984375,
+    "proofStable": true,
+    "distanceMeters": 730719.192
+  },
+  {
+    "case": "bangor-road",
+    "engine": "graphhopper",
+    "mode": "lm",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 220.60512501047924,
+    "warmRangeMs": [
+      199.89995803916827,
+      285.04329203860834
+    ],
+    "startupPlusFirstMedianMs": 1633.652666991111,
+    "maxObservedResidentMiB": 292.515625,
+    "proofStable": true,
+    "distanceMeters": 730719.192
+  },
+  {
+    "case": "bangor-road",
+    "engine": "osrm",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 9.41104197409004,
+    "warmRangeMs": [
+      8.977999968919903,
+      10.057708015665412
+    ],
+    "startupPlusFirstMedianMs": 82.01208303216845,
+    "maxObservedResidentMiB": 72.21875,
+    "proofStable": true,
+    "distanceMeters": 793944.2
+  },
+  {
+    "case": "bangor-road",
+    "engine": "valhalla",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 15.761125017888844,
+    "warmRangeMs": [
+      15.430208994075656,
+      16.595791035797447
+    ],
+    "startupPlusFirstMedianMs": 181.29279097774997,
+    "maxObservedResidentMiB": 120.078125,
+    "proofStable": true,
+    "distanceMeters": 793790.0
+  },
+  {
+    "case": "ns-long-dirt-road",
+    "engine": "graphhopper",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 16.37137500802055,
+    "warmRangeMs": [
+      12.287958001252264,
+      24.812209012452513
+    ],
+    "startupPlusFirstMedianMs": 1400.9202500456013,
+    "maxObservedResidentMiB": 199.390625,
+    "proofStable": true,
+    "distanceMeters": 282147.209
+  },
+  {
+    "case": "ns-long-dirt-road",
+    "engine": "graphhopper",
+    "mode": "flexible",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 85.23004100425169,
+    "warmRangeMs": [
+      66.1754590109922,
+      140.55150002241135
+    ],
+    "startupPlusFirstMedianMs": 1484.2427090043202,
+    "maxObservedResidentMiB": 296.125,
+    "proofStable": true,
+    "distanceMeters": 282147.209
+  },
+  {
+    "case": "ns-long-dirt-road",
+    "engine": "graphhopper",
+    "mode": "lm",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 23.823749972507358,
+    "warmRangeMs": [
+      18.44904199242592,
+      53.39424998965114
+    ],
+    "startupPlusFirstMedianMs": 1316.476792038884,
+    "maxObservedResidentMiB": 198.8125,
+    "proofStable": true,
+    "distanceMeters": 282147.209
+  },
+  {
+    "case": "ns-long-dirt-road",
+    "engine": "osrm",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 11.067167040891945,
+    "warmRangeMs": [
+      10.637333034537733,
+      12.448832974769175
+    ],
+    "startupPlusFirstMedianMs": 121.08720798278227,
+    "maxObservedResidentMiB": 69.140625,
+    "proofStable": true,
+    "distanceMeters": 284088.1
+  },
+  {
+    "case": "ns-long-dirt-road",
+    "engine": "valhalla",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 9.064708021469414,
+    "warmRangeMs": [
+      8.801667019724846,
+      9.58470901241526
+    ],
+    "startupPlusFirstMedianMs": 148.98095797980204,
+    "maxObservedResidentMiB": 93.96875,
+    "proofStable": true,
+    "distanceMeters": 286618.0
+  },
+  {
+    "case": "ns-short-balanced-road",
+    "engine": "graphhopper",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 13.418166956398636,
+    "warmRangeMs": [
+      11.534999997820705,
+      32.4741670046933
+    ],
+    "startupPlusFirstMedianMs": 1317.932250967715,
+    "maxObservedResidentMiB": 208.703125,
+    "proofStable": true,
+    "distanceMeters": 178902.069
+  },
+  {
+    "case": "ns-short-balanced-road",
+    "engine": "graphhopper",
+    "mode": "flexible",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 98.26574998442084,
+    "warmRangeMs": [
+      90.02208296442404,
+      190.30054099857807
+    ],
+    "startupPlusFirstMedianMs": 1512.5085419858806,
+    "maxObservedResidentMiB": 278.984375,
+    "proofStable": true,
+    "distanceMeters": 178902.069
+  },
+  {
+    "case": "ns-short-balanced-road",
+    "engine": "graphhopper",
+    "mode": "lm",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 45.003625040408224,
+    "warmRangeMs": [
+      29.672082979232073,
+      65.846000041347
+    ],
+    "startupPlusFirstMedianMs": 1348.7208330188878,
+    "maxObservedResidentMiB": 213.6875,
+    "proofStable": true,
+    "distanceMeters": 178902.069
+  },
+  {
+    "case": "ns-short-balanced-road",
+    "engine": "osrm",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 4.2197079746983945,
+    "warmRangeMs": [
+      3.975040977820754,
+      5.0782920443452895
+    ],
+    "startupPlusFirstMedianMs": 106.81220807600766,
+    "maxObservedResidentMiB": 52.71875,
+    "proofStable": true,
+    "distanceMeters": 222658.0
+  },
+  {
+    "case": "ns-short-balanced-road",
+    "engine": "valhalla",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 8.642875007353723,
+    "warmRangeMs": [
+      8.247416000813246,
+      9.081791969947517
+    ],
+    "startupPlusFirstMedianMs": 224.15604098932818,
+    "maxObservedResidentMiB": 87.53125,
+    "proofStable": true,
+    "distanceMeters": 225366.0
+  },
+  {
+    "case": "nsnb-balanced-road",
+    "engine": "graphhopper",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 15.493916987907141,
+    "warmRangeMs": [
+      12.068042007740587,
+      22.031125030480325
+    ],
+    "startupPlusFirstMedianMs": 1329.1981249931268,
+    "maxObservedResidentMiB": 200.8125,
+    "proofStable": true,
+    "distanceMeters": 390138.634
+  },
+  {
+    "case": "nsnb-balanced-road",
+    "engine": "graphhopper",
+    "mode": "flexible",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 153.0601250124164,
+    "warmRangeMs": [
+      139.73462500143796,
+      202.50749995466322
+    ],
+    "startupPlusFirstMedianMs": 1623.140459007118,
+    "maxObservedResidentMiB": 301.921875,
+    "proofStable": true,
+    "distanceMeters": 390138.634
+  },
+  {
+    "case": "nsnb-balanced-road",
+    "engine": "graphhopper",
+    "mode": "lm",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 60.22074999054894,
+    "warmRangeMs": [
+      43.85274997912347,
+      125.58166601229459
+    ],
+    "startupPlusFirstMedianMs": 1382.0150420069695,
+    "maxObservedResidentMiB": 205.828125,
+    "proofStable": true,
+    "distanceMeters": 390138.634
+  },
+  {
+    "case": "nsnb-balanced-road",
+    "engine": "osrm",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 5.146417010109872,
+    "warmRangeMs": [
+      4.929875023663044,
+      5.641374969854951
+    ],
+    "startupPlusFirstMedianMs": 54.99616602901369,
+    "maxObservedResidentMiB": 58.078125,
+    "proofStable": true,
+    "distanceMeters": 394581.4
+  },
+  {
+    "case": "nsnb-balanced-road",
+    "engine": "valhalla",
+    "mode": "default",
+    "processes": 3,
+    "requests": 18,
+    "allRoadComplete": true,
+    "warmMedianMs": 10.56620798772201,
+    "warmRangeMs": [
+      10.150082991458476,
+      11.262499960139394
+    ],
+    "startupPlusFirstMedianMs": 154.51708401087672,
+    "maxObservedResidentMiB": 96.515625,
+    "proofStable": true,
+    "distanceMeters": 394623.0
+  }
+]

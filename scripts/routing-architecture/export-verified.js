@@ -1,0 +1,15 @@
+'use strict';
+const fs=require('fs'),path=require('path'),crypto=require('crypto');
+const {readPreparedJoined}=require('../pack-fabric/bench/prepared-joined-runtime');
+const {surfaceKind}=require('../pack-fabric/routing/lib/adventure/surface');
+const {compile}=require('./directed-restrictions');
+const root=path.resolve(process.argv[2]),out=path.resolve(process.argv[3]);
+const receipt=JSON.parse(fs.readFileSync(root+'.receipt.json'));
+const geometryPaths=Object.fromEntries(receipt.identity.map(i=>[i.regionId,`/tmp/dirt-performance-packs/${i.regionId}/geometry.v1.bin`]));
+const {pack,diagnostics}=readPreparedJoined(root,{expectedIdentity:receipt.identity,manifestSha256:receipt.manifestSha256,geometryPaths});
+const restrictions=compile(pack);
+fs.mkdirSync(out,{recursive:true});
+const manifest=JSON.parse(fs.readFileSync(path.join(root,'joined-runtime.experimental.json')));
+const descriptor={schema:'dirt-gh-verified-input-v1',root,sourceManifestSha256:receipt.manifestSha256,identity:receipt.identity,nodeCount:pack.nodeCount,edgeCount:pack.edgeCount,sections:manifest.sections,geometryPaths:Object.values(geometryPaths),surfaceKinds:pack.enums.surfaceLeafNames.map(l=>({paved:0,dirt:1,unknown:2}[surfaceKind(l)])),roadClasses:pack.enums.roadClassLeafNames,restrictions,validation:diagnostics};
+fs.writeFileSync(path.join(out,'verified-input.json'),JSON.stringify(descriptor));
+console.log(JSON.stringify({nodes:pack.nodeCount,edges:pack.edgeCount,restrictions:restrictions.length,...diagnostics}));

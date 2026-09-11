@@ -1,0 +1,19 @@
+{
+  "valhalla": {
+    "sourceCommit": "a60c7cbfc83e073f50887cd27e0109d02e6b64e5",
+    "sourceDirty": ""
+  },
+  "graphhopper": {
+    "sourceCommit": "69e50f6e2cfaf0a8e69752df9953ee5f1ac276a4",
+    "sourceDirty": ""
+  },
+  "osrm": {
+    "sourceCommit": "d63a1df9c25c84f2edf304de8bc7b691aa9020f9",
+    "sourceDirty": ""
+  },
+  "pythonPackages": [
+    "osrm-bindings==26.9.0",
+    "pyvalhalla==3.8.3"
+  ],
+  "java": "openjdk version \"25.0.2\" 2026-01-20\nOpenJDK Runtime Environment Homebrew (build 25.0.2)\nOpenJDK 64-Bit Server VM Homebrew (build 25.0.2, mixed mode, sharing)\n"
+}
