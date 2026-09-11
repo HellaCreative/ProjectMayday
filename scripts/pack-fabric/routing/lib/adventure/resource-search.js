@@ -209,11 +209,23 @@ function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=n
       }
       return {state:"complete",target,graph,edgeCost,distances,coverage:"capped",capCost:cur.cost};
     }
+    if(reverse.forEachIncoming) {
+      let failure=null;
+      reverse.forEachIncoming(cur.node,arc=>{
+        if(!budget.consume()){failure=budget.snapshot().reason;return false;}
+        const value=edgeCost(arc);
+        if(!Number.isFinite(value)||value<0)throw new TypeError("Search costs must be finite and nonnegative");
+        const from=arc.from,cost=cur.cost+value;
+        if(cost<distances[from]){distances[from]=cost;heap.push({node:from,cost,priority:cost});}
+      });
+      if(failure)return {state:"incomplete",reason:failure};
+    } else {
     for(let id=reverse.heads[cur.node];id!==-1;) {
       if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
       const chunk=reverse.chunks[Math.floor(id/reverse.chunkSize)],offset=id%reverse.chunkSize;
       const from=chunk.from[offset],cost=cur.cost+chunk.cost[offset];id=chunk.next[offset];
       if(cost<distances[from]){distances[from]=cost;heap.push({node:from,cost,priority:cost});}
+    }
     }
   }
   return {state:"complete",target,graph,edgeCost,distances,coverage:"exact"};

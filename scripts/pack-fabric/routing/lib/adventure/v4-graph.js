@@ -5,7 +5,7 @@ const {restrictionAppliesToMotorcycle}=require("../legal-topology/restrictions")
 
 // Node-to-node experiment adapter. Endpoint projection/region stitching remain
 // outside this adapter; it never invents snaps or nearby station membership.
-function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Map()}={}) {
+function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Map(),fastNeutralTurns=false}={}) {
   if(pack.graphBinaryVersion!==4)throw new TypeError("Verified V4 graph required");
   const endpoints=new Set(endpointEdges),nodeTurns=new Map(),starts=new Map(),rules=[];
   for(const restriction of pack.restrictions || []) {
@@ -59,6 +59,11 @@ function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Ma
   }
   const states=[{incoming:-1,active:[]}],interned=new Map([["-1|",0]]);
   const transitionCache=new Map();
+  // State zero carries neither an incoming restriction nor an active via-way.
+  // Only an edge referenced by a restriction can create nonzero arrival state.
+  // Bypass string keys, interning and cache entries for the common neutral case.
+  const relevantEdges=fastNeutralTurns?new Set([...nodeTurns.keys(),...starts.keys()].map(key=>Number(key.slice(key.lastIndexOf(":")+1)))):null;
+  const neutralTransition=Object.freeze({allowed:true,state:0});
   function intern(incoming,active) {
     active.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
     const unique=active.filter((pair,i)=>!i||pair[0]!==active[i-1][0]||pair[1]!==active[i-1][1]);
@@ -67,6 +72,7 @@ function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Ma
   }
   function transition(stateId,arc) {
     stateId=stateId??0;
+    if(relevantEdges&&stateId===0&&!relevantEdges.has(arc.id))return neutralTransition;
     const cacheKey=`${stateId}:${arc.from}:${arc.id}`;
     const cached=transitionCache.get(cacheKey);if(cached)return cached;
     const state=states[stateId];if(!state)throw new TypeError("Unknown turn state");

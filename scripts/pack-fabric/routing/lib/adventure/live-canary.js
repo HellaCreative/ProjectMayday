@@ -4,7 +4,7 @@ const {createBudget}=require('./budget');
 const {summarizeSurface,surfaceKind}=require('./surface');
 const {withServiceIdentity}=require('../service-contract');
 const {qualifiedPack,nbSupplement}=require('./pack-revision-qualification');
-const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024});
+const sharedContext=createRideAlternativeContext({maxReverseBytes:256*1024*1024});
 let joinedCache=null;
 const {joinV4}=require('./join-v4');
 const warning={code:'adventure_preview',message:'DEV routing preview. Fuel stops are planned from mapped station locations; entrances, exits and current availability are not verified.'};
@@ -67,7 +67,7 @@ function requestWindowMs(regionIds,requested) {
  const maximum=regionIds.some(id=>!['ns','nb','pe','nl'].includes(id))?90000:20000;
  return Math.min(maximum,Math.max(100,Number(requested||maximum)));
 }
-async function adventureCanaryRequest(body,kind,{environment=process.env,load=null}={}) {
+async function adventureCanaryRequest(body,kind,{environment=process.env,load=null,context=sharedContext}={}) {
  if(body.options?.ridePreferences!=null) {
   const r=require('../../regional/select').resolveGraphRequest(body);
   if(!canarySupported(body,kind,environment)||!r.ok||!r.regionIds.length||r.regionIds.some(id=>!enabledRegions(environment).includes(id)))

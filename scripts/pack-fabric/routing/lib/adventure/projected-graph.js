@@ -6,8 +6,8 @@ const {createV4Graph}=require("./v4-graph");
 // At an interior projection the rider must continue in the same legal direction.
 // A mapped junction/dead end can permit reversal; a POI projection alone cannot
 // invent a turnaround or let a turn restriction disappear midway along an edge.
-function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],budget,allowProvisionalStations=false}) {
-  const base=createV4Graph(pack,{allowUnknown,endpointEdges});
+function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],budget,allowProvisionalStations=false,fastNeutralTurns=false}) {
+  const base=createV4Graph(pack,{allowUnknown,endpointEdges,fastNeutralTurns});
   const byEdge=new Map(),pointNodes=new Map(),virtual=new Map(),stations=new Map();
   let nodeCount=pack.nodeCount;
   for(const point of points) {
@@ -72,7 +72,7 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
     if(!result.allowed)return result;
     return virtual.has(arc.to)?{allowed:true,state:transit(result.state,arc.id,forward)}:result;
   }
-  return {
+  const graph={
     state:"complete",nodeCount,pointNodes,stationCount:stations.size,
     seedArrival(arcs,pointId) {
       const result=base.seedArrival(arcs);if(!result.allowed||!arcs.length)return result;
@@ -82,6 +82,11 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
     },
     // Order determines virtual node IDs. Station identities do not alter arcs.
     reverseTopology:Object.freeze({pack,key:JSON.stringify([allowUnknown,endpointEdges,points.map(p=>[p.edgeIndex,p.fraction])])}),
+    prepareIncoming({index,budget}) {
+      const affectedNodes=new Set();
+      for(const list of byEdge.values())for(const p of list)affectedNodes.add(p.node);
+      return require('./incoming-index').projectedIncoming({pack,graph,splitEdges:byEdge,affectedNodes,allowUnknown,endpointEdges,index,budget});
+    },
     stateKey:(node,state)=>`${node}:${state??0}`,
     transition,
     stationAt:node=>stations.get(node)||null,
@@ -117,5 +122,6 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
     },
     diagnostics:()=>({...base.diagnostics(),projectedNodes:virtual.size,splitEdges:byEdge.size,transitStates:transits.length,stations:stations.size})
   };
+  return graph;
 }
 module.exports={createProjectedGraph};
