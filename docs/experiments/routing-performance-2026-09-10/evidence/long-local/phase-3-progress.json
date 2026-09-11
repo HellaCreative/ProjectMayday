@@ -1,0 +1,324 @@
+[
+  {
+    "case": "on-long-balanced-road",
+    "variant": "baseline",
+    "exit": 0,
+    "seconds": 37.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 15018,
+        "peakMiB": 1359
+      },
+      {
+        "complete": true,
+        "ms": 11224,
+        "peakMiB": 1362
+      },
+      {
+        "complete": true,
+        "ms": 11358,
+        "peakMiB": 1363
+      }
+    ]
+  },
+  {
+    "case": "on-long-balanced-road",
+    "variant": "combined",
+    "exit": 0,
+    "seconds": 26.5,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 11264,
+        "peakMiB": 1377
+      },
+      {
+        "complete": true,
+        "ms": 7490,
+        "peakMiB": 1412
+      },
+      {
+        "complete": true,
+        "ms": 7394,
+        "peakMiB": 1413
+      }
+    ]
+  },
+  {
+    "case": "on-long-balanced-fuel",
+    "variant": "baseline",
+    "exit": 0,
+    "seconds": 67.7,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 24258,
+        "peakMiB": 1470
+      },
+      {
+        "complete": true,
+        "ms": 21485,
+        "peakMiB": 1472
+      },
+      {
+        "complete": true,
+        "ms": 21604,
+        "peakMiB": 1472
+      }
+    ]
+  },
+  {
+    "case": "on-long-balanced-fuel",
+    "variant": "combined",
+    "exit": 0,
+    "seconds": 57.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 21316,
+        "peakMiB": 1234
+      },
+      {
+        "complete": true,
+        "ms": 17804,
+        "peakMiB": 1394
+      },
+      {
+        "complete": true,
+        "ms": 17755,
+        "peakMiB": 1428
+      }
+    ]
+  },
+  {
+    "case": "bangor-fuel",
+    "variant": "baseline",
+    "exit": 0,
+    "seconds": 49.6,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 16274,
+        "peakMiB": 759
+      },
+      {
+        "complete": true,
+        "ms": 16422,
+        "peakMiB": 798
+      },
+      {
+        "complete": true,
+        "ms": 16578,
+        "peakMiB": 798
+      }
+    ]
+  },
+  {
+    "case": "bangor-fuel",
+    "variant": "combined",
+    "exit": 0,
+    "seconds": 43.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 14170,
+        "peakMiB": 773
+      },
+      {
+        "complete": true,
+        "ms": 14387,
+        "peakMiB": 905
+      },
+      {
+        "complete": true,
+        "ms": 14476,
+        "peakMiB": 905
+      }
+    ]
+  },
+  {
+    "case": "bangor-road",
+    "variant": "baseline",
+    "exit": 0,
+    "seconds": 10.4,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 4591,
+        "peakMiB": 651
+      },
+      {
+        "complete": true,
+        "ms": 2816,
+        "peakMiB": 678
+      },
+      {
+        "complete": true,
+        "ms": 2781,
+        "peakMiB": 679
+      }
+    ]
+  },
+  {
+    "case": "bangor-road",
+    "variant": "combined",
+    "exit": 0,
+    "seconds": 8.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 3798,
+        "peakMiB": 588
+      },
+      {
+        "complete": true,
+        "ms": 2014,
+        "peakMiB": 596
+      },
+      {
+        "complete": true,
+        "ms": 1995,
+        "peakMiB": 598
+      }
+    ]
+  },
+  {
+    "case": "wv-road",
+    "variant": "baseline",
+    "exit": 0,
+    "seconds": 183.7,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 69971,
+        "peakMiB": 2500
+      },
+      {
+        "complete": true,
+        "ms": 54613,
+        "peakMiB": 2676
+      },
+      {
+        "complete": true,
+        "ms": 57267,
+        "peakMiB": 2676
+      }
+    ]
+  },
+  {
+    "case": "wv-road",
+    "variant": "combined",
+    "exit": 0,
+    "seconds": 115.7,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 50756,
+        "peakMiB": 2838
+      },
+      {
+        "complete": true,
+        "ms": 31771,
+        "peakMiB": 2920
+      },
+      {
+        "complete": true,
+        "ms": 32157,
+        "peakMiB": 2920
+      }
+    ]
+  },
+  {
+    "case": "wv-clean-road",
+    "variant": "baseline",
+    "exit": 0,
+    "seconds": 166.4,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 63033,
+        "peakMiB": 3572
+      },
+      {
+        "complete": true,
+        "ms": 51434,
+        "peakMiB": 3572
+      },
+      {
+        "complete": true,
+        "ms": 50842,
+        "peakMiB": 3572
+      }
+    ]
+  },
+  {
+    "case": "wv-clean-road",
+    "variant": "combined",
+    "exit": 0,
+    "seconds": 113.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 47315,
+        "peakMiB": 3150
+      },
+      {
+        "complete": true,
+        "ms": 32435,
+        "peakMiB": 3150
+      },
+      {
+        "complete": true,
+        "ms": 33157,
+        "peakMiB": 3150
+      }
+    ]
+  },
+  {
+    "case": "ns-on-road",
+    "variant": "baseline",
+    "exit": 0,
+    "seconds": 65.1,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 27441,
+        "peakMiB": 1935
+      },
+      {
+        "complete": true,
+        "ms": 18537,
+        "peakMiB": 1935
+      },
+      {
+        "complete": true,
+        "ms": 18513,
+        "peakMiB": 1935
+      }
+    ]
+  },
+  {
+    "case": "ns-on-road",
+    "variant": "combined",
+    "exit": 0,
+    "seconds": 44.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 20447,
+        "peakMiB": 2280
+      },
+      {
+        "complete": true,
+        "ms": 11578,
+        "peakMiB": 2287
+      },
+      {
+        "complete": true,
+        "ms": 11691,
+        "peakMiB": 2291
+      }
+    ]
+  }
+]

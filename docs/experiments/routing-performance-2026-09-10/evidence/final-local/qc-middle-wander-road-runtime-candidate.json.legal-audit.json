@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/qc-middle-wander-road-runtime-candidate.json",
+  "case": "qc-middle-wander-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1094,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

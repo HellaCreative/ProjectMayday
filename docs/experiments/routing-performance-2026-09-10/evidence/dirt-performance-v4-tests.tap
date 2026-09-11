@@ -1,0 +1,1632 @@
+TAP version 13
+# Subtest: independent legal replay preserves through travel at a split fuel projection
+ok 1 - independent legal replay preserves through travel at a split fuel projection
+  ---
+  duration_ms: 4.50425
+  type: 'test'
+  ...
+# Subtest: independent replay detects an illegal node turn and a false source identity
+ok 2 - independent replay detects an illegal node turn and a false source identity
+  ---
+  duration_ms: 1.370625
+  type: 'test'
+  ...
+# Subtest: regional aliases and portable joined IDs resolve to the same source roads
+ok 3 - regional aliases and portable joined IDs resolve to the same source roads
+  ---
+  duration_ms: 1.083542
+  type: 'test'
+  ...
+# Subtest: history orientation uses a continuous source suffix and refuses ambiguous departure
+ok 4 - history orientation uses a continuous source suffix and refuses ambiguous departure
+  ---
+  duration_ms: 0.212375
+  type: 'test'
+  ...
+# Subtest: history lookup constructs only requested way aliases and preserves cached IDs across eviction
+ok 5 - history lookup constructs only requested way aliases and preserves cached IDs across eviction
+  ---
+  duration_ms: 30.882
+  type: 'test'
+  ...
+# Subtest: parallel pump access edges use the preceding approach junction to resolve arrival
+ok 6 - parallel pump access edges use the preceding approach junction to resolve arrival
+  ---
+  duration_ms: 0.212833
+  type: 'test'
+  ...
+# Subtest: exact decimal fuel boundary agrees between search and final proof
+ok 7 - exact decimal fuel boundary agrees between search and final proof
+  ---
+  duration_ms: 1.381625
+  type: 'test'
+  ...
+# Subtest: destination escape at the exact decimal fuel boundary remains reachable
+ok 8 - destination escape at the exact decimal fuel boundary remains reachable
+  ---
+  duration_ms: 1.13325
+  type: 'test'
+  ...
+# Subtest: a real one-millimetre shortfall is not rounded away
+ok 9 - a real one-millimetre shortfall is not rounded away
+  ---
+  duration_ms: 0.948125
+  type: 'test'
+  ...
+# Subtest: cancelled disconnected search stays cancelled even when reverse bounds skip the start
+ok 10 - cancelled disconnected search stays cancelled even when reverse bounds skip the start
+  ---
+  duration_ms: 0.735166
+  type: 'test'
+  ...
+# Subtest: zero starting fuel can refill at a supplied station, but cannot move to a nearby one
+ok 11 - zero starting fuel can refill at a supplied station, but cannot move to a nearby one
+  ---
+  duration_ms: 0.851917
+  type: 'test'
+  ...
+# Subtest: candidate order cannot change Dirt, Balanced or Clean selection or mutate the pool
+ok 12 - candidate order cannot change Dirt, Balanced or Clean selection or mutate the pool
+  ---
+  duration_ms: 2.04275
+  type: 'test'
+  ...
+# Subtest: primary-leg edits cannot alter another normalized leg or a fixed anchor
+ok 13 - primary-leg edits cannot alter another normalized leg or a fixed anchor
+  ---
+  duration_ms: 2.480709
+  type: 'test'
+  ...
+# Subtest: all eight loop bearings survive JSON storage with target and first-fuel intent
+ok 14 - all eight loop bearings survive JSON storage with target and first-fuel intent
+  ---
+  duration_ms: 3.798875
+  type: 'test'
+  ...
+# Subtest: cancellation at the last outgoing-road check cannot become a no-path result
+ok 15 - cancellation at the last outgoing-road check cannot become a no-path result
+  ---
+  duration_ms: 0.791541
+  type: 'test'
+  ...
+# Subtest: sequential guidance reuse clears all prior costs and preserves exact and capped distances
+ok 16 - sequential guidance reuse clears all prior costs and preserves exact and capped distances
+  ---
+  duration_ms: 4.657167
+  type: 'test'
+  ...
+# Subtest: R01/R02 one candidate pool makes Dirt seek more dirt while Balanced stays near half
+ok 17 - R01/R02 one candidate pool makes Dirt seek more dirt while Balanced stays near half
+  ---
+  duration_ms: 1.372667
+  type: 'test'
+  ...
+# Subtest: unknown surface cannot inflate Dirt or satisfy Balanced's pavement half
+ok 18 - unknown surface cannot inflate Dirt or satisfy Balanced's pavement half
+  ---
+  duration_ms: 0.128542
+  type: 'test'
+  ...
+# Subtest: Balanced prefers the dirt side only at an equivalent miss
+ok 19 - Balanced prefers the dirt side only at an equivalent miss
+  ---
+  duration_ms: 0.116875
+  type: 'test'
+  ...
+# Subtest: surface stats conserve distance including access and unknown
+ok 20 - surface stats conserve distance including access and unknown
+  ---
+  duration_ms: 0.069125
+  type: 'test'
+  ...
+# Subtest: R10 early refill preserves a long dirt section without a 75% gate
+ok 21 - R10 early refill preserves a long dirt section without a 75% gate
+  ---
+  duration_ms: 0.297542
+  type: 'test'
+  ...
+# Subtest: R11 nearby generated and fixed fuel stations both refill
+ok 22 - R11 nearby generated and fixed fuel stations both refill
+  ---
+  duration_ms: 0.559084
+  type: 'test'
+  ...
+# Subtest: R12 ordinary campsite does not refill and actual escape distance is enforced
+ok 23 - R12 ordinary campsite does not refill and actual escape distance is enforced
+  ---
+  duration_ms: 0.129458
+  type: 'test'
+  ...
+# Subtest: missing escape or unproved station visit cannot claim fuel verification
+ok 24 - missing escape or unproved station visit cannot claim fuel verification
+  ---
+  duration_ms: 0.12625
+  type: 'test'
+  ...
+# Subtest: unknown initial fuel is explicit, not silently a full tank
+ok 25 - unknown initial fuel is explicit, not silently a full tank
+  ---
+  duration_ms: 0.363875
+  type: 'test'
+  ...
+# Subtest: a refill just beyond range cannot cure an unreachable approach
+ok 26 - a refill just beyond range cannot cure an unreachable approach
+  ---
+  duration_ms: 0.398458
+  type: 'test'
+  ...
+# Subtest: zero-distance refill at destination supports a zero-distance escape
+ok 27 - zero-distance refill at destination supports a zero-distance escape
+  ---
+  duration_ms: 0.130708
+  type: 'test'
+  ...
+# Subtest: R14 failed fuel proof retains the selected complete road route
+ok 28 - R14 failed fuel proof retains the selected complete road route
+  ---
+  duration_ms: 0.106417
+  type: 'test'
+  ...
+# Subtest: a verified candidate wins over an infeasible higher-dirt ride
+ok 29 - a verified candidate wins over an infeasible higher-dirt ride
+  ---
+  duration_ms: 0.069542
+  type: 'test'
+  ...
+# Subtest: deadline is shared and terminal, never restarted by another phase
+ok 30 - deadline is shared and terminal, never restarted by another phase
+  ---
+  duration_ms: 0.05475
+  type: 'test'
+  ...
+# Subtest: fuel proof observes cancellation and resource exhaustion
+ok 31 - fuel proof observes cancellation and resource exhaustion
+  ---
+  duration_ms: 0.090292
+  type: 'test'
+  ...
+# Subtest: ordered visits and valid distances are mandatory
+ok 32 - ordered visits and valid distances are mandatory
+  ---
+  duration_ms: 0.24025
+  type: 'test'
+  ...
+# Subtest: contract preserves primary ownership and does not invent initial fuel
+ok 33 - contract preserves primary ownership and does not invent initial fuel
+  ---
+  duration_ms: 0.947041
+  type: 'test'
+  ...
+# Subtest: Loop has original return anchor, approximate target and mandatory first fuel
+ok 34 - Loop has original return anchor, approximate target and mandatory first fuel
+  ---
+  duration_ms: 0.098667
+  type: 'test'
+  ...
+# Subtest: generated fuel cannot masquerade as a fixed rider anchor
+ok 35 - generated fuel cannot masquerade as a fixed rider anchor
+  ---
+  duration_ms: 0.077625
+  type: 'test'
+  ...
+# Subtest: optional refinement timeout preserves the parent budget and charges its work
+ok 36 - optional refinement timeout preserves the parent budget and charges its work
+  ---
+  duration_ms: 0.126667
+  type: 'test'
+  ...
+# Subtest: a short dirt branch loses to paved onward road, a continuous 15km stretch remains worthwhile
+ok 37 - a short dirt branch loses to paved onward road, a continuous 15km stretch remains worthwhile
+  ---
+  duration_ms: 4.706666
+  type: 'test'
+  ...
+# Subtest: splitting a dirt road and refuelling mid-run do not charge another entry
+ok 38 - splitting a dirt road and refuelling mid-run do not charge another entry
+  ---
+  duration_ms: 0.676833
+  type: 'test'
+  ...
+# Subtest: necessary short fuel access remains available
+ok 39 - necessary short fuel access remains available
+  ---
+  duration_ms: 0.229084
+  type: 'test'
+  ...
+# Subtest: arrival surface must remain part of dominance state
+ok 40 - arrival surface must remain part of dominance state
+  ---
+  duration_ms: 0.131333
+  type: 'test'
+  ...
+# Subtest: a continuity preference cannot bypass turn restrictions
+ok 41 - a continuity preference cannot bypass turn restrictions
+  ---
+  duration_ms: 0.215625
+  type: 'test'
+  ...
+# Subtest: complete encoded-map pipeline includes a supplied catalog stop and exact onward fuel proof
+ok 42 - complete encoded-map pipeline includes a supplied catalog stop and exact onward fuel proof
+  ---
+  duration_ms: 20.108
+  type: 'test'
+  ...
+# Subtest: no station records retains a complete road without claiming geographic scarcity
+ok 43 - no station records retains a complete road without claiming geographic scarcity
+  ---
+  duration_ms: 2.515167
+  type: 'test'
+  ...
+# Subtest: unknown initial range retains a road and does not create a full-tank fuel plan
+ok 44 - unknown initial range retains a road and does not create a full-tank fuel plan
+  ---
+  duration_ms: 1.669625
+  type: 'test'
+  ...
+# Subtest: station source removal invalidates fuel planning even when road preparation is reused
+ok 45 - station source removal invalidates fuel planning even when road preparation is reused
+  ---
+  duration_ms: 5.221459
+  type: 'test'
+  ...
+# Subtest: coincident station records remain diagnostic alternatives instead of breaking graph creation
+ok 46 - coincident station records remain diagnostic alternatives instead of breaking graph creation
+  ---
+  duration_ms: 2.946916
+  type: 'test'
+  ...
+# Subtest: fixed fuel destination is preserved and explicitly refilled
+ok 47 - fixed fuel destination is preserved and explicitly refilled
+  ---
+  duration_ms: 3.3945
+  type: 'test'
+  ...
+# Subtest: provisional projection is opt-in and can never masquerade as verified station access
+ok 48 - provisional projection is opt-in and can never masquerade as verified station access
+  ---
+  duration_ms: 4.298917
+  type: 'test'
+  ...
+# Subtest: one-way reverse request cannot become legal through station projections
+ok 49 - one-way reverse request cannot become legal through station projections
+  ---
+  duration_ms: 1.29675
+  type: 'test'
+  ...
+# Subtest: cancelled or undersized requests report incomplete preparation honestly
+ok 50 - cancelled or undersized requests report incomplete preparation honestly
+  ---
+  duration_ms: 1.085
+  type: 'test'
+  ...
+# Subtest: station identity cannot move a rider anchor to a distant pump
+ok 51 - station identity cannot move a rider anchor to a distant pump
+  ---
+  duration_ms: 0.8475
+  type: 'test'
+  ...
+# Subtest: insufficient starting fuel changes the searched road path to include a reachable pump
+ok 52 - insufficient starting fuel changes the searched road path to include a reachable pump
+  ---
+  duration_ms: 5.8845
+  type: 'test'
+  ...
+# Subtest: fuel label cap preserves already materialized advisory geometry without a no-fuel claim
+ok 53 - fuel label cap preserves already materialized advisory geometry without a no-fuel claim
+  ---
+  duration_ms: 1.681917
+  type: 'test'
+  ...
+# Subtest: invalid fixed station coordinates cannot produce a provisional refill
+ok 54 - invalid fixed station coordinates cannot produce a provisional refill
+  ---
+  duration_ms: 0.510042
+  type: 'test'
+  ...
+# Subtest: reverse preparation is reused without carrying fuel state or stale stations
+ok 55 - reverse preparation is reused without carrying fuel state or stale stations
+  ---
+  duration_ms: 6.209791
+  type: 'test'
+  ...
+# Subtest: reverse cache capacity cannot turn incomplete preparation into no route
+ok 56 - reverse cache capacity cannot turn incomplete preparation into no route
+  ---
+  duration_ms: 0.523125
+  type: 'test'
+  ...
+# Subtest: moved pins and unknown-road settings invalidate reverse topology; cancellation cannot use a warm result
+ok 57 - moved pins and unknown-road settings invalidate reverse topology; cancellation cannot use a warm result
+  ---
+  duration_ms: 1.367875
+  type: 'test'
+  ...
+# Subtest: station matching reuse preserves current metadata and rejects evidence mutation
+ok 58 - station matching reuse preserves current metadata and rejects evidence mutation
+  ---
+  duration_ms: 7.166417
+  type: 'test'
+  ...
+# Subtest: station cache capacity bypasses caching without dropping stations
+ok 59 - station cache capacity bypasses caching without dropping stations
+  ---
+  duration_ms: 0.860083
+  type: 'test'
+  ...
+# Subtest: explicit cold-preparation work allowance shares the request deadline and reports its work
+ok 60 - explicit cold-preparation work allowance shares the request deadline and reports its work
+  ---
+  duration_ms: 0.878458
+  type: 'test'
+  ...
+# Subtest: a coarse off-road waypoint expands to the connected road without widening pump access
+ok 61 - a coarse off-road waypoint expands to the connected road without widening pump access
+  ---
+  duration_ms: 2.518958
+  type: 'test'
+  ...
+# Subtest: wider allowed radius preserves an already successful waypoint projection
+ok 62 - wider allowed radius preserves an already successful waypoint projection
+  ---
+  duration_ms: 1.011167
+  type: 'test'
+  ...
+# Subtest: rider waypoint at a mapped fuel POI is not broadened into an area destination
+ok 63 - rider waypoint at a mapped fuel POI is not broadened into an area destination
+  ---
+  duration_ms: 0.676833
+  type: 'test'
+  ...
+# Subtest: wide area arrival continues on the same previously selected road
+ok 64 - wide area arrival continues on the same previously selected road
+  ---
+  duration_ms: 4.199667
+  type: 'test'
+  ...
+# Subtest: coarse start can leave an isolated nearby road for a connected eligible road
+ok 65 - coarse start can leave an isolated nearby road for a connected eligible road
+  ---
+  duration_ms: 3.701792
+  type: 'test'
+  ...
+# Subtest: coarse connected-road recovery cannot move a fixed fuel start off its isolated road
+ok 66 - coarse connected-road recovery cannot move a fixed fuel start off its isolated road
+  ---
+  duration_ms: 1.983792
+  type: 'test'
+  ...
+# Subtest: connected-road area recovery cannot switch away from a prior arrival road
+ok 67 - connected-road area recovery cannot switch away from a prior arrival road
+  ---
+  duration_ms: 2.337584
+  type: 'test'
+  ...
+# Subtest: isolated candidates cannot crowd a connected road out of an explicit snap radius
+ok 68 - isolated candidates cannot crowd a connected road out of an explicit snap radius
+  ---
+  duration_ms: 10.815583
+  type: 'test'
+  ...
+# Subtest: replacement preserves canonical pump and continuous fuel-bounded chain
+ok 69 - replacement preserves canonical pump and continuous fuel-bounded chain
+  ---
+  duration_ms: 59.514666
+  type: 'test'
+  ...
+# Subtest: replacement rejects insufficient remaining fuel and unknown identity
+ok 70 - replacement rejects insufficient remaining fuel and unknown identity
+  ---
+  duration_ms: 3.6495
+  type: 'test'
+  ...
+# Subtest: replacement returns no partial geometry on unproved continuation
+ok 71 - replacement returns no partial geometry on unproved continuation
+  ---
+  duration_ms: 2.491416
+  type: 'test'
+  ...
+# Subtest: explicit replacement accepts an individually proved ride when another objective is unproved
+ok 72 - explicit replacement accepts an individually proved ride when another objective is unproved
+  ---
+  duration_ms: 3.746541
+  type: 'test'
+  ...
+# Subtest: camp arrival includes legal road escape, not merely enough fuel to get to camp
+ok 73 - camp arrival includes legal road escape, not merely enough fuel to get to camp
+  ---
+  duration_ms: 3.719875
+  type: 'test'
+  ...
+# Subtest: road remains available when mapped fuel access cannot support the ride
+ok 74 - road remains available when mapped fuel access cannot support the ride
+  ---
+  duration_ms: 0.208917
+  type: 'test'
+  ...
+# Subtest: escape cannot ignore a turn restriction on arrival at the campsite
+ok 75 - escape cannot ignore a turn restriction on arrival at the campsite
+  ---
+  duration_ms: 0.150791
+  type: 'test'
+  ...
+# Subtest: a fuel destination supports zero-distance escape after a needed planned refill
+ok 76 - a fuel destination supports zero-distance escape after a needed planned refill
+  ---
+  duration_ms: 0.208334
+  type: 'test'
+  ...
+# Subtest: fuel work exhaustion preserves the completed road without restarting its budget
+ok 77 - fuel work exhaustion preserves the completed road without restarting its budget
+  ---
+  duration_ms: 0.150583
+  type: 'test'
+  ...
+# Subtest: unknown starting fuel retains the road and does not claim a full tank
+ok 78 - unknown starting fuel retains the road and does not claim a full tank
+  ---
+  duration_ms: 0.074833
+  type: 'test'
+  ...
+# Subtest: integrated fuel planning prefers rural pumps even when the urban pump is nearer
+ok 79 - integrated fuel planning prefers rural pumps even when the urban pump is nearer
+  ---
+  duration_ms: 0.1915
+  type: 'test'
+  ...
+# Subtest: necessary urban fuel access is allowed without erasing a legal complete ride
+ok 80 - necessary urban fuel access is allowed without erasing a legal complete ride
+  ---
+  duration_ms: 0.1655
+  type: 'test'
+  ...
+# Subtest: fuel refinement rebuilds an exit-and-rejoin route with the same fuel and escape constraints
+ok 81 - fuel refinement rebuilds an exit-and-rejoin route with the same fuel and escape constraints
+  ---
+  duration_ms: 2.714583
+  type: 'test'
+  ...
+# Subtest: an onward fuel route does not pay for an unnecessary history refinement
+ok 82 - an onward fuel route does not pay for an unnecessary history refinement
+  ---
+  duration_ms: 1.627417
+  type: 'test'
+  ...
+# Subtest: fuel-first continuation preserves the proved ride while avoiding a redundant road search
+ok 83 - fuel-first continuation preserves the proved ride while avoiding a redundant road search
+  ---
+  duration_ms: 0.29325
+  type: 'test'
+  ...
+# Subtest: opt-in zero-refill advisory matches feasible objective and proves directional escape
+ok 84 - opt-in zero-refill advisory matches feasible objective and proves directional escape
+  ---
+  duration_ms: 0.186167
+  type: 'test'
+  ...
+# Subtest: opt-in shortcut falls through when initial fuel cannot cover legal escape
+ok 85 - opt-in shortcut falls through when initial fuel cannot cover legal escape
+  ---
+  duration_ms: 0.098458
+  type: 'test'
+  ...
+# Subtest: zero-refill proof preserves urban priority and surface objective with passing pumps
+ok 86 - zero-refill proof preserves urban priority and surface objective with passing pumps
+  ---
+  duration_ms: 0.148625
+  type: 'test'
+  ...
+# Subtest: passing refill candidate proves multiple tanks without changing the road
+ok 87 - passing refill candidate proves multiple tanks without changing the road
+  ---
+  duration_ms: 0.147958
+  type: 'test'
+  ...
+# Subtest: passing candidate skips unnecessary pumps and retains projected-access evidence
+ok 88 - passing candidate skips unnecessary pumps and retains projected-access evidence
+  ---
+  duration_ms: 0.096
+  type: 'test'
+  ...
+# Subtest: passing candidate falls back to integrated search when a detour is required
+ok 89 - passing candidate falls back to integrated search when a detour is required
+  ---
+  duration_ms: 0.074917
+  type: 'test'
+  ...
+# Subtest: passing candidate cannot spend reserve or bypass arrival turn restrictions
+ok 90 - passing candidate cannot spend reserve or bypass arrival turn restrictions
+  ---
+  duration_ms: 0.107709
+  type: 'test'
+  ...
+# Subtest: passing candidate supports an initially empty tank at a mapped starting pump
+ok 91 - passing candidate supports an initially empty tank at a mapped starting pump
+  ---
+  duration_ms: 0.055959
+  type: 'test'
+  ...
+# Subtest: projected station splits are continuous road, not repeated edge travel
+ok 92 - projected station splits are continuous road, not repeated edge travel
+  ---
+  duration_ms: 0.12725
+  type: 'test'
+  ...
+# Subtest: opt-in repeated-road proof retains exact fuel and legal escape requirements
+ok 93 - opt-in repeated-road proof retains exact fuel and legal escape requirements
+  ---
+  duration_ms: 0.294458
+  type: 'test'
+  ...
+# Subtest: fixed fuel destination reports arrival fuel separately from the planned full departure
+ok 94 - fixed fuel destination reports arrival fuel separately from the planned full departure
+  ---
+  duration_ms: 4.540542
+  type: 'test'
+  ...
+# Subtest: a necessary generated pump shortly before a fixed fuel destination keeps both refills
+ok 95 - a necessary generated pump shortly before a fixed fuel destination keeps both refills
+  ---
+  duration_ms: 1.494625
+  type: 'test'
+  ...
+# Subtest: an ordinary waypoint carries fuel into the following search without a phantom refill
+ok 96 - an ordinary waypoint carries fuel into the following search without a phantom refill
+  ---
+  duration_ms: 1.127458
+  type: 'test'
+  ...
+# Subtest: a fixed station waypoint supplies a full planned tank to the following search
+ok 97 - a fixed station waypoint supplies a full planned tank to the following search
+  ---
+  duration_ms: 0.56775
+  type: 'test'
+  ...
+# Subtest: passing a station marker without a planned visit cannot refill final proof
+ok 98 - passing a station marker without a planned visit cannot refill final proof
+  ---
+  duration_ms: 0.443125
+  type: 'test'
+  ...
+# Subtest: zero-distance station destination preserves the actual starting estimate on arrival
+ok 99 - zero-distance station destination preserves the actual starting estimate on arrival
+  ---
+  duration_ms: 0.441958
+  type: 'test'
+  ...
+# Subtest: a full tank at a fuel destination still has one explicit planned refill
+ok 100 - a full tank at a fuel destination still has one explicit planned refill
+  ---
+  duration_ms: 1.019292
+  type: 'test'
+  ...
+# Subtest: turn history survives an ordinary waypoint between separate searches
+ok 101 - turn history survives an ordinary waypoint between separate searches
+  ---
+  duration_ms: 0.466875
+  type: 'test'
+  ...
+# Subtest: unverified onward escape still distinguishes arrival from planned departure fuel
+ok 102 - unverified onward escape still distinguishes arrival from planned departure fuel
+  ---
+  duration_ms: 0.381667
+  type: 'test'
+  ...
+# Subtest: even a destination refill cannot prove an exit beyond full usable range
+ok 103 - even a destination refill cannot prove an exit beyond full usable range
+  ---
+  duration_ms: 0.469042
+  type: 'test'
+  ...
+# Subtest: incoming projected adjacency exactly equals reversed forward traversal including loops, access and order
+ok 104 - incoming projected adjacency exactly equals reversed forward traversal including loops, access and order
+  ---
+  duration_ms: 8.682375
+  type: 'test'
+  ...
+# Subtest: on-demand costs preserve exact and capped bounds and turn/fuel routes across targets and policies
+ok 105 - on-demand costs preserve exact and capped bounds and turn/fuel routes across targets and policies
+  ---
+  duration_ms: 31.734084
+  type: 'test'
+  ...
+# Subtest: base adjacency reuse excludes request projection/cost state; revision, cancellation and bounds remain enforced
+ok 106 - base adjacency reuse excludes request projection/cost state; revision, cancellation and bounds remain enforced
+  ---
+  duration_ms: 4.12075
+  type: 'test'
+  ...
+# Subtest: neutral turn fast path preserves node and via-way restrictions over branching histories
+ok 107 - neutral turn fast path preserves node and via-way restrictions over branching histories
+  ---
+  duration_ms: 35.101916
+  type: 'test'
+  ...
+# Subtest: station and generation identities reject objects instead of storing mutable or invented IDs
+ok 108 - station and generation identities reject objects instead of storing mutable or invented IDs
+  ---
+  duration_ms: 1.187042
+  type: 'test'
+  ...
+# Subtest: holes and null entries cannot silently omit fixed waypoints or primary legs
+ok 109 - holes and null entries cannot silently omit fixed waypoints or primary legs
+  ---
+  duration_ms: 0.175709
+  type: 'test'
+  ...
+# Subtest: malformed fuel settings are not silently treated as fuel not requested
+ok 110 - malformed fuel settings are not silently treated as fuel not requested
+  ---
+  duration_ms: 0.174625
+  type: 'test'
+  ...
+# Subtest: nonfinite or nonnumeric starting fuel is a data error rather than an unknown estimate
+ok 111 - nonfinite or nonnumeric starting fuel is a data error rather than an unknown estimate
+  ---
+  duration_ms: 0.585875
+  type: 'test'
+  ...
+# Subtest: an absent starting estimate stays unknown and never turns into a full tank
+ok 112 - an absent starting estimate stays unknown and never turns into a full tank
+  ---
+  duration_ms: 0.5365
+  type: 'test'
+  ...
+# Subtest: aggregate distance overflow is invalid data, not a fuel gap or NaN surface report
+ok 113 - aggregate distance overflow is invalid data, not a fuel gap or NaN surface report
+  ---
+  duration_ms: 0.210292
+  type: 'test'
+  ...
+# Subtest: partial candidate evaluation retains a completed road and admits the search is unfinished
+ok 114 - partial candidate evaluation retains a completed road and admits the search is unfinished
+  ---
+  duration_ms: 0.269542
+  type: 'test'
+  ...
+# Subtest: interrupted fuel proof retains the completed road without claiming fuel verification
+ok 115 - interrupted fuel proof retains the completed road without claiming fuel verification
+  ---
+  duration_ms: 0.083375
+  type: 'test'
+  ...
+# Subtest: empty or unproved candidate pools do not claim geographic disconnection
+ok 116 - empty or unproved candidate pools do not claim geographic disconnection
+  ---
+  duration_ms: 0.31375
+  type: 'test'
+  ...
+# Subtest: cancelled selection does not start work or select an unexamined candidate
+ok 117 - cancelled selection does not start work or select an unexamined candidate
+  ---
+  duration_ms: 0.360209
+  type: 'test'
+  ...
+# Subtest: invalid fuel is rejected before road search or candidate evaluation starts
+ok 118 - invalid fuel is rejected before road search or candidate evaluation starts
+  ---
+  duration_ms: 0.247042
+  type: 'test'
+  ...
+# Subtest: valid string and numeric station identities normalize without changing fixed coordinates
+ok 119 - valid string and numeric station identities normalize without changing fixed coordinates
+  ---
+  duration_ms: 0.095333
+  type: 'test'
+  ...
+# Subtest: join collapses exact overlapping roads and retains shared source geometry
+ok 120 - join collapses exact overlapping roads and retains shared source geometry
+  ---
+  duration_ms: 5.245041
+  type: 'test'
+  ...
+# Subtest: turn restriction from first pack remains enforced onto second pack road
+ok 121 - turn restriction from first pack remains enforced onto second pack road
+  ---
+  duration_ms: 2.625375
+  type: 'test'
+  ...
+# Subtest: same coordinates with different OSM IDs do not connect packs
+ok 122 - same coordinates with different OSM IDs do not connect packs
+  ---
+  duration_ms: 1.829209
+  type: 'test'
+  ...
+# Subtest: source mismatch and conflicting shared-node coordinates are rejected
+ok 123 - source mismatch and conflicting shared-node coordinates are rejected
+  ---
+  duration_ms: 1.046458
+  type: 'test'
+  ...
+# Subtest: join honours work cancellation
+ok 124 - join honours work cancellation
+  ---
+  duration_ms: 0.409458
+  type: 'test'
+  ...
+# Subtest: cross-region search carries fuel without refilling at the boundary
+ok 125 - cross-region search carries fuel without refilling at the boundary
+  ---
+  duration_ms: 2.332208
+  type: 'test'
+  ...
+# Subtest: three-region chain retains intermediate graph and boundary restrictions
+ok 126 - three-region chain retains intermediate graph and boundary restrictions
+  ---
+  duration_ms: 0.660834
+  type: 'test'
+  ...
+# Subtest: repeated region cannot be joined twice
+ok 127 - repeated region cannot be joined twice
+  ---
+  duration_ms: 0.369083
+  type: 'test'
+  ...
+# Subtest: lazy identities retain canonical names and every overlapping source alias
+ok 128 - lazy identities retain canonical names and every overlapping source alias
+  ---
+  duration_ms: 0.842166
+  type: 'test'
+  ...
+# Subtest: compact joined geometry index matches materialized source geometry at a seam
+ok 129 - compact joined geometry index matches materialized source geometry at a seam
+  ---
+  duration_ms: 21.279917
+  type: 'test'
+  ...
+# Subtest: packed joined node identities preserve topology, aliases and restrictions; high IDs false
+ok 130 - packed joined node identities preserve topology, aliases and restrictions; high IDs false
+  ---
+  duration_ms: 1.376208
+  type: 'test'
+  ...
+# Subtest: packed joined node identities preserve topology, aliases and restrictions; high IDs true
+ok 131 - packed joined node identities preserve topology, aliases and restrictions; high IDs true
+  ---
+  duration_ms: 0.742958
+  type: 'test'
+  ...
+# Subtest: immutable graph reuse survives source-reader eviction without fetching or joining again
+ok 132 - immutable graph reuse survives source-reader eviction without fetching or joining again
+  ---
+  duration_ms: 2.469834
+  type: 'test'
+  ...
+# Subtest: region/source/byte changes and mutable paths cannot reuse a joined runtime
+ok 133 - region/source/byte changes and mutable paths cannot reuse a joined runtime
+  ---
+  duration_ms: 3.047084
+  type: 'test'
+  ...
+# Subtest: profiles share the same candidate surface pool and Dirt cannot lose to Balanced
+ok 134 - profiles share the same candidate surface pool and Dirt cannot lose to Balanced
+  ---
+  duration_ms: 48.360666
+  type: 'test'
+  ...
+# Subtest: live fuel response partitions the selected ride without rerouting or changing fuel evidence
+ok 135 - live fuel response partitions the selected ride without rerouting or changing fuel evidence
+  ---
+  duration_ms: 3.252541
+  type: 'test'
+  ...
+# Subtest: canary is opt-in and does not silently ignore unsupported recovery or mandatory fuel controls
+ok 136 - canary is opt-in and does not silently ignore unsupported recovery or mandatory fuel controls
+  ---
+  duration_ms: 0.151167
+  type: 'test'
+  ...
+# Subtest: Atlantic opt-in exposes actual region identities and unknown-access intent
+ok 137 - Atlantic opt-in exposes actual region identities and unknown-access intent
+  ---
+  duration_ms: 4.038042
+  type: 'test'
+  ...
+# Subtest: phone Clean highway preference stays in the replacement engine
+ok 138 - phone Clean highway preference stays in the replacement engine
+  ---
+  duration_ms: 0.106208
+  type: 'test'
+  ...
+# Subtest: Clean avoids a motorway shortcut but keeps an unavoidable motorway connection
+ok 139 - Clean avoids a motorway shortcut but keeps an unavoidable motorway connection
+  ---
+  duration_ms: 2.874375
+  type: 'test'
+  ...
+# Subtest: a truncated fuel candidate cannot report a fully evaluated ride pool
+ok 140 - a truncated fuel candidate cannot report a fully evaluated ride pool
+  ---
+  duration_ms: 2.812458
+  type: 'test'
+  ...
+# Subtest: unsupported Atlantic ride controls report incomplete rather than switching engines
+ok 141 - unsupported Atlantic ride controls report incomplete rather than switching engines
+  ---
+  duration_ms: 28.543583
+  type: 'test'
+  ...
+# Subtest: an unfinished comparison cannot silently ship the first feasible candidate
+ok 142 - an unfinished comparison cannot silently ship the first feasible candidate
+  ---
+  duration_ms: 1.852958
+  type: 'test'
+  ...
+# Subtest: covered rides with unqualified pack data never fall back to the retired engine
+ok 143 - covered rides with unqualified pack data never fall back to the retired engine
+  ---
+  duration_ms: 6.111833
+  type: 'test'
+  ...
+# Subtest: waypoint continuations keep one candidate pool for all riding styles
+ok 144 - waypoint continuations keep one candidate pool for all riding styles
+  ---
+  duration_ms: 10.248667
+  type: 'test'
+  ...
+# Subtest: directed continuation retry cannot bypass label limits or declare an incomplete pool proved
+ok 145 - directed continuation retry cannot bypass label limits or declare an incomplete pool proved
+  ---
+  duration_ms: 2.441334
+  type: 'test'
+  ...
+# Subtest: new engine accepts explicit fuel replacement control
+ok 146 - new engine accepts explicit fuel replacement control
+  ---
+  duration_ms: 0.072167
+  type: 'test'
+  ...
+# Subtest: national opt-in admits exactly the audited 63 regions and preserves Atlantic gate
+ok 147 - national opt-in admits exactly the audited 63 regions and preserves Atlantic gate
+  ---
+  duration_ms: 0.08475
+  type: 'test'
+  ...
+# Subtest: national window includes cross-border requests without widening Atlantic-only work
+ok 148 - national window includes cross-border requests without widening Atlantic-only work
+  ---
+  duration_ms: 0.05175
+  type: 'test'
+  ...
+# Subtest: native cross-region combined forward window is admitted while graph-only feelers remain unsupported
+ok 149 - native cross-region combined forward window is admitted while graph-only feelers remain unsupported
+  ---
+  duration_ms: 0.101292
+  type: 'test'
+  ...
+# Subtest: native one-pump window retains fuel-proved geometry and marks the remaining trip incomplete
+ok 150 - native one-pump window retains fuel-proved geometry and marks the remaining trip incomplete
+  ---
+  duration_ms: 2.296583
+  type: 'test'
+  ...
+# Subtest: partial comparison requires a fuel-proved candidate for the requested profile
+ok 151 - partial comparison requires a fuel-proved candidate for the requested profile
+  ---
+  duration_ms: 0.345
+  type: 'test'
+  ...
+# Subtest: proved mapped fuel disconnection is distinct from an unfinished search
+ok 152 - proved mapped fuel disconnection is distinct from an unfinished search
+  ---
+  duration_ms: 0.304958
+  type: 'test'
+  ...
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":61882368}
+# adventure join complete {"elapsedMs":0,"rss":61964288}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":62275584}
+# adventure join complete {"elapsedMs":0,"rss":62291968}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":62341120}
+# adventure join complete {"elapsedMs":1,"rss":62357504}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":62423040}
+# adventure join complete {"elapsedMs":0,"rss":62439424}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":62816256}
+# adventure join complete {"elapsedMs":0,"rss":62865408}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":62996480}
+# adventure join complete {"elapsedMs":0,"rss":62996480}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63078400}
+# adventure join complete {"elapsedMs":0,"rss":63111168}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63176704}
+# adventure join complete {"elapsedMs":0,"rss":63176704}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63340544}
+# adventure join complete {"elapsedMs":1,"rss":63356928}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63455232}
+# adventure join complete {"elapsedMs":0,"rss":63455232}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63520768}
+# adventure join complete {"elapsedMs":0,"rss":63520768}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63586304}
+# adventure join complete {"elapsedMs":0,"rss":63602688}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63733760}
+# adventure join complete {"elapsedMs":0,"rss":63733760}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63832064}
+# adventure join complete {"elapsedMs":0,"rss":63832064}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63897600}
+# adventure join complete {"elapsedMs":0,"rss":63897600}
+# adventure join begin {"regions":["ns","nb"],"nodes":4,"edges":2,"rss":63930368}
+# adventure join complete {"elapsedMs":0,"rss":63930368}
+# Subtest: shared-v1: live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources
+ok 153 - shared-v1: live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources
+  ---
+  duration_ms: 78.854459
+  type: 'test'
+  ...
+# Subtest: compact-v2: live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources
+ok 154 - compact-v2: live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources
+  ---
+  duration_ms: 1.56775
+  type: 'test'
+  ...
+# Subtest: compact-v3: live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources
+ok 155 - compact-v3: live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources
+  ---
+  duration_ms: 1.208708
+  type: 'test'
+  ...
+# Subtest: compact-v4: live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources
+ok 156 - compact-v4: live loader reuses a qualified immutable joined graph before source readers, and invalidates changed sources
+  ---
+  duration_ms: 2.183958
+  type: 'test'
+  ...
+# Subtest: new revisions require exact graph, geometry and fuel identities
+ok 157 - new revisions require exact graph, geometry and fuel identities
+  ---
+  duration_ms: 0.621583
+  type: 'test'
+  ...
+# Subtest: accepted NB boxes are applied once for both source versions
+ok 158 - accepted NB boxes are applied once for both source versions
+  ---
+  duration_ms: 0.373666
+  type: 'test'
+  ...
+# Subtest: accepted older Atlantic revision also requires exact manifest identities
+ok 159 - accepted older Atlantic revision also requires exact manifest identities
+  ---
+  duration_ms: 2.808
+  type: 'test'
+  ...
+# Subtest: longer paved back roads beat a primary shortcut
+ok 160 - longer paved back roads beat a primary shortcut
+  ---
+  duration_ms: 6.367208
+  type: 'test'
+  ...
+# Subtest: service-road shortcut and short gravel branch do not replace paved onward road
+ok 161 - service-road shortcut and short gravel branch do not replace paved onward road
+  ---
+  duration_ms: 17.512166
+  type: 'test'
+  ...
+# Subtest: necessary highway and fuel-access connections remain available
+ok 162 - necessary highway and fuel-access connections remain available
+  ---
+  duration_ms: 0.288875
+  type: 'test'
+  ...
+# Subtest: repeat requests reuse exact preparation without rescanning geometry
+ok 163 - repeat requests reuse exact preparation without rescanning geometry
+  ---
+  duration_ms: 2.20625
+  type: 'test'
+  ...
+# Subtest: revision, graph instance, geometry instance and urban bounds invalidate reuse
+ok 164 - revision, graph instance, geometry instance and urban bounds invalidate reuse
+  ---
+  duration_ms: 0.880209
+  type: 'test'
+  ...
+# Subtest: incomplete preparation cannot poison later requests or evict completed data
+ok 165 - incomplete preparation cannot poison later requests or evict completed data
+  ---
+  duration_ms: 0.110875
+  type: 'test'
+  ...
+# Subtest: bounded eviction and explicit unloading release cached references
+ok 166 - bounded eviction and explicit unloading release cached references
+  ---
+  duration_ms: 0.159708
+  type: 'test'
+  ...
+# Subtest: cancellation remains terminal even when prepared data is already cached
+ok 167 - cancellation remains terminal even when prepared data is already cached
+  ---
+  duration_ms: 0.337458
+  type: 'test'
+  ...
+# Subtest: same-edge projections use only the distance between the selected points
+ok 168 - same-edge projections use only the distance between the selected points
+  ---
+  duration_ms: 8.911
+  type: 'test'
+  ...
+# Subtest: one-way road cannot be reversed by inserting endpoint projections
+ok 169 - one-way road cannot be reversed by inserting endpoint projections
+  ---
+  duration_ms: 1.873667
+  type: 'test'
+  ...
+# Subtest: a projected station can refuel without leaving or resetting road direction
+ok 170 - a projected station can refuel without leaving or resetting road direction
+  ---
+  duration_ms: 1.180916
+  type: 'test'
+  ...
+# Subtest: projection cannot create a turnaround halfway through a road
+ok 171 - projection cannot create a turnaround halfway through a road
+  ---
+  duration_ms: 0.99925
+  type: 'test'
+  ...
+# Subtest: unverified nearby pump cannot become a fuel reset
+ok 172 - unverified nearby pump cannot become a fuel reset
+  ---
+  duration_ms: 0.701833
+  type: 'test'
+  ...
+# Subtest: identical positions share the road node, never connect different edges
+ok 173 - identical positions share the road node, never connect different edges
+  ---
+  duration_ms: 0.937667
+  type: 'test'
+  ...
+# Subtest: split pieces preserve the restriction at the real next junction
+ok 174 - split pieces preserve the restriction at the real next junction
+  ---
+  duration_ms: 1.057458
+  type: 'test'
+  ...
+# Subtest: coincident projected coordinates do not join disconnected roads
+ok 175 - coincident projected coordinates do not join disconnected roads
+  ---
+  duration_ms: 1.043542
+  type: 'test'
+  ...
+# Subtest: splitting a via-way preserves path history but does not invent history at an interior start
+ok 176 - splitting a via-way preserves path history but does not invent history at an interior start
+  ---
+  duration_ms: 0.821
+  type: 'test'
+  ...
+# Subtest: waypoint interior arrival cannot invent an immediate reversal
+ok 177 - waypoint interior arrival cannot invent an immediate reversal
+  ---
+  duration_ms: 0.726459
+  type: 'test'
+  ...
+# Subtest: direct arc visitor preserves projection order and stops on cancellation
+ok 178 - direct arc visitor preserves projection order and stops on cancellation
+  ---
+  duration_ms: 1.927958
+  type: 'test'
+  ...
+# Subtest: reducing one candidate repetition cannot expose a worse winner for another style
+ok 179 - reducing one candidate repetition cannot expose a worse winner for another style
+  ---
+  duration_ms: 0.64725
+  type: 'test'
+  ...
+# Subtest: accept a repetition improvement that preserves all style winners, reject urban degradation
+ok 180 - accept a repetition improvement that preserves all style winners, reject urban degradation
+  ---
+  duration_ms: 0.319042
+  type: 'test'
+  ...
+# Subtest: start both regional loads before either resolves and retain requested order
+ok 181 - start both regional loads before either resolves and retain requested order
+  ---
+  duration_ms: 1.030125
+  type: 'test'
+  ...
+# Subtest: a failed regional load never returns a partial pack list
+ok 182 - a failed regional load never returns a partial pack list
+  ---
+  duration_ms: 0.309959
+  type: 'test'
+  ...
+# Subtest: 250 seeded directed fuel/turn/urban graphs agree with exhaustive state enumeration
+ok 183 - 250 seeded directed fuel/turn/urban graphs agree with exhaustive state enumeration
+  ---
+  duration_ms: 71.084167
+  type: 'test'
+  ...
+# Subtest: fuel participates in search: early refill permits a path that shortest arrival cannot
+ok 184 - fuel participates in search: early refill permits a path that shortest arrival cannot
+  ---
+  duration_ms: 5.403875
+  type: 'test'
+  ...
+# Subtest: cheaper low-fuel arrival does not dominate a feasible higher-fuel arrival
+ok 185 - cheaper low-fuel arrival does not dominate a feasible higher-fuel arrival
+  ---
+  duration_ms: 0.533958
+  type: 'test'
+  ...
+# Subtest: necessary fuel access may return along the same stem
+ok 186 - necessary fuel access may return along the same stem
+  ---
+  duration_ms: 0.21625
+  type: 'test'
+  ...
+# Subtest: nonnegative search doesn't add gratuitous cycles when fuel isn't needed
+ok 187 - nonnegative search doesn't add gratuitous cycles when fuel isn't needed
+  ---
+  duration_ms: 0.228083
+  type: 'test'
+  ...
+# Subtest: destination escape can force an extra refill before arrival
+ok 188 - destination escape can force an extra refill before arrival
+  ---
+  duration_ms: 0.192375
+  type: 'test'
+  ...
+# Subtest: fuel refill preserves incoming turn state
+ok 189 - fuel refill preserves incoming turn state
+  ---
+  duration_ms: 0.149417
+  type: 'test'
+  ...
+# Subtest: resource exhaustion is incomplete, never disconnected or fuel gap
+ok 190 - resource exhaustion is incomplete, never disconnected or fuel gap
+  ---
+  duration_ms: 0.125917
+  type: 'test'
+  ...
+# Subtest: directed arcs cannot be traversed in reverse
+ok 191 - directed arcs cannot be traversed in reverse
+  ---
+  duration_ms: 0.115417
+  type: 'test'
+  ...
+# Subtest: negative reward for dirt cannot enter the additive search
+ok 192 - negative reward for dirt cannot enter the additive search
+  ---
+  duration_ms: 0.5015
+  type: 'test'
+  ...
+# Subtest: reverse bound preserves fuel-aware route and avoids irrelevant branches
+ok 193 - reverse bound preserves fuel-aware route and avoids irrelevant branches
+  ---
+  duration_ms: 2.528917
+  type: 'test'
+  ...
+# Subtest: partial or mismatched lower bounds cannot turn unknown reachability into no-path
+ok 194 - partial or mismatched lower bounds cannot turn unknown reachability into no-path
+  ---
+  duration_ms: 0.300875
+  type: 'test'
+  ...
+# Subtest: urban shortcut never beats a feasible rural route through a finite penalty
+ok 195 - urban shortcut never beats a feasible rural route through a finite penalty
+  ---
+  duration_ms: 0.095667
+  type: 'test'
+  ...
+# Subtest: unavoidable urban passage completes and minimizes urban exposure first
+ok 196 - unavoidable urban passage completes and minimizes urban exposure first
+  ---
+  duration_ms: 0.069292
+  type: 'test'
+  ...
+# Subtest: rural low-fuel arrival cannot erase an urban arrival needed for onward fuel
+ok 197 - rural low-fuel arrival cannot erase an urban arrival needed for onward fuel
+  ---
+  duration_ms: 0.132
+  type: 'test'
+  ...
+# Subtest: reverse ride-cost bound cannot make an urban shortcut win
+ok 198 - reverse ride-cost bound cannot make an urban shortcut win
+  ---
+  duration_ms: 0.660709
+  type: 'test'
+  ...
+# Subtest: negative urban rewards and unfinished rural searches cannot claim necessary passage
+ok 199 - negative urban rewards and unfinished rural searches cannot claim necessary passage
+  ---
+  duration_ms: 0.133541
+  type: 'test'
+  ...
+# Subtest: fuel search does not schedule every passing pump when no refill is needed
+ok 200 - fuel search does not schedule every passing pump when no refill is needed
+  ---
+  duration_ms: 0.08375
+  type: 'test'
+  ...
+# Subtest: equivalent road geometry uses only the necessary number of planned refills
+ok 201 - equivalent road geometry uses only the necessary number of planned refills
+  ---
+  duration_ms: 0.061708
+  type: 'test'
+  ...
+# Subtest: label memory guard returns incomplete with a bounded admitted label count
+ok 202 - label memory guard returns incomplete with a bounded admitted label count
+  ---
+  duration_ms: 0.071625
+  type: 'test'
+  ...
+# Subtest: weighted candidate guidance preserves fuel feasibility and rural priority
+ok 203 - weighted candidate guidance preserves fuel feasibility and rural priority
+  ---
+  duration_ms: 0.231875
+  type: 'test'
+  ...
+# Subtest: fuel search prefers an onward connection when retraced dirt is priced as connecting travel
+ok 204 - fuel search prefers an onward connection when retraced dirt is priced as connecting travel
+  ---
+  duration_ms: 0.266
+  type: 'test'
+  ...
+# Subtest: onward preference preserves incomplete search status when its label cap is reached
+ok 205 - onward preference preserves incomplete search status when its label cap is reached
+  ---
+  duration_ms: 0.053125
+  type: 'test'
+  ...
+# Subtest: legal station exit that rejoins an earlier junction cannot hide the fuel approach retrace
+ok 206 - legal station exit that rejoins an earlier junction cannot hide the fuel approach retrace
+  ---
+  duration_ms: 0.397209
+  type: 'test'
+  ...
+# Subtest: station exit rejoining the approach in the same direction also counts repetition
+ok 207 - station exit rejoining the approach in the same direction also counts repetition
+  ---
+  duration_ms: 0.247542
+  type: 'test'
+  ...
+# Subtest: unavoidable urban arrival bounds prevent exhausting rural fuel labels
+ok 208 - unavoidable urban arrival bounds prevent exhausting rural fuel labels
+  ---
+  duration_ms: 0.546375
+  type: 'test'
+  ...
+# Subtest: rural endpoint beyond a required town also needs an urban bound
+ok 209 - rural endpoint beyond a required town also needs an urban bound
+  ---
+  duration_ms: 3.797958
+  type: 'test'
+  ...
+# Subtest: relaxed fuel connectivity distinguishes missing range from expensive preferences
+ok 210 - relaxed fuel connectivity distinguishes missing range from expensive preferences
+  ---
+  duration_ms: 0.32775
+  type: 'test'
+  ...
+# Subtest: reusable reverse costs span chunks and preserve directed reachability across targets
+ok 211 - reusable reverse costs span chunks and preserve directed reachability across targets
+  ---
+  duration_ms: 35.312125
+  type: 'test'
+  ...
+# Subtest: bounded or interrupted reverse preparation never publishes partial reachability
+ok 212 - bounded or interrupted reverse preparation never publishes partial reachability
+  ---
+  duration_ms: 1.5345
+  type: 'test'
+  ...
+# Subtest: reverse costs cannot be reused across graph or cost identities
+ok 213 - reverse costs cannot be reused across graph or cost identities
+  ---
+  duration_ms: 1.512917
+  type: 'test'
+  ...
+# Subtest: early reverse stopping returns exact capped bounds, never false disconnection
+ok 214 - early reverse stopping returns exact capped bounds, never false disconnection
+  ---
+  duration_ms: 1.751875
+  type: 'test'
+  ...
+# Subtest: maximum wander retains accepted objective exactly
+ok 215 - maximum wander retains accepted objective exactly
+  ---
+  duration_ms: 0.558084
+  type: 'test'
+  ...
+# Subtest: lower wander raises extra-distance cost continuously without erasing surface preference
+ok 216 - lower wander raises extra-distance cost continuously without erasing surface preference
+  ---
+  duration_ms: 0.210042
+  type: 'test'
+  ...
+# Subtest: malformed preferences cannot be silently ignored
+ok 217 - malformed preferences cannot be silently ignored
+  ---
+  duration_ms: 0.189875
+  type: 'test'
+  ...
+# Subtest: highway switch changes the actual connected route
+ok 218 - highway switch changes the actual connected route
+  ---
+  duration_ms: 39.992416
+  type: 'test'
+  ...
+# Subtest: town switch changes the actual connected route
+ok 219 - town switch changes the actual connected route
+  ---
+  duration_ms: 14.39525
+  type: 'test'
+  ...
+# Subtest: return-road preference is optional and validated
+ok 220 - return-road preference is optional and validated
+  ---
+  duration_ms: 0.495917
+  type: 'test'
+  ...
+# Subtest: adjacent station-split intervals are not repeated roads
+ok 221 - adjacent station-split intervals are not repeated roads
+  ---
+  duration_ms: 0.975042
+  type: 'test'
+  ...
+# Subtest: reverse and third traversals count prior overlap once per new traversal
+ok 222 - reverse and third traversals count prior overlap once per new traversal
+  ---
+  duration_ms: 0.124458
+  type: 'test'
+  ...
+# Subtest: separate prior fragments form a union without double-counting overlaps
+ok 223 - separate prior fragments form a union without double-counting overlaps
+  ---
+  duration_ms: 0.386
+  type: 'test'
+  ...
+# Subtest: continuous dirt survives split edges and unknown surface breaks the run
+ok 224 - continuous dirt survives split edges and unknown surface breaks the run
+  ---
+  duration_ms: 0.228542
+  type: 'test'
+  ...
+# Subtest: interrupted audit does not present partial metrics as complete
+ok 225 - interrupted audit does not present partial metrics as complete
+  ---
+  duration_ms: 0.164833
+  type: 'test'
+  ...
+# Subtest: route geometry preserves a curved source edge in its travel direction
+ok 226 - route geometry preserves a curved source edge in its travel direction
+  ---
+  duration_ms: 5.531542
+  type: 'test'
+  ...
+# Subtest: partial source geometry begins and ends at the selected interior positions
+ok 227 - partial source geometry begins and ends at the selected interior positions
+  ---
+  duration_ms: 0.747125
+  type: 'test'
+  ...
+# Subtest: nonjoining arcs cannot be painted as a straight connection
+ok 228 - nonjoining arcs cannot be painted as a straight connection
+  ---
+  duration_ms: 0.686833
+  type: 'test'
+  ...
+# Subtest: snap distance is normalized against actual polyline rather than rounded edge length
+ok 229 - snap distance is normalized against actual polyline rather than rounded edge length
+  ---
+  duration_ms: 0.143542
+  type: 'test'
+  ...
+# Subtest: indexed station candidates equal full legal projection without OSM-node identity join
+ok 230 - indexed station candidates equal full legal projection without OSM-node identity join
+  ---
+  duration_ms: 12.755666
+  type: 'test'
+  ...
+# Subtest: missing or prohibited station access has an explicit reason, not a geographic gap
+ok 231 - missing or prohibited station access has an explicit reason, not a geographic gap
+  ---
+  duration_ms: 0.956333
+  type: 'test'
+  ...
+# Subtest: an incomplete index cannot masquerade as zero reachable pumps
+ok 232 - an incomplete index cannot masquerade as zero reachable pumps
+  ---
+  duration_ms: 2.113291
+  type: 'test'
+  ...
+# Subtest: station cache never publishes partial matches or bypasses cancellation
+ok 233 - station cache never publishes partial matches or bypasses cancellation
+  ---
+  duration_ms: 2.498917
+  type: 'test'
+  ...
+# Subtest: exact bounds reject distant cell neighbours while retaining full crossing geometry
+ok 234 - exact bounds reject distant cell neighbours while retaining full crossing geometry
+  ---
+  duration_ms: 0.139792
+  type: 'test'
+  ...
+# Subtest: zero-copy decoded coordinate indexing equals polyline fallback
+ok 235 - zero-copy decoded coordinate indexing equals polyline fallback
+  ---
+  duration_ms: 5.445667
+  type: 'test'
+  ...
+# Subtest: compact cell membership preserves exact candidate order, broad roads, dateline and polar queries
+ok 236 - compact cell membership preserves exact candidate order, broad roads, dateline and polar queries
+  ---
+  duration_ms: 1.906959
+  type: 'test'
+  ...
+# Subtest: compact bounds use source precision exactly and fall back for double precision geometry
+ok 237 - compact bounds use source precision exactly and fall back for double precision geometry
+  ---
+  duration_ms: 0.531084
+  type: 'test'
+  ...
+# Subtest: bounds share only identical topology, cost, target and stopping node; release graph false
+ok 238 - bounds share only identical topology, cost, target and stopping node; release graph false
+  ---
+  duration_ms: 2.957458
+  type: 'test'
+  ...
+# Subtest: bounds share only identical topology, cost, target and stopping node; release graph true
+ok 239 - bounds share only identical topology, cost, target and stopping node; release graph true
+  ---
+  duration_ms: 1.85325
+  type: 'test'
+  ...
+# Subtest: cached bounds do not override cancellation
+ok 240 - cached bounds do not override cancellation
+  ---
+  duration_ms: 0.176792
+  type: 'test'
+  ...
+# Subtest: rural settlements are not silently classified as major cores
+ok 241 - rural settlements are not silently classified as major cores
+  ---
+  duration_ms: 0.952834
+  type: 'test'
+  ...
+# Subtest: full road geometry detects a city crossing with both endpoints outside
+ok 242 - full road geometry detects a city crossing with both endpoints outside
+  ---
+  duration_ms: 2.298375
+  type: 'test'
+  ...
+# Subtest: overlapping city boxes count each road metre once
+ok 243 - overlapping city boxes count each road metre once
+  ---
+  duration_ms: 0.455458
+  type: 'test'
+  ...
+# Subtest: partial forward and reverse traversal count only traversed urban geometry
+ok 244 - partial forward and reverse traversal count only traversed urban geometry
+  ---
+  duration_ms: 0.678958
+  type: 'test'
+  ...
+# Subtest: curved rural road does not inherit its endpoint chord's city crossing
+ok 245 - curved rural road does not inherit its endpoint chord's city crossing
+  ---
+  duration_ms: 0.727666
+  type: 'test'
+  ...
+# Subtest: incomplete indexing cannot be used as complete urban evidence
+ok 246 - incomplete indexing cannot be used as complete urban evidence
+  ---
+  duration_ms: 0.257375
+  type: 'test'
+  ...
+# Subtest: missing urban data remains explicitly unqualified
+ok 247 - missing urban data remains explicitly unqualified
+  ---
+  duration_ms: 0.313583
+  type: 'test'
+  ...
+# Subtest: reused spatial index matches full geometry classification including curved crossings
+ok 248 - reused spatial index matches full geometry classification including curved crossings
+  ---
+  duration_ms: 12.24325
+  type: 'test'
+  ...
+# Subtest: per-edge core candidates preserve overlapping and distant core measurements
+ok 249 - per-edge core candidates preserve overlapping and distant core measurements
+  ---
+  duration_ms: 11.637208
+  type: 'test'
+  ...
+# Subtest: node turn restriction preserves alternate arrival state
+ok 250 - node turn restriction preserves alternate arrival state
+  ---
+  duration_ms: 2.275625
+  type: 'test'
+  ...
+# Subtest: via-way no restriction depends on the full incoming sequence
+ok 251 - via-way no restriction depends on the full incoming sequence
+  ---
+  duration_ms: 1.414209
+  type: 'test'
+  ...
+# Subtest: multi-edge only restriction rejects an early departure and allows its exit
+ok 252 - multi-edge only restriction rejects an early departure and allows its exit
+  ---
+  duration_ms: 1.362208
+  type: 'test'
+  ...
+# Subtest: multiple permitted only-turn destinations form alternatives
+ok 253 - multiple permitted only-turn destinations form alternatives
+  ---
+  duration_ms: 0.337292
+  type: 'test'
+  ...
+# Subtest: unknown permission differs from prohibited travel
+ok 254 - unknown permission differs from prohibited travel
+  ---
+  duration_ms: 0.2075
+  type: 'test'
+  ...
+# Subtest: destination-only access is scoped to explicit endpoint edges
+ok 255 - destination-only access is scoped to explicit endpoint edges
+  ---
+  duration_ms: 0.0835
+  type: 'test'
+  ...
+# Subtest: Quebec repeated approach/via edge is an actionable restriction error, never silently dropped
+ok 256 - Quebec repeated approach/via edge is an actionable restriction error, never silently dropped
+  ---
+  duration_ms: 0.363
+  type: 'test'
+  ...
+# Subtest: waypoint arrival preserves node and via-way restrictions
+ok 257 - waypoint arrival preserves node and via-way restrictions
+  ---
+  duration_ms: 0.877667
+  type: 'test'
+  ...
+# Subtest: repeated only-turn approach with proved one-way direction enforces the unique exit
+ok 258 - repeated only-turn approach with proved one-way direction enforces the unique exit
+  ---
+  duration_ms: 0.529458
+  type: 'test'
+  ...
+# Subtest: repeated approach normalization refuses unproved attachment and leaves source unchanged
+ok 259 - repeated approach normalization refuses unproved attachment and leaves source unchanged
+  ---
+  duration_ms: 0.592416
+  type: 'test'
+  ...
+# Subtest: distinct parallel via entry uses source-resolved contiguous path
+ok 260 - distinct parallel via entry uses source-resolved contiguous path
+  ---
+  duration_ms: 0.225
+  type: 'test'
+  ...
+# Subtest: coarse rider area selection expands while street precision and explicit limits remain
+ok 261 - coarse rider area selection expands while street precision and explicit limits remain
+  ---
+  duration_ms: 0.698542
+  type: 'test'
+  ...
+# Subtest: decoded-pack consumers do not build a legacy grid; snapping and spread consumers still receive the exact grid
+ok 262 - decoded-pack consumers do not build a legacy grid; snapping and spread consumers still receive the exact grid
+  ---
+  duration_ms: 1.193958
+  type: 'test'
+  ...
+# Subtest: deferred legacy index does not publish a failed build
+ok 263 - deferred legacy index does not publish a failed build
+  ---
+  duration_ms: 0.26075
+  type: 'test'
+  ...
+# Subtest: long rectangles retain exact candidates and edge order at every queried cell
+ok 264 - long rectangles retain exact candidates and edge order at every queried cell
+  ---
+  duration_ms: 7.217042
+  type: 'test'
+  ...
+# Subtest: continental ferry bounds do not allocate a cell for every ocean square
+ok 265 - continental ferry bounds do not allocate a cell for every ocean square
+  ---
+  duration_ms: 0.20925
+  type: 'test'
+  ...
+1..265
+# tests 265
+# suites 0
+# pass 265
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 557.452417

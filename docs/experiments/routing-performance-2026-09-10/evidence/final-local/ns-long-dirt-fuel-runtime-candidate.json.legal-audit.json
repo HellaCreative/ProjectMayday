@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-long-dirt-fuel-runtime-candidate.json",
+  "case": "ns-long-dirt-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1328,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

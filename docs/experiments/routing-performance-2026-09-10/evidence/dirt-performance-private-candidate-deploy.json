@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "deployment": {
+    "id": "dpl_8WhjbxvHWUCP7UFmCPDLptfZEoEw",
+    "url": "https://pack-fabric-3ebft6y0a-goricksmith-7678s-projects.vercel.app",
+    "inspectorUrl": "https://vercel.com/goricksmith-7678s-projects/pack-fabric/8WhjbxvHWUCP7UFmCPDLptfZEoEw",
+    "readyState": "READY",
+    "target": null,
+    "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_8WhjbxvHWUCP7UFmCPDLptfZEoEw"
+  },
+  "message": "Deployment pack-fabric-3ebft6y0a-goricksmith-7678s-projects.vercel.app ready.",
+  "next": [
+    {
+      "command": "vercel inspect pack-fabric-3ebft6y0a-goricksmith-7678s-projects.vercel.app",
+      "when": "Inspect deployment"
+    },
+    {
+      "command": "vercel deploy --prod",
+      "when": "Promote to production"
+    }
+  ]
+}

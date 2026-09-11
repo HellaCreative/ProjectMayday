@@ -1,0 +1,16 @@
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":0,"complete":true,"ms":2999.880459,"meters":479368.54542749963,"stops":0,"peakRoutingMiB":301.71875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":1,"complete":true,"ms":1105.6889159999996,"meters":212258.68234217862,"stops":1,"peakRoutingMiB":301.71875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":2,"complete":true,"ms":282.67591600000014,"meters":246906.51866492073,"stops":0,"peakRoutingMiB":301.71875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":3,"complete":true,"ms":8401.075125,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":4,"complete":true,"ms":783.9284580000003,"meters":246906.51866492073,"stops":0,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":5,"complete":true,"ms":374.86062499999935,"meters":212258.68234217862,"stops":1,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":6,"complete":true,"ms":236.31362500000068,"meters":246906.51866492073,"stops":0,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":7,"complete":true,"ms":837.1023750000004,"meters":540768.7310017741,"stops":0,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":8,"complete":true,"ms":244.20808399999987,"meters":246906.51866492073,"stops":0,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":9,"complete":true,"ms":876.730042000001,"meters":540768.7310017741,"stops":0,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":10,"complete":true,"ms":238.3658749999977,"meters":246906.51866492073,"stops":0,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":11,"complete":true,"ms":284.17849999999817,"meters":202619.68234217865,"stops":1,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":12,"complete":true,"ms":2833.3399580000005,"meters":479368.54542749963,"stops":0,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":13,"complete":true,"ms":885.6667499999967,"meters":212258.68234217862,"stops":1,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":14,"complete":true,"ms":323.56604199999856,"meters":202619.68234217865,"stops":1,"peakRoutingMiB":788.203125}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":15,"complete":true,"ms":7461.902916999999,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":788.203125}

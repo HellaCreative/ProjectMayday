@@ -1,0 +1,3 @@
+{"caseId":"ns-short-clean-220km","variant":"runtime-candidate","run":0,"complete":true,"ms":680.740666,"meters":210881.68234217868,"stops":1,"peakRoutingMiB":196.453125}
+{"caseId":"ns-short-clean-220km","variant":"runtime-candidate","run":1,"complete":true,"ms":222.747792,"meters":210881.68234217868,"stops":1,"peakRoutingMiB":202.84375}
+{"caseId":"ns-short-clean-220km","variant":"runtime-candidate","run":2,"complete":true,"ms":212.0407919999999,"meters":210881.68234217868,"stops":1,"peakRoutingMiB":210.765625}

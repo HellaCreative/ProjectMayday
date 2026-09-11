@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-long-unknown-road-runtime-candidate.json",
+  "case": "ns-long-unknown-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1002,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

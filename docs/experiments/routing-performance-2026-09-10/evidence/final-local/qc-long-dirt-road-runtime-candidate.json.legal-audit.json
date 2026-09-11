@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/qc-long-dirt-road-runtime-candidate.json",
+  "case": "qc-long-dirt-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1304,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

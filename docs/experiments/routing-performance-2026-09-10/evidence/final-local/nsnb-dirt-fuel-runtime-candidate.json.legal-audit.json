@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/nsnb-dirt-fuel-runtime-candidate.json",
+  "case": "nsnb-dirt-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 968,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

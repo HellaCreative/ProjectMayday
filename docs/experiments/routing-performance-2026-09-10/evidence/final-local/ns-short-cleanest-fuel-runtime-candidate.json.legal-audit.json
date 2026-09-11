@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-short-cleanest-fuel-runtime-candidate.json",
+  "case": "ns-short-cleanest-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 953,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

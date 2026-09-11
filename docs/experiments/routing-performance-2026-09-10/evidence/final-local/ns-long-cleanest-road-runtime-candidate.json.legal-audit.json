@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-long-cleanest-road-runtime-candidate.json",
+  "case": "ns-long-cleanest-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1695,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

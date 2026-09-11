@@ -1127,5 +1127,186 @@
     },
     "source": "Expanded fuel-range/partial-initial-tank case",
     "phase": 5
+  },
+  {
+    "id": "ns-short-unknown-220km",
+    "request": {
+      "profile": "dirt",
+      "locations": [
+        {
+          "lat": 44.76481,
+          "lon": -63.34024
+        },
+        {
+          "lat": 45.3933,
+          "lon": -62.18066
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": true
+      },
+      "options": {
+        "mapZoom": 9
+      },
+      "fuel": {
+        "usableRangeMeters": 220000,
+        "firstLegMaxMeters": 220000,
+        "windowMaxStops": 12,
+        "windowTimeBudgetMs": 90000,
+        "allowPartialWindow": true,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true
+      }
+    },
+    "source": "Additional access-policy, intermediate preference and220km range qualification",
+    "phase": 6
+  },
+  {
+    "id": "ns-long-unknown-road",
+    "request": {
+      "profile": "balanced",
+      "locations": [
+        {
+          "lat": 44.76484,
+          "lon": -63.34023
+        },
+        {
+          "lat": 43.47454,
+          "lon": -65.60197
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": true
+      },
+      "options": {
+        "mapZoom": 9
+      }
+    },
+    "source": "Additional access-policy, intermediate preference and220km range qualification",
+    "phase": 6
+  },
+  {
+    "id": "qc-middle-wander-road",
+    "request": {
+      "profile": "balanced",
+      "locations": [
+        {
+          "lat": 47.80183,
+          "lon": -69.56164
+        },
+        {
+          "lat": 46.13625,
+          "lon": -74.62998
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 10.2,
+        "ridePreferences": {
+          "wander": 0.5,
+          "avoidCities": true,
+          "avoidHighways": false
+        }
+      }
+    },
+    "source": "Additional access-policy, intermediate preference and220km range qualification",
+    "phase": 6
+  },
+  {
+    "id": "nsnb-unknown-220km",
+    "request": {
+      "profile": "dirt",
+      "locations": [
+        {
+          "lat": 44.764804,
+          "lon": -63.340199
+        },
+        {
+          "lat": 47.013162,
+          "lon": -65.244265
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": true
+      },
+      "options": {
+        "mapZoom": 9.3
+      },
+      "fuel": {
+        "usableRangeMeters": 220000,
+        "firstLegMaxMeters": 220000,
+        "windowMaxStops": 12,
+        "windowTimeBudgetMs": 90000,
+        "allowPartialWindow": true,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true
+      }
+    },
+    "source": "Additional access-policy, intermediate preference and220km range qualification",
+    "phase": 6
+  },
+  {
+    "id": "ns-short-clean-220km",
+    "request": {
+      "profile": "cleanest",
+      "locations": [
+        {
+          "lat": 44.76481,
+          "lon": -63.34024
+        },
+        {
+          "lat": 45.3933,
+          "lon": -62.18066
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 9
+      },
+      "fuel": {
+        "usableRangeMeters": 220000,
+        "firstLegMaxMeters": 220000,
+        "windowMaxStops": 12,
+        "windowTimeBudgetMs": 90000,
+        "allowPartialWindow": true,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true
+      }
+    },
+    "source": "Additional access-policy, intermediate preference and220km range qualification",
+    "phase": 6
+  },
+  {
+    "id": "ns-middle-wander-road",
+    "request": {
+      "profile": "balanced",
+      "locations": [
+        {
+          "lat": 44.76481,
+          "lon": -63.34024
+        },
+        {
+          "lat": 45.3933,
+          "lon": -62.18066
+        }
+      ],
+      "accessPolicy": {
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 9,
+        "ridePreferences": {
+          "wander": 0.5,
+          "avoidCities": false,
+          "avoidHighways": true
+        }
+      }
+    },
+    "source": "Additional access-policy, intermediate preference and220km range qualification",
+    "phase": 6
   }
 ]

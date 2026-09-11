@@ -1,0 +1,158 @@
+[
+  {
+    "case": "ns-short-dirt-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.7,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 646,
+        "peakMiB": 184
+      }
+    ]
+  },
+  {
+    "case": "ns-short-dirt-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 747,
+        "peakMiB": 228
+      }
+    ]
+  },
+  {
+    "case": "ns-short-balanced-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.8,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 655,
+        "peakMiB": 184
+      }
+    ]
+  },
+  {
+    "case": "ns-short-balanced-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 757,
+        "peakMiB": 224
+      }
+    ]
+  },
+  {
+    "case": "ns-short-cleanest-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.8,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 656,
+        "peakMiB": 184
+      }
+    ]
+  },
+  {
+    "case": "ns-short-cleanest-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 748,
+        "peakMiB": 218
+      }
+    ]
+  },
+  {
+    "case": "ns-long-dirt-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 1.2,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 1051,
+        "peakMiB": 250
+      }
+    ]
+  },
+  {
+    "case": "ns-long-dirt-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 1.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 888,
+        "peakMiB": 219
+      }
+    ]
+  },
+  {
+    "case": "ns-long-balanced-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 1.2,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 1037,
+        "peakMiB": 242
+      }
+    ]
+  },
+  {
+    "case": "ns-long-balanced-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 798,
+        "peakMiB": 215
+      }
+    ]
+  },
+  {
+    "case": "ns-long-cleanest-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 1.2,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 1031,
+        "peakMiB": 238
+      }
+    ]
+  },
+  {
+    "case": "ns-long-cleanest-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 1.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 810,
+        "peakMiB": 229
+      }
+    ]
+  }
+]

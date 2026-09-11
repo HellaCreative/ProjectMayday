@@ -1,0 +1,2 @@
+{"caseId":"ns-on-road","variant":"runtime-baseline","run":0,"complete":true,"ms":29433.545625,"meters":3992391.5628222907,"stops":0,"peakRoutingMiB":2171.59375}
+{"caseId":"ns-on-road","variant":"runtime-baseline","run":1,"complete":true,"ms":31978.656500000005,"meters":3992391.5628222907,"stops":0,"peakRoutingMiB":2229.484375}

@@ -1,0 +1,132 @@
+[
+  {
+    "case": "nsnb-accepted-180km",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 2.7,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2592,
+        "peakMiB": 408
+      }
+    ]
+  },
+  {
+    "case": "nsnb-accepted-180km",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2213,
+        "peakMiB": 304
+      }
+    ]
+  },
+  {
+    "case": "deep-accepted-windowed",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 107.8,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 107539,
+        "peakMiB": 1802
+      }
+    ]
+  },
+  {
+    "case": "deep-accepted-windowed",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 86.5,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 86285,
+        "peakMiB": 1906
+      }
+    ]
+  },
+  {
+    "case": "clean-accepted-windowed",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 117.5,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 117113,
+        "peakMiB": 2259
+      }
+    ]
+  },
+  {
+    "case": "clean-accepted-windowed",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 97.2,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 96857,
+        "peakMiB": 2060
+      }
+    ]
+  },
+  {
+    "case": "ns-short-162km",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 1.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 921,
+        "peakMiB": 266
+      }
+    ]
+  },
+  {
+    "case": "ns-short-162km",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.8,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 745,
+        "peakMiB": 225
+      }
+    ]
+  },
+  {
+    "case": "ns-short-partial-tank",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 1.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 866,
+        "peakMiB": 257
+      }
+    ]
+  },
+  {
+    "case": "ns-short-partial-tank",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 0.8,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 706,
+        "peakMiB": 208
+      }
+    ]
+  }
+]

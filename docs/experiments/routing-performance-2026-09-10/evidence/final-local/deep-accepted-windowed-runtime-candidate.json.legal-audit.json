@@ -1,0 +1,46 @@
+{
+  "input": "/tmp/dirt-performance-final/deep-accepted-windowed-runtime-candidate.json",
+  "case": "deep-accepted-windowed",
+  "results": [
+    {
+      "window": 0,
+      "segments": 764,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 1,
+      "segments": 183,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 2,
+      "segments": 163,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 3,
+      "segments": 245,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 4,
+      "segments": 566,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

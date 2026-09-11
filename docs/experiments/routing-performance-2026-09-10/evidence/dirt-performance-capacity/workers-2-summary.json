@@ -1,0 +1,13 @@
+{
+  "workers": 2,
+  "requests": 48,
+  "seconds": 45.15287084960938,
+  "requestsPerSecond": 1.0630553295243077,
+  "sampledAggregatePeakMiB": 1864.375,
+  "sumWorkerHighWaterMiB": 2189.09375,
+  "serviceMedianMs": 658.9278125000001,
+  "batchCompletionP95Ms": 41000.14697265625,
+  "queueMedianMs": 25595.14697265625,
+  "physicalBytes": 17179869184,
+  "scope": "48 queued mixed local requests; naturally collected Node workers, no forced GC. Static balanced assignment; no shared-memory mapping. Observed batch percentile, not a sustainable production p95."
+}

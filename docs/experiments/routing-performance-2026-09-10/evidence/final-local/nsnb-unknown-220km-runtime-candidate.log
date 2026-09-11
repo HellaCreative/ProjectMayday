@@ -1,0 +1,3 @@
+{"caseId":"nsnb-unknown-220km","variant":"runtime-candidate","run":0,"complete":true,"ms":2300.660166,"meters":614445.1202726266,"stops":2,"peakRoutingMiB":315.328125}
+{"caseId":"nsnb-unknown-220km","variant":"runtime-candidate","run":1,"complete":true,"ms":1292.4736669999998,"meters":614445.1202726266,"stops":2,"peakRoutingMiB":317.015625}
+{"caseId":"nsnb-unknown-220km","variant":"runtime-candidate","run":2,"complete":true,"ms":1299.3568749999995,"meters":614445.1202726266,"stops":2,"peakRoutingMiB":317.015625}

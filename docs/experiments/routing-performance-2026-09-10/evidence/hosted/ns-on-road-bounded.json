@@ -1,0 +1,924 @@
+{
+  "case": "ns-on-road",
+  "variant": "bounded",
+  "deployment": {
+    "id": "dpl_FhamX9tXkSUHFbM6KTyhnLjpA9Ei",
+    "url": "https://pack-fabric-bg6e3eazd-goricksmith-7678s-projects.vercel.app",
+    "inspectorUrl": "https://vercel.com/goricksmith-7678s-projects/pack-fabric/FhamX9tXkSUHFbM6KTyhnLjpA9Ei",
+    "readyState": "READY",
+    "target": null,
+    "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_FhamX9tXkSUHFbM6KTyhnLjpA9Ei"
+  },
+  "runs": [
+    {
+      "run": 0,
+      "complete": true,
+      "windows": [
+        {
+          "window": 0,
+          "http": "200 48.561260",
+          "wallSeconds": 50.24004566599615,
+          "status": "complete",
+          "error": null,
+          "debug": {
+            "routingRevision": "adventure-preview-v1",
+            "engine": "adventure-shared-candidates",
+            "regionIds": [
+              "nb",
+              "ns",
+              "on",
+              "qc"
+            ],
+            "packIdentity": [
+              {
+                "regionId": "nb",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/geometry.v1.bin",
+                "graphBytes": 13033846,
+                "geometryBytes": 10396492,
+                "graphSha256": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+                "geometrySha256": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/fuel.v1.json",
+                "fuelBytes": 142709,
+                "fuelSha256": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+              },
+              {
+                "regionId": "ns",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                "graphBytes": 15012189,
+                "geometryBytes": 23954228,
+                "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                "fuelBytes": 143951,
+                "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+              },
+              {
+                "regionId": "on",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/geometry.v1.bin",
+                "graphBytes": 129713382,
+                "geometryBytes": 89360644,
+                "graphSha256": "b423247a45de8658ca77e24c393de1e40788ead269b7a7b2a5098604edf59f66",
+                "geometrySha256": "d271632eaf20b342349c6982b822483970e0b2957c56e376e1e163a8c4701095",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/fuel.v1.json",
+                "fuelBytes": 1082999,
+                "fuelSha256": "9866fd4ec47a240d2d0e80eaec89e2cc5fe448083959a9b38e803193ce453294"
+              },
+              {
+                "regionId": "qc",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/geometry.v1.bin",
+                "graphBytes": 95617941,
+                "geometryBytes": 83894288,
+                "graphSha256": "4a46806b22a2075d01724980f22d3c774dca90549b094ba5463614d9ef4deb22",
+                "geometrySha256": "9f7cbbb9d6325b112cf4ca403e4e36c317f65f3dab776f6bf68c3d8961e7edea",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/fuel.v1.json",
+                "fuelBytes": 682231,
+                "fuelSha256": "839e594cd3e407dac3d6526d19ec73c63e0014556bcc8d708c160596ff8d48d5"
+              }
+            ],
+            "diagnostics": {
+              "allowUnknown": false,
+              "mapZoom": 7.4,
+              "strategy": "adventure-preview-v1",
+              "selectedReason": "dirt-30",
+              "adventure": {
+                "waypointSnap": {
+                  "attempts": 1,
+                  "startComponentRecovery": false,
+                  "radiusMeters": 2000,
+                  "maximumMeters": 18425.959292971347,
+                  "startDistanceMeters": 81.00975764654952,
+                  "endDistanceMeters": 19.21450146341728
+                },
+                "dirtEntryCost": 29000,
+                "fuelHeuristicWeight": 2,
+                "candidates": [
+                  {
+                    "id": "dirt-30",
+                    "road": "complete",
+                    "fuel": "not_requested",
+                    "searchRetry": null,
+                    "zeroRefillAdvisory": false,
+                    "passingRefillAdvisory": false,
+                    "surface": {
+                      "distanceMeters": 3992391.5628222907,
+                      "knownDirtMeters": 3202715,
+                      "pavedMeters": 703345.9628888303,
+                      "unknownSurfaceMeters": 86330.59993346054,
+                      "knownDirtPercent": 80.2204630884438,
+                      "pavedPercent": 17.617158833779893,
+                      "unknownSurfacePercent": 2.1623780777763177,
+                      "longestDirtRunMeters": 443215
+                    },
+                    "urbanMeters": 0,
+                    "timing": {
+                      "preparationMs": 12725,
+                      "endpointMatchingMs": 197,
+                      "stationMatchingMs": 0,
+                      "projectedGraphMs": 72,
+                      "reverseBoundsMs": 5064,
+                      "searchAndAdvisoryMs": 2613,
+                      "totalMs": 20674
+                    }
+                  },
+                  {
+                    "id": "paved",
+                    "road": "complete",
+                    "fuel": "not_requested",
+                    "searchRetry": null,
+                    "zeroRefillAdvisory": false,
+                    "passingRefillAdvisory": false,
+                    "surface": {
+                      "distanceMeters": 4202481.36295537,
+                      "knownDirtMeters": 6432,
+                      "pavedMeters": 4178068.9628888303,
+                      "unknownSurfaceMeters": 17980.400066539456,
+                      "knownDirtPercent": 0.15305243365735557,
+                      "pavedPercent": 99.41909557810932,
+                      "unknownSurfacePercent": 0.42785198823332427,
+                      "longestDirtRunMeters": 4250
+                    },
+                    "urbanMeters": 0,
+                    "timing": {
+                      "preparationMs": 0,
+                      "endpointMatchingMs": 3,
+                      "stationMatchingMs": 0,
+                      "projectedGraphMs": 55,
+                      "reverseBoundsMs": 4319,
+                      "searchAndAdvisoryMs": 4890,
+                      "totalMs": 9269
+                    }
+                  },
+                  {
+                    "id": "dirt-10",
+                    "road": "complete",
+                    "fuel": "not_requested",
+                    "searchRetry": null,
+                    "zeroRefillAdvisory": false,
+                    "passingRefillAdvisory": false,
+                    "surface": {
+                      "distanceMeters": 3802371.5628222907,
+                      "knownDirtMeters": 3002034,
+                      "pavedMeters": 714077.9628888303,
+                      "unknownSurfaceMeters": 86259.59993346054,
+                      "knownDirtPercent": 78.95162138683143,
+                      "pavedPercent": 18.779804947804987,
+                      "unknownSurfacePercent": 2.268573665363592,
+                      "longestDirtRunMeters": 305887
+                    },
+                    "urbanMeters": 0,
+                    "timing": {
+                      "preparationMs": 0,
+                      "endpointMatchingMs": 3,
+                      "stationMatchingMs": 0,
+                      "projectedGraphMs": 135,
+                      "reverseBoundsMs": 3295,
+                      "searchAndAdvisoryMs": 2134,
+                      "totalMs": 5568
+                    }
+                  }
+                ],
+                "search": {
+                  "deadlineAtMs": 1789090419875,
+                  "expansions": 38168272,
+                  "maxExpansions": 245110720,
+                  "reason": null,
+                  "poolComplete": true
+                },
+                "fuelState": "not_requested"
+              },
+              "packIdentity": [
+                {
+                  "regionId": "nb",
+                  "releaseId": "fabric-v4-20260909-02",
+                  "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/graph.v4.bin",
+                  "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/geometry.v1.bin",
+                  "graphBytes": 13033846,
+                  "geometryBytes": 10396492,
+                  "graphSha256": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+                  "geometrySha256": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+                  "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/fuel.v1.json",
+                  "fuelBytes": 142709,
+                  "fuelSha256": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+                },
+                {
+                  "regionId": "ns",
+                  "releaseId": "fabric-v4-20260909-02",
+                  "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                  "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                  "graphBytes": 15012189,
+                  "geometryBytes": 23954228,
+                  "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                  "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                  "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                  "fuelBytes": 143951,
+                  "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+                },
+                {
+                  "regionId": "on",
+                  "releaseId": "fabric-v4-20260909-02",
+                  "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/graph.v4.bin",
+                  "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/geometry.v1.bin",
+                  "graphBytes": 129713382,
+                  "geometryBytes": 89360644,
+                  "graphSha256": "b423247a45de8658ca77e24c393de1e40788ead269b7a7b2a5098604edf59f66",
+                  "geometrySha256": "d271632eaf20b342349c6982b822483970e0b2957c56e376e1e163a8c4701095",
+                  "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/fuel.v1.json",
+                  "fuelBytes": 1082999,
+                  "fuelSha256": "9866fd4ec47a240d2d0e80eaec89e2cc5fe448083959a9b38e803193ce453294"
+                },
+                {
+                  "regionId": "qc",
+                  "releaseId": "fabric-v4-20260909-02",
+                  "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/graph.v4.bin",
+                  "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/geometry.v1.bin",
+                  "graphBytes": 95617941,
+                  "geometryBytes": 83894288,
+                  "graphSha256": "4a46806b22a2075d01724980f22d3c774dca90549b094ba5463614d9ef4deb22",
+                  "geometrySha256": "9f7cbbb9d6325b112cf4ca403e4e36c317f65f3dab776f6bf68c3d8961e7edea",
+                  "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/fuel.v1.json",
+                  "fuelBytes": 682231,
+                  "fuelSha256": "839e594cd3e407dac3d6526d19ec73c63e0014556bcc8d708c160596ff8d48d5"
+                }
+              ]
+            },
+            "adventureTotalMs": 45481,
+            "adventureDataMs": 9948,
+            "adventureLoad": {
+              "regions": [
+                {
+                  "regionId": "qc",
+                  "elapsedMs": 2,
+                  "sourcePreparation": {
+                    "fetchMs": 6594,
+                    "decodeMs": 214,
+                    "graphBytes": 95617941,
+                    "geometryBytes": 83894288,
+                    "source": "async",
+                    "gridMs": 0,
+                    "totalMs": 7224,
+                    "gridDeferred": true
+                  }
+                },
+                {
+                  "regionId": "nb",
+                  "elapsedMs": 580,
+                  "sourcePreparation": {
+                    "fetchMs": 482,
+                    "decodeMs": 30,
+                    "graphBytes": 13033846,
+                    "geometryBytes": 10396492,
+                    "source": "async",
+                    "gridMs": 0,
+                    "totalMs": 578,
+                    "gridDeferred": true
+                  }
+                },
+                {
+                  "regionId": "ns",
+                  "elapsedMs": 840,
+                  "sourcePreparation": {
+                    "fetchMs": 685,
+                    "decodeMs": 59,
+                    "graphBytes": 15012189,
+                    "geometryBytes": 23954228,
+                    "source": "async",
+                    "gridMs": 0,
+                    "totalMs": 838,
+                    "gridDeferred": true
+                  }
+                },
+                {
+                  "regionId": "on",
+                  "elapsedMs": 3908,
+                  "sourcePreparation": {
+                    "fetchMs": 3153,
+                    "decodeMs": 245,
+                    "graphBytes": 129713382,
+                    "geometryBytes": 89360644,
+                    "source": "async",
+                    "gridMs": 0,
+                    "totalMs": 3906,
+                    "gridDeferred": true
+                  }
+                }
+              ],
+              "joinMs": 6030,
+              "joinCacheHit": false
+            },
+            "adventureSearchMs": 35529,
+            "adventureResponseMs": 4
+          },
+          "diagnostics": {
+            "allowUnknown": false,
+            "mapZoom": 7.4,
+            "strategy": "adventure-preview-v1",
+            "selectedReason": "dirt-30",
+            "adventure": {
+              "waypointSnap": {
+                "attempts": 1,
+                "startComponentRecovery": false,
+                "radiusMeters": 2000,
+                "maximumMeters": 18425.959292971347,
+                "startDistanceMeters": 81.00975764654952,
+                "endDistanceMeters": 19.21450146341728
+              },
+              "dirtEntryCost": 29000,
+              "fuelHeuristicWeight": 2,
+              "candidates": [
+                {
+                  "id": "dirt-30",
+                  "road": "complete",
+                  "fuel": "not_requested",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 3992391.5628222907,
+                    "knownDirtMeters": 3202715,
+                    "pavedMeters": 703345.9628888303,
+                    "unknownSurfaceMeters": 86330.59993346054,
+                    "knownDirtPercent": 80.2204630884438,
+                    "pavedPercent": 17.617158833779893,
+                    "unknownSurfacePercent": 2.1623780777763177,
+                    "longestDirtRunMeters": 443215
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 12725,
+                    "endpointMatchingMs": 197,
+                    "stationMatchingMs": 0,
+                    "projectedGraphMs": 72,
+                    "reverseBoundsMs": 5064,
+                    "searchAndAdvisoryMs": 2613,
+                    "totalMs": 20674
+                  }
+                },
+                {
+                  "id": "paved",
+                  "road": "complete",
+                  "fuel": "not_requested",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 4202481.36295537,
+                    "knownDirtMeters": 6432,
+                    "pavedMeters": 4178068.9628888303,
+                    "unknownSurfaceMeters": 17980.400066539456,
+                    "knownDirtPercent": 0.15305243365735557,
+                    "pavedPercent": 99.41909557810932,
+                    "unknownSurfacePercent": 0.42785198823332427,
+                    "longestDirtRunMeters": 4250
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 3,
+                    "stationMatchingMs": 0,
+                    "projectedGraphMs": 55,
+                    "reverseBoundsMs": 4319,
+                    "searchAndAdvisoryMs": 4890,
+                    "totalMs": 9269
+                  }
+                },
+                {
+                  "id": "dirt-10",
+                  "road": "complete",
+                  "fuel": "not_requested",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 3802371.5628222907,
+                    "knownDirtMeters": 3002034,
+                    "pavedMeters": 714077.9628888303,
+                    "unknownSurfaceMeters": 86259.59993346054,
+                    "knownDirtPercent": 78.95162138683143,
+                    "pavedPercent": 18.779804947804987,
+                    "unknownSurfacePercent": 2.268573665363592,
+                    "longestDirtRunMeters": 305887
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 3,
+                    "stationMatchingMs": 0,
+                    "projectedGraphMs": 135,
+                    "reverseBoundsMs": 3295,
+                    "searchAndAdvisoryMs": 2134,
+                    "totalMs": 5568
+                  }
+                }
+              ],
+              "search": {
+                "deadlineAtMs": 1789090419875,
+                "expansions": 38168272,
+                "maxExpansions": 245110720,
+                "reason": null,
+                "poolComplete": true
+              },
+              "fuelState": "not_requested"
+            },
+            "packIdentity": [
+              {
+                "regionId": "nb",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/geometry.v1.bin",
+                "graphBytes": 13033846,
+                "geometryBytes": 10396492,
+                "graphSha256": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+                "geometrySha256": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/fuel.v1.json",
+                "fuelBytes": 142709,
+                "fuelSha256": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+              },
+              {
+                "regionId": "ns",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                "graphBytes": 15012189,
+                "geometryBytes": 23954228,
+                "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                "fuelBytes": 143951,
+                "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+              },
+              {
+                "regionId": "on",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/geometry.v1.bin",
+                "graphBytes": 129713382,
+                "geometryBytes": 89360644,
+                "graphSha256": "b423247a45de8658ca77e24c393de1e40788ead269b7a7b2a5098604edf59f66",
+                "geometrySha256": "d271632eaf20b342349c6982b822483970e0b2957c56e376e1e163a8c4701095",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/fuel.v1.json",
+                "fuelBytes": 1082999,
+                "fuelSha256": "9866fd4ec47a240d2d0e80eaec89e2cc5fe448083959a9b38e803193ce453294"
+              },
+              {
+                "regionId": "qc",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/geometry.v1.bin",
+                "graphBytes": 95617941,
+                "geometryBytes": 83894288,
+                "graphSha256": "4a46806b22a2075d01724980f22d3c774dca90549b094ba5463614d9ef4deb22",
+                "geometrySha256": "9f7cbbb9d6325b112cf4ca403e4e36c317f65f3dab776f6bf68c3d8961e7edea",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/fuel.v1.json",
+                "fuelBytes": 682231,
+                "fuelSha256": "839e594cd3e407dac3d6526d19ec73c63e0014556bcc8d708c160596ff8d48d5"
+              }
+            ]
+          },
+          "checks": {
+            "continuous": true,
+            "access": true,
+            "range": true
+          },
+          "meters": 3992391.5628222907,
+          "stops": 0,
+          "signature": "2b34fbdbbde6ca819048abf6891b95698db4dc5a86ffdf0cfd564dff3aacc36b"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "complete": true,
+      "windows": [
+        {
+          "window": 0,
+          "http": "200 25.704833",
+          "wallSeconds": 27.409177167050075,
+          "status": "complete",
+          "error": null,
+          "debug": {
+            "routingRevision": "adventure-preview-v1",
+            "engine": "adventure-shared-candidates",
+            "regionIds": [
+              "nb",
+              "ns",
+              "on",
+              "qc"
+            ],
+            "packIdentity": [
+              {
+                "regionId": "nb",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/geometry.v1.bin",
+                "graphBytes": 13033846,
+                "geometryBytes": 10396492,
+                "graphSha256": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+                "geometrySha256": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/fuel.v1.json",
+                "fuelBytes": 142709,
+                "fuelSha256": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+              },
+              {
+                "regionId": "ns",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                "graphBytes": 15012189,
+                "geometryBytes": 23954228,
+                "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                "fuelBytes": 143951,
+                "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+              },
+              {
+                "regionId": "on",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/geometry.v1.bin",
+                "graphBytes": 129713382,
+                "geometryBytes": 89360644,
+                "graphSha256": "b423247a45de8658ca77e24c393de1e40788ead269b7a7b2a5098604edf59f66",
+                "geometrySha256": "d271632eaf20b342349c6982b822483970e0b2957c56e376e1e163a8c4701095",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/fuel.v1.json",
+                "fuelBytes": 1082999,
+                "fuelSha256": "9866fd4ec47a240d2d0e80eaec89e2cc5fe448083959a9b38e803193ce453294"
+              },
+              {
+                "regionId": "qc",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/geometry.v1.bin",
+                "graphBytes": 95617941,
+                "geometryBytes": 83894288,
+                "graphSha256": "4a46806b22a2075d01724980f22d3c774dca90549b094ba5463614d9ef4deb22",
+                "geometrySha256": "9f7cbbb9d6325b112cf4ca403e4e36c317f65f3dab776f6bf68c3d8961e7edea",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/fuel.v1.json",
+                "fuelBytes": 682231,
+                "fuelSha256": "839e594cd3e407dac3d6526d19ec73c63e0014556bcc8d708c160596ff8d48d5"
+              }
+            ],
+            "diagnostics": {
+              "allowUnknown": false,
+              "mapZoom": 7.4,
+              "strategy": "adventure-preview-v1",
+              "selectedReason": "dirt-30",
+              "adventure": {
+                "waypointSnap": {
+                  "attempts": 1,
+                  "startComponentRecovery": false,
+                  "radiusMeters": 2000,
+                  "maximumMeters": 18425.959292971347,
+                  "startDistanceMeters": 81.00975764654952,
+                  "endDistanceMeters": 19.21450146341728
+                },
+                "dirtEntryCost": 29000,
+                "fuelHeuristicWeight": 2,
+                "candidates": [
+                  {
+                    "id": "dirt-30",
+                    "road": "complete",
+                    "fuel": "not_requested",
+                    "searchRetry": null,
+                    "zeroRefillAdvisory": false,
+                    "passingRefillAdvisory": false,
+                    "surface": {
+                      "distanceMeters": 3992391.5628222907,
+                      "knownDirtMeters": 3202715,
+                      "pavedMeters": 703345.9628888303,
+                      "unknownSurfaceMeters": 86330.59993346054,
+                      "knownDirtPercent": 80.2204630884438,
+                      "pavedPercent": 17.617158833779893,
+                      "unknownSurfacePercent": 2.1623780777763177,
+                      "longestDirtRunMeters": 443215
+                    },
+                    "urbanMeters": 0,
+                    "timing": {
+                      "preparationMs": 0,
+                      "endpointMatchingMs": 2,
+                      "stationMatchingMs": 0,
+                      "projectedGraphMs": 34,
+                      "reverseBoundsMs": 5266,
+                      "searchAndAdvisoryMs": 3574,
+                      "totalMs": 8891
+                    }
+                  },
+                  {
+                    "id": "paved",
+                    "road": "complete",
+                    "fuel": "not_requested",
+                    "searchRetry": null,
+                    "zeroRefillAdvisory": false,
+                    "passingRefillAdvisory": false,
+                    "surface": {
+                      "distanceMeters": 4202481.36295537,
+                      "knownDirtMeters": 6432,
+                      "pavedMeters": 4178068.9628888303,
+                      "unknownSurfaceMeters": 17980.400066539456,
+                      "knownDirtPercent": 0.15305243365735557,
+                      "pavedPercent": 99.41909557810932,
+                      "unknownSurfacePercent": 0.42785198823332427,
+                      "longestDirtRunMeters": 4250
+                    },
+                    "urbanMeters": 0,
+                    "timing": {
+                      "preparationMs": 0,
+                      "endpointMatchingMs": 2,
+                      "stationMatchingMs": 0,
+                      "projectedGraphMs": 54,
+                      "reverseBoundsMs": 4643,
+                      "searchAndAdvisoryMs": 5197,
+                      "totalMs": 9898
+                    }
+                  },
+                  {
+                    "id": "dirt-10",
+                    "road": "complete",
+                    "fuel": "not_requested",
+                    "searchRetry": null,
+                    "zeroRefillAdvisory": false,
+                    "passingRefillAdvisory": false,
+                    "surface": {
+                      "distanceMeters": 3802371.5628222907,
+                      "knownDirtMeters": 3002034,
+                      "pavedMeters": 714077.9628888303,
+                      "unknownSurfaceMeters": 86259.59993346054,
+                      "knownDirtPercent": 78.95162138683143,
+                      "pavedPercent": 18.779804947804987,
+                      "unknownSurfacePercent": 2.268573665363592,
+                      "longestDirtRunMeters": 305887
+                    },
+                    "urbanMeters": 0,
+                    "timing": {
+                      "preparationMs": 0,
+                      "endpointMatchingMs": 2,
+                      "stationMatchingMs": 0,
+                      "projectedGraphMs": 35,
+                      "reverseBoundsMs": 3397,
+                      "searchAndAdvisoryMs": 1984,
+                      "totalMs": 5418
+                    }
+                  }
+                ],
+                "search": {
+                  "deadlineAtMs": 1789090470471,
+                  "expansions": 28485836,
+                  "maxExpansions": 245110720,
+                  "reason": null,
+                  "poolComplete": true
+                },
+                "fuelState": "not_requested"
+              },
+              "packIdentity": [
+                {
+                  "regionId": "nb",
+                  "releaseId": "fabric-v4-20260909-02",
+                  "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/graph.v4.bin",
+                  "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/geometry.v1.bin",
+                  "graphBytes": 13033846,
+                  "geometryBytes": 10396492,
+                  "graphSha256": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+                  "geometrySha256": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+                  "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/fuel.v1.json",
+                  "fuelBytes": 142709,
+                  "fuelSha256": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+                },
+                {
+                  "regionId": "ns",
+                  "releaseId": "fabric-v4-20260909-02",
+                  "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                  "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                  "graphBytes": 15012189,
+                  "geometryBytes": 23954228,
+                  "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                  "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                  "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                  "fuelBytes": 143951,
+                  "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+                },
+                {
+                  "regionId": "on",
+                  "releaseId": "fabric-v4-20260909-02",
+                  "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/graph.v4.bin",
+                  "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/geometry.v1.bin",
+                  "graphBytes": 129713382,
+                  "geometryBytes": 89360644,
+                  "graphSha256": "b423247a45de8658ca77e24c393de1e40788ead269b7a7b2a5098604edf59f66",
+                  "geometrySha256": "d271632eaf20b342349c6982b822483970e0b2957c56e376e1e163a8c4701095",
+                  "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/fuel.v1.json",
+                  "fuelBytes": 1082999,
+                  "fuelSha256": "9866fd4ec47a240d2d0e80eaec89e2cc5fe448083959a9b38e803193ce453294"
+                },
+                {
+                  "regionId": "qc",
+                  "releaseId": "fabric-v4-20260909-02",
+                  "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/graph.v4.bin",
+                  "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/geometry.v1.bin",
+                  "graphBytes": 95617941,
+                  "geometryBytes": 83894288,
+                  "graphSha256": "4a46806b22a2075d01724980f22d3c774dca90549b094ba5463614d9ef4deb22",
+                  "geometrySha256": "9f7cbbb9d6325b112cf4ca403e4e36c317f65f3dab776f6bf68c3d8961e7edea",
+                  "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/fuel.v1.json",
+                  "fuelBytes": 682231,
+                  "fuelSha256": "839e594cd3e407dac3d6526d19ec73c63e0014556bcc8d708c160596ff8d48d5"
+                }
+              ]
+            },
+            "adventureTotalMs": 24213,
+            "adventureDataMs": 0,
+            "adventureLoad": {
+              "regions": [],
+              "joinMs": 0,
+              "joinCacheHit": true,
+              "sourceReuse": true
+            },
+            "adventureSearchMs": 24209,
+            "adventureResponseMs": 4
+          },
+          "diagnostics": {
+            "allowUnknown": false,
+            "mapZoom": 7.4,
+            "strategy": "adventure-preview-v1",
+            "selectedReason": "dirt-30",
+            "adventure": {
+              "waypointSnap": {
+                "attempts": 1,
+                "startComponentRecovery": false,
+                "radiusMeters": 2000,
+                "maximumMeters": 18425.959292971347,
+                "startDistanceMeters": 81.00975764654952,
+                "endDistanceMeters": 19.21450146341728
+              },
+              "dirtEntryCost": 29000,
+              "fuelHeuristicWeight": 2,
+              "candidates": [
+                {
+                  "id": "dirt-30",
+                  "road": "complete",
+                  "fuel": "not_requested",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 3992391.5628222907,
+                    "knownDirtMeters": 3202715,
+                    "pavedMeters": 703345.9628888303,
+                    "unknownSurfaceMeters": 86330.59993346054,
+                    "knownDirtPercent": 80.2204630884438,
+                    "pavedPercent": 17.617158833779893,
+                    "unknownSurfacePercent": 2.1623780777763177,
+                    "longestDirtRunMeters": 443215
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 2,
+                    "stationMatchingMs": 0,
+                    "projectedGraphMs": 34,
+                    "reverseBoundsMs": 5266,
+                    "searchAndAdvisoryMs": 3574,
+                    "totalMs": 8891
+                  }
+                },
+                {
+                  "id": "paved",
+                  "road": "complete",
+                  "fuel": "not_requested",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 4202481.36295537,
+                    "knownDirtMeters": 6432,
+                    "pavedMeters": 4178068.9628888303,
+                    "unknownSurfaceMeters": 17980.400066539456,
+                    "knownDirtPercent": 0.15305243365735557,
+                    "pavedPercent": 99.41909557810932,
+                    "unknownSurfacePercent": 0.42785198823332427,
+                    "longestDirtRunMeters": 4250
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 2,
+                    "stationMatchingMs": 0,
+                    "projectedGraphMs": 54,
+                    "reverseBoundsMs": 4643,
+                    "searchAndAdvisoryMs": 5197,
+                    "totalMs": 9898
+                  }
+                },
+                {
+                  "id": "dirt-10",
+                  "road": "complete",
+                  "fuel": "not_requested",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 3802371.5628222907,
+                    "knownDirtMeters": 3002034,
+                    "pavedMeters": 714077.9628888303,
+                    "unknownSurfaceMeters": 86259.59993346054,
+                    "knownDirtPercent": 78.95162138683143,
+                    "pavedPercent": 18.779804947804987,
+                    "unknownSurfacePercent": 2.268573665363592,
+                    "longestDirtRunMeters": 305887
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 2,
+                    "stationMatchingMs": 0,
+                    "projectedGraphMs": 35,
+                    "reverseBoundsMs": 3397,
+                    "searchAndAdvisoryMs": 1984,
+                    "totalMs": 5418
+                  }
+                }
+              ],
+              "search": {
+                "deadlineAtMs": 1789090470471,
+                "expansions": 28485836,
+                "maxExpansions": 245110720,
+                "reason": null,
+                "poolComplete": true
+              },
+              "fuelState": "not_requested"
+            },
+            "packIdentity": [
+              {
+                "regionId": "nb",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/geometry.v1.bin",
+                "graphBytes": 13033846,
+                "geometryBytes": 10396492,
+                "graphSha256": "dab8c8fa644d8f4453476cef45a510f845db6ac230bc63a6d5cd3b856bde37d8",
+                "geometrySha256": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/nb/fuel.v1.json",
+                "fuelBytes": 142709,
+                "fuelSha256": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+              },
+              {
+                "regionId": "ns",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                "graphBytes": 15012189,
+                "geometryBytes": 23954228,
+                "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                "fuelBytes": 143951,
+                "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+              },
+              {
+                "regionId": "on",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/geometry.v1.bin",
+                "graphBytes": 129713382,
+                "geometryBytes": 89360644,
+                "graphSha256": "b423247a45de8658ca77e24c393de1e40788ead269b7a7b2a5098604edf59f66",
+                "geometrySha256": "d271632eaf20b342349c6982b822483970e0b2957c56e376e1e163a8c4701095",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/on/fuel.v1.json",
+                "fuelBytes": 1082999,
+                "fuelSha256": "9866fd4ec47a240d2d0e80eaec89e2cc5fe448083959a9b38e803193ce453294"
+              },
+              {
+                "regionId": "qc",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/geometry.v1.bin",
+                "graphBytes": 95617941,
+                "geometryBytes": 83894288,
+                "graphSha256": "4a46806b22a2075d01724980f22d3c774dca90549b094ba5463614d9ef4deb22",
+                "geometrySha256": "9f7cbbb9d6325b112cf4ca403e4e36c317f65f3dab776f6bf68c3d8961e7edea",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/qc/fuel.v1.json",
+                "fuelBytes": 682231,
+                "fuelSha256": "839e594cd3e407dac3d6526d19ec73c63e0014556bcc8d708c160596ff8d48d5"
+              }
+            ]
+          },
+          "checks": {
+            "continuous": true,
+            "access": true,
+            "range": true
+          },
+          "meters": 3992391.5628222907,
+          "stops": 0,
+          "signature": "2b34fbdbbde6ca819048abf6891b95698db4dc5a86ffdf0cfd564dff3aacc36b"
+        }
+      ]
+    }
+  ]
+}

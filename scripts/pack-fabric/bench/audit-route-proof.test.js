@@ -20,3 +20,10 @@ test('independent replay detects an illegal node turn and a false source identit
  f.pack.restrictions=[];f.proof.routes[0].segments[0].edgeId='invented';
  assert.throws(()=>auditRouteProof(f.pack,f.proof,f.request),/identity/);
 });
+test('junction continuation seeds the incoming road and still rejects a prohibited turn',()=>{
+ const f=fixture();f.proof.routes[0].segments=f.proof.routes[0].segments.slice(2);
+ f.request.options={priorEdgeIds:[f.pack.edgeId(0)],arrivalEdgeId:f.pack.edgeId(0)};
+ assert.equal(auditRouteProof(f.pack,f.proof,f.request).arrivalHistory,true);
+ f.pack.restrictions=[{fromEdge:0,toEdge:1,viaNode:f.pack.edgeTo[0],viaEdges:[],only:false}];
+ assert.throws(()=>auditRouteProof(f.pack,f.proof,f.request),/restriction/);
+});

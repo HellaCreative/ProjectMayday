@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-short-balanced-road-runtime-candidate.json",
+  "case": "ns-short-balanced-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 541,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+{"caseId":"ns-middle-wander-road","variant":"runtime-baseline","run":0,"complete":true,"ms":863.575333,"meters":211039.68234217865,"stops":0,"peakRoutingMiB":234.6875}
+{"caseId":"ns-middle-wander-road","variant":"runtime-baseline","run":1,"complete":true,"ms":405.25529200000005,"meters":211039.68234217865,"stops":0,"peakRoutingMiB":239.3125}
+{"caseId":"ns-middle-wander-road","variant":"runtime-baseline","run":2,"complete":true,"ms":410.96358299999997,"meters":211039.68234217865,"stops":0,"peakRoutingMiB":239.4375}

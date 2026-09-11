@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/nsnb-balanced-fuel-runtime-candidate.json",
+  "case": "nsnb-balanced-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 962,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

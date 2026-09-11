@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/qc-long-balanced-fuel-runtime-candidate.json",
+  "case": "qc-long-balanced-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1319,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

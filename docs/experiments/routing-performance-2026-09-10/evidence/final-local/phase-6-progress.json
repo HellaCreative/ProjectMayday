@@ -1,0 +1,278 @@
+[
+  {
+    "case": "ns-short-unknown-220km",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 4.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 1787,
+        "peakMiB": 320
+      },
+      {
+        "complete": true,
+        "ms": 1273,
+        "peakMiB": 339
+      },
+      {
+        "complete": true,
+        "ms": 1132,
+        "peakMiB": 339
+      }
+    ]
+  },
+  {
+    "case": "ns-short-unknown-220km",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 1257,
+        "peakMiB": 277
+      },
+      {
+        "complete": true,
+        "ms": 731,
+        "peakMiB": 281
+      },
+      {
+        "complete": true,
+        "ms": 719,
+        "peakMiB": 282
+      }
+    ]
+  },
+  {
+    "case": "ns-long-unknown-road",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 4.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 1607,
+        "peakMiB": 318
+      },
+      {
+        "complete": true,
+        "ms": 1070,
+        "peakMiB": 334
+      },
+      {
+        "complete": true,
+        "ms": 1083,
+        "peakMiB": 334
+      }
+    ]
+  },
+  {
+    "case": "ns-long-unknown-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.7,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 1182,
+        "peakMiB": 233
+      },
+      {
+        "complete": true,
+        "ms": 683,
+        "peakMiB": 255
+      },
+      {
+        "complete": true,
+        "ms": 690,
+        "peakMiB": 255
+      }
+    ]
+  },
+  {
+    "case": "qc-middle-wander-road",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 21.4,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 8752,
+        "peakMiB": 1039
+      },
+      {
+        "complete": true,
+        "ms": 6108,
+        "peakMiB": 1039
+      },
+      {
+        "complete": true,
+        "ms": 6199,
+        "peakMiB": 1039
+      }
+    ]
+  },
+  {
+    "case": "qc-middle-wander-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 14.1,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 6450,
+        "peakMiB": 984
+      },
+      {
+        "complete": true,
+        "ms": 3696,
+        "peakMiB": 985
+      },
+      {
+        "complete": true,
+        "ms": 3715,
+        "peakMiB": 985
+      }
+    ]
+  },
+  {
+    "case": "nsnb-unknown-220km",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 7.1,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2946,
+        "peakMiB": 407
+      },
+      {
+        "complete": true,
+        "ms": 1948,
+        "peakMiB": 420
+      },
+      {
+        "complete": true,
+        "ms": 1979,
+        "peakMiB": 420
+      }
+    ]
+  },
+  {
+    "case": "nsnb-unknown-220km",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 5.1,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2301,
+        "peakMiB": 315
+      },
+      {
+        "complete": true,
+        "ms": 1292,
+        "peakMiB": 317
+      },
+      {
+        "complete": true,
+        "ms": 1299,
+        "peakMiB": 317
+      }
+    ]
+  },
+  {
+    "case": "ns-short-clean-220km",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 1.7,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 846,
+        "peakMiB": 243
+      },
+      {
+        "complete": true,
+        "ms": 368,
+        "peakMiB": 252
+      },
+      {
+        "complete": true,
+        "ms": 361,
+        "peakMiB": 258
+      }
+    ]
+  },
+  {
+    "case": "ns-short-clean-220km",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 1.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 681,
+        "peakMiB": 196
+      },
+      {
+        "complete": true,
+        "ms": 223,
+        "peakMiB": 203
+      },
+      {
+        "complete": true,
+        "ms": 212,
+        "peakMiB": 211
+      }
+    ]
+  },
+  {
+    "case": "ns-middle-wander-road",
+    "variant": "runtime-baseline",
+    "exit": 0,
+    "seconds": 1.8,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 864,
+        "peakMiB": 235
+      },
+      {
+        "complete": true,
+        "ms": 405,
+        "peakMiB": 239
+      },
+      {
+        "complete": true,
+        "ms": 411,
+        "peakMiB": 239
+      }
+    ]
+  },
+  {
+    "case": "ns-middle-wander-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 1.4,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 698,
+        "peakMiB": 174
+      },
+      {
+        "complete": true,
+        "ms": 267,
+        "peakMiB": 177
+      },
+      {
+        "complete": true,
+        "ms": 271,
+        "peakMiB": 177
+      }
+    ]
+  }
+]

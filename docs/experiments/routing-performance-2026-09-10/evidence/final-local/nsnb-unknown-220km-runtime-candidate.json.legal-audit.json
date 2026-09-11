@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/nsnb-unknown-220km-runtime-candidate.json",
+  "case": "nsnb-unknown-220km",
+  "results": [
+    {
+      "window": 0,
+      "segments": 954,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

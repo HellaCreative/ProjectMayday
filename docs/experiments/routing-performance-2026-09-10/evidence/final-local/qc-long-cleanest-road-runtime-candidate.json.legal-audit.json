@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/qc-long-cleanest-road-runtime-candidate.json",
+  "case": "qc-long-cleanest-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 3761,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

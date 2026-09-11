@@ -1,0 +1,158 @@
+[
+  {
+    "case": "qc-long-dirt-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 6.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 5783,
+        "peakMiB": 886
+      }
+    ]
+  },
+  {
+    "case": "qc-long-dirt-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 13.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 12790,
+        "peakMiB": 1028
+      }
+    ]
+  },
+  {
+    "case": "qc-long-balanced-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 5.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 5727,
+        "peakMiB": 888
+      }
+    ]
+  },
+  {
+    "case": "qc-long-balanced-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 13.1,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 12897,
+        "peakMiB": 1028
+      }
+    ]
+  },
+  {
+    "case": "qc-long-cleanest-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 5.8,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 5688,
+        "peakMiB": 889
+      }
+    ]
+  },
+  {
+    "case": "qc-long-cleanest-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 13.1,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 12871,
+        "peakMiB": 1022
+      }
+    ]
+  },
+  {
+    "case": "nsnb-dirt-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2152,
+        "peakMiB": 342
+      }
+    ]
+  },
+  {
+    "case": "nsnb-dirt-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2176,
+        "peakMiB": 304
+      }
+    ]
+  },
+  {
+    "case": "nsnb-balanced-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2160,
+        "peakMiB": 343
+      }
+    ]
+  },
+  {
+    "case": "nsnb-balanced-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2184,
+        "peakMiB": 304
+      }
+    ]
+  },
+  {
+    "case": "nsnb-cleanest-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2151,
+        "peakMiB": 342
+      }
+    ]
+  },
+  {
+    "case": "nsnb-cleanest-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 2.3,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 2173,
+        "peakMiB": 303
+      }
+    ]
+  }
+]

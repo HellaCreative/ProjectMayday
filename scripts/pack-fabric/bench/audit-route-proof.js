@@ -22,7 +22,15 @@ function auditRouteProof(pack,proof,request) {
  assert.equal(graph.state,'complete');let state=0;
  if(request.options?.priorEdgeIds?.length) {
   const history=resolveHistory(pack,request.options.priorEdgeIds,request.options.arrivalEdgeId,budget);assert.equal(history.state,'complete');
-  const arrival=directedArrival(pack,history.edges,{edgeIndex:first.edgeIndex,fraction:fraction(first,true)});assert.equal(arrival.state,'complete');
+  const incoming=history.edges.at(-1),startFraction=fraction(first,true);
+  let arrivalFraction=startFraction;
+  if(incoming!==first.edgeIndex) {
+   assert.ok(startFraction===0||startFraction===1,'Different arrival road requires exact junction');
+   const junction=startFraction===0?pack.edgeFrom[first.edgeIndex]:pack.edgeTo[first.edgeIndex];
+   assert.ok(junction===pack.edgeFrom[incoming]||junction===pack.edgeTo[incoming],'Arrival road meets exact junction');
+   arrivalFraction=junction===pack.edgeFrom[incoming]?0:1;
+  }
+  const arrival=directedArrival(pack,history.edges,{edgeIndex:incoming,fraction:arrivalFraction});assert.equal(arrival.state,'complete',arrival.reason);
   const seed=graph.seedArrival(arrival.arcs,startId);assert.equal(seed.allowed,true);state=seed.state;
  }
  const node=(e,f)=>f===0?pack.edgeFrom[e]:f===1?pack.edgeTo[e]:graph.pointNodes.get(positions.get(`${e}:${f}`));

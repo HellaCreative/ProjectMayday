@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/on-long-balanced-fuel-runtime-candidate.json",
+  "case": "on-long-balanced-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 2979,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

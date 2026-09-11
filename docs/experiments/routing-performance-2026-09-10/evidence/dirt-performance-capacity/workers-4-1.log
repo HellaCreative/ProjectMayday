@@ -1,0 +1,12 @@
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":0,"complete":true,"ms":8553.057125,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":711.96875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":1,"complete":true,"ms":2874.4702080000006,"meters":479368.54542749963,"stops":0,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":2,"complete":true,"ms":883.0320840000004,"meters":202619.68234217865,"stops":1,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":3,"complete":true,"ms":366.9029159999991,"meters":212258.68234217862,"stops":1,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":4,"complete":true,"ms":305.19225000000006,"meters":202619.68234217865,"stops":1,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":5,"complete":true,"ms":249.34095800000068,"meters":246906.51866492073,"stops":0,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":6,"complete":true,"ms":298.6130000000012,"meters":202619.68234217865,"stops":1,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":7,"complete":true,"ms":2893.1178340000006,"meters":479368.54542749963,"stops":0,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":8,"complete":true,"ms":701.7137909999983,"meters":246906.51866492073,"stops":0,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":9,"complete":true,"ms":816.619292000003,"meters":540768.7310017741,"stops":0,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":10,"complete":true,"ms":247.28941699999996,"meters":246906.51866492073,"stops":0,"peakRoutingMiB":745.6875}
+{"caseId":"qc-long-balanced-road","variant":"runtime-candidate","run":11,"complete":true,"ms":8208.474083000001,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":745.6875}

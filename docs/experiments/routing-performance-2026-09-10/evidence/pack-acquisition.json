@@ -1,0 +1,278 @@
+{
+  "release": "fabric-v4-20260909-02",
+  "files": [
+    {
+      "region": "ab",
+      "file": "graph.v4.bin",
+      "source": "immutable_download",
+      "bytes": 63096981,
+      "ms": 4623
+    },
+    {
+      "region": "ab",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 41435612,
+      "ms": 23
+    },
+    {
+      "region": "ab",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 559742,
+      "ms": 2
+    },
+    {
+      "region": "bc",
+      "file": "graph.v4.bin",
+      "source": "immutable_download",
+      "bytes": 66190512,
+      "ms": 7046
+    },
+    {
+      "region": "bc",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 76135296,
+      "ms": 38
+    },
+    {
+      "region": "bc",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 429637,
+      "ms": 0
+    },
+    {
+      "region": "mb",
+      "file": "graph.v4.bin",
+      "source": "verified_local",
+      "bytes": 19480181,
+      "ms": 10
+    },
+    {
+      "region": "mb",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 12587600,
+      "ms": 6
+    },
+    {
+      "region": "mb",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 177402,
+      "ms": 0
+    },
+    {
+      "region": "me",
+      "file": "graph.v4.bin",
+      "source": "verified_local",
+      "bytes": 34430029,
+      "ms": 16
+    },
+    {
+      "region": "me",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 33124944,
+      "ms": 16
+    },
+    {
+      "region": "me",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 173448,
+      "ms": 0
+    },
+    {
+      "region": "nb",
+      "file": "graph.v4.bin",
+      "source": "verified_local",
+      "bytes": 13033846,
+      "ms": 6
+    },
+    {
+      "region": "nb",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 10396492,
+      "ms": 5
+    },
+    {
+      "region": "nb",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 142709,
+      "ms": 0
+    },
+    {
+      "region": "ns",
+      "file": "graph.v4.bin",
+      "source": "verified_local",
+      "bytes": 15012189,
+      "ms": 7
+    },
+    {
+      "region": "ns",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 23954228,
+      "ms": 12
+    },
+    {
+      "region": "ns",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 143951,
+      "ms": 1
+    },
+    {
+      "region": "ny",
+      "file": "graph.v4.bin",
+      "source": "immutable_download",
+      "bytes": 171054368,
+      "ms": 18889
+    },
+    {
+      "region": "ny",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 117631552,
+      "ms": 68
+    },
+    {
+      "region": "ny",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 1120065,
+      "ms": 3
+    },
+    {
+      "region": "on",
+      "file": "graph.v4.bin",
+      "source": "verified_local",
+      "bytes": 129713382,
+      "ms": 79
+    },
+    {
+      "region": "on",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 89360644,
+      "ms": 54
+    },
+    {
+      "region": "on",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 1082999,
+      "ms": 2
+    },
+    {
+      "region": "pa",
+      "file": "graph.v4.bin",
+      "source": "verified_local",
+      "bytes": 203808163,
+      "ms": 124
+    },
+    {
+      "region": "pa",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 146191308,
+      "ms": 90
+    },
+    {
+      "region": "pa",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 1211739,
+      "ms": 2
+    },
+    {
+      "region": "qc",
+      "file": "graph.v4.bin",
+      "source": "verified_local",
+      "bytes": 95617941,
+      "ms": 53
+    },
+    {
+      "region": "qc",
+      "file": "geometry.v1.bin",
+      "source": "verified_local",
+      "bytes": 83894288,
+      "ms": 49
+    },
+    {
+      "region": "qc",
+      "file": "fuel.v1.json",
+      "source": "verified_local",
+      "bytes": 682231,
+      "ms": 1
+    },
+    {
+      "region": "sk",
+      "file": "graph.v4.bin",
+      "source": "immutable_download",
+      "bytes": 29758294,
+      "ms": 5148
+    },
+    {
+      "region": "sk",
+      "file": "geometry.v1.bin",
+      "source": "immutable_download",
+      "bytes": 15701828,
+      "ms": 2854
+    },
+    {
+      "region": "sk",
+      "file": "fuel.v1.json",
+      "source": "immutable_download",
+      "bytes": 258157,
+      "ms": 1111
+    },
+    {
+      "region": "wv",
+      "file": "graph.v4.bin",
+      "source": "immutable_download",
+      "bytes": 36197840,
+      "ms": 3913
+    },
+    {
+      "region": "wv",
+      "file": "geometry.v1.bin",
+      "source": "immutable_download",
+      "bytes": 35918200,
+      "ms": 8143
+    },
+    {
+      "region": "wv",
+      "file": "fuel.v1.json",
+      "source": "immutable_download",
+      "bytes": 220121,
+      "ms": 912
+    },
+    {
+      "region": "yt",
+      "file": "graph.v4.bin",
+      "source": "immutable_download",
+      "bytes": 1468646,
+      "ms": 1267
+    },
+    {
+      "region": "yt",
+      "file": "geometry.v1.bin",
+      "source": "immutable_download",
+      "bytes": 2246256,
+      "ms": 1128
+    },
+    {
+      "region": "yt",
+      "file": "fuel.v1.json",
+      "source": "immutable_download",
+      "bytes": 19831,
+      "ms": 440
+    }
+  ]
+}

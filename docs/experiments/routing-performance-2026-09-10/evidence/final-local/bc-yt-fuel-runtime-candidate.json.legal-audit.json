@@ -1,0 +1,78 @@
+{
+  "input": "/tmp/dirt-performance-final/bc-yt-fuel-runtime-candidate.json",
+  "case": "bc-yt-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 628,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 1,
+      "segments": 367,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 2,
+      "segments": 395,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 3,
+      "segments": 161,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 4,
+      "segments": 259,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 5,
+      "segments": 187,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 6,
+      "segments": 215,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 7,
+      "segments": 181,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 8,
+      "segments": 402,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-ab-stress-runtime-candidate.json",
+  "case": "ns-ab-stress",
+  "results": [
+    {
+      "window": 0,
+      "segments": 5486,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

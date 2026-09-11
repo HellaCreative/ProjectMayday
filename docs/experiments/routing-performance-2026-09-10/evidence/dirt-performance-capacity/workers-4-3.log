@@ -1,0 +1,10 @@
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":0,"complete":true,"ms":3000.374083,"meters":479368.54542749963,"stops":0,"peakRoutingMiB":300.609375}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":1,"complete":true,"ms":8459.555417000001,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":755.46875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":2,"complete":true,"ms":1417.3152090000003,"meters":540768.7310017741,"stops":0,"peakRoutingMiB":755.46875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":3,"complete":true,"ms":8496.625290999998,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":755.46875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":4,"complete":true,"ms":1266.4407919999976,"meters":540768.7310017741,"stops":0,"peakRoutingMiB":755.46875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":5,"complete":true,"ms":796.8254579999993,"meters":540768.7310017741,"stops":0,"peakRoutingMiB":755.46875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":6,"complete":true,"ms":849.5750840000001,"meters":540768.7310017741,"stops":0,"peakRoutingMiB":755.46875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":7,"complete":true,"ms":426.0092919999988,"meters":212258.68234217862,"stops":1,"peakRoutingMiB":755.46875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":8,"complete":true,"ms":821.2341670000023,"meters":540768.7310017741,"stops":0,"peakRoutingMiB":755.46875}
+{"caseId":"nsnb-balanced-road","variant":"runtime-candidate","run":9,"complete":true,"ms":2494.1464589999996,"meters":479368.54542749963,"stops":0,"peakRoutingMiB":755.46875}

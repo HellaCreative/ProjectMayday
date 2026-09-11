@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/nsnb-dirt-road-runtime-candidate.json",
+  "case": "nsnb-dirt-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1050,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

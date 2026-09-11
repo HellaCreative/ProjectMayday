@@ -1,0 +1,30 @@
+{
+  "input": "/tmp/dirt-performance-final/bangor-fuel-runtime-candidate.json",
+  "case": "bangor-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1050,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 1,
+      "segments": 635,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 2,
+      "segments": 970,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-middle-wander-road-runtime-candidate.json",
+  "case": "ns-middle-wander-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 648,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

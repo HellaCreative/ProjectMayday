@@ -1,0 +1,3 @@
+{"caseId":"ns-short-unknown-220km","variant":"runtime-candidate","run":0,"complete":true,"ms":1256.770833,"meters":272986.31765782135,"stops":1,"peakRoutingMiB":277.15625}
+{"caseId":"ns-short-unknown-220km","variant":"runtime-candidate","run":1,"complete":true,"ms":731.496666,"meters":272986.31765782135,"stops":1,"peakRoutingMiB":280.75}
+{"caseId":"ns-short-unknown-220km","variant":"runtime-candidate","run":2,"complete":true,"ms":718.665125,"meters":272986.31765782135,"stops":1,"peakRoutingMiB":281.640625}

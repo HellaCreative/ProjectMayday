@@ -1,0 +1,38 @@
+{
+  "input": "/tmp/dirt-performance-final/clean-accepted-windowed-runtime-candidate.json",
+  "case": "clean-accepted-windowed",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1090,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 1,
+      "segments": 934,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 2,
+      "segments": 904,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    },
+    {
+      "window": 3,
+      "segments": 806,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "id": "dpl_FhamX9tXkSUHFbM6KTyhnLjpA9Ei",
+  "name": "pack-fabric",
+  "url": "pack-fabric-bg6e3eazd-goricksmith-7678s-projects.vercel.app",
+  "target": "preview",
+  "readyState": "READY",
+  "createdAt": 1789090164883,
+  "builds": [
+    {
+      "id": "bld_3folab4k8",
+      "deploymentId": "dpl_FhamX9tXkSUHFbM6KTyhnLjpA9Ei",
+      "entrypoint": ".",
+      "readyState": "READY",
+      "readyStateAt": 1789090164712,
+      "createdAt": 1789090164712,
+      "createdIn": "sfo1",
+      "use": "@vercel/vc-build",
+      "config": {
+        "nodeVersion": "24.x",
+        "projectCreatedAt": 1787305133421,
+        "vercelConfig": {
+          "cleanUrls": true,
+          "trailingSlash": false,
+          "functions": {
+            "api/route.js": {
+              "memory": 2048,
+              "maxDuration": 300,
+              "includeFiles": "routing/{lib,regional,schema}/**",
+              "excludeFiles": "{app/data,routing/data,routing/candidates}/**"
+            },
+            "api/fuel.js": {
+              "memory": 1024,
+              "maxDuration": 30,
+              "includeFiles": "routing/{lib,regional,schema}/**",
+              "excludeFiles": "{app/data,routing/data,routing/candidates}/**"
+            },
+            "api/fuel-chain.js": {
+              "memory": 2048,
+              "maxDuration": 105,
+              "includeFiles": "routing/{lib,regional,schema}/**",
+              "excludeFiles": "{app/data,routing/data,routing/candidates}/**"
+            },
+            "api/poi.js": {
+              "memory": 1024,
+              "maxDuration": 30,
+              "includeFiles": "poi/**"
+            }
+          },
+          "headers": [
+            {
+              "source": "/(.*)",
+              "headers": [
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                }
+              ]
+            }
+          ],
+          "name": "pack-fabric",
+          "version": 2
+        }
+      },
+      "middleware": [],
+      "output": [
+        {
+          "prerender": null,
+          "type": "lambda",
+          "path": "api/fuel",
+          "digest": "prj_F1ocsTaGckmnxcAYzuSqCOK7uCyJ/2bd4bbc1f21ccc6b455016f33119f4b9bc5ddc4a2d08293ac17abd3b615038cd",
+          "mode": 49590,
+          "size": 12356270,
+          "lambda": {
+            "functionName": "team_fgP7ndZ0pYAdKYH97hw6IEhf-c6d4de62bf94652e3dbe153822db654be9",
+            "deployedTo": [
+              "iad1"
+            ],
+            "runtime": "nodejs24.x",
+            "memorySize": 4096,
+            "timeout": 30,
+            "layers": [
+              "arn:aws:lambda:AWS_REGION_PLACEHOLDER:977805900156:layer:vercel-rusty-runtime-nodejs-1_51_4-production-1094e3c916-AWS_ARCH_PLACEHOLDER:1"
+            ]
+          },
+          "edge": null
+        },
+        {
+          "prerender": null,
+          "type": "lambda",
+          "path": "api/fuel-chain",
+          "digest": "prj_F1ocsTaGckmnxcAYzuSqCOK7uCyJ/0fa7971aee6ceeba54aaa04599647716d3e5cc4855e3c4b187e0c91ba748a1dd",
+          "mode": 49590,
+          "size": 12356793,
+          "lambda": {
+            "functionName": "team_fgP7ndZ0pYAdKYH97hw6IEhf-d2aa67a3d7d7fe05d2c3311dabc1c4d7be",
+            "deployedTo": [
+              "iad1"
+            ],
+            "runtime": "nodejs24.x",
+            "memorySize": 4096,
+            "timeout": 105,
+            "layers": [
+              "arn:aws:lambda:AWS_REGION_PLACEHOLDER:977805900156:layer:vercel-rusty-runtime-nodejs-1_51_4-production-1094e3c916-AWS_ARCH_PLACEHOLDER:1"
+            ]
+          },
+          "edge": null
+        },
+        {
+          "prerender": null,
+          "type": "lambda",
+          "path": "api/poi",
+          "digest": "prj_F1ocsTaGckmnxcAYzuSqCOK7uCyJ/88a5b0bae371d292abfc9bf76891e64cbc124a51e6938a8885d27066a3caa3ad",
+          "mode": 49590,
+          "size": 9851,
+          "lambda": {
+            "functionName": "team_fgP7ndZ0pYAdKYH97hw6IEhf-40161df50f8331309b8779d5f4e3eb3cee",
+            "deployedTo": [
+              "iad1"
+            ],
+            "runtime": "nodejs24.x",
+            "memorySize": 4096,
+            "timeout": 30,
+            "layers": [
+              "arn:aws:lambda:AWS_REGION_PLACEHOLDER:977805900156:layer:vercel-rusty-runtime-nodejs-1_51_4-production-1094e3c916-AWS_ARCH_PLACEHOLDER:1"
+            ]
+          },
+          "edge": null
+        },
+        {
+          "prerender": null,
+          "type": "lambda",
+          "path": "api/route",
+          "digest": "prj_F1ocsTaGckmnxcAYzuSqCOK7uCyJ/cd68cfeef40f7d939ba878fee3a80866c3a95276ade150869531e6cee3b937ca",
+          "mode": 49590,
+          "size": 12356604,
+          "lambda": {
+            "functionName": "team_fgP7ndZ0pYAdKYH97hw6IEhf-1be752c23e75d0b5bca0d841f9d7725b8b",
+            "deployedTo": [
+              "iad1"
+            ],
+            "runtime": "nodejs24.x",
+            "memorySize": 4096,
+            "timeout": 300,
+            "layers": [
+              "arn:aws:lambda:AWS_REGION_PLACEHOLDER:977805900156:layer:vercel-rusty-runtime-nodejs-1_51_4-production-1094e3c916-AWS_ARCH_PLACEHOLDER:1"
+            ]
+          },
+          "edge": null
+        }
+      ],
+      "fingerprint": null
+    }
+  ],
+  "contextName": "goricksmith-7678s-projects"
+}

@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/wv-road-runtime-candidate.json",
+  "case": "wv-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 6710,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

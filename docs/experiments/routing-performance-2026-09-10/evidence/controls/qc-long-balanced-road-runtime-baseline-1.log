@@ -1,0 +1,6 @@
+{"caseId":"qc-long-balanced-road","variant":"runtime-baseline","run":0,"complete":true,"ms":7499.577834000001,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":914.25}
+{"caseId":"qc-long-balanced-road","variant":"runtime-baseline","run":1,"complete":true,"ms":4842.826959000001,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":996.734375}
+{"caseId":"qc-long-balanced-road","variant":"runtime-baseline","run":2,"complete":true,"ms":4827.0875,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":998.078125}
+{"caseId":"qc-long-balanced-road","variant":"runtime-baseline","run":3,"complete":true,"ms":4808.392499999998,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":999.9375}
+{"caseId":"qc-long-balanced-road","variant":"runtime-baseline","run":4,"complete":true,"ms":4887.788957999997,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":1001.03125}
+{"caseId":"qc-long-balanced-road","variant":"runtime-baseline","run":5,"complete":true,"ms":4801.019833999999,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":1001.03125}

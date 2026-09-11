@@ -1,0 +1,10 @@
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":0,"complete":true,"ms":957.8121249999999,"meters":202619.68234217865,"stops":1,"peakRoutingMiB":199.578125}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":1,"complete":true,"ms":8833.500458999999,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":759.03125}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":2,"complete":true,"ms":952.8296250000003,"meters":212258.68234217862,"stops":1,"peakRoutingMiB":831.5625}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":3,"complete":true,"ms":2991.4449170000007,"meters":479368.54542749963,"stops":0,"peakRoutingMiB":875.375}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":4,"complete":true,"ms":1540.6467080000002,"meters":479368.54542749963,"stops":0,"peakRoutingMiB":875.375}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":5,"complete":true,"ms":791.2805420000004,"meters":202619.68234217865,"stops":1,"peakRoutingMiB":875.375}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":6,"complete":true,"ms":284.46458299999904,"meters":202619.68234217865,"stops":1,"peakRoutingMiB":875.375}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":7,"complete":true,"ms":334.74337500000183,"meters":212258.68234217862,"stops":1,"peakRoutingMiB":875.375}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":8,"complete":true,"ms":359.24212500000067,"meters":212258.68234217862,"stops":1,"peakRoutingMiB":875.375}
+{"caseId":"ns-short-partial-tank","variant":"runtime-candidate","run":9,"complete":true,"ms":8198.121292,"meters":1307301.376012777,"stops":0,"peakRoutingMiB":875.375}

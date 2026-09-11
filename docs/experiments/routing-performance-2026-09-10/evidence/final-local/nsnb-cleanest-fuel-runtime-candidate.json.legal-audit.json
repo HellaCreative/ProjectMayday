@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/nsnb-cleanest-fuel-runtime-candidate.json",
+  "case": "nsnb-cleanest-fuel",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1349,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

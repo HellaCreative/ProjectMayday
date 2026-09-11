@@ -1,0 +1,24 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const {decodeGraphV4,decodeGeometryV1}=require('../routing/lib/pack-v4');
+const {resolveGraphRequest}=require('../routing/regional/select');
+const {qualifiedPack}=require('../routing/lib/adventure/pack-revision-qualification');
+const {createBudget}=require('../routing/lib/adventure/budget');
+const {joinV4}=require('../routing/lib/adventure/join-v4');
+const {writePreparedJoined}=require('./prepared-joined-runtime');
+const fixture=require('../../../docs/experiments/routing-performance-2026-09-10/matrix-inputs.json').find(c=>c.id===process.argv[2]);
+if(!fixture||!process.argv[3])throw Error('CASE OUTPUT_ROOT required');
+const regionIds=resolveGraphRequest(fixture.request).regionIds;if(regionIds.length<2)throw Error('Multi-region sidecar only');
+const root=process.env.PERFORMANCE_PACK_ROOT||'/tmp/dirt-performance-packs',identity=[],hash=x=>crypto.createHash('sha256').update(x).digest('hex'),started=performance.now();
+const regions=regionIds.map(regionId=>{
+ const folder=path.join(root,regionId),g=fs.readFileSync(path.join(folder,'graph.v4.bin')),geo=fs.readFileSync(path.join(folder,'geometry.v1.bin')),fuel=fs.readFileSync(path.join(folder,'fuel.v1.json'));
+ const id={regionId,releaseId:'fabric-v4-20260909-02',graphSha256:hash(g),geometrySha256:hash(geo),fuelSha256:hash(fuel)};
+ if(!qualifiedPack(id))throw Error('Unqualified source');identity.push(id);
+ return {pack:decodeGraphV4(g,geo),geom:decodeGeometryV1(geo)};
+});
+const loaded=performance.now(),joined=joinV4(regions,{compactNodes:true,budget:createBudget({deadlineAtMs:Date.now()+120000,maxExpansions:200000000})}),joinedAt=performance.now();
+fs.mkdirSync(process.argv[3],{recursive:true});
+const target=path.join(process.argv[3],regionIds.join('+'));
+const receipt=writePreparedJoined(target,{joined,regions,identity});
+Object.assign(receipt,{caseId:fixture.id,regionIds,loadValidateDecodeMs:loaded-started,joinMs:joinedAt-loaded,serializeMs:performance.now()-joinedAt,totalBuildMs:performance.now()-started,peakBuildMiB:process.resourceUsage().maxRSS/1024,node:process.version});
+fs.writeFileSync(target+'.receipt.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));

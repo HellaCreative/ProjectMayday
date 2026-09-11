@@ -1,0 +1,1682 @@
+[
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 0,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 1,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 2,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 3,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 4,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 5,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 6,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 7,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 8,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 9,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 10,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 11,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 12,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 13,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 14,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 15,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 16,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 17,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 18,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 19,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 20,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 21,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 22,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 23,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 24,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 25,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-0.json",
+    "run": 26,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 0,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 1,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 2,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 3,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 4,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 5,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 6,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 7,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 8,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 9,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 10,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 11,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 12,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 13,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 14,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 15,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 16,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 17,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 18,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 19,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-2-1.json",
+    "run": 20,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 0,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 1,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 2,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 3,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 4,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 5,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 6,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 7,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 8,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-0.json",
+    "run": 9,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 0,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 1,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 2,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 3,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 4,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 5,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 6,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 7,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 8,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 9,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 10,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-1.json",
+    "run": 11,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 0,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 1,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 2,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 3,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 4,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 5,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 6,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 7,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 8,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 9,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 10,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 11,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 12,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 13,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 14,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-2.json",
+    "run": 15,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 0,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 1,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 2,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 3,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 4,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 5,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 6,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 7,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 8,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-4-3.json",
+    "run": 9,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 0,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 1,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 2,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 3,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 4,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 5,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 6,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 7,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 8,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 9,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 10,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 11,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 12,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 13,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 14,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 15,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 16,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 17,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 18,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 19,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 20,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 21,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 22,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 23,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 24,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 25,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 26,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 27,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 28,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 29,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 30,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 31,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 32,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 33,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 34,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 35,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 36,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 37,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 38,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 39,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 40,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 41,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 42,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 43,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 44,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 45,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 46,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity/workers-1-0.json",
+    "run": 47,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 0,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 1,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 2,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 3,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 4,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 5,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 6,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 7,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 8,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 9,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 10,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 11,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 12,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 13,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 14,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 15,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 16,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 17,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 18,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 19,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 20,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 21,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 22,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 23,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 24,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 25,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-0.json",
+    "run": 26,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 0,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 1,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 2,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 3,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 4,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 5,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 6,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 7,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 8,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 9,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 10,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 11,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 12,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 13,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 14,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 15,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 16,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 17,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 18,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 19,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-2-1.json",
+    "run": 20,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 0,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 1,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 2,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 3,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 4,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 5,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 6,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 7,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 8,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 9,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 10,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 11,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 12,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 13,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 14,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 15,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 16,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 17,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 18,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 19,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 20,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 21,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 22,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 23,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 24,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 25,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 26,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 27,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 28,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 29,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 30,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 31,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 32,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 33,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 34,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 35,
+    "case": "ns-short-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 36,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 37,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 38,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 39,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 40,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 41,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 42,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 43,
+    "case": "ns-short-cleanest-fuel",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 44,
+    "case": "ns-short-partial-tank",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 45,
+    "case": "ns-long-dirt-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 46,
+    "case": "qc-long-balanced-road",
+    "complete": true,
+    "exactReference": true
+  },
+  {
+    "source": "dirt-performance-capacity-control/workers-1-0.json",
+    "run": 47,
+    "case": "nsnb-balanced-road",
+    "complete": true,
+    "exactReference": true
+  }
+]

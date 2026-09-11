@@ -1,0 +1,3 @@
+{"caseId":"ns-long-unknown-road","variant":"runtime-baseline","run":0,"complete":true,"ms":1606.607958,"meters":519998.2295557463,"stops":0,"peakRoutingMiB":317.796875}
+{"caseId":"ns-long-unknown-road","variant":"runtime-baseline","run":1,"complete":true,"ms":1070.4019589999998,"meters":519998.2295557463,"stops":0,"peakRoutingMiB":333.53125}
+{"caseId":"ns-long-unknown-road","variant":"runtime-baseline","run":2,"complete":true,"ms":1082.7857080000003,"meters":519998.2295557463,"stops":0,"peakRoutingMiB":333.65625}

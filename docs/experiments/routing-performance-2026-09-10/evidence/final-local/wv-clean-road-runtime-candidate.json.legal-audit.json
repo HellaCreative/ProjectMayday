@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/wv-clean-road-runtime-candidate.json",
+  "case": "wv-clean-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 12069,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

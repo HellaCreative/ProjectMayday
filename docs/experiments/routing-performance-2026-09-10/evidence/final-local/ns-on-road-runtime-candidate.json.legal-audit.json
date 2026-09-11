@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-on-road-runtime-candidate.json",
+  "case": "ns-on-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 3219,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

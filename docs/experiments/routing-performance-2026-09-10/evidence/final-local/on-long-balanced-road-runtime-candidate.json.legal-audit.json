@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/on-long-balanced-road-runtime-candidate.json",
+  "case": "on-long-balanced-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 2840,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/nsnb-balanced-road-runtime-candidate.json",
+  "case": "nsnb-balanced-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 1051,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+[
+  {
+    "case": "bangor-fuel",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      16274.489958,
+      16422.394667,
+      16578.430709000007
+    ],
+    "candidateMs": [
+      14169.895709,
+      14387.087167,
+      14475.710375000002
+    ],
+    "baselinePeakMiB": 798.046875,
+    "candidatePeakMiB": 905.15625
+  },
+  {
+    "case": "bangor-road",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      4591.007209,
+      2815.8588339999997,
+      2780.5669579999994
+    ],
+    "candidateMs": [
+      3798.1765,
+      2014.4890829999995,
+      1995.1844579999997
+    ],
+    "baselinePeakMiB": 679.421875,
+    "candidatePeakMiB": 597.703125
+  },
+  {
+    "case": "bc-yt-fuel",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      84388.16979,
+      82159.595751,
+      82027.75237600002
+    ],
+    "candidateMs": [
+      61989.644209000006,
+      59050.58245700001
+    ],
+    "baselinePeakMiB": 1240.859375,
+    "candidatePeakMiB": 1549.765625
+  },
+  {
+    "case": "bc-yt-road",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      5988.523167,
+      3254.8246249999993,
+      3139.1797499999993
+    ],
+    "candidateMs": [
+      4645.271333000001,
+      1710.0023330000004,
+      1698.935707999999
+    ],
+    "baselinePeakMiB": 880.125,
+    "candidatePeakMiB": 860.234375
+  },
+  {
+    "case": "ns-ab-stress",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      42052.078375000005,
+      30382.738916999995,
+      31120.176708
+    ],
+    "candidateMs": [
+      32434.501583,
+      19526.498459000002,
+      19367.316957999996
+    ],
+    "baselinePeakMiB": 2942.28125,
+    "candidatePeakMiB": 2895.515625
+  },
+  {
+    "case": "ns-on-road",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      27441.454875,
+      18536.9825,
+      18513.221082999997
+    ],
+    "candidateMs": [
+      20447.003665999997,
+      11577.628624999998,
+      11690.987125
+    ],
+    "baselinePeakMiB": 1934.546875,
+    "candidatePeakMiB": 2290.765625
+  },
+  {
+    "case": "on-long-balanced-fuel",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      24258.013917,
+      21484.794374999998,
+      21604.379084
+    ],
+    "candidateMs": [
+      21316.340833,
+      17803.970041,
+      17755.100416999994
+    ],
+    "baselinePeakMiB": 1472.421875,
+    "candidatePeakMiB": 1428.25
+  },
+  {
+    "case": "on-long-balanced-road",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      15018.292208,
+      11224.088333000002,
+      11357.569917
+    ],
+    "candidateMs": [
+      11264.112708999999,
+      7489.842750000002,
+      7394.356457999998
+    ],
+    "baselinePeakMiB": 1362.96875,
+    "candidatePeakMiB": 1412.84375
+  },
+  {
+    "case": "wv-clean-road",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      63032.512792,
+      51433.650417000004,
+      50842.037374999985
+    ],
+    "candidateMs": [
+      47315.262209,
+      32434.581833000004,
+      33157.074582999994
+    ],
+    "baselinePeakMiB": 3572.25,
+    "candidatePeakMiB": 3150.15625
+  },
+  {
+    "case": "wv-road",
+    "exactFirstProof": true,
+    "allComplete": true,
+    "baselineMs": [
+      69971.09254099999,
+      54612.6905,
+      57267.11200000001
+    ],
+    "candidateMs": [
+      50756.494708,
+      31770.987792000007,
+      32156.783500000005
+    ],
+    "baselinePeakMiB": 2675.609375,
+    "candidatePeakMiB": 2919.921875
+  }
+]

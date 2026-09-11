@@ -1,0 +1,120 @@
+{
+  "nsnb-balanced-fuel": {
+    "runtime-baseline": {
+      "processes": 3,
+      "coldMs": [
+        2519.2919159999997,
+        2529.2499580000003,
+        2542.05825
+      ],
+      "warmMedianMs": 1501.597167,
+      "warmRangeMs": [
+        1466.9123749999999,
+        1641.6768330000004
+      ],
+      "warmRequests": 15,
+      "peakMiB": [
+        422.9375,
+        423.421875,
+        422.609375
+      ],
+      "allSignaturesMatchFinal": true
+    },
+    "runtime-candidate": {
+      "processes": 3,
+      "coldMs": [
+        2167.492166,
+        2178.244083,
+        2176.3572919999997
+      ],
+      "warmMedianMs": 1152.1332499999999,
+      "warmRangeMs": [
+        1121.5051249999997,
+        1285.8442919999998
+      ],
+      "warmRequests": 15,
+      "peakMiB": [
+        383.390625,
+        382.25,
+        315.203125
+      ],
+      "allSignaturesMatchFinal": true
+    }
+  },
+  "qc-long-balanced-road": {
+    "runtime-baseline": {
+      "processes": 3,
+      "coldMs": [
+        7561.085249999999,
+        7499.577834000001,
+        7557.434666
+      ],
+      "warmMedianMs": 4814.575375,
+      "warmRangeMs": [
+        4799.258750000001,
+        4887.788957999997
+      ],
+      "warmRequests": 15,
+      "peakMiB": [
+        996.140625,
+        1001.03125,
+        1000.78125
+      ],
+      "allSignaturesMatchFinal": true
+    },
+    "runtime-candidate": {
+      "processes": 3,
+      "coldMs": [
+        5671.248792,
+        5694.516250000001,
+        5699.193458
+      ],
+      "warmMedianMs": 2910.532959000001,
+      "warmRangeMs": [
+        2889.205749999999,
+        3056.8327500000014
+      ],
+      "warmRequests": 15,
+      "peakMiB": [
+        889.765625,
+        890.53125,
+        890.203125
+      ],
+      "allSignaturesMatchFinal": true
+    }
+  },
+  "ns-on-road": {
+    "runtime-baseline": {
+      "processes": 1,
+      "coldMs": [
+        29433.545625
+      ],
+      "warmMedianMs": 31978.656500000005,
+      "warmRangeMs": [
+        31978.656500000005,
+        31978.656500000005
+      ],
+      "warmRequests": 1,
+      "peakMiB": [
+        2229.484375
+      ],
+      "allSignaturesMatchFinal": true
+    },
+    "runtime-candidate": {
+      "processes": 1,
+      "coldMs": [
+        20964.905541
+      ],
+      "warmMedianMs": 11470.978334,
+      "warmRangeMs": [
+        11470.978334,
+        11470.978334
+      ],
+      "warmRequests": 1,
+      "peakMiB": [
+        2289.84375
+      ],
+      "allSignaturesMatchFinal": true
+    }
+  }
+}

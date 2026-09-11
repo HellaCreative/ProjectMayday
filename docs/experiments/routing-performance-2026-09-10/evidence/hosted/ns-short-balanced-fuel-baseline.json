@@ -1,0 +1,737 @@
+{
+  "case": "ns-short-balanced-fuel",
+  "variant": "baseline",
+  "deployment": {
+    "id": "dpl_aC3VKkDXJHngsztXn66mnzyDgcEP",
+    "url": "https://pack-fabric-dtbay1q8u-goricksmith-7678s-projects.vercel.app",
+    "inspectorUrl": "https://vercel.com/goricksmith-7678s-projects/pack-fabric/aC3VKkDXJHngsztXn66mnzyDgcEP",
+    "readyState": "READY",
+    "target": null,
+    "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_aC3VKkDXJHngsztXn66mnzyDgcEP"
+  },
+  "runs": [
+    {
+      "run": 0,
+      "complete": true,
+      "windows": [
+        {
+          "window": 0,
+          "http": "200 4.386926",
+          "wallSeconds": 6.16888354200637,
+          "status": "complete",
+          "error": null,
+          "debug": {
+            "adventureTotalMs": 3344,
+            "adventureDataMs": 1247,
+            "adventureLoad": {
+              "regions": [
+                {
+                  "regionId": "ns",
+                  "elapsedMs": 1235
+                }
+              ],
+              "joinMs": 0,
+              "joinCacheHit": false
+            },
+            "adventureSearchMs": 2095,
+            "adventureResponseMs": 2
+          },
+          "diagnostics": {
+            "allowUnknown": false,
+            "mapZoom": 9,
+            "strategy": "adventure-preview-v1",
+            "selectedReason": "dirt-10",
+            "adventure": {
+              "waypointSnap": {
+                "attempts": 1,
+                "startComponentRecovery": false,
+                "radiusMeters": 2000,
+                "maximumMeters": 6078.301389635322,
+                "startDistanceMeters": 81.91024514163527,
+                "endDistanceMeters": 0.21162301247300896
+              },
+              "dirtEntryCost": 9000,
+              "fuelHeuristicWeight": 1.5,
+              "candidates": [
+                {
+                  "id": "paved",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 212258.68234217865,
+                    "knownDirtMeters": 0,
+                    "pavedMeters": 212235.68234217865,
+                    "unknownSurfaceMeters": 23,
+                    "knownDirtPercent": 0,
+                    "pavedPercent": 99.9891641652788,
+                    "unknownSurfacePercent": 0.010835834721202163,
+                    "longestDirtRunMeters": 0
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 761,
+                    "endpointMatchingMs": 27,
+                    "stationMatchingMs": 151,
+                    "projectedGraphMs": 8,
+                    "reverseBoundsMs": 182,
+                    "searchAndAdvisoryMs": 48,
+                    "geometryAndProofMs": 7,
+                    "totalMs": 1184
+                  },
+                  "repeatedRoadMeters": 0
+                },
+                {
+                  "id": "dirt-10",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 213534.68234217865,
+                    "knownDirtMeters": 142849,
+                    "pavedMeters": 67801.68234217867,
+                    "unknownSurfaceMeters": 2884,
+                    "knownDirtPercent": 66.89732947975712,
+                    "pavedPercent": 31.75207024849006,
+                    "unknownSurfacePercent": 1.3506002717528265,
+                    "longestDirtRunMeters": 32284
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 3,
+                    "stationMatchingMs": 3,
+                    "projectedGraphMs": 6,
+                    "reverseBoundsMs": 232,
+                    "searchAndAdvisoryMs": 138,
+                    "geometryAndProofMs": 5,
+                    "totalMs": 387
+                  },
+                  "repeatedRoadMeters": 0
+                },
+                {
+                  "id": "dirt-30",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 213534.68234217865,
+                    "knownDirtMeters": 142849,
+                    "pavedMeters": 67801.68234217867,
+                    "unknownSurfaceMeters": 2884,
+                    "knownDirtPercent": 66.89732947975712,
+                    "pavedPercent": 31.75207024849006,
+                    "unknownSurfacePercent": 1.3506002717528265,
+                    "longestDirtRunMeters": 32284
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 2,
+                    "stationMatchingMs": 3,
+                    "projectedGraphMs": 5,
+                    "reverseBoundsMs": 225,
+                    "searchAndAdvisoryMs": 262,
+                    "geometryAndProofMs": 4,
+                    "totalMs": 501
+                  },
+                  "repeatedRoadMeters": 0
+                }
+              ],
+              "search": {
+                "deadlineAtMs": 1789088341033,
+                "expansions": 2257054,
+                "maxExpansions": 30000000,
+                "reason": null,
+                "poolComplete": true
+              },
+              "quality": {
+                "state": "complete",
+                "distanceMeters": 213534.68234217868,
+                "repeatedRoadMeters": 0,
+                "repeatedKnownDirtMeters": 0,
+                "repeatedIntervals": [],
+                "revisitedNodes": [],
+                "dirtRuns": [
+                  {
+                    "startMeters": 44235.60050354971,
+                    "distanceMeters": 4603
+                  },
+                  {
+                    "startMeters": 50140.60050354971,
+                    "distanceMeters": 4427
+                  },
+                  {
+                    "startMeters": 55228.60050354971,
+                    "distanceMeters": 5157
+                  },
+                  {
+                    "startMeters": 63071.60050354971,
+                    "distanceMeters": 26114
+                  },
+                  {
+                    "startMeters": 91802.60050354971,
+                    "distanceMeters": 32284
+                  },
+                  {
+                    "startMeters": 125790.60050354971,
+                    "distanceMeters": 6761
+                  },
+                  {
+                    "startMeters": 132860.6005035497,
+                    "distanceMeters": 6862
+                  },
+                  {
+                    "startMeters": 141051.6005035497,
+                    "distanceMeters": 3816
+                  },
+                  {
+                    "startMeters": 146887.6005035497,
+                    "distanceMeters": 7225
+                  },
+                  {
+                    "startMeters": 156889.6005035497,
+                    "distanceMeters": 21081
+                  },
+                  {
+                    "startMeters": 179708.6005035497,
+                    "distanceMeters": 17192
+                  },
+                  {
+                    "startMeters": 197155.6005035497,
+                    "distanceMeters": 1789
+                  },
+                  {
+                    "startMeters": 203361.6005035497,
+                    "distanceMeters": 5538
+                  }
+                ],
+                "shortDirtRunCounts": {
+                  "under250Meters": 0,
+                  "under1000Meters": 0
+                },
+                "limitations": [
+                  "diagnostic bins are not routing thresholds",
+                  "fuel and rider-waypoint spurs require context",
+                  "short dirt runs alone do not prove needless diversions"
+                ]
+              },
+              "fuelState": "provisional_station_access"
+            },
+            "packIdentity": [
+              {
+                "regionId": "ns",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                "graphBytes": 15012189,
+                "geometryBytes": 23954228,
+                "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                "fuelBytes": 143951,
+                "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+              }
+            ]
+          },
+          "checks": {
+            "continuous": true,
+            "access": true,
+            "range": true
+          },
+          "meters": 213534.68234217868,
+          "stops": 1,
+          "signature": "be2f5d6cdf054e0a76801795cffbfd7a5cf8a21ac90cb97cf4c66064f8ea1cec"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "complete": true,
+      "windows": [
+        {
+          "window": 0,
+          "http": "200 1.879531",
+          "wallSeconds": 3.5472573330043815,
+          "status": "complete",
+          "error": null,
+          "debug": {
+            "adventureTotalMs": 1277,
+            "adventureDataMs": 3,
+            "adventureLoad": {
+              "regions": [
+                {
+                  "regionId": "ns",
+                  "elapsedMs": 2
+                }
+              ],
+              "joinMs": 0,
+              "joinCacheHit": false
+            },
+            "adventureSearchMs": 1273,
+            "adventureResponseMs": 1
+          },
+          "diagnostics": {
+            "allowUnknown": false,
+            "mapZoom": 9,
+            "strategy": "adventure-preview-v1",
+            "selectedReason": "dirt-10",
+            "adventure": {
+              "waypointSnap": {
+                "attempts": 1,
+                "startComponentRecovery": false,
+                "radiusMeters": 2000,
+                "maximumMeters": 6078.301389635322,
+                "startDistanceMeters": 81.91024514163527,
+                "endDistanceMeters": 0.21162301247300896
+              },
+              "dirtEntryCost": 9000,
+              "fuelHeuristicWeight": 1.5,
+              "candidates": [
+                {
+                  "id": "paved",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 212258.68234217865,
+                    "knownDirtMeters": 0,
+                    "pavedMeters": 212235.68234217865,
+                    "unknownSurfaceMeters": 23,
+                    "knownDirtPercent": 0,
+                    "pavedPercent": 99.9891641652788,
+                    "unknownSurfacePercent": 0.010835834721202163,
+                    "longestDirtRunMeters": 0
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 3,
+                    "stationMatchingMs": 3,
+                    "projectedGraphMs": 4,
+                    "reverseBoundsMs": 265,
+                    "searchAndAdvisoryMs": 62,
+                    "geometryAndProofMs": 15,
+                    "totalMs": 354
+                  },
+                  "repeatedRoadMeters": 0
+                },
+                {
+                  "id": "dirt-10",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 213534.68234217865,
+                    "knownDirtMeters": 142849,
+                    "pavedMeters": 67801.68234217867,
+                    "unknownSurfaceMeters": 2884,
+                    "knownDirtPercent": 66.89732947975712,
+                    "pavedPercent": 31.75207024849006,
+                    "unknownSurfacePercent": 1.3506002717528265,
+                    "longestDirtRunMeters": 32284
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 5,
+                    "stationMatchingMs": 37,
+                    "projectedGraphMs": 4,
+                    "reverseBoundsMs": 255,
+                    "searchAndAdvisoryMs": 166,
+                    "geometryAndProofMs": 4,
+                    "totalMs": 470
+                  },
+                  "repeatedRoadMeters": 0
+                },
+                {
+                  "id": "dirt-30",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 213534.68234217865,
+                    "knownDirtMeters": 142849,
+                    "pavedMeters": 67801.68234217867,
+                    "unknownSurfaceMeters": 2884,
+                    "knownDirtPercent": 66.89732947975712,
+                    "pavedPercent": 31.75207024849006,
+                    "unknownSurfacePercent": 1.3506002717528265,
+                    "longestDirtRunMeters": 32284
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 2,
+                    "stationMatchingMs": 3,
+                    "projectedGraphMs": 5,
+                    "reverseBoundsMs": 214,
+                    "searchAndAdvisoryMs": 220,
+                    "geometryAndProofMs": 4,
+                    "totalMs": 447
+                  },
+                  "repeatedRoadMeters": 0
+                }
+              ],
+              "search": {
+                "deadlineAtMs": 1789088347007,
+                "expansions": 2246026,
+                "maxExpansions": 30000000,
+                "reason": null,
+                "poolComplete": true
+              },
+              "quality": {
+                "state": "complete",
+                "distanceMeters": 213534.68234217868,
+                "repeatedRoadMeters": 0,
+                "repeatedKnownDirtMeters": 0,
+                "repeatedIntervals": [],
+                "revisitedNodes": [],
+                "dirtRuns": [
+                  {
+                    "startMeters": 44235.60050354971,
+                    "distanceMeters": 4603
+                  },
+                  {
+                    "startMeters": 50140.60050354971,
+                    "distanceMeters": 4427
+                  },
+                  {
+                    "startMeters": 55228.60050354971,
+                    "distanceMeters": 5157
+                  },
+                  {
+                    "startMeters": 63071.60050354971,
+                    "distanceMeters": 26114
+                  },
+                  {
+                    "startMeters": 91802.60050354971,
+                    "distanceMeters": 32284
+                  },
+                  {
+                    "startMeters": 125790.60050354971,
+                    "distanceMeters": 6761
+                  },
+                  {
+                    "startMeters": 132860.6005035497,
+                    "distanceMeters": 6862
+                  },
+                  {
+                    "startMeters": 141051.6005035497,
+                    "distanceMeters": 3816
+                  },
+                  {
+                    "startMeters": 146887.6005035497,
+                    "distanceMeters": 7225
+                  },
+                  {
+                    "startMeters": 156889.6005035497,
+                    "distanceMeters": 21081
+                  },
+                  {
+                    "startMeters": 179708.6005035497,
+                    "distanceMeters": 17192
+                  },
+                  {
+                    "startMeters": 197155.6005035497,
+                    "distanceMeters": 1789
+                  },
+                  {
+                    "startMeters": 203361.6005035497,
+                    "distanceMeters": 5538
+                  }
+                ],
+                "shortDirtRunCounts": {
+                  "under250Meters": 0,
+                  "under1000Meters": 0
+                },
+                "limitations": [
+                  "diagnostic bins are not routing thresholds",
+                  "fuel and rider-waypoint spurs require context",
+                  "short dirt runs alone do not prove needless diversions"
+                ]
+              },
+              "fuelState": "provisional_station_access"
+            },
+            "packIdentity": [
+              {
+                "regionId": "ns",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                "graphBytes": 15012189,
+                "geometryBytes": 23954228,
+                "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                "fuelBytes": 143951,
+                "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+              }
+            ]
+          },
+          "checks": {
+            "continuous": true,
+            "access": true,
+            "range": true
+          },
+          "meters": 213534.68234217868,
+          "stops": 1,
+          "signature": "be2f5d6cdf054e0a76801795cffbfd7a5cf8a21ac90cb97cf4c66064f8ea1cec"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "complete": true,
+      "windows": [
+        {
+          "window": 0,
+          "http": "200 1.670897",
+          "wallSeconds": 3.2600053750211373,
+          "status": "complete",
+          "error": null,
+          "debug": {
+            "adventureTotalMs": 1081,
+            "adventureDataMs": 3,
+            "adventureLoad": {
+              "regions": [
+                {
+                  "regionId": "ns",
+                  "elapsedMs": 3
+                }
+              ],
+              "joinMs": 0,
+              "joinCacheHit": false
+            },
+            "adventureSearchMs": 1077,
+            "adventureResponseMs": 1
+          },
+          "diagnostics": {
+            "allowUnknown": false,
+            "mapZoom": 9,
+            "strategy": "adventure-preview-v1",
+            "selectedReason": "dirt-10",
+            "adventure": {
+              "waypointSnap": {
+                "attempts": 1,
+                "startComponentRecovery": false,
+                "radiusMeters": 2000,
+                "maximumMeters": 6078.301389635322,
+                "startDistanceMeters": 81.91024514163527,
+                "endDistanceMeters": 0.21162301247300896
+              },
+              "dirtEntryCost": 9000,
+              "fuelHeuristicWeight": 1.5,
+              "candidates": [
+                {
+                  "id": "paved",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 212258.68234217865,
+                    "knownDirtMeters": 0,
+                    "pavedMeters": 212235.68234217865,
+                    "unknownSurfaceMeters": 23,
+                    "knownDirtPercent": 0,
+                    "pavedPercent": 99.9891641652788,
+                    "unknownSurfacePercent": 0.010835834721202163,
+                    "longestDirtRunMeters": 0
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 4,
+                    "stationMatchingMs": 4,
+                    "projectedGraphMs": 7,
+                    "reverseBoundsMs": 247,
+                    "searchAndAdvisoryMs": 29,
+                    "geometryAndProofMs": 4,
+                    "totalMs": 296
+                  },
+                  "repeatedRoadMeters": 0
+                },
+                {
+                  "id": "dirt-10",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 213534.68234217865,
+                    "knownDirtMeters": 142849,
+                    "pavedMeters": 67801.68234217867,
+                    "unknownSurfaceMeters": 2884,
+                    "knownDirtPercent": 66.89732947975712,
+                    "pavedPercent": 31.75207024849006,
+                    "unknownSurfacePercent": 1.3506002717528265,
+                    "longestDirtRunMeters": 32284
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 3,
+                    "stationMatchingMs": 3,
+                    "projectedGraphMs": 4,
+                    "reverseBoundsMs": 211,
+                    "searchAndAdvisoryMs": 105,
+                    "geometryAndProofMs": 4,
+                    "totalMs": 330
+                  },
+                  "repeatedRoadMeters": 0
+                },
+                {
+                  "id": "dirt-30",
+                  "road": "complete",
+                  "fuel": "provisional_station_access",
+                  "searchRetry": null,
+                  "zeroRefillAdvisory": false,
+                  "passingRefillAdvisory": false,
+                  "surface": {
+                    "distanceMeters": 213534.68234217865,
+                    "knownDirtMeters": 142849,
+                    "pavedMeters": 67801.68234217867,
+                    "unknownSurfaceMeters": 2884,
+                    "knownDirtPercent": 66.89732947975712,
+                    "pavedPercent": 31.75207024849006,
+                    "unknownSurfacePercent": 1.3506002717528265,
+                    "longestDirtRunMeters": 32284
+                  },
+                  "urbanMeters": 0,
+                  "timing": {
+                    "preparationMs": 0,
+                    "endpointMatchingMs": 2,
+                    "stationMatchingMs": 3,
+                    "projectedGraphMs": 4,
+                    "reverseBoundsMs": 228,
+                    "searchAndAdvisoryMs": 209,
+                    "geometryAndProofMs": 4,
+                    "totalMs": 450
+                  },
+                  "repeatedRoadMeters": 0
+                }
+              ],
+              "search": {
+                "deadlineAtMs": 1789088350516,
+                "expansions": 2246026,
+                "maxExpansions": 30000000,
+                "reason": null,
+                "poolComplete": true
+              },
+              "quality": {
+                "state": "complete",
+                "distanceMeters": 213534.68234217868,
+                "repeatedRoadMeters": 0,
+                "repeatedKnownDirtMeters": 0,
+                "repeatedIntervals": [],
+                "revisitedNodes": [],
+                "dirtRuns": [
+                  {
+                    "startMeters": 44235.60050354971,
+                    "distanceMeters": 4603
+                  },
+                  {
+                    "startMeters": 50140.60050354971,
+                    "distanceMeters": 4427
+                  },
+                  {
+                    "startMeters": 55228.60050354971,
+                    "distanceMeters": 5157
+                  },
+                  {
+                    "startMeters": 63071.60050354971,
+                    "distanceMeters": 26114
+                  },
+                  {
+                    "startMeters": 91802.60050354971,
+                    "distanceMeters": 32284
+                  },
+                  {
+                    "startMeters": 125790.60050354971,
+                    "distanceMeters": 6761
+                  },
+                  {
+                    "startMeters": 132860.6005035497,
+                    "distanceMeters": 6862
+                  },
+                  {
+                    "startMeters": 141051.6005035497,
+                    "distanceMeters": 3816
+                  },
+                  {
+                    "startMeters": 146887.6005035497,
+                    "distanceMeters": 7225
+                  },
+                  {
+                    "startMeters": 156889.6005035497,
+                    "distanceMeters": 21081
+                  },
+                  {
+                    "startMeters": 179708.6005035497,
+                    "distanceMeters": 17192
+                  },
+                  {
+                    "startMeters": 197155.6005035497,
+                    "distanceMeters": 1789
+                  },
+                  {
+                    "startMeters": 203361.6005035497,
+                    "distanceMeters": 5538
+                  }
+                ],
+                "shortDirtRunCounts": {
+                  "under250Meters": 0,
+                  "under1000Meters": 0
+                },
+                "limitations": [
+                  "diagnostic bins are not routing thresholds",
+                  "fuel and rider-waypoint spurs require context",
+                  "short dirt runs alone do not prove needless diversions"
+                ]
+              },
+              "fuelState": "provisional_station_access"
+            },
+            "packIdentity": [
+              {
+                "regionId": "ns",
+                "releaseId": "fabric-v4-20260909-02",
+                "graphSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/graph.v4.bin",
+                "geometrySource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/geometry.v1.bin",
+                "graphBytes": 15012189,
+                "geometryBytes": 23954228,
+                "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+                "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+                "fuelSource": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/fabric-v4-20260909-02/ns/fuel.v1.json",
+                "fuelBytes": 143951,
+                "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+              }
+            ]
+          },
+          "checks": {
+            "continuous": true,
+            "access": true,
+            "range": true
+          },
+          "meters": 213534.68234217868,
+          "stops": 1,
+          "signature": "be2f5d6cdf054e0a76801795cffbfd7a5cf8a21ac90cb97cf4c66064f8ea1cec"
+        }
+      ]
+    }
+  ]
+}

@@ -10,16 +10,18 @@ const {resolveGraphRequest}=require('../routing/regional/select');
 const {qualifiedPack}=require('../routing/lib/adventure/pack-revision-qualification');
 const cases=require('../../../docs/experiments/routing-performance-2026-09-10/matrix-inputs.json');
 const [caseId,variant,out,repeatsArg='3']=process.argv.slice(2),fixture=cases.find(c=>c.id===caseId);
-if(!fixture||!['baseline','incoming','neutral','combined','compact','compact-join','runtime-baseline','runtime-candidate'].includes(variant)||!out)throw Error('CASE baseline|incoming OUTPUT [REPEATS] required');
+if(!fixture||!['baseline','incoming','neutral','combined','compact','compact-join','runtime-baseline','runtime-candidate','prepared'].includes(variant)||!out)throw Error('CASE baseline|incoming OUTPUT [REPEATS] required');
 // Multi-window replays are correctness/stress checks; one cold and one warm
 // replay suffice here. Smaller single-window comparisons retain three runs.
-const repetitions=fixture.request.fuel?.windowMaxStops===1?Math.min(2,Number(repeatsArg)):Number(repeatsArg);
+const workload=process.env.PERFORMANCE_WORKLOAD?JSON.parse(fs.readFileSync(process.env.PERFORMANCE_WORKLOAD)):null;
+if(workload&&(!Array.isArray(workload)||workload.some(id=>!cases.some(c=>c.id===id))))throw Error('Invalid workload');
+const repetitions=workload?workload.length:fixture.request.fuel?.windowMaxStops===1?Math.min(2,Number(repeatsArg)):Number(repeatsArg);
 fs.mkdirSync(path.dirname(out),{recursive:true});
 const root=process.env.PERFORMANCE_PACK_ROOT||'/tmp/dirt-performance-packs',releaseId='fabric-v4-20260909-02';
 const environment={DIRT_ADVENTURE_CANARY:'national-v1',DIRT_PASSING_REFILL_ADVISORY:'candidate-v1',DIRT_FUEL_COMPLETION_POLICY:'feasible-v1',DIRT_FUEL_CONNECTIVITY_PROBE:'candidate-v1',DIRT_ZERO_REFILL_ADVISORY:'proved-national-v1'};
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
 const runtimeModel=variant.startsWith('runtime-'),runtimeCandidate=variant==='runtime-candidate';
-const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:['incoming','combined','compact','compact-join','runtime-candidate'].includes(variant),fastNeutralTurns:['neutral','combined','compact','compact-join','runtime-candidate'].includes(variant),compactPreparation:['compact','compact-join','runtime-candidate'].includes(variant),reuseBounds:['compact-join','runtime-candidate'].includes(variant)});
+const context=createRideAlternativeContext({maxReverseBytes:256*1024*1024,useIncomingBounds:['incoming','combined','compact','compact-join','runtime-candidate','prepared'].includes(variant),fastNeutralTurns:['neutral','combined','compact','compact-join','runtime-candidate','prepared'].includes(variant),compactPreparation:['compact','compact-join','runtime-candidate','prepared'].includes(variant),reuseBounds:['compact-join','runtime-candidate','prepared'].includes(variant)});
 const packCache=new Map();let joinedCache=null,loadTrace=[];
 function loadRegion(id) {
  const cached=packCache.get(id);if(cached){packCache.delete(id);packCache.set(id,cached);loadTrace.push({id,cacheHit:true});return cached;}
@@ -35,6 +37,21 @@ function loadRegion(id) {
 }
 async function load(resolution) {
  const sourceKey=resolution.regionIds.join(',');
+ if(variant==='prepared') {
+  if(joinedCache?.sourceKey===sourceKey){loadTrace.push({joinCacheHit:true,sourceReuse:true});return joinedCache.data;}
+  joinedCache=null;context.preparationCache.clear();context.reverseCostCache.clear();context.stationMatchCache.clear();
+  const folder=path.join(process.env.PREPARED_JOIN_ROOT||'/tmp/dirt-prepared-joins',resolution.regionIds.join('+'));
+  const receipt=JSON.parse(fs.readFileSync(folder+'.receipt.json'));
+  if(!receipt.identity.every(qualifiedPack)||receipt.identity.map(i=>i.regionId).join(',')!==sourceKey)throw Error('Prepared source qualification failed');
+  const data=require('./prepared-joined-runtime').readPreparedJoined(folder,{expectedIdentity:receipt.identity,manifestSha256:receipt.manifestSha256,geometryPaths:Object.fromEntries(resolution.regionIds.map(id=>[id,path.join(root,id,'geometry.v1.bin')]))});
+  const stations=new Map();let fuelBytes=0;
+  for(const id of receipt.identity) {
+   const raw=fs.readFileSync(path.join(root,id.regionId,'fuel.v1.json'));fuelBytes+=raw.length;
+   if(hash(raw)!==id.fuelSha256)throw Error('Prepared fuel identity failed');
+   for(const station of JSON.parse(raw).stations){const previous=stations.get(station.id);if(previous&&(previous.lat!==station.lat||previous.lon!==station.lon))throw Error('Conflicting fuel identity');stations.set(station.id,station);}
+  }
+  data.stations=[...stations.values()];joinedCache={sourceKey,data};loadTrace.push({prepared:true,...data.diagnostics,fuelBytes});return data;
+ }
  if(runtimeCandidate&&joinedCache?.sourceKey===sourceKey){loadTrace.push({joinCacheHit:true,sourceReuse:true});return joinedCache.data;}
  if(runtimeCandidate){joinedCache=null;context.preparationCache.clear();context.reverseCostCache.clear();context.stationMatchCache.clear();}
  const rows=resolution.regionIds.map(loadRegion);
@@ -67,11 +84,12 @@ function validate(result,request) {
  return {continuous:true,access:true,range:true};
 }
 (async()=>{
- const sources=fs.readdirSync(path.join(__dirname,'../routing/lib/adventure')).filter(f=>f.endsWith('.js')&&!f.endsWith('.test.js')).concat(['../graph.js','../deferred-edge-grid.js','../geometry-edge-grid.js','../pack-v4.js']).sort().map(f=>[f,hash(fs.readFileSync(path.join(__dirname,'../routing/lib/adventure',f)))]);
- const report={caseId,variant,fixture,environment,repetitions,sourceHashes:sources,scope:runtimeModel?'Local disk model of hosted three-region reader LRU and legacy spatial preparation; actual live-canary pool. No hosted timing claim.':'Local full immutable pack loader and actual live-canary candidate pool; ideal single retained joined graph. No hosted speed claim.',node:process.version,runs:[]};
+ const sources=fs.readdirSync(path.join(__dirname,'../routing/lib/adventure')).filter(f=>f.endsWith('.js')&&!f.endsWith('.test.js')).concat(['../graph.js','../deferred-edge-grid.js','../geometry-edge-grid.js','../pack-v4.js','../../../bench/prepared-joined-runtime.js']).sort().map(f=>[f,hash(fs.readFileSync(path.join(__dirname,'../routing/lib/adventure',f)))]);
+ const report={caseId,variant,fixture,environment,repetitions,workload,sourceHashes:sources,scope:variant==='prepared'?'Local derived joined sidecar plus original geometry/fuel; no source graph load or request-time join. No hosted timing claim.':runtimeModel?'Local disk model of hosted three-region reader LRU and legacy spatial preparation; actual live-canary pool. No hosted timing claim.':'Local full immutable pack loader and actual live-canary candidate pool; ideal single retained joined graph. No hosted speed claim.',node:process.version,runs:[]};
  const checkpoint=()=>{fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,JSON.stringify(report,null,2));};
  for(let run=0;run<repetitions;run++) {
-  let request=structuredClone(fixture.request),history=[],excluded=[],windows=[],proofs=[],meters=0,stops=0,complete=false;
+  const runFixture=workload?cases.find(c=>c.id===workload[run]):fixture,runStartedAt=Date.now();
+  let request=structuredClone(runFixture.request),history=[],excluded=[],windows=[],proofs=[],meters=0,stops=0,complete=false;
   for(let window=0;window<24;window++) {
    loadTrace=[];const at=performance.now(),result=await adventureCanaryRequest(request,request.fuel?'fuel':'route',{environment,load,context}),ms=performance.now()-at;
    const memoryBeforeProof=process.memoryUsage(),checks=result?.status==='complete'?validate(result,request):null,p=proof(result);
@@ -102,7 +120,7 @@ function validate(result,request) {
   proofs.length=0;
   if(global.gc)global.gc();
   delete report.active;
-  report.runs.push({run,complete,ms:windows.reduce((n,w)=>n+w.ms,0),meters,stops,windows,peakRoutingMiB,retained:process.memoryUsage()});
+  report.runs.push({run,caseId:runFixture.id,runStartedAt,runEndedAt:Date.now(),complete,ms:windows.reduce((n,w)=>n+w.ms,0),meters,stops,windows,peakRoutingMiB,retained:process.memoryUsage()});
   checkpoint();console.log(JSON.stringify({caseId,variant,run,complete,ms:report.runs.at(-1).ms,meters,stops,peakRoutingMiB}));
   // Do not spend repeated full timeouts on a failing case; preserve the first result.
   if(!complete)break;

@@ -1,0 +1,33 @@
+{
+  "case": "wv-road",
+  "variant": "baseline",
+  "deployment": {
+    "id": "dpl_aC3VKkDXJHngsztXn66mnzyDgcEP",
+    "url": "https://pack-fabric-dtbay1q8u-goricksmith-7678s-projects.vercel.app",
+    "inspectorUrl": "https://vercel.com/goricksmith-7678s-projects/pack-fabric/aC3VKkDXJHngsztXn66mnzyDgcEP",
+    "readyState": "READY",
+    "target": null,
+    "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_aC3VKkDXJHngsztXn66mnzyDgcEP"
+  },
+  "runs": [
+    {
+      "run": 0,
+      "complete": false,
+      "windows": [
+        {
+          "window": 0,
+          "http": "500 86.809344",
+          "wallSeconds": 88.67295845801709,
+          "status": "invalid_response",
+          "error": "A server error has occurred\n\nFUNCTION_INVOCATION_FAILED\n\niad1::gpnpw-1789088606692-3b64d255a77e\n",
+          "debug": null,
+          "diagnostics": {},
+          "checks": null,
+          "meters": 0,
+          "stops": 0,
+          "signature": "f6f8e22b98d843d5769437c6221f32e9bc6dd406f492064882afb1ecb260ef85"
+        }
+      ]
+    }
+  ]
+}

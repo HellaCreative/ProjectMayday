@@ -1,0 +1,93 @@
+[
+  {
+    "case": "on-long-balanced-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 11.6,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 11385,
+        "peakMiB": 1321
+      }
+    ]
+  },
+  {
+    "case": "on-long-balanced-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 21.1,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 20898,
+        "peakMiB": 1418
+      }
+    ]
+  },
+  {
+    "case": "bangor-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 14.5,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 14294,
+        "peakMiB": 595
+      }
+    ]
+  },
+  {
+    "case": "bangor-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 4.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 3873,
+        "peakMiB": 527
+      }
+    ]
+  },
+  {
+    "case": "wv-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 48.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 48470,
+        "peakMiB": 2743
+      }
+    ]
+  },
+  {
+    "case": "wv-clean-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 48.4,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 48050,
+        "peakMiB": 2357
+      }
+    ]
+  },
+  {
+    "case": "ns-on-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 21.1,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 20752,
+        "peakMiB": 2283
+      }
+    ]
+  }
+]

@@ -1,0 +1,41 @@
+[
+  {
+    "case": "ns-ab-stress",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 32.0,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 31650,
+        "peakMiB": 3082
+      }
+    ]
+  },
+  {
+    "case": "bc-yt-road",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 4.9,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 4694,
+        "peakMiB": 691
+      }
+    ]
+  },
+  {
+    "case": "bc-yt-fuel",
+    "variant": "runtime-candidate",
+    "exit": 0,
+    "seconds": 62.6,
+    "runs": [
+      {
+        "complete": true,
+        "ms": 62286,
+        "peakMiB": 1815
+      }
+    ]
+  }
+]

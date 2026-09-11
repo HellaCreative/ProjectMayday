@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-short-partial-tank-runtime-candidate.json",
+  "case": "ns-short-partial-tank",
+  "results": [
+    {
+      "window": 0,
+      "segments": 614,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

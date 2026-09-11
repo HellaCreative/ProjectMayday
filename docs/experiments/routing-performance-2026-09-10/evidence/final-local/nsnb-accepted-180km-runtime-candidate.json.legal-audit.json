@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/nsnb-accepted-180km-runtime-candidate.json",
+  "case": "nsnb-accepted-180km",
+  "results": [
+    {
+      "window": 0,
+      "segments": 968,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

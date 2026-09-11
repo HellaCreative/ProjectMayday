@@ -1,0 +1,3 @@
+{"caseId":"qc-middle-wander-road","variant":"runtime-candidate","run":0,"complete":true,"ms":6449.535041,"meters":952180.376012777,"stops":0,"peakRoutingMiB":983.546875}
+{"caseId":"qc-middle-wander-road","variant":"runtime-candidate","run":1,"complete":true,"ms":3695.5119589999995,"meters":952180.376012777,"stops":0,"peakRoutingMiB":985.203125}
+{"caseId":"qc-middle-wander-road","variant":"runtime-candidate","run":2,"complete":true,"ms":3715.137708,"meters":952180.376012777,"stops":0,"peakRoutingMiB":985.203125}

@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/ns-short-unknown-220km-runtime-candidate.json",
+  "case": "ns-short-unknown-220km",
+  "results": [
+    {
+      "window": 0,
+      "segments": 492,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}

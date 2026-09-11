@@ -1,0 +1,362 @@
+[
+  {
+    "case": "bangor-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/bangor-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/bangor-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "bangor-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/bangor-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/bangor-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "bc-yt-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/bc-yt-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/bc-yt-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "bc-yt-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/bc-yt-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/bc-yt-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "clean-accepted-windowed",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/clean-accepted-windowed-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/clean-accepted-windowed-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "deep-accepted-windowed",
+    "exact": false,
+    "baseline": "/tmp/dirt-performance-final/deep-accepted-windowed-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/deep-accepted-windowed-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-ab-stress",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/ns-ab-stress-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-ab-stress-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-long-balanced-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-long-balanced-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-long-balanced-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-long-balanced-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-long-balanced-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-long-balanced-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-long-cleanest-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-long-cleanest-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-long-cleanest-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-long-cleanest-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-long-cleanest-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-long-cleanest-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-long-dirt-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-long-dirt-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-long-dirt-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-long-dirt-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-long-dirt-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-long-dirt-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-long-unknown-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/ns-long-unknown-road-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-long-unknown-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-middle-wander-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/ns-middle-wander-road-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-middle-wander-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-on-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/ns-on-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-on-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-162km",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/ns-short-162km-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-162km-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-balanced-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-short-balanced-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-balanced-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-balanced-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-short-balanced-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-balanced-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-clean-220km",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/ns-short-clean-220km-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-clean-220km-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-cleanest-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-short-cleanest-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-cleanest-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-cleanest-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-short-cleanest-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-cleanest-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-dirt-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-short-dirt-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-dirt-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-dirt-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/ns-short-dirt-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-dirt-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-partial-tank",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/ns-short-partial-tank-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-partial-tank-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "ns-short-unknown-220km",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/ns-short-unknown-220km-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/ns-short-unknown-220km-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "nsnb-accepted-180km",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/nsnb-accepted-180km-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/nsnb-accepted-180km-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "nsnb-balanced-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/nsnb-balanced-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/nsnb-balanced-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "nsnb-balanced-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/nsnb-balanced-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/nsnb-balanced-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "nsnb-cleanest-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/nsnb-cleanest-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/nsnb-cleanest-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "nsnb-cleanest-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/nsnb-cleanest-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/nsnb-cleanest-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "nsnb-dirt-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/nsnb-dirt-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/nsnb-dirt-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "nsnb-dirt-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/nsnb-dirt-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/nsnb-dirt-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "nsnb-unknown-220km",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/nsnb-unknown-220km-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/nsnb-unknown-220km-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "on-long-balanced-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/on-long-balanced-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/on-long-balanced-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "on-long-balanced-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/on-long-balanced-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/on-long-balanced-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "qc-long-balanced-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/qc-long-balanced-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/qc-long-balanced-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "qc-long-balanced-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/qc-long-balanced-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/qc-long-balanced-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "qc-long-cleanest-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/qc-long-cleanest-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/qc-long-cleanest-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "qc-long-cleanest-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/qc-long-cleanest-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/qc-long-cleanest-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "qc-long-dirt-fuel",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/qc-long-dirt-fuel-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/qc-long-dirt-fuel-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "qc-long-dirt-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-matrix/qc-long-dirt-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/qc-long-dirt-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "qc-middle-wander-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-final/qc-middle-wander-road-runtime-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/qc-middle-wander-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "wv-clean-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/wv-clean-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/wv-clean-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  },
+  {
+    "case": "wv-road",
+    "exact": true,
+    "baseline": "/tmp/dirt-performance-long/wv-road-baseline.json",
+    "candidate": "/tmp/dirt-performance-final/wv-road-runtime-candidate.json",
+    "complete": true,
+    "repeatProofsEqual": true
+  }
+]

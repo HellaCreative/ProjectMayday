@@ -1,0 +1,6 @@
+{"caseId":"nsnb-balanced-fuel","variant":"runtime-baseline","run":0,"complete":true,"ms":2542.05825,"meters":485260.54542749963,"stops":2,"peakRoutingMiB":406.46875}
+{"caseId":"nsnb-balanced-fuel","variant":"runtime-baseline","run":1,"complete":true,"ms":1570.4118749999998,"meters":485260.54542749963,"stops":2,"peakRoutingMiB":416.09375}
+{"caseId":"nsnb-balanced-fuel","variant":"runtime-baseline","run":2,"complete":true,"ms":1520.2313750000003,"meters":485260.54542749963,"stops":2,"peakRoutingMiB":416.703125}
+{"caseId":"nsnb-balanced-fuel","variant":"runtime-baseline","run":3,"complete":true,"ms":1503.7983329999997,"meters":485260.54542749963,"stops":2,"peakRoutingMiB":416.796875}
+{"caseId":"nsnb-balanced-fuel","variant":"runtime-baseline","run":4,"complete":true,"ms":1588.6272920000001,"meters":485260.54542749963,"stops":2,"peakRoutingMiB":416.921875}
+{"caseId":"nsnb-balanced-fuel","variant":"runtime-baseline","run":5,"complete":true,"ms":1501.597167,"meters":485260.54542749963,"stops":2,"peakRoutingMiB":422.609375}

@@ -1,0 +1,33 @@
+{
+  "case": "wv-road",
+  "variant": "bounded",
+  "deployment": {
+    "id": "dpl_FhamX9tXkSUHFbM6KTyhnLjpA9Ei",
+    "url": "https://pack-fabric-bg6e3eazd-goricksmith-7678s-projects.vercel.app",
+    "inspectorUrl": "https://vercel.com/goricksmith-7678s-projects/pack-fabric/FhamX9tXkSUHFbM6KTyhnLjpA9Ei",
+    "readyState": "READY",
+    "target": null,
+    "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_FhamX9tXkSUHFbM6KTyhnLjpA9Ei"
+  },
+  "runs": [
+    {
+      "run": 0,
+      "complete": false,
+      "windows": [
+        {
+          "window": 0,
+          "http": "500 10.842228",
+          "wallSeconds": 12.606519624998327,
+          "status": "error",
+          "error": "route_internal_error",
+          "debug": null,
+          "diagnostics": {},
+          "checks": null,
+          "meters": 0,
+          "stops": 0,
+          "signature": "54187896d0789d0c96d92435f6e78d50c2d00c3b6906c2c95e05b945c28c3437"
+        }
+      ]
+    }
+  ]
+}

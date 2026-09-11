@@ -1,0 +1,14 @@
+{
+  "input": "/tmp/dirt-performance-final/bc-yt-road-runtime-candidate.json",
+  "case": "bc-yt-road",
+  "results": [
+    {
+      "window": 0,
+      "segments": 2311,
+      "legalDirections": true,
+      "turnRestrictions": true,
+      "exactNodeContinuity": true,
+      "arrivalHistory": true
+    }
+  ]
+}
