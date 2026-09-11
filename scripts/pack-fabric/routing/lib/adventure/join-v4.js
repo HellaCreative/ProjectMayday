@@ -5,6 +5,9 @@
 function indexedView(length,read) {
  return new Proxy({}, {get:(_,key)=>key==='length'?length:/^\d+$/.test(String(key))&&Number(key)<length?read(Number(key)):undefined});
 }
+// Keep the packed ID accessor outside joinV4's allocation scope so retaining
+// it cannot also retain temporary node maps and join scratch arrays.
+function nodeIdReader(storage){return i=>String(storage[i]);}
 function sourceReader(regionIds,edgeIds){return e=>({region:regionIds[e],edge:edgeIds[e]});}
 function joinedReaders(regions,source,nodeIds,from,to,aliases){
  return {
@@ -26,7 +29,8 @@ function joinV4(regions,{budget,compactNodes=false}) {
  const maxNodes=regions.reduce((n,r)=>n+r.pack.nodeCount,0),maxEdges=regions.reduce((n,r)=>n+r.pack.edgeCount,0);
  const nodes=new Map(),coords=new Float32Array(maxNodes*2),nodeMaps=[],edgeMaps=[],canonical=new Map();
  const idStorage=compactNodes?new BigInt64Array(maxNodes):null;
- const nodeIds=compactNodes?indexedView(maxNodes,i=>String(idStorage[i])):[];let nodeCount=0;
+ const readNodeId=compactNodes?nodeIdReader(idStorage):null;
+ const nodeIds=compactNodes?indexedView(maxNodes,readNodeId):[];let nodeCount=0;
  const sourceRegions=new Uint16Array(maxEdges),sourceEdges=new Int32Array(maxEdges);let edgeCount=0;
  const source=sourceReader(sourceRegions,sourceEdges);
  const shared=new Uint8Array(maxNodes),lastNodeRegion=new Uint16Array(maxNodes);
@@ -114,7 +118,7 @@ function joinV4(regions,{budget,compactNodes=false}) {
  const pack={graphBinaryVersion:4,regionId:regions.map(r=>r.pack.regionId).join('+'),regionIds:regions.map(r=>r.pack.regionId),provenance:first.provenance,enums:{...first.enums,surfaceLeafNames:surfaceNames,roadClassLeafNames:roadNames},
   meta:{urbanCores:regions.flatMap(r=>r.pack.meta?.urbanCores||[]),settlements:regions.flatMap(r=>r.pack.meta?.settlements||[])},
   nodeCount:nodeCount,edgeCount:edgeCount,undirectedEdgeCount:edgeCount,directedArcCount:targets.length,
-  nodeCoords:coords.subarray(0,nodeCount*2),osmNodeIds:compactNodes?indexedView(nodeCount,i=>String(idStorage[i])):nodeIds,osmWayIds:indexedView(edgeCount,readers.wayId),
+  nodeCoords:coords.subarray(0,nodeCount*2),osmNodeIds:compactNodes?indexedView(nodeCount,readNodeId):nodeIds,osmWayIds:indexedView(edgeCount,readers.wayId),
   nodeOffsets:offsets,edgeTargets:targets,edgeUndirectedIndex:edgeIndices,edgeFrom:from.subarray(0,edgeCount),edgeTo:to.subarray(0,edgeCount),edgeMeters:meters.subarray(0,edgeCount),edgeAccess:access.subarray(0,edgeCount*2),edgeSurfaceLeaf:surface.subarray(0,edgeCount),edgeRoadClassLeaf:road.subarray(0,edgeCount),restrictions,
   edgeId:readers.edgeId,edgeAliases:readers.edgeAliases,edgeLeaves:readers.edgeLeaves,
   hasDirectedArc(a,b,e){for(let i=this.nodeOffsets[a];i<this.nodeOffsets[a+1];i++)if(this.edgeTargets[i]===b&&this.edgeUndirectedIndex[i]===e)return true;return false;}};
