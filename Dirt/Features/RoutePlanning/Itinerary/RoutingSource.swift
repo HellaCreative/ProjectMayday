@@ -327,6 +327,9 @@ final class PackRoutingSource: RoutingSource {
         var stops: [FuelChainStop] = []
         var graphMeters: [Double] = []
         var stationCandidates: [FuelStationCandidate] = []
+        let crossesRegion = GraphPackStore.endpointsCrossProvince([
+            start.locationCoordinate, end.locationCoordinate
+        ])
         let returnedStopLimit = min(12, max(1, req.fuel.windowMaxStops ?? 12))
         let maximumStops = req.fuel.allowPartialWindow == true
             ? min(4, max(returnedStopLimit + 2, req.fuel.minimumFuelStops + 1))
@@ -335,6 +338,11 @@ final class PackRoutingSource: RoutingSource {
         var carriedArrival = req.options?.arrivalEdgeId
         let budgetDeadline = req.fuel.windowTimeBudgetMs.map {
             Date().addingTimeInterval(max(0.001, Double($0) / 1_000))
+        }
+        let probeLogging = req.fuel.riderLegId == "private-device-hybrid-probe"
+
+        func logProbePhase(_ phase: String) {
+            if probeLogging { print("[HybridProbePhase] profile=\(req.profile.rawValue) phase=\(phase)") }
         }
 
         func budgetExpired() -> Bool {
@@ -370,13 +378,25 @@ final class PackRoutingSource: RoutingSource {
             let firstCap = stops.isEmpty
                 ? req.fuel.firstLegMaxMeters
                 : req.fuel.usableRangeMeters
-            let direct = await packs.shortestGraphMeters(
-                from: current.locationCoordinate,
-                to: end.locationCoordinate,
-                maxMeters: firstCap,
-                profile: req.profile,
-                allowUnknown: req.accessPolicy.motorizedUnknown
-            )
+            let direct: Double?
+            if crossesRegion {
+                // A single active pack cannot prove a direct A→B hop when the
+                // endpoints belong to different provinces. Skipping this
+                // bounded search avoids traversing the entire departure pack
+                // only to discover that the destination has no local snap.
+                logProbePhase("shortest-skip-cross-region")
+                direct = nil
+            } else {
+                logProbePhase("shortest-begin")
+                direct = await packs.shortestGraphMeters(
+                    from: current.locationCoordinate,
+                    to: end.locationCoordinate,
+                    maxMeters: firstCap,
+                    profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown
+                )
+                logProbePhase("shortest-end")
+            }
             if budgetExpired() { return budgetResponse("after-reachability") }
             let mustPump = stops.count < req.fuel.minimumFuelStops
                 || (stops.isEmpty && req.fuel.requireFuelStopBeforeEnd)
@@ -384,6 +404,7 @@ final class PackRoutingSource: RoutingSource {
             var directFallback: Double?
             if let direct,
                destinationLimit == nil || direct <= (destinationLimit ?? .infinity) + 1 {
+                logProbePhase("direct-begin")
                 let routed = await packs.routeOnDeviceDetailed(
                     from: current.locationCoordinate,
                     to: end.locationCoordinate,
@@ -400,6 +421,7 @@ final class PackRoutingSource: RoutingSource {
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true
                 )
+                logProbePhase("direct-end")
                 if budgetExpired() { return budgetResponse("after-direct-route") }
                 if case .success(let route) = routed, route.distanceMeters <= firstCap + 1 {
                     directFallback = route.distanceMeters
@@ -444,6 +466,7 @@ final class PackRoutingSource: RoutingSource {
                 )
             }
 
+            logProbePhase("reachable-begin")
             let reachable = await packs.reachableFuelMeters(
                 from: current.locationCoordinate,
                 toward: end.locationCoordinate,
@@ -452,10 +475,13 @@ final class PackRoutingSource: RoutingSource {
                 profile: req.profile,
                 allowUnknown: req.accessPolicy.motorizedUnknown
             )
+            logProbePhase("reachable-end")
+            logProbePhase("avoidance-begin")
             let fuelAvoidanceBoxes = await packs.fuelAvoidanceBoxes(
                 from: current.locationCoordinate,
                 toward: end.locationCoordinate
             )
+            logProbePhase("avoidance-end")
             if budgetExpired() { return budgetResponse("after-avoidance") }
             let ranked = FuelItinerary.rankedProgressFuel(
                 fuels: stations,
@@ -475,6 +501,7 @@ final class PackRoutingSource: RoutingSource {
             // safe pump is worth riding to.
             for (rank, candidate) in ranked.prefix(6).enumerated() {
                 if budgetExpired() { return budgetResponse("before-candidate-\(rank)") }
+                logProbePhase("candidate-\(rank)-begin")
                 let urbanEntry = FuelItinerary.fuelStopRequiresUrbanEntry(
                     candidate,
                     start: current,
@@ -501,6 +528,7 @@ final class PackRoutingSource: RoutingSource {
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true
                 )
+                logProbePhase("candidate-\(rank)-end")
                 if budgetExpired() { return budgetResponse("after-candidate-\(rank)") }
                 guard case .success(let firstRoute) = firstResult,
                       firstRoute.distanceMeters <= firstCap + 1
@@ -521,6 +549,7 @@ final class PackRoutingSource: RoutingSource {
                 evaluatedRoutesByID[candidate.id] = firstRoute
                 let destinationCap = req.fuel.destinationFuelUsedLimitMeters
                     ?? req.fuel.usableRangeMeters
+                logProbePhase("continuation-\(rank)-begin")
                 let continuationResult = await packs.routeOnDeviceDetailed(
                     from: candidateCoordinate,
                     to: end.locationCoordinate,
@@ -537,6 +566,7 @@ final class PackRoutingSource: RoutingSource {
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true
                 )
+                logProbePhase("continuation-\(rank)-end")
                 if budgetExpired() { return budgetResponse("after-continuation-\(rank)") }
                 let continuationRoute: OnDeviceRouter.Result?
                 if case .success(let route) = continuationResult,

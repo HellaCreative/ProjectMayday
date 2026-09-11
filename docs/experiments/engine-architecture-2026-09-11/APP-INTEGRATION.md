@@ -14,8 +14,11 @@ The first NS→NB fuel probe began on White but produced no profile result after
 five minutes; it was terminated cleanly. That run exposed an unbounded
 cross-pack fuel search, so the private candidate now enforces the request
 window budget at each expensive phase and propagates cancellation into detached
-graph searches. A replacement build is installed, but the phone is currently
-locked and iOS will not launch it until White is unlocked.
+graph searches. The follow-up full matrix completed all three profiles and
+recognized `regions=ns,nb`, but the fuel reachability flood consumed 32.794s
+(Cleanest), 35.296s (Dirt), and 37.936s (Balanced) before candidate selection.
+Each response was the explicit `fuel_window_budget_exceeded` result with
+1,003–1,127 matched pumps and no committed stop.
 
 Focused tests reported 49 passes and one existing itinerary assertion failure:
 `atlanticDevRequestsCombinedFuelGeometry` expects optional `forwardFeeler` to
@@ -26,4 +29,5 @@ change and must be resolved or separately baselined before promotion.
 This app candidate is a preparation/timing test. It is not yet a certified
 fuel route: the 22-case continuity gate, physical pump access, larger-region
 parity and Dirt/Balanced completion remain separate qualification work. The
-full NS→NB device result is still pending the unlocked rerun.
+road seam is loaded and discoverable; the current on-device fuel planner does
+not meet a 20-second cross-region window on White.

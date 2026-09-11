@@ -79,9 +79,13 @@ Private Dev app candidate:
   cancellation in the isolated DIRT Dev worktree; Release/stable app untouched.
 - [x] Compile simulator and arm64 White/iPhone 16 builds; install the private
   `com.mayday.dirt.dev` bundle on White.
-- [ ] Launch on an unlocked White device and run the bounded NS→NB route/fuel
-  matrix. The first attempt ran beyond five minutes without a profile result;
-  checkpoint `cc8d9dc` adds a bounded response and cancellation propagation.
+- [x] Launch on an unlocked White device and run the bounded NS→NB route/fuel
+  matrix. The cross-pack seam is recognized, but the on-device reachability
+  flood takes 32.794–37.936s before candidate selection and all three profiles
+  return `fuel_window_budget_exceeded` under the 20-second budget. Checkpoint
+  `cc8d9dc` adds the bounded response and cancellation propagation; the next
+  architectural choice is whether long cross-region fuel planning stays online
+  or gets a dedicated corridor/index implementation on the phone.
 - [ ] Resolve or baseline the unrelated `forwardFeeler` optional-value test
   failure before any promotion decision.
 - [ ] Integrate the geometry index and continuity publication gate only after

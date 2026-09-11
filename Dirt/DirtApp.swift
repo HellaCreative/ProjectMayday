@@ -78,9 +78,11 @@ struct DirtApp: App {
                 let regions = response.regionIds?.joined(separator: ",") ?? "-"
                 let window = response.windowComplete.map { $0 ? "complete" : "partial" } ?? "-"
                 let gap = response.gapMeters.map { String(format: "%.0f", $0) } ?? "-"
+                let strategy = response.diagnostics?.strategy ?? "-"
+                let matched = response.diagnostics.map { String(describing: $0.matchedFuel) } ?? "-"
                 let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
                 let error = response.error ?? "-"
-                print("[HybridProbe] profile=\(profile.rawValue) status=\(response.status) seconds=\(seconds) regions=\(regions) window=\(window) stops=\(stops) graphMeters=\(meters) gapMeters=\(gap) error=\(error)")
+                print("[HybridProbe] profile=\(profile.rawValue) status=\(response.status) seconds=\(seconds) regions=\(regions) window=\(window) strategy=\(strategy) matched=\(matched) stops=\(stops) graphMeters=\(meters) gapMeters=\(gap) error=\(error)")
             } catch {
                 let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
                 print("[HybridProbe] profile=\(profile.rawValue) failure=\(error) seconds=\(seconds)")
