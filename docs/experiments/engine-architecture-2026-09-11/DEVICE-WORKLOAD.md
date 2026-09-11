@@ -118,7 +118,7 @@ The first unmodified run completed six NS road routes on an 8-core, 16 GiB Mac:
 | First NS fixture / Clean | 0.366 | 194.53 km | 0% |
 | Long NS / Dirt | 11.540 | 510.71 km | 52% |
 | Long NS / Balanced | 11.746 | 641.26 km | 46% |
-| Long NS / Clean | 0.647 | 335.15 km | 0% |
+| Long NS / Clean | 0.647 | 335.15 km | 2% |
 
 Decode/preparation before requests was 1.027 seconds; process-group peak RSS was
 250.953 MiB. The existing fixture name includes "short", but this is a regional
