@@ -1204,3 +1204,16 @@ the barriers to expanding working areas. No runtime, pack, app or deployment
 change is accepted by this experiment; accepted DEV source remains `139a173`.
 Measurements, limitations and proposed next experiments:
 [private selective-loading report](experiments/selective-loading-2026-09-10/README.md).
+
+
+## September 11 private hybrid development direction
+
+Richard selected GraphHopper graph storage/search combined with DIRT route and
+fuel responsibilities. Implement privately and measure fuel separately; reconsider
+fuel's rider-facing role if it remains the burden. This supersedes the earlier
+engine-selection pause, without authorizing stable DEV, production, native builds,
+published pack changes or remote pushes. The first local hybrid candidate and
+its precise qualification limits are recorded in
+[the hybrid experiment](experiments/engine-architecture-2026-09-11/HYBRID.md).
+Additive engine profiles are not accepted Dirt/Balanced/Clean parity. No app or
+Android behavior changes are shipped by this private Java/Python experiment.

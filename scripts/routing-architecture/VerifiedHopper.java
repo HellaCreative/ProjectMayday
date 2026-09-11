@@ -226,10 +226,13 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
    List<Snap> matches=(station.has("edgeIndex")?preparedStationSnaps(station,w):snaps(station.path("position"),w)).stream().filter(x->x.getQueryDistance()<=150).toList();
    if(!matches.isEmpty()){bindings.add(Map.entry(id,matches));all.addAll(matches);}
   }
-  QueryGraph graph=project(all);Map<Integer,String> stations=new HashMap<>();for(var binding:bindings)for(Snap point:binding.getValue())stations.putIfAbsent(point.getClosestNode(),binding.getKey());
+  long matchedAt=System.nanoTime();
+  QueryGraph graph=project(all);long projectedAt=System.nanoTime();Map<Integer,String> stations=new HashMap<>();for(var binding:bindings)for(Snap point:binding.getValue())stations.putIfAbsent(point.getClosestNode(),binding.getKey());
   JsonNode f=q.path("fuel");double full=f.path("usableRangeMeters").asDouble(Double.NaN),initial=f.path("initialUsableMeters").asDouble(Double.NaN);
   if(!Double.isFinite(full)||full<=0||!Double.isFinite(initial)||initial<0||initial>full)throw new IllegalArgumentException("Invalid usable fuel range");
   long deadline=begin+90000000000L;int maxLabels=Math.min(500000,q.path("maxLabels").asInt(100000));
+  Map<String,Object> phases=new LinkedHashMap<>();phases.put("matchingSeconds",(matchedAt-begin)/1e9);phases.put("queryGraphSeconds",(projectedAt-matchedAt)/1e9);
+  long roadAt=System.nanoTime();
   FuelSearch.Result result=null;com.graphhopper.routing.Path best=null;boolean roadComplete=true;int roadVisited=0;List<String> roadFailures=new ArrayList<>();
   if(!q.path("forceResourceSearch").asBoolean(false)){
    boolean flexible=q.path("flexible").asBoolean(false);RoutingAlgorithmFactory factory=flexible?new RoutingAlgorithmFactorySimple():new LMRoutingAlgorithmFactory(getLandmarks().get(name));
@@ -240,11 +243,18 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
    }
    if(roadComplete&&best!=null)result=FuelSearch.certify(graph,w,best,stations,full,initial,deadline,maxLabels);
   }
+  phases.put("roadAndCertificateSeconds",(System.nanoTime()-roadAt)/1e9);
+  Map<String,Object> repairDiagnostics=new LinkedHashMap<>();
+  if(result==null&&best!=null&&q.path("fuelRepair").asBoolean(false)){
+   long t=System.nanoTime();
+   var repaired=FuelRepair.repair(graph,w,best,stations,full,initial,deadline,maxLabels,30000);
+   result=repaired.result();repairDiagnostics.put("seconds",(System.nanoTime()-t)/1e9);repairDiagnostics.put("attempts",repaired.attempts());repairDiagnostics.put("labels",repaired.labels());repairDiagnostics.put("reason",repaired.reason());repairDiagnostics.put("maxExcursionMeters",30000);
+  }
   List<Map<String,Object>> portfolio=new ArrayList<>();
   if(result==null&&!name.equals("distance")&&q.path("fuelPortfolio").asBoolean(false)){
    // Candidate generation only: scalarization does not prove constrained optimality.
    // Every accepted path is certified on the same exact turn-state query graph.
-   for(double lambda:new double[]{0.25,1,3,10,30,100,300}){
+   for(double lambda:q.path("hybrid").asBoolean(false)?new double[]{30,300}:new double[]{0.25,1,3,10,30,100,300}){
     if(System.nanoTime()>=deadline)break;
     Weighting scalar=createWeighting(getProfile(name),new PMap().putObject("allow_unknown",q.path("allowUnknown").asBoolean(false)).putObject("wander",q.path("wander").asDouble(1)).putObject("distance_penalty",lambda));
     var factory=new LMRoutingAlgorithmFactory(getLandmarks().get(name));
@@ -256,13 +266,19 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
      try{var path=algo.calcPath(a,b);visited+=algo.getVisitedNodes();if(algo.getVisitedNodes()>=12000000||System.nanoTime()>=deadline)complete=false;if(path.isFound()&&(selected==null||path.getWeight()<selected.getWeight()))selected=path;}catch(Exception ex){complete=false;roadFailures.add(ex.toString());}
     }
     FuelSearch.Result certified=complete&&selected!=null?FuelSearch.certify(graph,w,selected,stations,full,initial,deadline,maxLabels):null;
+    FuelRepair.Attempt candidateRepair=null;
+    if(certified==null&&selected!=null&&q.path("fuelRepair").asBoolean(false)){
+     candidateRepair=FuelRepair.repair(graph,w,selected,stations,full,initial,deadline,maxLabels,30000);certified=candidateRepair.result();
+    }
     double originalCost=0;
     if(certified!=null){var original=graph.wrapWeighting(w);int incoming=-1;for(var edge:selected.calcEdges()){originalCost+=original.calcEdgeWeight(edge,false)+original.calcTurnWeight(incoming,edge.getBaseNode(),edge.getEdge());incoming=edge.getEdge();}}
-    Map<String,Object> row=new LinkedHashMap<>();row.put("lambda",lambda);row.put("complete",complete);row.put("visited",visited);row.put("distance",selected==null?null:selected.getDistance());row.put("fuelCertified",certified!=null);row.put("originalCost",certified==null?null:originalCost);portfolio.add(row);
+    if(candidateRepair!=null&&certified!=null)originalCost=certified.cost();
+    Map<String,Object> row=new LinkedHashMap<>();if(candidateRepair!=null)row.put("repair",Map.of("attempts",candidateRepair.attempts(),"labels",candidateRepair.labels(),"reason",String.valueOf(candidateRepair.reason())));row.put("lambda",lambda);row.put("complete",complete);row.put("visited",visited);row.put("distance",selected==null?null:selected.getDistance());row.put("fuelCertified",certified!=null);row.put("originalCost",certified==null?null:originalCost);portfolio.add(row);
     if(certified!=null&&(result==null||originalCost<result.cost()))result=new FuelSearch.Result("found","scalar_portfolio_fixed_path_certificate",certified.steps(),certified.meters(),originalCost,certified.remaining(),certified.escape(),certified.escapeStation(),0,0);
+    if(result!=null&&q.path("hybrid").asBoolean(false))break;
    }
   }
-  if(result==null&&q.path("portfolioOnly").asBoolean(false))result=FuelSearch.failed("portfolio_no_certificate",0,0);
+  if(result==null&&q.path("portfolioOnly").asBoolean(false))result=FuelSearch.failed(q.path("hybrid").asBoolean(false)?(System.nanoTime()>=deadline?"time_budget":"bounded_hybrid_candidates_exhausted"):"portfolio_no_certificate",0,0);
   if(result==null){
    var landmarks=getLandmarks().get(name);List<com.graphhopper.routing.lm.LMApproximator> bounds=new ArrayList<>();
    if(!q.path("disableFuelGuidance").asBoolean(false))for(int target:to.stream().map(Snap::getClosestNode).distinct().toList()){
@@ -272,7 +288,12 @@ public class VerifiedHopper extends GraphHopper implements AutoCloseable {
    java.util.function.IntToDoubleFunction lowerBound=node->{double value=Double.POSITIVE_INFINITY;for(var bound:bounds)value=Math.min(value,bound.approximate(node));return Double.isFinite(value)?value:0;};
    result=FuelSearch.search(graph,w,from.stream().map(Snap::getClosestNode).distinct().toList(),new HashSet<>(to.stream().map(Snap::getClosestNode).toList()),stations,full,initial,deadline,maxLabels,lowerBound);
   }
-  Map<String,Object> out=new LinkedHashMap<>();out.put("portfolio",portfolio);out.put("portfolioSearchComplete",portfolio.isEmpty()?null:portfolio.size()==7&&portfolio.stream().allMatch(x->Boolean.TRUE.equals(x.get("complete"))));out.put("state",result.state());out.put("reason",result.reason());out.put("seconds",(System.nanoTime()-begin)/1e9);out.put("labels",result.labels());out.put("expanded",result.expanded());out.put("distance",result.meters());out.put("weight",result.cost());out.put("remainingUsableMeters",result.remaining());out.put("escapeStation",result.escapeStation());out.put("steps",fuelSteps(graph,result.steps()));out.put("escape",fuelSteps(graph,result.escape()));out.put("matchedStations",bindings.size());out.put("roadVisited",roadVisited);out.put("roadFailures",roadFailures);out.put("roadBestDistance",best==null?null:best.getDistance());out.put("roadSourceKeys",best==null?List.of():best.calcEdges().stream().map(e->List.of(e.getEdge(),e.get(getEncodingManager().getIntEncodedValue("source_edge")))).toList());out.put("stationAccessEvidence","legal_road_projection");return out;
+  Map<String,Object> out=new LinkedHashMap<>();out.put("phases",phases);out.put("repair",repairDiagnostics);out.put("portfolio",portfolio);out.put("portfolioSearchComplete",portfolio.isEmpty()?null:portfolio.size()==(q.path("hybrid").asBoolean(false)?2:7)&&portfolio.stream().allMatch(x->Boolean.TRUE.equals(x.get("complete"))));out.put("state",result.state());out.put("reason",result.reason());out.put("seconds",(System.nanoTime()-begin)/1e9);out.put("labels",result.labels());out.put("expanded",result.expanded());out.put("distance",result.meters());out.put("weight",result.cost());out.put("remainingUsableMeters",result.remaining());out.put("escapeStation",result.escapeStation());out.put("steps",fuelSteps(graph,result.steps()));out.put("escape",fuelSteps(graph,result.escape()));out.put("matchedStations",bindings.size());out.put("roadVisited",roadVisited);out.put("roadFailures",roadFailures);out.put("roadBestDistance",best==null?null:best.getDistance());out.put("roadSourceKeys",best==null?List.of():best.calcEdges().stream().map(e->List.of(e.getEdge(),e.get(getEncodingManager().getIntEncodedValue("source_edge")))).toList());out.put("stationAccessEvidence","legal_road_projection");
+  if(q.path("hybrid").asBoolean(false)&&best!=null){
+   List<FuelSearch.Step> roadSteps=best.calcEdges().stream().map(e->new FuelSearch.Step(e.getEdge(),e.getBaseNode(),e.getAdjNode(),e.getDistance(),null)).toList();
+   out.put("roadCandidate",Map.of("state","found","alternativesComplete",roadComplete,"distance",best.getDistance(),"weight",best.getWeight(),"steps",fuelSteps(graph,roadSteps),"fuelStatus","unverified"));
+  }
+  return out;
  }
  List<Map<String,Object>> fuelSteps(QueryGraph graph,List<FuelSearch.Step> steps){
   List<Map<String,Object>> out=new ArrayList<>();var source=getEncodingManager().getIntEncodedValue("source_edge");

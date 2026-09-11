@@ -1,0 +1,205 @@
+{
+  "scope": "Private hybrid v1. Additive profiles and legal fuel candidates, not full app/profile/500-client qualification.",
+  "evidence": {
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-boundary-fixture.json": {
+      "bytes": 9688,
+      "sha256": "c78273c8d8799563ccac09a420457d2b0fd0dc1eba31cbd6d95e280934546bd6"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-concurrency-audit-input.gz": {
+      "bytes": 4161992,
+      "sha256": "3e93e91b9aca74e1d363e42f64124bffe20052c196ce22c08f2eb35bc76cba7c"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-concurrency-audit-input.gz.fuel-walks.gz": {
+      "bytes": 3903124,
+      "sha256": "9186d0eb96a5cc6c372ed3bf7c7094adf18634f66bf58151e4825060830a89a1"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-concurrency.audit.json": {
+      "bytes": 18635,
+      "sha256": "b5d7596e426dd865d2959c5863dde0b31967c5d2d15105120c6a8ebd3cb82b27"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-concurrency.guard.json": {
+      "bytes": 3627,
+      "sha256": "9c9d2bd01d66ca74048d514e90f150eed3da92af2d64ed49709ba7b6ec8e4ac5"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-concurrency.guard.log": {
+      "bytes": 645,
+      "sha256": "346cacf9721c62b862952dc6d9b2b004612e69672ab8d8eda0f49bd60bef46af"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-concurrency.json": {
+      "bytes": 20296,
+      "sha256": "f0e9ca8989eb3b0b807fd3250733557b2e127dc6db615bcb670e1c4596bcb0be"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-concurrency.json.responses.json.gz": {
+      "bytes": 7918965,
+      "sha256": "d9138c177497662db0b9d6ceff833458facf062ef125f5f9d3a0312dfa48809c"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-concurrency.log": {
+      "bytes": 1263,
+      "sha256": "6171254fe8d2d9fca4ad6000d37053201e85b0966769766a5e464e0c46c52995"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-first.audit.json": {
+      "bytes": 1600,
+      "sha256": "1b6e36eaf9bdd4927cb4d966cc42504a7147281e8547a6f4277d9a772222dd18"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-first.guard.json": {
+      "bytes": 1668,
+      "sha256": "da572dca652f29e96249d895ebfbf429dc4aed6fac98b9e1d16f81500282859f"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-first.guard.log": {
+      "bytes": 2174,
+      "sha256": "92236eae47212695cc199e1a21d8424bfa1a7930640f43703ac524f88d725684"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-first.json": {
+      "bytes": 4148,
+      "sha256": "636b3c1db741a124ea5fa6d5dbe3fa3a095c5cf2b9fc81d7cce98526198843d5"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-first.json.responses.json.gz": {
+      "bytes": 346333,
+      "sha256": "ee8f94a50e76ea625b4de00cd6baa158fd6c568092dfccb974b9f311b6952fd0"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-first.json.responses.json.gz.fuel-walks.gz": {
+      "bytes": 174791,
+      "sha256": "7bf4c5b75d4c7f2665db1594c9b6b6a5242d01e48c5cdbfb8fea9733204df2ec"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-first.log": {
+      "bytes": 800,
+      "sha256": "79a6f6731756f6f4e748515dab8bab4b17c8cde7f7c050576675eee4a544583c"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-refined.audit.json": {
+      "bytes": 5890,
+      "sha256": "b777646aa97e4c58bb9a0c9a0a6e97755dcbb0c01311bb6a0020aa549b56b8bb"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-refined.guard.json": {
+      "bytes": 2180,
+      "sha256": "891b884cd38d4ec67954c2102adbf81ff5152bee53d0a8e76034475f8a61fa44"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-refined.guard.log": {
+      "bytes": 13084,
+      "sha256": "002e3b19e96977c005f7dbe3ce57b1a85a5f43f8edf21dee432229714a1c9543"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-refined.json": {
+      "bytes": 20778,
+      "sha256": "b9949f7c17626d434371a764e85c8c61ee60b340e33bc1e037e7c7afd0c026a1"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-refined.json.responses.json.gz": {
+      "bytes": 1810452,
+      "sha256": "b62723edb47da7e2732b718c9e7b7f36317d53a159e06a244693efb578e519d4"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-refined.json.responses.json.gz.fuel-walks.gz": {
+      "bytes": 901688,
+      "sha256": "06fd05714d172747b73a8736dbc68371aeb40617d2bd6a633b251bfa2caf47f7"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-nsnb-refined.log": {
+      "bytes": 800,
+      "sha256": "79814eb7403d4b068a3a3aa1cfddd5bd75cf92c593e9a417ea81af1678480c5a"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-first.guard.json": {
+      "bytes": 5353,
+      "sha256": "2ec068c2e166b304a3017d7752e66e334fc6b32d401da94de0b584cd4d52b293"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-first.guard.log": {
+      "bytes": 1054,
+      "sha256": "b125d5fc50de96138c562d6211378968a4c94619aa084b77c1e377a020f81d5e"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-first.json": {
+      "bytes": 2392,
+      "sha256": "bf4fd86f5c27923d9b7e214dc18e7763d95be4fe6e111afbed30f84253c34c7a"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-first.json.responses.json.gz": {
+      "bytes": 574228,
+      "sha256": "d8222c39b178b7697252827c19182fea6dc0bad1840b5eb0be1a61bbcd3a3651"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-first.log": {
+      "bytes": 812,
+      "sha256": "7650bfef40b8c5b378afb3b8c5a52cf3a0f6b5ed9008cf19f776551b489a5727"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-load.audit.json": {
+      "bytes": 2617,
+      "sha256": "895cb47fca7a03bf33216f1edbcaad6fe517660eeaaeabfba756cb8fb91c13e3"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-load.guard.json": {
+      "bytes": 13435,
+      "sha256": "1ddea0d27f01bb98d5ce472f432cf778749f83b306138997fe3ab25b76d77481"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-load.guard.log": {
+      "bytes": 419,
+      "sha256": "32988d5f10032e1eb03cc38472158ee4e4badb5095f0fe8c3e56e8a0b0bd4767"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-load.json": {
+      "bytes": 925,
+      "sha256": "fdc7854782ed7203c02d0e783df886d50780b87251ce46fe59cbadb09087f092"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-load.json.responses.json.gz": {
+      "bytes": 4264109,
+      "sha256": "fb6f78a9d52db40ea3a513a333cddd7c79a970af0c092a0c6d3758b0f79883e4"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-load.json.responses.json.gz.fuel-walks.gz": {
+      "bytes": 4156254,
+      "sha256": "40f06f1d7818bc229488ed5f8cf2ff55e75c34f4046f6b5b049e4bece009c35a"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-load.log": {
+      "bytes": 1431,
+      "sha256": "5bec513db03bba39a711e153a683d4e30105f20c7ee72d8983d0162dd67e6e36"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-refined.audit.json": {
+      "bytes": 934,
+      "sha256": "74bc63740969a15289fa41fce399829450f7478ae9ee0aa8ccf2a7a23c4a6612"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-refined.guard.json": {
+      "bytes": 8405,
+      "sha256": "76b2fc97a9692f5f2fa1a333bef92082282d5a1cecf4d78df059df0ec7bf9036"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-refined.guard.log": {
+      "bytes": 1321,
+      "sha256": "150ee3b053d2297aa8c6714eca5459d984e5714532ba07e1d7d64785d3dd7d52"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-refined.json": {
+      "bytes": 2831,
+      "sha256": "9a71934513b18a59bfa56713ccfb0f72a9f1b38de25ee7b9613c4907f48214a7"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-refined.json.responses.json.gz": {
+      "bytes": 981958,
+      "sha256": "b9491140829ec18e1ba4ada576ae130c332576712d5a8c6ed7feacdc1abe10aa"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-refined.json.responses.json.gz.fuel-walks.gz": {
+      "bytes": 408322,
+      "sha256": "24421c321c8f9e2ae9e4dcc5108d0f8b8e3d21725b09fee99e21be841daaf335"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-refined.log": {
+      "bytes": 812,
+      "sha256": "784099172c2a4b7335485fe96a25fe0ea83cfd59b4da5b9f55e6813a9f4e4a69"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-strict.audit.json": {
+      "bytes": 931,
+      "sha256": "b92f83e9904fa3f31c410c8c708d7e792122c470002f94f24890446f1f55b29e"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-strict.guard.json": {
+      "bytes": 7563,
+      "sha256": "f96708bd4dcadfefeb85c3fc0e434c380aec549148ede910725ef78b6d9ed324"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-strict.guard.log": {
+      "bytes": 1550,
+      "sha256": "52635a4d0155047feb9f0f8745754afd812e2a6835ebe553688780564f3fa6eb"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-strict.json": {
+      "bytes": 3221,
+      "sha256": "d123ea50a6bddbc7cdce764f2982b008ade187460f6b32aee2cf25f22a405640"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-strict.json.responses.json.gz": {
+      "bytes": 997205,
+      "sha256": "73942b627e8596e46a81e24a0d0514c4bbf04a689bbc67fabde0e4498502c9eb"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-strict.json.responses.json.gz.fuel-walks.gz": {
+      "bytes": 389062,
+      "sha256": "d4b1288e465320dde6c98ce35114683d159936b33520a606bf7ee5380ad7bf28"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-strict.log": {
+      "bytes": 968,
+      "sha256": "33afe0fb05da061327f56040d81c99d70f71f28ae454652c2b1b38df0e1bd137"
+    },
+    "/Users/richardsmith/.codex/experiments/routing-architecture-20260911/results/hybrid-wv-strict.mask-audit.json": {
+      "bytes": 178,
+      "sha256": "2b38387559bab9c43fd9003397670438484366a8e161e9d5044a412aedc169f6"
+    }
+  }
+}

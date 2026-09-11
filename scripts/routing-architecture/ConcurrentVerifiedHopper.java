@@ -21,7 +21,7 @@ public final class ConcurrentVerifiedHopper {
      try{pool.execute(()->{
       long started=System.nanoTime();Map<String,Object> response=new LinkedHashMap<>();response.put("requestId",id);response.put("queueSeconds",(started-submitted)/1e9);
       int count=active.incrementAndGet();peak.accumulateAndGet(count,Math::max);response.put("routingCallsAtStart",count);
-      try{response.put("result",q.has("fuel")?h.fuelRoute(q):h.directedRoute(q));}
+      try{response.put("result",q.path("hybrid").asBoolean(false)?HybridHopper.route(h,q):q.has("fuel")?h.fuelRoute(q):h.directedRoute(q));}
       catch(Exception ex){response.put("error",ex.toString());}
       finally{active.decrementAndGet();response.put("peakConcurrentRoutingCalls",peak.get());}
       response.put("executionSeconds",(System.nanoTime()-started)/1e9);

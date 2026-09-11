@@ -99,3 +99,19 @@ Verified WV prepared join exported10.24s/731.34MiB:6,595,291nodes,8,096,548edges
 ### Unified500x/hard urban/120-mile admission benchmark
 
 Owner authorized a pinned built-up dataset with coverage limits. Full evidence external unified-stress/RESULT.md,contract.json,results.json and rawguards. Bespoke strongest available incoming-index path finds road but hits500kfuel labels28.0s/2232.55MiB sampled; GH finds road seeds but nofuelcertificate before90s/2487.17MiB. Valhalla/OSRM exact regional adapters absent, not claimed native runtime failures. No candidate passed admission, so500-client load and CPU throttling were NOT measured. Full route physical infeasibility and architecture superiority are NOT established by these failures. Superseded harness/configuration failures retained. No production or native app changes.
+
+
+## Owner-selected hybrid v1 implementation
+
+Implemented persistent HybridHopper and bounded FuelRepair with exact incoming
+state through excursions and rejoin; retained independent road and fuel outcomes.
+NSNB four additive objectives x3, mixed NS/NSNB 42 shared-graph requests, normal WV
+and strict masked500x WV fuel candidates pass source and fuel audits. Strict WV
+now found ~50 s versus previous90 s incomplete; two concurrent strict repeats
+match control at ~50 s each under3.19GiB group peak. This is a feasible heuristic
+candidate with explicit dirt-character trade-offs, not global optimality, complete
+product profile parity or500-client qualification. Initial local-only WV repair
+failed; two-seed repaired fallback solves it. Naive redundant fuel stops/avoidable
+excursions were refined. See HYBRID.md and pinned hybrid-evidence.json for scope,
+commands, failures, comparisons and recovery. No production, app, pack or remote
+change. Private Android parity not claimed.
