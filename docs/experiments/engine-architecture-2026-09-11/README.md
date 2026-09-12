@@ -87,3 +87,29 @@ modified. To reproduce the old phone state, install the predecessor release
 under its version directory; the DEV route guard will intentionally report it
 as stale until the approved candidate is installed.
 
+## 2026-09-12 on-device confirmation
+
+The authorized iPhone 16 (device label `white`) ran DIRT Dev bundle version
+`2 (15)` against the installed `fabric-v4-20260909-01` pack. Automatic fuel
+planning was off for this run, so these are pure on-device route measurements.
+
+| Case | Result |
+| --- | --- |
+| NS short leg, 70.8 km, Dirt | 88 ms, 3,544 pops, 30% Dirt, committed |
+| NS long leg, 603.3 km, Dirt | 2,020 ms, 85,074 pops, 67% Dirt, committed |
+| NS long leg, 546.7 km, Dirt, unknown access allowed | 1,297 ms, 77% Dirt, committed |
+| NS long leg, 550.4 km, Dirt, unknown access allowed | 1,529 ms, 89% Dirt, committed |
+| NS long leg, 592.0 km, Dirt, unknown access allowed | 1,731 ms, 81% Dirt, committed |
+
+The device log identifies the current NS pack as
+`ns@fabric-v4-20260909-01/91a10b49`. Earlier cross-region attempts were
+cancelled while the user replaced the active pin; they did not show a stale
+pack or a missing phone capability. Cross-region routing now keeps both
+decoded packs resident for one request, avoids swapping the active UI pack at
+each seam candidate, and records a shared elapsed deadline. This is
+checkpoint `1b37439` (`Bound cross-region pack decoding`).
+
+Focused verification after that change: 56 tests in 3 suites passed. Broad
+verification: 297 tests in 35 suites passed. The remaining device validation
+is automatic fuel planning on the current pack; no new phone build is being
+requested until that path has a local integration result.
