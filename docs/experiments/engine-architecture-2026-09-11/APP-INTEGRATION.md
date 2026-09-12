@@ -80,9 +80,9 @@ gate is covered by the 16-test PackFirstRoutingTests suite. A home-region
 offer is still presented after the first authorized location fix and does not
 start routing by itself.
 
-The download alert names the selected regions and, for routes spanning more
-than two regions, explains that planning may take about 110 seconds to 3
-minutes on the phone. The focused suite now has 17 passing tests; the latest
+The download alert names the selected regions, states the pack count, and, for
+routes spanning more than two regions, explains that planning may take about
+110 seconds to 3 minutes on the phone. The focused suite now has 18 passing tests; the latest
 arm64 Dev build is installed on White, which is currently locked.
 
 The suite now has 18 passing tests, including the acceptance path: after the
