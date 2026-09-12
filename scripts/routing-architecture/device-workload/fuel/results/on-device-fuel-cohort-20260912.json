@@ -151,8 +151,8 @@
     "decision": "Rejected: the endpoint arguments are not consumed by the native router yet, so the trial was behaviorally a no-op. Do not carry dead plumbing into the device candidate."
   },
   "fastOnDeviceCandidate": {
-    "checkpoint": "3e3ce62",
-    "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; cross-region and multi-stop windows retain the full qualified planner. The returned start\u2192pump response now appends the short mapped-forecourt approach so displayed geometry closes exactly at the fuel stop; it remains explicitly labelled soft-stitch/unverified until customer-access edges are authored. Fast candidate ordering preserves the existing urban-core avoidance preference, and required first-station requests stay on the qualified planner.",
+    "checkpoint": "02089a2",
+    "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; installed cross-region seams now use the same bounded path, while multi-stop and required-first-station windows retain the full qualified planner. The returned start\u2192pump response appends the short mapped-forecourt approach so displayed geometry closes exactly at the fuel stop; it remains explicitly labelled soft-stitch/unverified until customer-access edges are authored. Fast candidate ordering preserves the existing urban-core avoidance preference.",
     "hostFixture": {
       "pack": "NS fabric-v4-20260908-01",
       "targetCohort": 16,
@@ -278,6 +278,12 @@
         ]
       },
       "interpretation": "Single-process and four-way host runs meet the 1.8s cutoff. Eight-way contention on one Mac exceeds it while each process remains under 95 MiB RSS; this is CPU contention, not graph-memory growth."
+    },
+    "crossRegionFastPath": {
+      "enabled": true,
+      "measuredHostSuccess": false,
+      "scope": "Source and build verified; no new physical-device run and no cross-region native facade replay in this checkpoint",
+      "guard": "Requires both endpoint packs and factory-proven seams; deadline remains 1.8s; failure returns fuel_fast_path_no_qualified_route"
     }
   }
 }
