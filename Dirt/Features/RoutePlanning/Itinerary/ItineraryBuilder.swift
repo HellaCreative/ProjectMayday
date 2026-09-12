@@ -2496,6 +2496,11 @@ private func routeRequest(
         priorEdgeIds: history.edgeIDs,
         arrivalEdgeId: history.arrivalEdgeID,
         backtrackFactor: 4,
+        // New route builds intentionally receive a fresh tie-break seed. A
+        // saved itinerary remains reproducible from its stored geometry, but
+        // dropping the same two pins again should explore a different
+        // near-equal dirt corridor.
+        sessionSeed: UInt64.random(in: 1...9_007_199_254_740_991),
         maxPathMeters: maxPathMeters,
         directExtraBudgetMeters: directExtraBudgetMeters,
         regionalHopMinimumMeters: regionalHopMinimumMeters,

@@ -206,6 +206,10 @@ nonisolated struct OnDeviceRouter {
     var mapZoom: Double? = nil
     /// Optional explicit snap radius, still capped by graph version.
     var matchLimitMeters: Double? = nil
+    /// Bounded first response used by the on-device fuel planner. It keeps one
+    /// dirt corridor search and skips the expensive comparison ladder; the
+    /// returned route still goes through the same legal snap and turn checks.
+    var fastSearch: Bool = false
 
     /// New packs carry OSM-derived local cores. Static boxes remain a temporary
     /// compatibility fallback for older installed packs.
@@ -896,8 +900,8 @@ nonisolated struct OnDeviceRouter {
 
         if profile == .dirt {
             let base = HopSearchPolicy.dirtCorridorMeters
-            let comparisonWidths = [base * 2, base]
-            let connectivityWidths: [Double?] = [base * 3, base * 4, nil]
+            let comparisonWidths = fastSearch ? [base] : [base * 2, base]
+            let connectivityWidths: [Double?] = fastSearch ? [nil] : [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double, objective: String)] = []
             var lastBoundedFailure: Failure = .noPath
 
@@ -907,7 +911,8 @@ nonisolated struct OnDeviceRouter {
             ) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
                 hunt.costMode = costMode
-                hunt.variety = false
+                // A fresh request seed is an intentional route variation.
+                hunt.variety = sessionSeed != 0
                 hunt.corridorMeters = width
                 hunt.hardCorridor = width != nil
                 hunt.boundedSearch = true
@@ -923,7 +928,7 @@ nonisolated struct OnDeviceRouter {
                 var route = initial
                 var penaltyEdgeIds = hunt.shortDirtPenaltyEdgeIds
                 var repairPasses = 0
-                for _ in 0..<HopSearchPolicy.maximumShortDirtRepairPasses {
+                for _ in 0..<(fastSearch ? 0 : HopSearchPolicy.maximumShortDirtRepairPasses) {
                     let found = Self.shortDirtExcursionEdgeIDs(in: route.legs)
                     let additions = found.subtracting(penaltyEdgeIds)
                     if additions.isEmpty { break }
@@ -964,7 +969,7 @@ nonisolated struct OnDeviceRouter {
             // shorter route with less dirt cannot beat a genuinely dirtier
             // ride merely because it contains fewer paved kilometres.
             let primaryBestDirt = candidates.map(\.route.dirtPercent).max() ?? 0
-            if primaryBestDirt < 70 {
+            if !fastSearch && primaryBestDirt < 70 {
                 switch searchDirt(width: base, costMode: .balancedResource) {
                 case .success(let route):
                     candidates.append((route, base, "resource"))

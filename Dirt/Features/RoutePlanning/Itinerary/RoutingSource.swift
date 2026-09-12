@@ -307,6 +307,9 @@ final class PackRoutingSource: RoutingSource {
                 stops: [], graphMeters: [], diagnostics: nil
             )
         }
+        let crossesRegion = GraphPackStore.endpointsCrossProvince([
+            start.locationCoordinate, end.locationCoordinate
+        ])
         if req.fuel.probeFirstReachableStation == true {
             let reachable = await packs.reachableFuelMeters(
                 from: start.locationCoordinate,
@@ -331,20 +334,177 @@ final class PackRoutingSource: RoutingSource {
                 firstReachableStationMeters: first
             )
         }
+        // First response path for the phone. A full target-aware flood is the
+        // right qualification tool, but it can spend several seconds proving
+        // stations that will never be selected. For one-stop Dirt windows we
+        // use a small geographic cohort, then require two complete legal road
+        // searches before returning anything. This keeps both success and
+        // failure inside the rider-facing two-second envelope without making
+        // fuel safety depend on straight-line distance.
+        if req.profile == .dirt,
+           !crossesRegion,
+           req.fuel.minimumFuelStops <= 1,
+           req.fuel.requireFuelStopBeforeEnd,
+           req.fuel.allowPartialWindow == true {
+            let fastCutoff = Date().addingTimeInterval(1.8)
+            let fastDeadline = budgetDeadline.map { min($0, fastCutoff) } ?? fastCutoff
+            let firstCap = req.fuel.firstLegMaxMeters
+            let destinationCap = req.fuel.destinationFuelUsedLimitMeters
+                ?? req.fuel.usableRangeMeters
+            let seed = req.options?.sessionSeed
+                ?? UInt64.random(in: 1...9_007_199_254_740_991)
+            let targets = FuelItinerary.boundedOnDeviceFuelTargets(
+                fuels: stations,
+                from: start,
+                to: end,
+                maxMeters: firstCap,
+                limit: 16
+            )
+            let approximateReachability = Dictionary(uniqueKeysWithValues: targets.map { station in
+                let point = RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
+                return (station.id, GeoMath.meters(start, point))
+            })
+            let ranked = FuelItinerary.rankedProgressFuel(
+                fuels: targets,
+                from: start,
+                to: end,
+                reachableMeters: approximateReachability,
+                tankMeters: firstCap,
+                usableRangeMeters: req.fuel.usableRangeMeters,
+                sessionSeed: seed,
+                excluding: Set(req.fuel.excludedStationIds ?? [])
+            )
+            for candidate in ranked.prefix(3) {
+                guard Date() < fastDeadline else { break }
+                let candidateCoordinate = CLLocationCoordinate2D(
+                    latitude: candidate.latitude,
+                    longitude: candidate.longitude
+                )
+                let firstResult = await packs.routeOnDeviceDetailed(
+                    from: start.locationCoordinate,
+                    to: candidateCoordinate,
+                    profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown,
+                    avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                    priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
+                    arrivalEdgeId: req.options?.arrivalEdgeId,
+                    backtrackFactor: req.options?.backtrackFactor ?? 4,
+                    sessionSeed: seed,
+                    maxRouteMeters: firstCap,
+                    regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
+                    cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+                    avoidMotorways: req.options?.avoidMotorways == true,
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    fastSearch: true,
+                    deadline: fastDeadline
+                )
+                guard case .success(let firstRoute) = firstResult,
+                      firstRoute.distanceMeters <= firstCap + 1,
+                      Date() < fastDeadline
+                else { continue }
+                let continuationResult = await packs.routeOnDeviceDetailed(
+                    from: candidateCoordinate,
+                    to: end.locationCoordinate,
+                    profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown,
+                    avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                    priorEdgeIds: Set((req.options?.priorEdgeIds ?? []) + firstRoute.edgeIds),
+                    arrivalEdgeId: firstRoute.edgeIds.last ?? req.options?.arrivalEdgeId,
+                    backtrackFactor: req.options?.backtrackFactor ?? 4,
+                    sessionSeed: seed,
+                    maxRouteMeters: destinationCap,
+                    regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
+                    cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+                    avoidMotorways: req.options?.avoidMotorways == true,
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    fastSearch: true,
+                    deadline: fastDeadline
+                )
+                guard case .success(let continuation) = continuationResult,
+                      continuation.distanceMeters <= destinationCap + 1,
+                      Date() < fastDeadline
+                else { continue }
+                let stop = FuelChainStop(
+                    id: candidate.id,
+                    latitude: candidate.latitude,
+                    longitude: candidate.longitude,
+                    name: candidate.name,
+                    brand: candidate.brand,
+                    address: candidate.address,
+                    graphMeters: firstRoute.distanceMeters
+                )
+                let candidateReport = FuelStationCandidate(
+                    id: candidate.id,
+                    meters: firstRoute.distanceMeters,
+                    dirtPct: firstRoute.reportedDirtPercent,
+                    departureId: "start",
+                    latitude: candidate.latitude,
+                    longitude: candidate.longitude,
+                    name: candidate.displayName,
+                    validForward: true,
+                    remainingGraphMeters: continuation.distanceMeters,
+                    canFinish: true,
+                    rank: 1,
+                    candidateSource: "fast-geographic-cohort"
+                )
+                return FuelChainResponse(
+                    status: "complete",
+                    error: nil,
+                    message: nil,
+                    regionIds: GraphPackStore.regionIds(containingAny: [
+                        start.locationCoordinate, end.locationCoordinate
+                    ]),
+                    stops: [stop],
+                    graphMeters: [firstRoute.distanceMeters, continuation.distanceMeters],
+                    diagnostics: FuelChainDiagnostics(
+                        strategy: "pack-fast-proven-continuation",
+                        states: 2,
+                        dijkstraPops: nil,
+                        matchedFuel: stations.count,
+                        elapsedMs: nil,
+                        candidateK: 1,
+                        stationsReachableWithinRange: nil,
+                        candidatesEvaluated: 1
+                    ),
+                    routes: [
+                        RouteResponse(onDevice: firstRoute, priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])),
+                        RouteResponse(onDevice: continuation, priorEdgeIDs: Set(firstRoute.edgeIds))
+                    ],
+                    stationCandidates: [candidateReport],
+                    windowComplete: true
+                )
+            }
+            return FuelChainResponse(
+                status: "unknown",
+                error: "fuel_fast_path_no_qualified_route",
+                message: "No qualified fuel continuation was found within the on-device response budget.",
+                regionIds: GraphPackStore.regionIds(containingAny: [
+                    start.locationCoordinate, end.locationCoordinate
+                ]),
+                stops: [], graphMeters: [],
+                diagnostics: FuelChainDiagnostics(
+                    strategy: "pack-fast-budget",
+                    states: 1,
+                    dijkstraPops: nil,
+                    matchedFuel: stations.count,
+                    elapsedMs: nil
+                ),
+                windowComplete: false
+            )
+        }
         var current = start
         var visited = Set(req.fuel.excludedStationIds ?? [])
         var stops: [FuelChainStop] = []
         var graphMeters: [Double] = []
         var stationCandidates: [FuelStationCandidate] = []
-        let crossesRegion = GraphPackStore.endpointsCrossProvince([
-            start.locationCoordinate, end.locationCoordinate
-        ])
         let returnedStopLimit = min(12, max(1, req.fuel.windowMaxStops ?? 12))
         let maximumStops = req.fuel.allowPartialWindow == true
             ? min(4, max(returnedStopLimit + 2, req.fuel.minimumFuelStops + 1))
             : returnedStopLimit
         var carriedHistory = Set(req.options?.priorEdgeIds ?? [])
         var carriedArrival = req.options?.arrivalEdgeId
+        let sessionSeed = req.options?.sessionSeed
+            ?? UInt64.random(in: 1...9_007_199_254_740_991)
         let probeLogging = req.fuel.riderLegId == "private-device-hybrid-probe"
 
         func logProbePhase(_ phase: String) {
@@ -424,7 +584,7 @@ final class PackRoutingSource: RoutingSource {
                     priorEdgeIds: carriedHistory,
                     arrivalEdgeId: carriedArrival,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
-                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    sessionSeed: sessionSeed,
                     maxRouteMeters: firstCap,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -508,7 +668,7 @@ final class PackRoutingSource: RoutingSource {
                 reachableMeters: reachable,
                 tankMeters: firstCap,
                 usableRangeMeters: req.fuel.usableRangeMeters,
-                sessionSeed: 0,
+                sessionSeed: sessionSeed,
                 excluding: visited
             )
             let departureID = stops.last?.id ?? "start"
@@ -541,7 +701,7 @@ final class PackRoutingSource: RoutingSource {
                     priorEdgeIds: carriedHistory,
                     arrivalEdgeId: carriedArrival,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
-                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    sessionSeed: sessionSeed,
                     maxRouteMeters: firstCap,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -580,7 +740,7 @@ final class PackRoutingSource: RoutingSource {
                     priorEdgeIds: carriedHistory.union(firstRoute.edgeIds),
                     arrivalEdgeId: firstRoute.edgeIds.last ?? carriedArrival,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
-                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    sessionSeed: sessionSeed,
                     maxRouteMeters: destinationCap,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -632,7 +792,7 @@ final class PackRoutingSource: RoutingSource {
                     reachableMeters: onward,
                     tankMeters: req.fuel.usableRangeMeters,
                     usableRangeMeters: req.fuel.usableRangeMeters,
-                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    sessionSeed: sessionSeed,
                     excluding: onwardExclusions
                 ).isEmpty
                 // A forecourt connector may repeat briefly; a meaningful

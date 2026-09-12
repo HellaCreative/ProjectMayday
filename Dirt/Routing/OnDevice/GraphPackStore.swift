@@ -775,6 +775,7 @@ final class GraphPackStore {
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
         endEndpointKind: String? = nil,
+        fastSearch: Bool = false,
         deadline: Date? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
@@ -816,6 +817,7 @@ final class GraphPackStore {
                 matchLimitMeters: matchLimitMeters,
                 startEndpointKind: startEndpointKind,
                 endEndpointKind: endEndpointKind,
+                fastSearch: fastSearch,
                 deadline: deadline
             )
         }
@@ -838,6 +840,7 @@ final class GraphPackStore {
             matchLimitMeters: matchLimitMeters,
             startEndpointKind: startEndpointKind,
             endEndpointKind: endEndpointKind,
+            fastSearch: fastSearch,
             deadline: deadline
         )
     }
@@ -865,6 +868,7 @@ final class GraphPackStore {
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
         endEndpointKind: String? = nil,
+        fastSearch: Bool = false,
         deadline: Date? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         guard regions.count >= 2 else { return .failure(.noPath) }
@@ -899,6 +903,7 @@ final class GraphPackStore {
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
                     endEndpointKind: endEndpointKind,
+                    fastSearch: fastSearch,
                     deadline: deadline
                 )
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
@@ -955,6 +960,7 @@ final class GraphPackStore {
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
                     endEndpointKind: nil,
+                    fastSearch: fastSearch,
                     deadline: deadline
                 )
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
@@ -1028,6 +1034,7 @@ final class GraphPackStore {
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
         endEndpointKind: String? = nil,
+        fastSearch: Bool = false,
         deadline: Date? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
@@ -1055,6 +1062,7 @@ final class GraphPackStore {
             router.sessionSeed = seed
             router.mapZoom = zoom
             router.matchLimitMeters = matchLimit
+            router.fastSearch = fastSearch
             return router.routeDetailed(
                 from: start,
                 to: end,
