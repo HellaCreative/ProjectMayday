@@ -589,6 +589,19 @@ final class PackRoutingSource: RoutingSource {
                 "fuel fast ranked-ready count=\(fastRanked.count) "
                     + "deadlineMs=\(max(0, Int(fastDeadline.timeIntervalSinceNow * 1_000)))"
             )
+            // Fuel POIs are commonly mapped at a forecourt or driveway rather
+            // than on the graph edge itself. The normal rider-pin snap limit
+            // is intentionally tight; a pump approach may use the V4 tap
+            // radius so a legal nearby station is not rejected as
+            // `cannotSnapEnd` before the next candidate can be tried.
+            let fuelStationMatchLimit = min(
+                TapRadius.v4CapMeters,
+                max(
+                    TapRadius.minMeters,
+                    req.options?.matchLimitMeters ?? OnDeviceRouter.preferredMatchMeters,
+                    2_000
+                )
+            )
             for candidate in fastRanked.prefix(3) {
                 guard Date() < fastDeadline else { break }
                 let candidateCoordinate = CLLocationCoordinate2D(
@@ -621,11 +634,7 @@ final class PackRoutingSource: RoutingSource {
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
-                    // Fuel stations must be proven against a nearby road;
-                    // scanning the full zoom-aware pin radius adds work and
-                    // cannot qualify a station whose approach is farther than
-                    // the 150 m endpoint contract anyway.
-                    matchLimitMeters: req.options?.matchLimitMeters ?? OnDeviceRouter.preferredMatchMeters,
+                    matchLimitMeters: fuelStationMatchLimit,
                     fastSearch: true,
                     deadline: fastDeadline
                 )
@@ -652,7 +661,7 @@ final class PackRoutingSource: RoutingSource {
                         cleanMetroMultiplier: nil,
                         avoidMotorways: false,
                         preferBackRoads: false,
-                        matchLimitMeters: req.options?.matchLimitMeters ?? OnDeviceRouter.preferredMatchMeters,
+                        matchLimitMeters: fuelStationMatchLimit,
                         fastSearch: true,
                         deadline: fastDeadline
                     )

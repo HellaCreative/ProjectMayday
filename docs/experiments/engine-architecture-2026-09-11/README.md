@@ -211,3 +211,22 @@ the logs show only `source=pack` with no routing network request. The old
 12-second assertion remains valid; the measured total is now below it by more
 than five seconds. The candidate is ready for one authorized White-device
 build and a physical NS pack confirmation.
+
+The first NS→NB fuel-chain run then found a mapped pump whose forecourt was
+outside the normal 550 m rider-pin snap radius. The planner correctly refused
+to invent a route, but it stopped before trying the next pump. Pump approaches
+now use the V4 tap-radius ceiling (2 km) while rider pins retain their normal
+snap policy. This keeps the stop tied to a real nearby graph edge and lets the
+candidate continue when a fuel POI is mapped at a driveway or forecourt.
+
+The current NS→NB pack integration now completes with the seam and fuel chain
+together:
+
+| Case | Result |
+| --- | --- |
+| NS→NB Dirt, automatic fuel | 11.45 s total; 11 proven pumps; 12 built legs |
+| First cross-region pump | 1.21 s; 78.3 km graph hop; 19 m endpoint gap |
+| Seam crossing | 0.91 s; 72.4 km graph hop; 1 canonical seam attempt |
+
+No advisory fallback or unverified tail was emitted. The test uses only the
+current NS and NB pack bytes and remains serial on one simulator destination.
