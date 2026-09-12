@@ -100,7 +100,7 @@
       ]
     }
   ],
-  "decision": "Use 32 as the default discovery cohort. It retains more corridor alternatives than 16 while matching the selected stop and continuation in this real NS pack fixture.",
+  "decision": "Keep c8d3d1b as the private candidate. Do not install to white yet. Run the serial simulator gate, then a controlled physical-device build only after the fast path and fuel continuity audit are reviewed.",
   "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
   "recovery": "Do not install to white from this checkpoint. Rebuild the private probe from the current source and rerun the fixture before any device test.",
   "routeReuse": {
@@ -149,5 +149,49 @@
     },
     "strictAudit": "unchanged incomplete; pump approach remains unverified at 34.3 m and 26.8 m, with the same source-walk qualification errors.",
     "decision": "Rejected: the endpoint arguments are not consumed by the native router yet, so the trial was behaviorally a no-op. Do not carry dead plumbing into the device candidate."
+  },
+  "fastOnDeviceCandidate": {
+    "checkpoint": "c8d3d1b",
+    "change": "Pack fuel windows use a bounded geographic candidate cohort, then require a legal start\u2192pump and pump\u2192destination search with fastSearch corridor mode. Cross-region and multi-stop windows retain the full qualified planner.",
+    "hostFixture": {
+      "pack": "NS fabric-v4-20260908-01",
+      "targetCohort": 16,
+      "searchMode": "one Dirt corridor, no repair ladder, 1.8s absolute cutoff",
+      "seconds": 1.661,
+      "status": "complete",
+      "routeCalls": 2,
+      "stop": "osm:a1096878646",
+      "legMeters": [
+        102448.1,
+        120551.83
+      ],
+      "timeBudgetExpired": false,
+      "scope": "macOS native facade using the current OnDeviceRouter source; not physical-phone qualification"
+    },
+    "errorContract": "Returns fuel_fast_path_no_qualified_route with windowComplete=false when no candidate is legally proven before cutoff.",
+    "correctnessGate": "Each returned hop is a profile route with legal snapping/turn checks and each leg is bounded by firstLegMaxMeters or usableRangeMeters; strict pump-approach continuity audit remains required.",
+    "routeVariance": {
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "seconds": [
+        1.056,
+        1.051,
+        1.057
+      ],
+      "distancesMeters": [
+        179051.02,
+        184236.65,
+        182232.88
+      ],
+      "geometryHashes": [
+        "0334044dc435",
+        "aa01ddd8a7dd",
+        "bd83ecb05853"
+      ],
+      "result": "three distinct Dirt geometries for identical endpoints"
+    }
   }
 }
