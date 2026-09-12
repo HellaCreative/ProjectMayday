@@ -1,5 +1,32 @@
 # Architectural experiment ledger
 
+## 2026-09-12 — device-first clarification and regional fuel proof bound
+
+The owner supplied a physical-device diagnostic for an NS→NB route at a
+200 km automatic fuel range. That export is a live/server result: it records
+`selected=live`, HTTP fuel requests, and a 4.652 s response. It is useful as a
+product-flow baseline, but it is not evidence that the phone completed the
+route without server work. The isolated on-device NS→NB probe remains the
+correct stress measurement.
+
+Private checkpoint `5d72d0f` keeps the fuel station list broad for itinerary
+selection but filters each exact reachability proof to the currently active
+regional graph. A NS graph no longer spends snap work on NB pumps (and vice
+versa). The fuel snap metadata cache is bounded at 4,096 entries so repeated
+profiles and hops reuse station projections without retaining topology. The
+private Dev build compiled and installed on White; no accepted app, published
+pack, server, or production path changed. This is a low-risk measured
+optimization, not a completeness claim: the full cross-region flood still
+needs a target-aware/corridor implementation for worst-case phone planning.
+
+Product direction recorded for the next integration pass: after location
+permission, identify the primary region and offer its pack during onboarding;
+before a multi-region plan, enumerate the required packs and their exact sizes,
+then require an explicit download decision. Pack bytes are the phone's working
+set, and a long multi-region plan should disclose its expected time and memory
+cost before starting. This policy must be backed by actual pack availability and
+cannot silently fall back to a server route when the device-only mode is chosen.
+
 Active mission: MISSION.md. Continue until its architecture/integration, repeated WV, and concurrency criteria are met, or a specific external dependency prevents meaningful progress. The prior preparation candidate is parked, not a preferred architecture.
 
 ## Isolation and resource budget

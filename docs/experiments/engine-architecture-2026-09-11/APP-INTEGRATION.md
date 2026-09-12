@@ -1,5 +1,25 @@
 # Private DIRT Dev app integration
 
+## Latest device evidence
+
+The owner-provided diagnostic for the NS→NB, 200 km fuel-range route completed
+in about 16 seconds from the phone UI, but it selected the live source and made
+HTTP fuel requests. It therefore confirms the current online product path, not
+on-device scalability. The isolated Dev probe remains the device-only gate.
+
+Checkpoint `5d72d0f` adds two private-only preparation changes: exact fuel
+reachability receives only pumps belonging to the active regional graph, and
+fuel snap metadata is retained in a bounded 4,096-entry LRU. This avoids
+cross-border false candidates and repeated geometry projection while preserving
+the complete station list for later regional hops. The build succeeded and was
+installed on White; the accepted app and published packs are unchanged.
+
+The intended product flow is now explicit: location permission identifies the
+home region, its pack is offered during onboarding, and a route spanning more
+regions presents the required pack IDs and byte sizes before an explicit
+download. Device-only planning must surface an estimate and bounded memory
+warning for long plans; it must not silently switch to the live endpoint.
+
 This is an isolated Dev candidate on branch
 `experiment/engine-architecture-20260911`. It activates the bounded native
 fuel-snap cache and cooperative pump-loop cancellation inside the real

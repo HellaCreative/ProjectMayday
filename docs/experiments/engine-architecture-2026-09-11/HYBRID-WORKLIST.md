@@ -1,5 +1,20 @@
 # Hybrid implementation deep dive
 
+## Device-first pack flow (new owner direction)
+
+- [ ] After location permission, resolve the primary region and present its
+  graph/geometry/fuel pack as an onboarding download with byte size and storage
+  estimate.
+- [ ] Before a multi-region plan, enumerate the exact regional path from the
+  seam registry, show missing pack IDs and total bytes, and require explicit
+  download confirmation.
+- [ ] Add a device-only planning mode that reports expected time/memory for
+  long routes and never silently submits the request to the live endpoint.
+- [ ] Keep a smaller routing working set by loading one regional pack at a time;
+  retain only immutable pack bytes and bounded indexes in memory.
+- [ ] Re-run White cold/warm tests after the pack gate is wired, including NS,
+  NB, NS→NB, and a longer multi-region route.
+
 Owner authorized implementation after checkpoint
 `f3a10ffe10ae7f319af263073e7694bdbcb67afd`. Work remains local/private.
 The first refinement milestone is implemented and reviewed; the broader product
