@@ -26,6 +26,7 @@ struct RoutePlannerCard: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showSaveDialog = false
+    @State private var showLoopReplaceConfirm = false
     @State private var saveName = ""
     /// GPX share sheet — only presented after the export gate allows it.
     @State private var exportShareURL: URL?
@@ -76,6 +77,16 @@ struct RoutePlannerCard: View {
             Button("Cancel", role: .cancel) { unknownAckStage = nil }
         } message: {
             Text("Unknown-access routing may include branch lines that are unverified for motorcycles. That is not legal permission and may expose you to closures, private land, seasonal restrictions, or enforcement.")
+        }
+        .confirmationDialog(
+            "Start a new loop?",
+            isPresented: $showLoopReplaceConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Start a new loop") { planner.selectLoop() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This replaces the current unsaved plan. Saved rides are kept.")
         }
         .alert(isUpdatingSavedRoute ? "Update saved route" : "Save route", isPresented: $showSaveDialog) {
             TextField("Route name", text: $saveName)
@@ -328,13 +339,17 @@ struct RoutePlannerCard: View {
 
     @ViewBuilder
     private var plannerModeContent: some View {
-        switch planner.mode {
-        case .fromHere:
-            fromHereContent
-        case .plan:
-            planContent
-        case .saved:
-            savedContent
+        if planner.showingLoop {
+            loopContent
+        } else {
+            switch planner.mode {
+            case .fromHere:
+                fromHereContent
+            case .plan:
+                planContent
+            case .saved:
+                savedContent
+            }
         }
     }
 
@@ -342,32 +357,22 @@ struct RoutePlannerCard: View {
 
     private var tabBar: some View {
         HStack(spacing: 2) {
-            ForEach(RoutePlannerModel.Mode.allCases) { mode in
-                Button {
-                    requestMode(mode)
-                } label: {
-                    Text(mode.rawValue)
-                        .font(DirtType.rowTitle)
-                        // Unselected labels sit straight on the orange track, so they
-                        // carry ink too; the white pill and weight mark the selection.
-                        .fontWeight(planner.mode == mode ? .bold : .semibold)
-                        .foregroundStyle(planner.mode == mode ? DirtTheme.ink : DirtTheme.onOrange)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: DirtHit.min)
-                        .background(
-                            planner.mode == mode
-                                ? AnyShapeStyle(.white)
-                                : AnyShapeStyle(.clear)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        .shadow(
-                            color: planner.mode == mode ? .black.opacity(0.12) : .clear,
-                            radius: 1,
-                            y: 1
-                        )
+            plannerTab("From here", selected: !planner.showingLoop && planner.mode == .fromHere) {
+                requestMode(.fromHere)
+            }
+            plannerTab("Loop", selected: planner.showingLoop) {
+                guard !planner.showingLoop else { return }
+                if !planner.itinerary.waypoints.isEmpty || planner.hasRoute {
+                    showLoopReplaceConfirm = true
+                } else {
+                    planner.selectLoop()
                 }
+            }
+            plannerTab("Plan", selected: !planner.showingLoop && planner.mode == .plan) {
+                requestMode(.plan)
+            }
+            plannerTab("Saved", selected: !planner.showingLoop && planner.mode == .saved) {
+                requestMode(.saved)
             }
         }
         .padding(2)
@@ -375,8 +380,39 @@ struct RoutePlannerCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
+    private func plannerTab(
+        _ title: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(DirtType.rowTitle)
+                .fontWeight(selected ? .bold : .semibold)
+                .foregroundStyle(selected ? DirtTheme.ink : DirtTheme.onOrange)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .frame(maxWidth: .infinity)
+                .frame(height: DirtHit.min)
+                .background(
+                    selected ? AnyShapeStyle(.white) : AnyShapeStyle(.clear)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .shadow(
+                    color: selected ? .black.opacity(0.12) : .clear,
+                    radius: 1,
+                    y: 1
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     /// Confirm before abandoning a From here pin or a multi-stage plan.
     private func requestMode(_ mode: RoutePlannerModel.Mode) {
+        if planner.showingLoop {
+            planner.selectMode(mode)
+            return
+        }
         guard mode != planner.mode else { return }
         if planner.mode == .fromHere, mode == .plan, planner.hasFromHereDraft {
             showFromHereToPlanConfirm = true
@@ -389,6 +425,103 @@ struct RoutePlannerCard: View {
         selectedStage = nil
         fromHereChipsOpen = false
         planner.selectMode(mode)
+    }
+
+    // MARK: - Loop
+
+    @ViewBuilder private var loopContent: some View {
+        if planner.hasRoute && !planner.isRouting {
+            stageList
+            routingStatus
+            fuelCoverageNotices
+            ferryNotice
+            statsRow
+            ctaRow
+            clearAllButton
+        } else {
+            VStack(spacing: DirtSpace.inner) {
+                HStack {
+                    Text("Direction")
+                    Spacer()
+                    Picker(
+                        "Direction",
+                        selection: Binding(
+                            get: { planner.loopDirection },
+                            set: { planner.loopDirection = $0 }
+                        )
+                    ) {
+                        ForEach(LoopDirection.allCases) { direction in
+                            Text(direction.rawValue).tag(direction)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+                .frame(minHeight: DirtHit.min)
+
+                HStack {
+                    Text("Surface")
+                    Spacer()
+                    Picker(
+                        "Surface",
+                        selection: Binding(
+                            get: { planner.profile },
+                            set: { planner.profile = $0 }
+                        )
+                    ) {
+                        ForEach(RouteProfile.allCases) { profile in
+                            Text(profile.title).tag(profile)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+                .frame(minHeight: DirtHit.min)
+
+                HStack {
+                    Text("Distance")
+                    Spacer()
+                    Text("\(Int(planner.loopDistanceKM)) km")
+                        .fontWeight(.semibold)
+                        .monospacedDigit()
+                }
+                Slider(
+                    value: Binding(
+                        get: { planner.loopDistanceKM },
+                        set: { planner.loopDistanceKM = $0 }
+                    ),
+                    in: 50...500,
+                    step: 25
+                )
+                .accessibilityLabel("Total loop distance")
+                .accessibilityValue("\(Int(planner.loopDistanceKM)) kilometres")
+
+                if planner.isRouting {
+                    HStack {
+                        ProgressView()
+                        Text(planner.fuelPlanningStatus ?? "Creating loop")
+                        Spacer()
+                        Button("Cancel") { planner.selectMode(.plan) }
+                    }
+                    .font(DirtType.helper)
+                } else {
+                    Button("Create Loop") { planner.generateLoop() }
+                        .buttonStyle(DirtCTAStyle.brand())
+                }
+
+                if let summary = planner.loopSummary {
+                    Text(summary)
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.ink)
+                }
+                if let error = planner.errorMessage {
+                    Text(error)
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.danger)
+                }
+            }
+            .padding(.horizontal, DirtSpace.inner)
+        }
     }
 
     // MARK: - From here
