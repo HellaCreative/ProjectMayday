@@ -113,6 +113,13 @@ final class GraphPackStore {
     private(set) var isRefreshingCatalog = false
     /// Fuel stations loaded from installed `fuel.v1.json` sidecars.
     private var packedFuelByRegion: [String: [POIFeature]] = [:]
+    /// Decoded graph packs are mmap-backed but still retain decoded indexes and
+    /// seam metadata. Keep only the active pack and one adjacent region so a
+    /// cross-border route can reuse both sides without turning every installed
+    /// province into resident routing state.
+    private var decodedPackCache: [String: GraphV2Pack] = [:]
+    private var decodedPackCacheOrder: [String] = []
+    private static let decodedPackCacheLimit = 2
 
     /// When true, a checksum-valid installed revision is not replaced in place.
     var protectInstalledRevisions = false
@@ -649,6 +656,8 @@ final class GraphPackStore {
         let dir = regionDir(regionId: id)
         try? FileManager.default.removeItem(at: dir)
         packedFuelByRegion.removeValue(forKey: id)
+        decodedPackCache.removeValue(forKey: id)
+        decodedPackCacheOrder.removeAll { $0 == id }
         if activePack?.regionId?.lowercased() == id {
             activePack = nil
             loadedRegionIds.removeAll { $0.lowercased() == id }
@@ -957,6 +966,7 @@ final class GraphPackStore {
         let maximumSeamAttempts = fastSearch
             ? max(2, min(8, (regions.count - 1) * 2))
             : max(24, min(96, (regions.count - 1) * 8))
+        let chainStartedAt = ProcessInfo.processInfo.systemUptime
 
         func search(
             regionIndex: Int,
@@ -968,6 +978,9 @@ final class GraphPackStore {
         ) async -> OnDeviceRouter.Result? {
             let regionId = regions[regionIndex]
             if regionIndex == regions.count - 1 {
+                guard deadline.map({ Date() < $0 }) ?? true,
+                      let finalPack = await decodedInstalledPack(regionId: regionId)
+                else { return nil }
                 let final = await routeOnDeviceInRegion(
                     from: current, to: to, regionId: regionId,
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -986,7 +999,8 @@ final class GraphPackStore {
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
                     endEndpointKind: endEndpointKind,
                     fastSearch: fastSearch,
-                    deadline: deadline
+                    deadline: deadline,
+                    packOverride: finalPack
                 )
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
                     if case .failure(let reason) = final { lastFailure = reason }
@@ -996,8 +1010,8 @@ final class GraphPackStore {
             }
 
             let nextRegionId = regions[regionIndex + 1]
-            await activateInstalledPack(regionId: regionId)
-            guard let localPack = activePack,
+            guard deadline.map({ Date() < $0 }) ?? true,
+                  let localPack = await decodedInstalledPack(regionId: regionId),
                   localPack.regionId?.lowercased() == regionId else { return nil }
             let anchors = CrossPackSeam.operationalCandidates(
                 from: current,
@@ -1008,12 +1022,13 @@ final class GraphPackStore {
             )
             guard !anchors.isEmpty else { return nil }
 
-            await activateInstalledPack(regionId: nextRegionId)
-            guard let remotePack = activePack,
+            guard deadline.map({ Date() < $0 }) ?? true,
+                  let remotePack = await decodedInstalledPack(regionId: nextRegionId),
                   remotePack.regionId?.lowercased() == nextRegionId else { return nil }
             let reverseAnchors = remotePack.crossPackSeams[regionId] ?? []
 
             for anchor in anchors.prefix(fastSearch ? 2 : 8) {
+                guard deadline.map({ Date() < $0 }) ?? true else { return nil }
                 guard seamAttempts < maximumSeamAttempts else { return nil }
                 guard let reverse = reverseAnchors.first(where: {
                     $0.osmWayId == anchor.osmWayId
@@ -1044,7 +1059,8 @@ final class GraphPackStore {
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
                     endEndpointKind: nil,
                     fastSearch: fastSearch,
-                    deadline: deadline
+                    deadline: deadline,
+                    packOverride: localPack
                 )
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
                     if case .failure(let reason) = hop { lastFailure = reason }
@@ -1064,6 +1080,7 @@ final class GraphPackStore {
             return nil
         }
 
+        let outcome: Result<OnDeviceRouter.Result, OnDeviceRouter.Failure>
         if let result = await search(
             regionIndex: 0,
             current: from,
@@ -1072,9 +1089,24 @@ final class GraphPackStore {
             incomingEdgeId: arrivalEdgeId,
             completedMeters: 0
         ) {
-            return .success(result)
+            outcome = .success(result)
+        } else {
+            outcome = .failure(lastFailure)
         }
-        return .failure(lastFailure)
+        let elapsedMs = Int((ProcessInfo.processInfo.systemUptime - chainStartedAt) * 1_000)
+        let outcomeText: String
+        switch outcome {
+        case .success(let result):
+            outcomeText = "success meters=\(Int(result.distanceMeters)) dirt=\(result.reportedDirtPercent)"
+        case .failure(let failure):
+            outcomeText = "failure=\(failure)"
+        }
+        RoutingDebugLog.shared.event(
+            "on-device cross-region result regions=\(regions.joined(separator: ">")) "
+                + "profile=\(profile.rawValue) fast=\(fastSearch ? 1 : 0) "
+                + "seamAttempts=\(seamAttempts) elapsedMs=\(elapsedMs) \(outcomeText)"
+        )
+        return outcome
     }
 
     /// A fuel-leg cap belongs to the complete regional chain. Before the
@@ -1118,14 +1150,21 @@ final class GraphPackStore {
         startEndpointKind: String? = nil,
         endEndpointKind: String? = nil,
         fastSearch: Bool = false,
-        deadline: Date? = nil
+        deadline: Date? = nil,
+        packOverride: GraphV2Pack? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
-        if let regionId {
-            await activateInstalledPack(regionId: regionId)
+        let pack: GraphV2Pack?
+        if let packOverride {
+            pack = packOverride
         } else {
-            await ensureActivePackAsync(for: [from, to])
+            if let regionId {
+                await activateInstalledPack(regionId: regionId)
+            } else {
+                await ensureActivePackAsync(for: [from, to])
+            }
+            pack = activePack
         }
-        guard let pack = activePack else { return .failure(.noPath) }
+        guard let pack else { return .failure(.noPath) }
         let avoid = Set(avoidEdgeIds)
         let packRef = pack
         let start = from
@@ -1736,6 +1775,29 @@ final class GraphPackStore {
             return
         }
 
+        let pack = await decodedInstalledPack(regionId: preferred)
+        guard let pack else { return }
+        activePack = pack
+        touchDecodedPack(preferred)
+        loadedRegionIds = Array(Set(loadedRegionIds + [preferred]))
+        if pack.geometry == nil {
+            maybeTopUpGeometry(regionId: preferred)
+        }
+        maybeTopUpFuel(regionId: preferred)
+        maybeTopUpSeams(regionId: preferred)
+    }
+
+    /// Return a decoded installed pack without changing the active UI pack.
+    /// Cross-region routing uses this to hold both sides of a seam at once;
+    /// alternating `activePack` would otherwise decode the same files again for
+    /// each candidate and make a bounded request appear to hang.
+    private func decodedInstalledPack(regionId: String) async -> GraphV2Pack? {
+        let preferred = regionId.lowercased()
+        guard isInstalled(preferred) else { return nil }
+        if let cached = decodedPackCache[preferred] {
+            touchDecodedPack(preferred)
+            return cached
+        }
         let graphURL = graphFileURL(regionId: preferred)
         let geometryURL = geometryFileURL(regionId: preferred)
         let seamsURL = seamsFileURL(regionId: preferred)
@@ -1749,14 +1811,24 @@ final class GraphPackStore {
                 seamsURL: seamsURL
             )
         }.value
-        guard let pack else { return }
-        activePack = pack
-        loadedRegionIds = Array(Set(loadedRegionIds + [preferred]))
-        if pack.geometry == nil {
-            maybeTopUpGeometry(regionId: preferred)
+        guard let pack else { return nil }
+        decodedPackCache[preferred] = pack
+        touchDecodedPack(preferred)
+        return pack
+    }
+
+    private func touchDecodedPack(_ regionId: String) {
+        let id = regionId.lowercased()
+        decodedPackCacheOrder.removeAll { $0 == id }
+        decodedPackCacheOrder.append(id)
+        while decodedPackCacheOrder.count > Self.decodedPackCacheLimit {
+            let activeID = activePack?.regionId?.lowercased()
+            guard let index = decodedPackCacheOrder.firstIndex(where: { $0 != activeID }) else {
+                break
+            }
+            let evicted = decodedPackCacheOrder.remove(at: index)
+            decodedPackCache.removeValue(forKey: evicted)
         }
-        maybeTopUpFuel(regionId: preferred)
-        maybeTopUpSeams(regionId: preferred)
     }
 
     /// Primary regions for each pin, then any extra bbox hits (cross-border corridors).
