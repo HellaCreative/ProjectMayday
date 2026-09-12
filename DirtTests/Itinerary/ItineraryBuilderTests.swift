@@ -131,6 +131,27 @@ struct ItineraryBuilderTests {
         #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
     }
 
+    @Test func packDoesNotProbeDestinationBeforeThePumpSequence() async throws {
+        // The on-device source follows a next-pump sequence. It must not spend
+        // a separate destination-escape search before building the leg.
+        let points = [point(0), point(2.0)]
+        let source = FakeRoutingSource(name: "pack")
+        source.supportsDirectFuelCarry = true
+        source.distances[key(points[0], points[1])] = 67_000
+
+        let result = await build(points, source: source, usable: 180_000)
+
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.endsAtFuelStop == nil)
+        #expect(result.legs.first?.fuelUsedOnArrivalMeters == 67_000)
+        #expect(source.routeRequests.count == 1)
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.fuelChainRequests.allSatisfy {
+            $0.fuel.riderLegId != "destination-escape"
+        })
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+    }
+
     @Test func combinedLivePlanConsumesItsDirectRouteWithoutASecondRouteRequest() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")

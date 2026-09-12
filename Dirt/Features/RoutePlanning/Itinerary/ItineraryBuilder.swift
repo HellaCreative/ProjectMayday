@@ -740,9 +740,11 @@ final class ItineraryBuilder {
         }
 
         // A final waypoint is safe only when the fuel remaining on arrival can
-        // reach the nearest pump by road. The search is deliberately 360°: with
-        // no later rider waypoint, "forward" has no useful meaning. A final
-        // waypoint already on a packed pump resets the tank instead.
+        // reach the nearest pump by road. The legacy non-direct source uses a
+        // deliberately 360° probe: with no later rider waypoint, "forward"
+        // has no useful meaning. The on-device pack source follows the simpler
+        // pump-hop contract and does not qualify the destination up front;
+        // a final waypoint already on a packed pump still resets the tank.
         let finalWaypoint = itinerary.waypoints.last
         let finalWaypointIsFuel = finalWaypoint.map { waypointFuelStops[$0.id] != nil } ?? false
         let singleShortLeg = source.supportsDirectFuelCarry
@@ -757,6 +759,7 @@ final class ItineraryBuilder {
            let finalWaypoint,
            !finalWaypointIsFuel,
            !source.supportsCombinedFuelPlanning,
+           !source.supportsDirectFuelCarry,
            !singleShortLeg {
             onFuelStatus("Checking fuel after destination")
             do {
@@ -797,6 +800,13 @@ final class ItineraryBuilder {
                     "fuel destination escape unavailable msg=\(error.localizedDescription)"
                 )
             }
+        } else if endIndex == itinerary.legs.count,
+                  !finalWaypointIsFuel,
+                  source.supportsDirectFuelCarry,
+                  !source.supportsCombinedFuelPlanning {
+            RoutingDebugLog.shared.event(
+                "fuel destination escape deferred source=pack reason=next-pump-sequence"
+            )
         }
 
         var committed = BuiltItinerary(
@@ -1061,7 +1071,22 @@ final class ItineraryBuilder {
                 // route proof: the returned graph distance, not the air
                 // distance, must fit the same hard cap.
                 let destinationFuelStop = waypointFuelStops[riderDestination.id]
-                let arrivalRemaining = arrivalFuelLimit.map {
+                // On-device fuel planning is a sequence of proven pump hops.
+                // If the optional destination-escape probe returned the
+                // conservative full-tank value, its derived limit is zero.
+                // Treating that zero as a hard arrival cap prevents the
+                // ordinary final hop from ever being attempted and sends the
+                // request back through the bounded fuel planner. Keep the
+                // original limit on FuelChainRequest for diagnostics and
+                // server-side sources, but defer the zero cap while the pack
+                // source is finding the next pump or finishing the final leg.
+                let effectiveArrivalFuelLimit: Double? =
+                    source.supportsDirectFuelCarry
+                        && !source.supportsCombinedFuelPlanning
+                        && arrivalFuelLimit == 0
+                    ? nil
+                    : arrivalFuelLimit
+                let arrivalRemaining = effectiveArrivalFuelLimit.map {
                     max(0, $0 - fuelUsed)
                 } ?? .greatestFiniteMagnitude
                 let directFuelCap = min(remaining, arrivalRemaining)
@@ -1121,7 +1146,7 @@ final class ItineraryBuilder {
                     RoutingDebugLog.shared.event(
                         "fuel direct carry riderLeg=\(riderLeg.id) "
                             + "meters=\(Int(meters)) remaining=\(Int(remaining)) "
-                            + "arrivalLimit=\(arrivalFuelLimit.map { Int($0) } ?? -1) "
+                            + "arrivalLimit=\(effectiveArrivalFuelLimit.map { Int($0) } ?? -1) "
                             + "routeSource=pack"
                     )
                     progressWatchdog.recordProgress()
