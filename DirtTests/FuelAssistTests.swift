@@ -84,6 +84,36 @@ struct FuelAssistTests {
         #expect(pick == nil)
     }
 
+    @Test func onDeviceFuelTargetCohortBoundsDensePackAndKeepsCorridorCoverage() {
+        let start = RouteCoordinate(longitude: -63.340248, latitude: 44.764805)
+        let end = RouteCoordinate(longitude: -62.526655, latitude: 45.404016)
+        let axis = GeoMath.meters(start, end)
+        var fuels = (0..<240).map { index in
+            let fraction = Double(index + 1) / 241
+            return poi("corridor-\(index)", GeoMath.interpolate(start, end, fraction: fraction))
+        }
+        fuels.append(poi("far-away", RouteCoordinate(longitude: -60.0, latitude: 47.0)))
+
+        let selected = FuelItinerary.boundedOnDeviceFuelTargets(
+            fuels: fuels,
+            from: start,
+            to: end,
+            maxMeters: 180_000,
+            limit: 32
+        )
+        #expect(selected.count == 32)
+        #expect(!selected.contains(where: { $0.id == "osm:far-away" }))
+        let progress = selected.map {
+            GeoMath.progressAlongAB(
+                from: start,
+                to: end,
+                point: RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+            )
+        }
+        #expect(progress.min() ?? 0 < axis * 0.25)
+        #expect(progress.max() ?? 0 > axis * 0.75)
+    }
+
     private func poi(_ id: String, _ at: RouteCoordinate) -> POIFeature {
         POIFeature(
             id: "osm:\(id)",

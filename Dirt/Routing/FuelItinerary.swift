@@ -41,6 +41,132 @@ nonisolated enum FuelItinerary {
         return (fallbackCount, majorMeters, route.distanceMeters)
     }
 
+    /// Keep the on-device reachability flood focused on stations that the
+    /// existing progress rules could actually select. The old planner handed
+    /// every station in the A→B box to Dijkstra; a province can contain
+    /// hundreds of targets, so the flood waited for every target snap before
+    /// returning any result. This is only a discovery cohort: every selected
+    /// station still needs a legal profile route to the pump and a legal
+    /// continuation (or onward reachable pump) before it can be committed.
+    static func boundedOnDeviceFuelTargets(
+        fuels: [POIFeature],
+        from: RouteCoordinate,
+        to: RouteCoordinate,
+        maxMeters: Double,
+        // 32 was selected after 16/32/64/128 all retained the same legal
+        // first pump and continuation in the real NS pack; it keeps twice the
+        // corridor alternatives of the faster 16-target floor.
+        limit: Int = 32
+    ) -> [POIFeature] {
+        guard limit > 0, fuels.count > limit else { return fuels }
+        let axisMeters = GeoMath.meters(from, to)
+        guard axisMeters > HopSearchPolicy.fuelMinimumForwardMeters else {
+            return Array(fuels.prefix(limit))
+        }
+
+        struct Scored {
+            let fuel: POIFeature
+            let directMeters: Double
+            let progressMeters: Double
+            let crossTrackMeters: Double
+            let coherent: Bool
+        }
+
+        let direct = fuels.compactMap { fuel -> Scored? in
+            let point = RouteCoordinate(longitude: fuel.longitude, latitude: fuel.latitude)
+            let directMeters = GeoMath.meters(from, point)
+            guard directMeters <= maxMeters + 1 else { return nil }
+            let progress = GeoMath.progressAlongAB(from: from, to: to, point: point)
+            let crossTrack = abs(GeoMath.crossTrackMeters(
+                point: point.locationCoordinate,
+                lineFrom: from.locationCoordinate,
+                to: to.locationCoordinate
+            ))
+            let coherent = !(
+                (crossTrack > 50_000 && crossTrack > progress * 0.75)
+                    || (progress < max(10_000, axisMeters * 0.18) && crossTrack > 25_000)
+            )
+            return Scored(
+                fuel: fuel,
+                directMeters: directMeters,
+                progressMeters: progress,
+                crossTrackMeters: crossTrack,
+                coherent: coherent
+            )
+        }
+        guard direct.count > limit else { return direct.map(\.fuel) }
+
+        let corridor = direct.filter {
+            $0.progressMeters > HopSearchPolicy.fuelMinimumForwardMeters
+                && $0.progressMeters < axisMeters - HopSearchPolicy.fuelDestinationClearanceMeters
+        }
+        let fallback = direct.filter { row in
+            !corridor.contains { $0.fuel.id == row.fuel.id }
+        }.sorted {
+            if $0.coherent != $1.coherent { return $0.coherent }
+            if abs($0.crossTrackMeters - $1.crossTrackMeters) > 1 {
+                return $0.crossTrackMeters < $1.crossTrackMeters
+            }
+            if abs($0.directMeters - $1.directMeters) > 1 {
+                return $0.directMeters < $1.directMeters
+            }
+            return $0.fuel.id < $1.fuel.id
+        }
+
+        // Preserve coverage along the entire corridor instead of allowing a
+        // dense town cluster to consume the whole target budget.
+        let fallbackLimit = min(max(8, limit / 8), fallback.count)
+        let corridorLimit = limit - fallbackLimit
+        let binCount = max(4, min(16, corridorLimit / 4))
+        var bins = Array(repeating: [Scored](), count: binCount)
+        for row in corridor {
+            let fraction = min(0.999_999, max(0, row.progressMeters / axisMeters))
+            let bin = min(binCount - 1, Int(fraction * Double(binCount)))
+            bins[bin].append(row)
+        }
+        for index in bins.indices {
+            bins[index].sort {
+                if $0.coherent != $1.coherent { return $0.coherent }
+                if abs($0.crossTrackMeters - $1.crossTrackMeters) > 1 {
+                    return $0.crossTrackMeters < $1.crossTrackMeters
+                }
+                if abs($0.directMeters - $1.directMeters) > 1 {
+                    return $0.directMeters < $1.directMeters
+                }
+                return $0.fuel.id < $1.fuel.id
+            }
+        }
+
+        var selected: [POIFeature] = []
+        selected.reserveCapacity(limit)
+        let perBin = max(1, corridorLimit / max(1, binCount))
+        for bin in bins {
+            for row in bin.prefix(perBin) where selected.count < corridorLimit {
+                selected.append(row.fuel)
+            }
+        }
+        for row in corridor.sorted(by: {
+            if $0.coherent != $1.coherent { return $0.coherent }
+            if abs($0.progressMeters - $1.progressMeters) > 1 {
+                return $0.progressMeters > $1.progressMeters
+            }
+            if abs($0.directMeters - $1.directMeters) > 1 {
+                return $0.directMeters < $1.directMeters
+            }
+            return $0.fuel.id < $1.fuel.id
+        }) where selected.count < corridorLimit {
+            if !selected.contains(where: { $0.id == row.fuel.id }) {
+                selected.append(row.fuel)
+            }
+        }
+        for row in fallback where selected.count < limit {
+            if !selected.contains(where: { $0.id == row.fuel.id }) {
+                selected.append(row.fuel)
+            }
+        }
+        return selected
+    }
+
     /// Safety/continuity is a gate. Then minimize complete-chain stops and
     /// preserve forward travel. Ride character is the final tiebreaker.
     static func prefersProfileFuelCandidate(

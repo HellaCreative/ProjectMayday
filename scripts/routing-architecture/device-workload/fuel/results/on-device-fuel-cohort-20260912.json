@@ -1,0 +1,106 @@
+{
+  "date": "2026-09-12",
+  "scope": "Private host-side replay of the on-device fuel planner against the immutable NS pack; no phone install and no live/server request.",
+  "pack": {
+    "manifest": "fabric-v4-20260908-01",
+    "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+    "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+    "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+  },
+  "fixture": {
+    "start": [
+      -63.340248,
+      44.764805
+    ],
+    "end": [
+      -62.526655,
+      45.404016
+    ],
+    "profile": "dirt",
+    "usableRangeMeters": 180000,
+    "firstLegMaxMeters": 180000,
+    "minimumFuelStops": 1,
+    "profileMeters": 180630,
+    "windowBudgetMs": 20000
+  },
+  "runs": [
+    {
+      "label": "pre-fix bounded-window baseline",
+      "targetCount": 128,
+      "seconds": 20.588,
+      "status": "gap",
+      "timeBudgetExpired": true,
+      "routeCalls": 3,
+      "reachabilitySeconds": 6.135,
+      "roadSeconds": [
+        7.4,
+        3.352,
+        3.516
+      ],
+      "stop": "osm:w548439323",
+      "gapMeters": 14509.99
+    },
+    {
+      "label": "candidate cohort 128",
+      "targetCount": 128,
+      "seconds": [
+        17.001,
+        17.108,
+        17.183
+      ],
+      "status": "complete",
+      "timeBudgetExpired": false,
+      "routeCalls": 2,
+      "stop": "osm:w548439323",
+      "legMeters": [
+        166120.01,
+        120332.66
+      ]
+    },
+    {
+      "label": "candidate cohort 64",
+      "targetCount": 64,
+      "seconds": 14.473,
+      "status": "complete",
+      "timeBudgetExpired": false,
+      "routeCalls": 2,
+      "stop": "osm:w548439323",
+      "legMeters": [
+        166120.01,
+        120332.66
+      ]
+    },
+    {
+      "label": "candidate cohort 32",
+      "targetCount": 32,
+      "seconds": [
+        13.154,
+        13.308
+      ],
+      "status": "complete",
+      "timeBudgetExpired": false,
+      "routeCalls": 2,
+      "stop": "osm:w548439323",
+      "legMeters": [
+        166120.01,
+        120332.66
+      ]
+    },
+    {
+      "label": "candidate cohort 16 (sizing floor probe)",
+      "targetCount": 16,
+      "seconds": 12.868,
+      "status": "complete",
+      "timeBudgetExpired": false,
+      "routeCalls": 2,
+      "stop": "osm:w548439323",
+      "legMeters": [
+        166120.01,
+        120332.66
+      ]
+    }
+  ],
+  "decision": "Use 32 as the default discovery cohort. It retains more corridor alternatives than 16 while matching the selected stop and continuation in this real NS pack fixture.",
+  "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
+  "recovery": "Do not install to white from this checkpoint. Rebuild the private probe from the current source and rerun the fixture before any device test."
+}

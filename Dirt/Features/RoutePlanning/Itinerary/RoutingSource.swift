@@ -409,7 +409,10 @@ final class PackRoutingSource: RoutingSource {
                 || (stops.isEmpty && req.fuel.requireFuelStopBeforeEnd)
             let destinationLimit = req.fuel.destinationFuelUsedLimitMeters
             var directFallback: Double?
-            if let direct,
+            // A direct route cannot satisfy this iteration while a mandatory
+            // pump is outstanding. Skipping it prevents a full profile search
+            // from consuming the same deadline needed to prove the pump leg.
+            if !mustPump, let direct,
                destinationLimit == nil || direct <= (destinationLimit ?? .infinity) + 1 {
                 logProbePhase("direct-begin")
                 let routed = await packs.routeOnDeviceDetailed(
@@ -475,10 +478,16 @@ final class PackRoutingSource: RoutingSource {
             }
 
             logProbePhase("reachable-begin")
+            let reachabilityTargets = FuelItinerary.boundedOnDeviceFuelTargets(
+                fuels: stations,
+                from: current,
+                to: end,
+                maxMeters: firstCap
+            )
             let reachable = await packs.reachableFuelMeters(
                 from: current.locationCoordinate,
                 toward: end.locationCoordinate,
-                pumps: stations,
+                pumps: reachabilityTargets,
                 maxMeters: firstCap,
                 profile: req.profile,
                 allowUnknown: req.accessPolicy.motorizedUnknown,
@@ -505,10 +514,12 @@ final class PackRoutingSource: RoutingSource {
             let departureID = stops.last?.id ?? "start"
             var evaluated: [FuelItinerary.ProfileFuelCandidate] = []
             var evaluatedRoutesByID: [String: OnDeviceRouter.Result] = [:]
+            var continuationRoutesByID: [String: OnDeviceRouter.Result] = [:]
             // Match live: route-score every geographically bounded candidate.
             // Reachability keeps the rider safe; profile quality decides which
             // safe pump is worth riding to.
-            for (rank, candidate) in ranked.prefix(6).enumerated() {
+            let candidateLimit = req.fuel.windowTimeBudgetMs == nil ? 6 : 3
+            for (rank, candidate) in ranked.prefix(candidateLimit).enumerated() {
                 if budgetExpired() { return budgetResponse("before-candidate-\(rank)") }
                 logProbePhase("candidate-\(rank)-begin")
                 let urbanEntry = FuelItinerary.fuelStopRequiresUrbanEntry(
@@ -583,6 +594,7 @@ final class PackRoutingSource: RoutingSource {
                 if case .success(let route) = continuationResult,
                    route.distanceMeters <= destinationCap + 1 {
                     continuationRoute = route
+                    continuationRoutesByID[candidate.id] = route
                 } else {
                     continuationRoute = nil
                 }
@@ -593,7 +605,15 @@ final class PackRoutingSource: RoutingSource {
                     onward = await packs.reachableFuelMeters(
                         from: candidateCoordinate,
                         toward: end.locationCoordinate,
-                        pumps: stations,
+                        pumps: FuelItinerary.boundedOnDeviceFuelTargets(
+                            fuels: stations,
+                            from: RouteCoordinate(
+                                longitude: candidate.longitude,
+                                latitude: candidate.latitude
+                            ),
+                            to: end,
+                            maxMeters: req.fuel.usableRangeMeters
+                        ),
                         maxMeters: req.fuel.usableRangeMeters,
                         profile: req.profile,
                         allowUnknown: req.accessPolicy.motorizedUnknown,
@@ -679,6 +699,17 @@ final class PackRoutingSource: RoutingSource {
                     validForward: validForward,
                     urbanEntry: urbanEntry
                 ))
+
+                // On a bounded on-device window, the first candidate with a
+                // proven continuation already satisfies the fuel safety gate.
+                // Stop scoring more pumps before they consume the deadline;
+                // the deterministic ranked order remains the profile tie-break.
+                if req.fuel.windowTimeBudgetMs != nil,
+                   continuationRoute != nil,
+                   validForward,
+                   stops.count + 1 >= req.fuel.minimumFuelStops {
+                    break
+                }
             }
             let required = stops.isEmpty ? req.fuel.requiredFirstStationId : nil
             let choices = FuelItinerary.eligibleProfileFuelCandidates(
@@ -758,6 +789,30 @@ final class PackRoutingSource: RoutingSource {
             if let route = evaluatedRoutesByID[station.id] {
                 carriedHistory.formUnion(route.edgeIds)
                 carriedArrival = route.edgeIds.last ?? carriedArrival
+            }
+
+            // The candidate evaluation already proved this pump→destination
+            // continuation under the same history and fuel cap. Reuse that
+            // proof instead of starting a second search on the next loop.
+            // This is valid only once the required minimum pump count is met.
+            if req.fuel.windowTimeBudgetMs != nil,
+               stops.count >= req.fuel.minimumFuelStops,
+               choice.validForward,
+               let continuation = continuationRoutesByID[station.id] {
+                return FuelChainResponse(
+                    status: "complete", error: nil, message: nil,
+                    regionIds: GraphPackStore.regionIds(containingAny: [
+                        start.locationCoordinate, end.locationCoordinate
+                    ]),
+                    stops: Array(stops.prefix(returnedStopLimit)),
+                    graphMeters: Array((graphMeters + [continuation.distanceMeters]).prefix(returnedStopLimit + 1)),
+                    diagnostics: FuelChainDiagnostics(
+                        strategy: "pack-forward-proven-continuation", states: stops.count + 1,
+                        dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
+                    ),
+                    stationCandidates: stationCandidates,
+                    windowComplete: true
+                )
             }
         }
         let routedPrefix = graphMeters.reduce(0, +)
