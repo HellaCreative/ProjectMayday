@@ -2,6 +2,20 @@
 
 ## 2026-09-12 — device-first clarification and regional fuel proof bound
 
+Private checkpoint `ebe2144` changes the real app's routing selector: when all
+endpoint regions are installed, the pack source is selected even while Wi-Fi
+is available. The selector log now records `selectionReason=installed-packs`;
+live remains available for missing coverage and the existing test-only policy
+default remains unchanged. Focused source tests compiled as part of the White
+device test build; the test runner could not launch because the phone became
+locked before execution.
+
+Private checkpoint after that change adds exact catalog byte totals to pack
+consent and offers the current primary region once after the first location
+fix. The home offer is explicit, records the region and byte count, and does
+not start route planning. Multi-region consent uses the sum of the approved
+pack sizes. No automatic server fallback is introduced by this flow.
+
 The owner supplied a physical-device diagnostic for an NS→NB route at a
 200 km automatic fuel range. That export is a live/server result: it records
 `selected=live`, HTTP fuel requests, and a 4.652 s response. It is useful as a

@@ -2,6 +2,18 @@
 
 ## Latest device evidence
 
+The private app selector is now pack-first for covered routes. With the NS and
+NB packs installed, an online route should report `selected=pack` and
+`selectionReason=installed-packs`; an HTTP fuel request is no longer expected
+for that covered case. This is the evidence boundary for distinguishing the
+phone engine from the earlier 16-second live/server diagnostic.
+
+Pack acquisition now exposes approved byte totals in the consent copy. After a
+first location fix, the current primary region can be offered once for
+onboarding; a route that crosses regions asks for the missing published packs
+as one explicit, size-labelled decision. The home offer is a preparation step,
+not a route build, and the private worktree remains the only affected checkout.
+
 The owner-provided diagnostic for the NS→NB, 200 km fuel-range route completed
 in about 16 seconds from the phone UI, but it selected the live source and made
 HTTP fuel requests. It therefore confirms the current online product path, not

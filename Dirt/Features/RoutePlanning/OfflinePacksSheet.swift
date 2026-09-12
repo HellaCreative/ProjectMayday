@@ -57,7 +57,7 @@ struct OfflinePacksSheet: View {
             Text("Installed routing packs")
                 .font(DirtType.title)
                 .foregroundStyle(DirtTheme.ink)
-            Text("Packs are installed when a route needs them. You can delete a pack here; you cannot browse or pre-download other regions.")
+            Text("DIRT offers your current region after location access and asks before adding regions to a route. You can delete a pack here; you cannot browse or pre-download unrelated regions.")
                 .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)

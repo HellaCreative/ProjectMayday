@@ -242,6 +242,35 @@ struct PackFirstRoutingTests {
         #expect(Set(prompt.regionIDs).count == prompt.regionIDs.count)
     }
 
+    @Test func packConsentReportsCombinedDownloadSize() {
+        let coverage = FakePackCoverage(installed: [], published: ["ns", "nb"])
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [halifax.locationCoordinate, fredericton.locationCoordinate],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected download consent, got \(decision)")
+            return
+        }
+        #expect(prompt.downloadBytes == 139_000_000)
+        #expect(prompt.message.contains("139 MB"))
+    }
+
+    @Test func homePackOfferIsOneTimeAndIncludesSize() {
+        let coverage = FakePackCoverage(installed: [], published: ["ns"])
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        coordinator.offerHomePack(at: halifax.locationCoordinate)
+        #expect(coordinator.consent?.kind == .home)
+        #expect(coordinator.consent?.regionIDs == ["ns"])
+        #expect(coordinator.consent?.downloadBytes == 101_000_000)
+        coordinator.declineConsent()
+        coordinator.offerHomePack(at: halifax.locationCoordinate)
+        #expect(coordinator.consent == nil)
+    }
+
     @Test func packsInterfacePermitsDeletionWithoutManualDownload() {
         #expect(OfflinePacksSheet.allowsManualDownload == false)
         let rows = GraphPackStore.managementRows(from: [
@@ -427,6 +456,14 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
         case "nb": return "New Brunswick"
         case "pe": return "Prince Edward Island"
         default: return id.uppercased()
+        }
+    }
+
+    func packDownloadBytes(forRegionId id: String) -> Int64? {
+        switch id.lowercased() {
+        case "ns": return 101_000_000
+        case "nb": return 38_000_000
+        default: return nil
         }
     }
 

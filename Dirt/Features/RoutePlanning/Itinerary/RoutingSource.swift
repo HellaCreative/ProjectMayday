@@ -808,6 +808,12 @@ extension GraphPackStore: PackCoverageInspecting, PackInstalling {
     func installedRoutingGraphPath(regionID: String) -> String? {
         installedGraphPath(regionId: regionID)
     }
+
+    func packDownloadBytes(forRegionId regionID: String) -> Int64? {
+        let id = regionID.lowercased()
+        guard let row = regions.first(where: { $0.id == id }) else { return nil }
+        return row.exactBytes ?? row.approxBytes
+    }
 }
 
 @MainActor

@@ -27,6 +27,7 @@ enum PackAcquisitionError: LocalizedError, Equatable {
 
 struct PackConsentPrompt: Equatable, Sendable {
     enum Kind: Equatable, Sendable {
+        case home
         case download
         case update
     }
@@ -34,9 +35,12 @@ struct PackConsentPrompt: Equatable, Sendable {
     let kind: Kind
     let regionIDs: [String]
     let regionTitles: [String]
+    let downloadBytes: Int64?
 
     var title: String {
         switch kind {
+        case .home:
+            return regionIDs.count == 1 ? "Install your home routing pack" : "Install your home routing packs"
         case .download:
             return regionIDs.count == 1 ? "Install routing pack" : "Install routing packs"
         case .update:
@@ -46,12 +50,25 @@ struct PackConsentPrompt: Equatable, Sendable {
 
     var message: String {
         let names = PackAcquisitionEvaluator.joinedTitles(regionTitles)
+        let size = downloadBytes.map { " (\(Self.byteLabel($0)))" } ?? ""
         switch kind {
+        case .home:
+            return "Download (names) now\(size) so route planning and offline rerouting stay on this phone."
         case .download:
-            return "Installing \(names) improves routing speed and enables offline rerouting."
+            return "Installing \(names)\(size) improves routing speed and enables offline rerouting."
         case .update:
-            return "A newer approved \(names) pack is available. Updating is recommended. You can keep using the installed revision."
+            return "A newer approved \(names) pack is available\(size). Updating is recommended. You can keep using the installed revision."
         }
+    }
+
+    private static func byteLabel(_ bytes: Int64) -> String {
+        let megabytes = Double(bytes) / 1_000_000
+        if megabytes >= 1_000 {
+            return String(format: "%.1f GB", megabytes / 1_000)
+        }
+        return megabytes >= 10
+            ? String(format: "%.0f MB", megabytes)
+            : String(format: "%.1f MB", megabytes)
     }
 }
 
@@ -97,6 +114,11 @@ protocol PackCoverageInspecting: RoutingInstalledPackRegistry {
     func isRoutingPackPublished(_ regionID: String) -> Bool
     func packRevisionState(_ regionID: String) -> PackRevisionState
     func displayTitle(forRegionId: String) -> String
+    func packDownloadBytes(forRegionId: String) -> Int64?
+}
+
+extension PackCoverageInspecting {
+    func packDownloadBytes(forRegionId: String) -> Int64? { nil }
 }
 
 @MainActor
@@ -130,6 +152,11 @@ enum PackAcquisitionEvaluator {
     ) -> PackAcquisitionDecision {
         let needed = requiredRegionIDs(for: coordinates)
         let titles = { (ids: [String]) in ids.map { registry.displayTitle(forRegionId: $0) } }
+        let bytes = { (ids: [String]) -> Int64? in
+            let values = ids.compactMap { registry.packDownloadBytes(forRegionId: $0) }
+            guard values.count == ids.count else { return nil }
+            return values.reduce(0, +)
+        }
 
         if needed.isEmpty {
             return .useLive(PackRoutingWarning(
@@ -154,7 +181,8 @@ enum PackAcquisitionEvaluator {
             return .requestConsent(PackConsentPrompt(
                 kind: .download,
                 regionIDs: pendingDownload,
-                regionTitles: titles(pendingDownload)
+                regionTitles: titles(pendingDownload),
+                downloadBytes: bytes(pendingDownload)
             ))
         }
 
@@ -178,7 +206,8 @@ enum PackAcquisitionEvaluator {
             return .requestConsent(PackConsentPrompt(
                 kind: .update,
                 regionIDs: stale,
-                regionTitles: titles(stale)
+                regionTitles: titles(stale),
+                downloadBytes: bytes(stale)
             ))
         }
 
@@ -199,6 +228,7 @@ final class PackAcquisitionCoordinator {
     private(set) var warnings: [PackRoutingWarning] = []
     private(set) var declinedDownloads: Set<String> = []
     private(set) var declinedUpdates: Set<String> = []
+    private var offeredHomeRegionIDs: Set<String> = []
 
     private let inspect: any PackCoverageInspecting
     private let installer: any PackInstalling
@@ -244,12 +274,34 @@ final class PackAcquisitionCoordinator {
         return result
     }
 
+    /// Offer the pack for the rider's current region once per app session. The
+    /// route planner still asks separately for every additional region in a
+    /// multi-region route.
+    func offerHomePack(at coordinate: CLLocationCoordinate2D) {
+        guard consent == nil,
+              let regionID = GraphPackStore.primaryRegionId(containing: coordinate),
+              !offeredHomeRegionIDs.contains(regionID),
+              inspect.isRoutingPackPublished(regionID),
+              inspect.packRevisionState(regionID) == .missing
+        else { return }
+        offeredHomeRegionIDs.insert(regionID)
+        consent = PackConsentPrompt(
+            kind: .home,
+            regionIDs: [regionID],
+            regionTitles: [inspect.displayTitle(forRegionId: regionID)],
+            downloadBytes: inspect.packDownloadBytes(forRegionId: regionID)
+        )
+        RoutingDebugLog.shared.event(
+            "home pack offer region=\(regionID) bytes=\(inspect.packDownloadBytes(forRegionId: regionID).map(String.init) ?? "unknown")"
+        )
+    }
+
     func acceptConsent() async throws {
         guard let prompt = consent else { return }
         consent = nil
         RoutingDebugLog.shared.event(
             "pack install accepted regions=\(prompt.regionIDs.joined(separator: ",")) " +
-                "kind=\(prompt.kind == .update ? "update" : "download")"
+                "kind=\(prompt.kind == .home ? "home" : (prompt.kind == .update ? "update" : "download"))"
         )
         do {
             try await installer.installVerifiedPacks(
@@ -275,6 +327,13 @@ final class PackAcquisitionCoordinator {
         guard let prompt = consent else { return }
         consent = nil
         switch prompt.kind {
+        case .home:
+            declinedDownloads.formUnion(prompt.regionIDs)
+            record(PackRoutingWarning(
+                regionIDs: prompt.regionIDs,
+                regionTitles: prompt.regionTitles,
+                reason: .declinedDownload
+            ))
         case .download:
             declinedDownloads.formUnion(prompt.regionIDs)
             record(PackRoutingWarning(

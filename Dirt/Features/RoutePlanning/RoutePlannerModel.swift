@@ -689,6 +689,12 @@ final class RoutePlannerModel {
     var packConsent: PackConsentPrompt? { packAcquisition.consent }
     var packRoutingWarnings: [PackRoutingWarning] { packAcquisition.warnings }
 
+    /// Called after the first authorized location fix so the rider can prepare
+    /// the local routing pack during onboarding. This does not start a route.
+    func offerHomePack(at coordinate: CLLocationCoordinate2D) {
+        packAcquisition.offerHomePack(at: coordinate)
+    }
+
     func acceptPackConsent() async {
         do {
             try await packAcquisition.acceptConsent()

@@ -197,17 +197,23 @@ final class AppEnvironment {
 
         // Frame the map on the rider as soon as GPS (or a cached fix) arrives.
         let priorLocationHandler = location.onLocation
-        location.onLocation = { [mapState, graphPacks, groups] locationFix in
+        location.onLocation = { [mapState, graphPacks, groups, planner] locationFix in
             priorLocationHandler?(locationFix)
             groups.receiveLocationFix(locationFix)
             mapState.consumeInitialUserLocation(locationFix.coordinate)
             Task {
+                // Resolve the catalog before offering the home-region pack so
+                // the consent sheet can show the approved byte count.
+                await graphPacks.refreshCatalogIfStale()
+                planner.offerHomePack(at: locationFix.coordinate)
                 await graphPacks.warmupActivePack(near: locationFix.coordinate)
             }
         }
         if let seed = location.lastLocation?.coordinate {
             mapState.consumeInitialUserLocation(seed)
             Task {
+                await graphPacks.refreshCatalogIfStale()
+                planner.offerHomePack(at: seed)
                 await graphPacks.warmupActivePack(near: seed)
             }
         }
