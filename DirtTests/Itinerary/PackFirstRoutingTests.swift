@@ -266,6 +266,7 @@ struct PackFirstRoutingTests {
         #expect(coordinator.consent?.kind == .home)
         #expect(coordinator.consent?.regionIDs == ["ns"])
         #expect(coordinator.consent?.downloadBytes == 101_000_000)
+        #expect(coordinator.consent?.message.contains("Nova Scotia") == true)
         coordinator.declineConsent()
         coordinator.offerHomePack(at: halifax.locationCoordinate)
         #expect(coordinator.consent == nil)

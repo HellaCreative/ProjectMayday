@@ -53,7 +53,7 @@ struct PackConsentPrompt: Equatable, Sendable {
         let size = downloadBytes.map { " (\(Self.byteLabel($0)))" } ?? ""
         switch kind {
         case .home:
-            return "Download (names) now\(size) so route planning and offline rerouting stay on this phone."
+            return "Download \(names) now\(size) so route planning and offline rerouting stay on this phone."
         case .download:
             return "Installing \(names)\(size) improves routing speed and enables offline rerouting."
         case .update:
