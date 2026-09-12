@@ -430,6 +430,8 @@ final class PackRoutingSource: RoutingSource {
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
+                    startEndpointKind: stops.isEmpty ? nil : "customers",
+                    endEndpointKind: "customers",
                     deadline: budgetDeadline
                 )
                 logProbePhase("direct-end")
@@ -547,6 +549,8 @@ final class PackRoutingSource: RoutingSource {
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
+                    startEndpointKind: "customers",
+                    endEndpointKind: nil,
                     deadline: budgetDeadline
                 )
                 logProbePhase("candidate-\(rank)-end")

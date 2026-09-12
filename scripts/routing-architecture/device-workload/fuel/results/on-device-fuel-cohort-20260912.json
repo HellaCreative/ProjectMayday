@@ -133,5 +133,21 @@
       120332.66
     ],
     "scope": "Current captured PackRoutingSource replay against the same immutable NS pack; macOS host facade, not phone qualification."
+  },
+  "endpointKindReplay": {
+    "checkpoint": "working-tree after 3f6d627",
+    "change": "Pack pump profile searches now carry customer endpoint semantics at the pump end and continuation start.",
+    "hostResult": {
+      "seconds": 13.163,
+      "status": "complete",
+      "routeCalls": 2,
+      "stop": "osm:w548439323",
+      "legMeters": [
+        166120.01,
+        120332.66
+      ]
+    },
+    "strictAudit": "unchanged incomplete; pump approach remains unverified at 34.3 m and 26.8 m, with the same source-walk qualification errors.",
+    "decision": "Keep the semantic correction. It does not relax access or fuel limits; it leaves the current fixture result unchanged."
   }
 }
