@@ -339,11 +339,12 @@ final class PackRoutingSource: RoutingSource {
         // right qualification tool, but it can spend several seconds proving
         // stations that will never be selected. For one-stop Dirt windows we
         // use a small geographic cohort, then require two complete legal road
-        // searches before returning anything. This keeps both success and
-        // failure inside the rider-facing two-second envelope without making
-        // fuel safety depend on straight-line distance.
+        // searches before returning anything. The same bounded calls may span
+        // installed regional seams; the route store proves those seams rather
+        // than treating a province boundary as a route failure. This keeps
+        // both success and failure inside the rider-facing two-second envelope
+        // without making fuel safety depend on straight-line distance.
         if req.profile == .dirt,
-           !crossesRegion,
            req.fuel.minimumFuelStops <= 1,
            req.fuel.requireFuelStopBeforeEnd,
            req.fuel.allowPartialWindow == true,
