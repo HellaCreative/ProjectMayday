@@ -113,6 +113,24 @@ struct ItineraryBuilderTests {
         #expect(fuelMilestones.isEmpty)
     }
 
+    @Test func packShortLegBypassesFuelChainWhenItFitsTheUsableRange() async throws {
+        // Roughly 64 km as a straight-line span, matching the short phone
+        // repro that previously spent the entire fuel window first.
+        let points = [point(0), point(0.8)]
+        let source = FakeRoutingSource(name: "pack")
+        source.supportsDirectFuelCarry = true
+        source.distances[key(points[0], points[1])] = 67_000
+
+        let result = await build(points, source: source, usable: 180_000)
+
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.endsAtFuelStop == nil)
+        #expect(result.legs.first?.fuelUsedOnArrivalMeters == 67_000)
+        #expect(source.routeRequests.count == 1)
+        #expect(source.fuelChainRequests.isEmpty)
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+    }
+
     @Test func combinedLivePlanConsumesItsDirectRouteWithoutASecondRouteRequest() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
@@ -1361,6 +1379,7 @@ struct IncrementalItineraryRebuildTests {
 private final class FakeRoutingSource: RoutingSource {
     let name: String
     var supportsCombinedFuelPlanning = false
+    var supportsDirectFuelCarry = false
     var providePlannedRoutes = false
     var distances: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []

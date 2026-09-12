@@ -22,8 +22,13 @@ struct DirtApp: App {
                 .preferredColorScheme(.light)
                 .task {
                     #if DEBUG
-                    guard ProcessInfo.processInfo.arguments.contains("--dirt-hybrid-fuel-probe") else { return }
-                    await runPrivateHybridFuelProbe(using: appEnvironment)
+                    let arguments = ProcessInfo.processInfo.arguments
+                    if arguments.contains("--dirt-hybrid-fuel-probe") {
+                        await runPrivateHybridFuelProbe(using: appEnvironment)
+                    }
+                    if arguments.contains("--dirt-on-device-direct-probe") {
+                        await runPrivateOnDeviceDirectProbe(using: appEnvironment)
+                    }
                     #endif
                 }
                 .onOpenURL { url in
@@ -168,6 +173,47 @@ struct DirtApp: App {
             } catch {
                 let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
                 emit("profile=\(profile.rawValue) failure=\(error) seconds=\(seconds)")
+            }
+        }
+        emit("end")
+    }
+
+    /// Direct pack-only diagnostic for the ordinary (fuel-off) route path.
+    /// This deliberately runs the same source call the UI uses, with several
+    /// deadlines, so a cross-region Dirt cancellation cannot be mistaken for
+    /// a fuel-planner failure.
+    @MainActor
+    private func runPrivateOnDeviceDirectProbe(using app: AppEnvironment) async {
+        let start = RouteCoordinate(longitude: -63.340199, latitude: 44.764804)
+        let end = RouteCoordinate(longitude: -65.244265, latitude: 47.013162)
+        func emit(_ message: String) {
+            RoutingDebugLog.shared.event("direct-probe \(message)")
+            print("[DirectProbe] \(message)")
+        }
+        let warmupBegan = ProcessInfo.processInfo.systemUptime
+        await app.graphPacks.warmupActivePack(near: start.locationCoordinate)
+        emit("begin fixture=ns-nb profiles=3 warmupSeconds=\(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - warmupBegan))")
+        for profile in [RouteProfile.cleanest, .dirt, .balanced] {
+            for seconds in [1.8, 3.0, 5.0] {
+                let began = ProcessInfo.processInfo.systemUptime
+                let result = await app.graphPacks.routeOnDeviceDetailed(
+                    from: start.locationCoordinate,
+                    to: end.locationCoordinate,
+                    profile: profile,
+                    allowUnknown: false,
+                    sessionSeed: UInt64.random(in: 1...9_007_199_254_740_991),
+                    avoidMotorways: profile == .cleanest,
+                    mapZoom: 8,
+                    fastSearch: true,
+                    deadline: Date().addingTimeInterval(seconds)
+                )
+                let elapsed = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
+                switch result {
+                case .success(let route):
+                    emit("profile=\(profile.rawValue) deadline=\(String(format: "%.1f", seconds)) result=success seconds=\(elapsed) meters=\(Int(route.distanceMeters)) dirtPct=\(route.reportedDirtPercent) timedOut=\(route.searchMeta.timedOut ? 1 : 0)")
+                case .failure(let failure):
+                    emit("profile=\(profile.rawValue) deadline=\(String(format: "%.1f", seconds)) result=failure seconds=\(elapsed) reason=\(failure)")
+                }
             }
         }
         emit("end")

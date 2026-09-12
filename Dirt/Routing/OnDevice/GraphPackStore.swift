@@ -102,7 +102,13 @@ final class GraphPackStore {
     private(set) var loadedRegionIds: [String] = []
     private(set) var activePack: GraphV2Pack?
     private(set) var regions: [RegionInfo] = GraphPackStore.catalogSeed
-    private(set) var lastManifestVersion: String = "v1"
+    private(set) var lastManifestVersion: String = {
+        #if DIRT_DEVELOPMENT
+        return AppConfig.v4CandidateReleaseId
+        #else
+        return "v1"
+        #endif
+    }()
     private(set) var verifiedInstalledRegionIds: Set<String> = []
     private(set) var isRefreshingCatalog = false
     /// Fuel stations loaded from installed `fuel.v1.json` sidecars.
@@ -380,8 +386,27 @@ final class GraphPackStore {
     func packRevisionState(_ regionID: String) -> PackRevisionState {
         let id = regionID.lowercased()
         guard isInstalled(id) else { return .missing }
-        if !catalogIdentityLoaded { return .current }
+        if !catalogIdentityLoaded {
+            #if DIRT_DEVELOPMENT
+            // Route selection must remain offline. The version directory is
+            // part of the pack identity, so a DEV build can reject the old
+            // candidate immediately without waiting for a manifest request.
+            // `v1` is reserved for bundled/local test fixtures.
+            let installedRevision = installedGraphRevisionId(regionId: id)
+            return installedRevision == "v1"
+                || installedRevision == AppConfig.v4CandidateReleaseId
+                ? .current
+                : .stale
+            #else
+            return .current
+            #endif
+        }
         return verifiedInstalledRegionIds.contains(id) ? .current : .stale
+    }
+
+    private func installedGraphRevisionId(regionId: String) -> String? {
+        guard let graph = findGraphFileURL(regionId: regionId) else { return nil }
+        return graph.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent
     }
 
     func isRoutingPackPublished(_ regionID: String) -> Bool {
@@ -455,6 +480,61 @@ final class GraphPackStore {
             guard let sha = file.sha256 else { return nil }
             return (file.name, sha)
         })
+    }
+
+    /// Machine-readable identity for the bytes that the on-device router is
+    /// allowed to use. When the catalog is already present this includes its
+    /// checksums; offline it still reports the immutable release directory.
+    /// A stale pack must never look current in a route response or phone log.
+    func installedRoutingPackIdentity(regionId: String) -> RoutingPackIdentity? {
+        let id = regionId.lowercased()
+        guard isInstalled(id), packRevisionState(id) == .current else { return nil }
+        if !catalogIdentityLoaded {
+            let graphURL = findGraphFileURL(regionId: id)
+            let geometryURL = geometryFileURL(regionId: id)
+            let fuelURL = fuelFileURL(regionId: id)
+            func bytes(_ url: URL) -> Int? {
+                (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int
+            }
+            return RoutingPackIdentity(
+                regionId: id,
+                releaseId: installedGraphRevisionId(regionId: id) ?? lastManifestVersion,
+                graphSource: graphURL == nil ? nil : "installed-pack",
+                geometrySource: FileManager.default.fileExists(atPath: geometryURL.path)
+                    ? "installed-pack" : nil,
+                graphBytes: graphURL.flatMap(bytes),
+                geometryBytes: bytes(geometryURL),
+                fuelBytes: bytes(fuelURL),
+                graphSha256: nil,
+                geometrySha256: nil,
+                fuelSha256: nil,
+                fuelSource: FileManager.default.fileExists(atPath: fuelURL.path)
+                    ? "installed-pack" : nil
+            )
+        }
+        guard let files = manifestFilesByRegion[id] else { return nil }
+        func file(_ names: [String]) -> PackManifest.File? {
+            for name in names {
+                if let hit = files.first(where: { $0.name == name }) { return hit }
+            }
+            return nil
+        }
+        let graph = file(["graph.v4.bin", "graph.v3.bin", "graph.v2.bin"])
+        let geometry = file(["geometry.v1.bin"])
+        let fuel = file(["fuel.v1.json"])
+        return RoutingPackIdentity(
+            regionId: id,
+            releaseId: lastManifestVersion,
+            graphSource: "installed-pack",
+            geometrySource: geometry == nil ? nil : "installed-pack",
+            graphBytes: graph?.bytes,
+            geometryBytes: geometry?.bytes,
+            fuelBytes: fuel?.bytes,
+            graphSha256: graph?.sha256,
+            geometrySha256: geometry?.sha256,
+            fuelSha256: fuel?.sha256,
+            fuelSource: fuel == nil ? nil : "installed-pack"
+        )
     }
 
     func isPublished(_ regionId: String) -> Bool {
@@ -919,11 +999,12 @@ final class GraphPackStore {
             await activateInstalledPack(regionId: regionId)
             guard let localPack = activePack,
                   localPack.regionId?.lowercased() == regionId else { return nil }
-            let anchors = CrossPackSeam.candidates(
+            let anchors = CrossPackSeam.operationalCandidates(
                 from: current,
                 to: to,
                 anchors: localPack.crossPackSeams[nextRegionId] ?? [],
-                urbanCores: localPack.urbanCores
+                urbanCores: localPack.urbanCores,
+                pack: localPack
             )
             guard !anchors.isEmpty else { return nil }
 

@@ -26,6 +26,63 @@ enum CrossPackSeam {
             }
     }
 
+    /// Rank factory seams by whether their packed edge actually behaves like
+    /// a through connector. The factory can legitimately publish a seam on a
+    /// motorway spur or a one-edge stub; it is a legal crossing but a poor
+    /// runtime target for a dirt corridor. Prefer an edge with graph degree on
+    /// both ends, then retain the geometric order as the tie breaker.
+    static func operationalCandidates(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        anchors: [GraphV2Pack.CrossPackSeamAnchor],
+        urbanCores: [UrbanCore.Box],
+        pack: GraphV2Pack
+    ) -> [GraphV2Pack.CrossPackSeamAnchor] {
+        let geometric = candidates(
+            from: from,
+            to: to,
+            anchors: anchors,
+            urbanCores: urbanCores
+        )
+        guard geometric.count > 1 else { return geometric }
+        let scored = geometric.enumerated().map { index, anchor in
+            (index: index, anchor: anchor, score: operationalScore(anchor, pack: pack))
+        }
+        return scored.sorted {
+            if $0.score != $1.score { return $0.score < $1.score }
+            return $0.index < $1.index
+        }.map(\.anchor)
+    }
+
+    private static func operationalScore(
+        _ anchor: GraphV2Pack.CrossPackSeamAnchor,
+        pack: GraphV2Pack
+    ) -> Int {
+        guard let way = Int64(anchor.osmWayId),
+              let fromArr = pack.edgeFrom,
+              let toArr = pack.edgeTo else {
+            return 100_000
+        }
+        var best = 100_000
+        for ei in pack.osmWayIds.indices where pack.osmWayIds[ei] == way {
+            let a = Int(fromArr[ei])
+            let b = Int(toArr[ei])
+            guard a >= 0, b >= 0, a + 1 < pack.nodeOffsets.count,
+                  b + 1 < pack.nodeOffsets.count else { continue }
+            let degreeA = Int(pack.nodeOffsets[a + 1] - pack.nodeOffsets[a])
+            let degreeB = Int(pack.nodeOffsets[b + 1] - pack.nodeOffsets[b])
+            let minimumDegree = min(degreeA, degreeB)
+            // A degree-one edge is a dead-end/stub in the local graph. A
+            // major highway receives a secondary penalty so a parallel
+            // service/road connector wins when both are operational.
+            let deadEndPenalty = minimumDegree <= 1 ? 10_000 : 0
+            let degreePenalty = max(0, 3 - minimumDegree) * 100
+            let highwayPenalty = pack.roadClassLeaf(ei) == "motorway" ? 250 : 0
+            best = min(best, deadEndPenalty + degreePenalty + highwayPenalty)
+        }
+        return best
+    }
+
     private static func distanceToChord(
         _ anchor: GraphV2Pack.CrossPackSeamAnchor,
         from: CLLocationCoordinate2D,

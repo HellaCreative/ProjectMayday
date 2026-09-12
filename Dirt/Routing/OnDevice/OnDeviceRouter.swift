@@ -73,6 +73,10 @@ nonisolated struct OnDeviceRouter {
     /// road planner leaves this false; pack fuel planning supplies a deadline
     /// so a target-aware flood cannot run past the rider-facing budget.
     var executionCancelled: @Sendable () -> Bool = { false }
+    /// Diagnostic tuning hook for pack-only benchmarks. Production keeps the
+    /// policy value; tests can sweep the bounded envelope without changing
+    /// the graph or route-selection rules.
+    var fastDirtCorridorMetersOverride: Double?
 
     struct Leg: Sendable {
         var coordinates: [CLLocationCoordinate2D]
@@ -915,9 +919,16 @@ nonisolated struct OnDeviceRouter {
             // waypoint. A compact fast corridor prevents a 30 km hop from
             // exploring the whole 60 km adventure fan while retaining the
             // wider corridor for ordinary route planning.
-            let base = fastSearch
-                ? min(HopSearchPolicy.dirtCorridorMeters, 20_000)
+            // The first fast Dirt envelope must be wide enough to retain a
+            // genuine off-pavement detour. A 20–30 km line corridor routinely
+            // discarded the only connected path to Yarmouth and then paid for
+            // an unbounded retry. The measured 40 km envelope completes in
+            // about half the time of the 60 km envelope with the same route
+            // character; ordinary planning keeps its wider 60 km policy.
+            let policyBase = fastSearch
+                ? min(HopSearchPolicy.dirtCorridorMeters, 40_000)
                 : HopSearchPolicy.dirtCorridorMeters
+            let base = fastDirtCorridorMetersOverride ?? policyBase
             let comparisonWidths = fastSearch ? [base] : [base * 2, base]
             let connectivityWidths: [Double?] = fastSearch ? [nil] : [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double, objective: String)] = []
@@ -969,8 +980,10 @@ nonisolated struct OnDeviceRouter {
 
             for width in comparisonWidths {
                 switch searchDirt(width: width) {
-                case .success(let route): candidates.append((route, width, "pavement"))
-                case .failure(let failure): lastBoundedFailure = failure
+                case .success(let route):
+                    candidates.append((route, width, "pavement"))
+                case .failure(let failure):
+                    lastBoundedFailure = failure
                 }
             }
             if candidates.isEmpty {

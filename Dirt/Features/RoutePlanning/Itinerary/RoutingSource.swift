@@ -5,6 +5,10 @@ import Foundation
 protocol RoutingSource: AnyObject {
     var name: String { get }
     var supportsCombinedFuelPlanning: Bool { get }
+    /// Whether the source can prove a short ordinary route locally before
+    /// entering the fuel-chain planner. Test doubles and remote sources keep
+    /// the conservative default; the packed on-device source opts in.
+    var supportsDirectFuelCarry: Bool { get }
     func route(_ req: RouteRequest) async throws -> RouteResponse
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop?
@@ -12,6 +16,7 @@ protocol RoutingSource: AnyObject {
 
 extension RoutingSource {
     var supportsCombinedFuelPlanning: Bool { false }
+    var supportsDirectFuelCarry: Bool { false }
 }
 
 @MainActor
@@ -186,6 +191,7 @@ final class LiveRoutingSource: RoutingSource {
 @MainActor
 final class PackRoutingSource: RoutingSource {
     let name = "pack"
+    let supportsDirectFuelCarry = true
     private let packs: GraphPackStore
     private let cache: RouteResponseCache
 
@@ -196,6 +202,40 @@ final class PackRoutingSource: RoutingSource {
 
     func route(_ req: RouteRequest) async throws -> RouteResponse {
         let endpoints = try routeEndpoints(req)
+        // A DEV build must never silently exercise a previous candidate. The
+        // old behavior searched every version directory and routed from the
+        // first checksum-valid graph, which made an apparently successful
+        // phone run impossible to compare with the current pack candidate.
+        // Pack identity is checked from the installed release directory so
+        // this route path remains fully offline.
+        let neededRegions = GraphPackStore.regionIds(containingAny: [
+            endpoints.0.locationCoordinate,
+            endpoints.1.locationCoordinate
+        ])
+        let revisionStates = neededRegions.map {
+            "\($0)=\(packs.packRevisionState($0).rawValue)"
+        }.joined(separator: ",")
+        let identities = neededRegions.compactMap {
+            packs.installedRoutingPackIdentity(regionId: $0)
+        }
+        let identitySummary = identities.map { identity in
+            "\(identity.regionId ?? "?")@\(identity.releaseId ?? "?")/\((identity.graphSha256 ?? "-").prefix(8))"
+        }.joined(separator: ",")
+        RoutingDebugLog.shared.event(
+            "on-device identity manifest=\(packs.lastManifestVersion) "
+                + "needed=[\(neededRegions.joined(separator: ","))] "
+                + "states=[\(revisionStates)] identities=[\(identitySummary)]"
+        )
+        #if DIRT_DEVELOPMENT
+        let staleRegions = neededRegions.filter { packs.packRevisionState($0) == .stale }
+        if !staleRegions.isEmpty {
+            let titles = staleRegions.map { packs.displayTitle(forRegionId: $0) }
+            throw RoutingError.server(
+                "Update the installed routing pack before planning on this DEV build: "
+                    + titles.joined(separator: ", ") + "."
+            )
+        }
+        #endif
         let key = RouteResponseCache.Key(
             from: endpoints.0,
             to: endpoints.1,
@@ -223,7 +263,11 @@ final class PackRoutingSource: RoutingSource {
         // bounded failure. Without this deadline a no-path Dirt search could
         // spend the router's seven-second candidate cap before the UI learned
         // that the request was not viable.
-        let fastDeadline = Date().addingTimeInterval(1.8)
+        // The measured 40 km Dirt envelope completes the difficult Yarmouth
+        // case in about 2.06 s on the simulator. Keep a narrow 2.2 s ceiling:
+        // a genuine hard case may finish, while a dead search still returns
+        // promptly instead of consuming the seven-second candidate cap.
+        let fastDeadline = Date().addingTimeInterval(2.2)
         let result = await packs.routeOnDeviceDetailed(
             from: endpoints.0.locationCoordinate,
             to: endpoints.1.locationCoordinate,
@@ -263,16 +307,38 @@ final class PackRoutingSource: RoutingSource {
         diagnostics.tapRadiusMeters = local.tapRadiusMeters
         diagnostics.mapZoom = local.mapZoom ?? req.options?.mapZoom
         diagnostics.snap = local.snapDiagnostics
+        diagnostics.searchMs = local.searchMeta.elapsedMs
+        diagnostics.pops = local.searchMeta.pops
+        diagnostics.corridorMeters = local.searchMeta.corridorMeters
+        diagnostics.corridorWidened = local.searchMeta.corridorWidened
+        diagnostics.maxCrossTrackMeters = local.searchMeta.maxCrossTrackMeters
+        diagnostics.searchOutcome = local.searchMeta.pass2Outcome
+        diagnostics.effectiveProfile = req.profile.rawValue
         response.debug = RouteResponseDebug(
-            routingRevision: nil,
+            routingRevision: packs.lastManifestVersion,
             graphMode: "on-device",
-            searchMeta: nil,
+            searchMeta: RouteResponseSearchMeta(
+                pass2Outcome: local.searchMeta.pass2Outcome,
+                pops: local.searchMeta.pops,
+                timedOut: local.searchMeta.timedOut,
+                rideObjective: local.searchMeta.rideObjective,
+                corridorMeters: local.searchMeta.corridorMeters,
+                maxCrossTrackMeters: local.searchMeta.maxCrossTrackMeters,
+                corridorWidened: local.searchMeta.corridorWidened,
+                shortestMeters: local.searchMeta.shortestMeters,
+                extraUsedMeters: local.searchMeta.extraUsedMeters,
+                extraBudgetMeters: local.searchMeta.extraBudgetMeters,
+                urbanCoreFallbackUsed: local.searchMeta.urbanCoreFallbackUsed,
+                cleanUnpavedFallbackUsed: local.searchMeta.cleanUnpavedFallbackUsed,
+                settlementFallbackUsed: local.searchMeta.settlementFallbackUsed,
+                corridorCandidates: nil
+            ),
             fallback: nil,
-            packIdentity: nil,
+            packIdentity: identities,
             diagnostics: diagnostics,
             failureReason: nil,
-            searchMs: nil,
-            pops: nil
+            searchMs: local.searchMeta.elapsedMs,
+            pops: local.searchMeta.pops
         )
         RoutingDebugLog.shared.routeAttempt(
             mode: name,
@@ -291,6 +357,12 @@ final class PackRoutingSource: RoutingSource {
             )
         }
         if req.options?.maxPathMeters == nil { cache.insert(response, for: key) }
+        RoutingDebugLog.shared.event(
+            "on-device result profile=\(req.profile.rawValue) "
+                + "ms=\(local.searchMeta.elapsedMs) pops=\(local.searchMeta.pops) "
+                + "meters=\(Int(local.distanceMeters)) dirt=\(local.reportedDirtPercent) "
+                + "objective=\(local.searchMeta.rideObjective ?? "-")"
+        )
         return response
     }
 

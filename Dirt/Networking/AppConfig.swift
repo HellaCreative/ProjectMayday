@@ -106,11 +106,7 @@ enum AppConfig {
         #endif
     }
     nonisolated static var riderServicesManifestURL: URL {
-        #if DIRT_DEVELOPMENT
-        v4CandidateBaseURL.appendingPathComponent("rider-services/manifest.json")
-        #else
         packCDNBaseURL.appendingPathComponent("rider-services/v1/manifest.json")
-        #endif
     }
 
     nonisolated static func packFileURL(version: String, regionId: String, fileName: String) -> URL {
@@ -128,7 +124,11 @@ enum AppConfig {
 
     #if DIRT_DEVELOPMENT
     /// Atlantic DEV canary: roads, services and connections share one release.
-    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260908-01"
+    // The device build must follow the sealed 63-region candidate. Keeping
+    // this pinned to the four-region predecessor made the phone silently
+    // route on stale NB seams and graph bytes while local tests used the
+    // current fabric.
+    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260909-01"
     nonisolated static var v4CandidateBaseURL: URL {
         packCDNBaseURL
             .appendingPathComponent("v4")

@@ -64,6 +64,11 @@ final class ItineraryBuilder {
     /// as proved; dense Ontario/Quebec requests get enough room to prove both
     /// sides of one pump without reaching Vercel's platform timeout.
     private static let liveFuelWindowBudgetMs = 20_000
+    /// A short rider leg should be proved as one ordinary graph route. The
+    /// air-distance bound is deliberately conservative, but 0.35 rejected a
+    /// 64 km leg with a 180 km reserve-adjusted tank (the exact failure seen
+    /// on the phone) before the direct route was even attempted.
+    private static let directFuelAirFraction = 0.50
     private var currentGeneration: Int?
     /// Current map zoom for V4 tap-radius. Set by the planner before `build`.
     var mapZoom: Double?
@@ -740,12 +745,19 @@ final class ItineraryBuilder {
         // waypoint already on a packed pump resets the tank instead.
         let finalWaypoint = itinerary.waypoints.last
         let finalWaypointIsFuel = finalWaypoint.map { waypointFuelStops[$0.id] != nil } ?? false
+        let singleShortLeg = source.supportsDirectFuelCarry
+            && itinerary.legs.count == 1
+            && finalWaypoint.map {
+                straightLineMeters(itinerary.waypoints[0].coordinate, $0.coordinate)
+                    <= fuel.usableMeters * Self.directFuelAirFraction + 1
+            } == true
         var finalEscapeFuelMeters: Double?
         var finalEscapeVerificationWarning: String?
         if endIndex == itinerary.legs.count,
            let finalWaypoint,
            !finalWaypointIsFuel,
-           !source.supportsCombinedFuelPlanning {
+           !source.supportsCombinedFuelPlanning,
+           !singleShortLeg {
             onFuelStatus("Checking fuel after destination")
             do {
                 let escape = try await source.fuelChain(FuelSnapPatch.applyingMapZoom(FuelChainRequest(
@@ -1038,6 +1050,86 @@ final class ItineraryBuilder {
                 let committedFuelStopCount = builtLegs.filter {
                     $0.endsAtFuelStop != nil
                 }.count
+
+                // A normal rider leg that fits inside the fuel remaining on
+                // arrival does not need a fuel-chain search. The old on-device
+                // path entered fuelChain first for every automatic-fuel build,
+                // so even a 60 km leg could spend the full bounded window and
+                // then be labelled unverified. Try one ordinary profile route
+                // before any station work when the straight-line lower bound
+                // fits the available arrival budget. This is also the legal
+                // route proof: the returned graph distance, not the air
+                // distance, must fit the same hard cap.
+                let destinationFuelStop = waypointFuelStops[riderDestination.id]
+                let arrivalRemaining = arrivalFuelLimit.map {
+                    max(0, $0 - fuelUsed)
+                } ?? .greatestFiniteMagnitude
+                let directFuelCap = min(remaining, arrivalRemaining)
+                let directAirMeters = straightLineMeters(
+                    RouteCoordinate(
+                        longitude: current.longitude,
+                        latitude: current.latitude
+                    ),
+                    riderDestination.coordinate
+                )
+                let shouldTryDirectFuelRoute = source.supportsDirectFuelCarry
+                    && !forceFuelStop
+                    && requiredStationID == nil
+                    && directFuelCap > 0
+                    // An air-distance margin keeps a near-edge Dirt leg from
+                    // paying for a failed direct proof before its normal
+                    // station search. Short legs like 67 km vs 180 km remain
+                    // well inside this bound.
+                    && directAirMeters <= directFuelCap * Self.directFuelAirFraction + 1
+                if shouldTryDirectFuelRoute,
+                   let response = try? await source.route(routeRequest(
+                       profile: activeProfile,
+                       allowUnknown: activeAllowUnknown,
+                       from: current,
+                       to: riderDestination.coordinate,
+                       avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                       maxPathMeters: directFuelCap,
+                       history: history,
+                       avoidMotorways: activeAvoidMotorways,
+                       preferBackRoads: riderLeg.preferBackRoads
+                   )),
+                   let meters = try? responseMeters(response),
+                   meters <= directFuelCap + 1 {
+                    let arrivalFuel = destinationFuelStop == nil
+                        ? fuelUsed + meters
+                        : 0
+                    let built = BuiltLeg(
+                        riderLegID: riderLeg.id,
+                        fromCoordinate: current,
+                        toCoordinate: riderDestination.coordinate,
+                        endsAtFuelStop: nil,
+                        response: response,
+                        fuelUsedOnArrivalMeters: arrivalFuel,
+                        routeProfile: activeProfile
+                    )
+                    builtLegs.append(built)
+                    history.append(response)
+                    fuelUsed = arrivalFuel
+                    current = riderDestination.coordinate
+                    statuses[riderLeg.id] = .built
+                    committed = replacing(
+                        riderLegID: riderLeg.id,
+                        with: builtLegs,
+                        in: committed,
+                        status: .built
+                    )
+                    RoutingDebugLog.shared.event(
+                        "fuel direct carry riderLeg=\(riderLeg.id) "
+                            + "meters=\(Int(meters)) remaining=\(Int(remaining)) "
+                            + "arrivalLimit=\(arrivalFuelLimit.map { Int($0) } ?? -1) "
+                            + "routeSource=pack"
+                    )
+                    progressWatchdog.recordProgress()
+                    onProgress(committed)
+                    onFuelStatus("Route ready")
+                    break
+                }
+
                 onFuelStatus(committedFuelStopCount == 0
                     ? "Checking fuel range"
                     : "Checking range after fuel stop \(committedFuelStopCount)")
