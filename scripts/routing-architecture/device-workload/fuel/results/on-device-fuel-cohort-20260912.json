@@ -100,7 +100,7 @@
       ]
     }
   ],
-  "decision": "Keep 0917972 as the private candidate. Do not install to white yet. The next device run should use this build only after the cross-region pack replay and source-walk qualification are recorded.",
+  "decision": "Keep 201f06a as the private candidate. Do not install to white yet. The next device run should use this build only after the cross-region pack replay and source-walk qualification are recorded.",
   "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
   "recovery": "Do not install to white from an older checkpoint. Build 0917972 or newer from the private branch; keep production and published packs unchanged.",
   "routeReuse": {
@@ -151,7 +151,7 @@
     "decision": "Rejected: the endpoint arguments are not consumed by the native router yet, so the trial was behaviorally a no-op. Do not carry dead plumbing into the device candidate."
   },
   "fastOnDeviceCandidate": {
-    "checkpoint": "0917972",
+    "checkpoint": "201f06a",
     "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; installed cross-region seams now use the same bounded path, while multi-stop and required-first-station windows retain the full qualified planner. The returned start\u2192pump response appends the short mapped-forecourt approach so displayed geometry closes exactly at the fuel stop; it remains explicitly labelled soft-stitch/unverified until customer-access edges are authored. Fast candidate ordering preserves the existing urban-core avoidance preference.",
     "hostFixture": {
       "pack": "NS fabric-v4-20260908-01",
@@ -169,7 +169,7 @@
       "scope": "macOS native facade using the current OnDeviceRouter source; not physical-phone qualification"
     },
     "errorContract": "Returns fuel_fast_path_no_qualified_route with windowComplete=false when no candidate is legally proven before cutoff.",
-    "correctnessGate": "Each returned hop is a profile route with legal snapping/turn checks and each leg is bounded by firstLegMaxMeters or usableRangeMeters; strict pump-approach continuity audit remains required.",
+    "correctnessGate": "Each returned hop is a profile route with legal snapping/turn checks, each leg is bounded by firstLegMaxMeters or usableRangeMeters, and a fast candidate is rejected when the mapped forecourt is more than 150m from the returned road endpoint. Strict source-walk fuel continuity still remains required for the accepted under-150m connector.",
     "routeVariance": {
       "seeds": [
         1,
@@ -200,7 +200,7 @@
       "scope": "PackFirstRoutingTests + ItineraryBuilderTests",
       "deviceInstall": false
     },
-    "limitation": "Host timing evidence is still from the native current-router facade. Strict source-walk/forecourt access remains unverified, and a physical iPhone plus a multi-pack NS\u2192NB replay are still required before release.",
+    "limitation": "The fast connector is now capped at the authored 150m station snap radius, but it remains a labelled soft-stitch until customer-access edges are authored and the strict source-walk audit accepts it. Host timing evidence is from the native current-router facade; the simulator cross-region probe did not emit a usable result and no physical-device run has been made.",
     "hostMatrix": [
       {
         "label": "NS short",
