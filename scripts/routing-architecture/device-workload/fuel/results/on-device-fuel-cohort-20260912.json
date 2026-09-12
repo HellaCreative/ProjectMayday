@@ -100,7 +100,7 @@
       ]
     }
   ],
-  "decision": "Keep c8d3d1b as the private candidate. Do not install to white yet. Run the serial simulator gate, then a controlled physical-device build only after the fast path and fuel continuity audit are reviewed.",
+  "decision": "Keep 1f4382d as the private candidate. Device install remains paused until the fast path has a broader host matrix and the source-walk/pump approach qualification is addressed.",
   "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
   "recovery": "Do not install to white from this checkpoint. Rebuild the private probe from the current source and rerun the fixture before any device test.",
   "routeReuse": {
@@ -151,8 +151,8 @@
     "decision": "Rejected: the endpoint arguments are not consumed by the native router yet, so the trial was behaviorally a no-op. Do not carry dead plumbing into the device candidate."
   },
   "fastOnDeviceCandidate": {
-    "checkpoint": "c8d3d1b",
-    "change": "Pack fuel windows use a bounded geographic candidate cohort, then require a legal start\u2192pump and pump\u2192destination search with fastSearch corridor mode. Cross-region and multi-stop windows retain the full qualified planner.",
+    "checkpoint": "1f4382d",
+    "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; cross-region and multi-stop windows retain the full qualified planner.",
     "hostFixture": {
       "pack": "NS fabric-v4-20260908-01",
       "targetCohort": 16,
@@ -192,6 +192,14 @@
         "bd83ecb05853"
       ],
       "result": "three distinct Dirt geometries for identical endpoints"
-    }
+    },
+    "focusedGate": {
+      "passed": 64,
+      "failed": 0,
+      "destination": "iPhone 17 simulator iOS 26.5",
+      "deviceInstall": false,
+      "xcresult": "/Users/richardsmith/Library/Developer/Xcode/DerivedData/Dirt-dvzfopsyljqyraczanjdqbjemhmu/Logs/Test/Test-DIRT Dev-2026.09.12_09-56-55--0300.xcresult"
+    },
+    "limitation": "The 1.63s native replay is a single-region, one-stop NS fixture. Long multi-stop and cross-region itineraries still require more than one response window; strict source-walk fuel continuity still reports approach gaps."
   }
 }
