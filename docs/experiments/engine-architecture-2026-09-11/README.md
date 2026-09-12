@@ -230,3 +230,8 @@ together:
 
 No advisory fallback or unverified tail was emitted. The test uses only the
 current NS and NB pack bytes and remains serial on one simulator destination.
+
+Checkpoint `801e20a` contains the bounded forecourt snap and the NS→NB fuel
+integration regression. The corresponding White build is version 2 (15),
+installed from `/tmp/Dirt-EngineArchitecture-DeviceBuild8` on device
+`B1A97A1C-5418-5143-9134-42260494B443`.
