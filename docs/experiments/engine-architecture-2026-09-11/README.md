@@ -162,3 +162,20 @@ FuelAssist, ItineraryBuilder, and the real V4 on-device benchmark suites. The
 updated DIRT Dev app was built and installed on the authorized White iPhone
 16 (UDID `B1A97A1C-5418-5143-9134-42260494B443`); automated launch was denied
 only because iOS reported the phone locked.
+
+## 2026-09-12 destination-escape deferral
+
+The 21:27 White log also showed a separate destination-escape probe returning
+the conservative full-tank value (`arrivalLimit=0`) before the first pump
+search. That probe added up to 2.5 seconds and made a short or final leg enter
+the same bounded planner that had just timed out. The pack source now defers
+that probe and treats fuel as a sequence of local, route-proven pump hops. A
+zero derived arrival cap is also ignored for the pack source's direct final-hop
+check, while the original request value remains available to diagnostics and
+legacy sources.
+
+Checkpoint `12978df` adds the behavior and a regression test. The itinerary
+suite passes 41 tests. The next White log should show
+`fuel destination escape deferred source=pack reason=next-pump-sequence`, then
+the lower-bound fast path and a committed pump; it should not show a 20-second
+fuel-window fallback for a route that has stations in the installed pack.
