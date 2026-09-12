@@ -448,6 +448,15 @@ final class PackRoutingSource: RoutingSource {
                       continuation.distanceMeters <= destinationCap + 1,
                       Date() < fastDeadline
                 else { continue }
+                guard let firstEndpoint = firstRoute.coordinates.last,
+                      GeoMath.meters(firstEndpoint, candidateCoordinate)
+                          <= HopSearchPolicy.fuelWaypointSnapMeters
+                else {
+                    // A mapped pump beyond the authored station snap radius is
+                    // not a proven fuel approach. Keep looking rather than
+                    // turning a long straight-line connector into a route leg.
+                    continue
+                }
                 let stop = FuelChainStop(
                     id: candidate.id,
                     latitude: candidate.latitude,
