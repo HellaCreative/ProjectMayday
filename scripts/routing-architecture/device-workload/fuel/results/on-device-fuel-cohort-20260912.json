@@ -114,5 +114,24 @@
       "deviceInstall": false
     },
     "qualification": "This verifies the client reuse path with a scripted pack source. Real-pack strict NativeFuelContinuity still has the documented pump-approach/source-walk qualification."
+  },
+  "currentSourceReplay": {
+    "sourceCheckpoint": "434aa7b",
+    "targetCount": 32,
+    "seconds": 13.065,
+    "status": "complete",
+    "timeBudgetExpired": false,
+    "routeCalls": 2,
+    "reachabilitySeconds": 2.16,
+    "roadSeconds": [
+      7.343,
+      3.359
+    ],
+    "stop": "osm:w548439323",
+    "legMeters": [
+      166120.01,
+      120332.66
+    ],
+    "scope": "Current captured PackRoutingSource replay against the same immutable NS pack; macOS host facade, not phone qualification."
   }
 }
