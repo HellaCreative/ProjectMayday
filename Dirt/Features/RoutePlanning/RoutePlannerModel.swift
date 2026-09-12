@@ -6,9 +6,10 @@ import UIKit
 
 /// Planner state machine covering three route-finder modes:
 /// From here (GPS → point 2), Plan a route (chained ordered waypoint hops),
-/// and Saved (local SwiftData store). Live `/api/route` is always authoritative
-/// while online. Start Navigation downloads the published regional packs needed
-/// for no-signal recovery; installed packs route only while offline.
+/// and Saved (local SwiftData store). The private routing candidate prefers
+/// installed regional packs when they cover the request so device tests
+/// exercise the on-device graph directly; live `/api/route` remains the
+/// online fallback when packs are unavailable.
 @Observable
 final class RoutePlannerModel {
     enum Mode: String, CaseIterable, Identifiable {
@@ -569,7 +570,7 @@ final class RoutePlannerModel {
                 packs: graphPacks,
                 live: live,
                 pack: pack,
-                preferInstalledPacks: false
+                preferInstalledPacks: true
             )
         }
         self.packAcquisition = packAcquisition ?? PackAcquisitionCoordinator(store: graphPacks)
