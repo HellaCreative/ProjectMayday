@@ -69,6 +69,11 @@ nonisolated enum TapRadius {
 /// Opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` so search can run on
 /// `Task.detached` without freezing toast paint / map gestures.
 nonisolated struct OnDeviceRouter {
+    /// Cooperative stop used by bounded on-device fuel windows. The regular
+    /// road planner leaves this false; pack fuel planning supplies a deadline
+    /// so a target-aware flood cannot run past the rider-facing budget.
+    var executionCancelled: @Sendable () -> Bool = { false }
+
     struct Leg: Sendable {
         var coordinates: [CLLocationCoordinate2D]
         var distanceMeters: Double
@@ -340,6 +345,7 @@ nonisolated struct OnDeviceRouter {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
     ) -> Swift.Result<Result, Failure> {
+        guard !executionCancelled() else { return .failure(.searchLimit("cancelled")) }
         let pavedWall = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -551,6 +557,7 @@ nonisolated struct OnDeviceRouter {
         // Fuel forecourts and GPS fixes often sit beside a disconnected service
         // spur while a through-road is only a few metres farther away.
         for snap in snaps {
+            if executionCancelled() { return nil }
             guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
             let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
             let access = max(0, snap.distanceMeters)
@@ -569,7 +576,7 @@ nonisolated struct OnDeviceRouter {
         }
         let policyUnknown = allowUnknown && profile != .cleanest
         while let cur = heap.pop() {
-            if Task.isCancelled { return nil }
+            if Task.isCancelled || executionCancelled() { return nil }
             if cur.cost != dist[cur.node] { continue }
             if cur.cost > maxMeters { break }
             if let settled = targetOptionsByNode[cur.node] {
@@ -638,6 +645,7 @@ nonisolated struct OnDeviceRouter {
     ) -> [String: Double] {
         guard !pumps.isEmpty else { return [:] }
         let targetSnaps = pumps.map { pump -> [EdgeSnap] in
+            if executionCancelled() { return [] }
             let point = CLLocationCoordinate2D(latitude: pump.latitude, longitude: pump.longitude)
             // Road distance cannot be shorter than the straight-line distance;
             // skip impossible pumps before doing any geometry projection.
@@ -1782,7 +1790,7 @@ nonisolated struct OnDeviceRouter {
             : nil
 
         while let cur = heap.pop() {
-            if Task.isCancelled { return .failure(.noPath) }
+            if Task.isCancelled || executionCancelled() { return .failure(.searchLimit("cancelled")) }
             if cur.cost != dist[cur.node] { continue }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
@@ -2243,7 +2251,7 @@ nonisolated struct OnDeviceRouter {
             : nil
 
         while let cur = heap.pop() {
-            if Task.isCancelled { return .failure(.noPath) }
+            if Task.isCancelled || executionCancelled() { return .failure(.searchLimit("cancelled")) }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
             if let deadline, (pops & 255) == 0, CFAbsoluteTimeGetCurrent() > deadline {

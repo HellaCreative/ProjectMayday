@@ -774,7 +774,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        deadline: Date? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
@@ -786,6 +787,15 @@ final class GraphPackStore {
                 to: toId,
                 allowedRegionIds: installed
             ), regionPath.count > 1 else { return .failure(.noPath) }
+            let packFiles = regionPath.map { id in
+                let graph = installedGraphPath(regionId: id).map { URL(fileURLWithPath: $0).lastPathComponent } ?? "-"
+                let seams = FileManager.default.fileExists(atPath: seamsFileURL(regionId: id).path) ? 1 : 0
+                return "\(id){graph=\(graph),seams=\(seams)}"
+            }.joined(separator: ">")
+            RoutingDebugLog.shared.event(
+                "on-device cross-region from=\(fromId) to=\(toId) "
+                    + "path=\(regionPath.joined(separator: ">")) files=\(packFiles)"
+            )
             return await routeOnDeviceChained(
                 from: from,
                 to: to,
@@ -805,7 +815,8 @@ final class GraphPackStore {
                 mapZoom: mapZoom,
                 matchLimitMeters: matchLimitMeters,
                 startEndpointKind: startEndpointKind,
-                endEndpointKind: endEndpointKind
+                endEndpointKind: endEndpointKind,
+                deadline: deadline
             )
         }
         return await routeOnDeviceInRegion(
@@ -826,7 +837,8 @@ final class GraphPackStore {
             mapZoom: mapZoom,
             matchLimitMeters: matchLimitMeters,
             startEndpointKind: startEndpointKind,
-            endEndpointKind: endEndpointKind
+            endEndpointKind: endEndpointKind,
+            deadline: deadline
         )
     }
 
@@ -852,7 +864,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        deadline: Date? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         guard regions.count >= 2 else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
@@ -885,7 +898,8 @@ final class GraphPackStore {
                     avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
-                    endEndpointKind: endEndpointKind
+                    endEndpointKind: endEndpointKind,
+                    deadline: deadline
                 )
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
                     if case .failure(let reason) = final { lastFailure = reason }
@@ -940,7 +954,8 @@ final class GraphPackStore {
                     avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
-                    endEndpointKind: nil
+                    endEndpointKind: nil,
+                    deadline: deadline
                 )
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
                     if case .failure(let reason) = hop { lastFailure = reason }
@@ -1012,7 +1027,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        deadline: Date? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -1030,8 +1046,12 @@ final class GraphPackStore {
         let metro = cleanMetroMultiplier
         let zoom = mapZoom
         let matchLimit = matchLimitMeters
+        let executionCancelled: @Sendable () -> Bool = {
+            Task.isCancelled || (deadline.map { Date() >= $0 } ?? false)
+        }
         let work = Task.detached(priority: .userInitiated) {
             var router = OnDeviceRouter(pack: packRef)
+            router.executionCancelled = executionCancelled
             router.sessionSeed = seed
             router.mapZoom = zoom
             router.matchLimitMeters = matchLimit
@@ -1062,13 +1082,18 @@ final class GraphPackStore {
         to: CLLocationCoordinate2D,
         maxMeters: Double,
         profile: RouteProfile,
-        allowUnknown: Bool
+        allowUnknown: Bool,
+        deadline: Date? = nil
     ) async -> Double? {
         await ensureActivePackAsync(for: [from, to])
         guard let pack = activePack else { return nil }
         let packRef = pack
         let work = Task.detached(priority: .userInitiated) {
-            OnDeviceRouter(pack: packRef).shortestGraphMeters(
+            var router = OnDeviceRouter(pack: packRef)
+            router.executionCancelled = {
+                Task.isCancelled || (deadline.map { Date() >= $0 } ?? false)
+            }
+            return router.shortestGraphMeters(
                 from: from, to: to, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
@@ -1085,7 +1110,8 @@ final class GraphPackStore {
         pumps: [POIFeature],
         maxMeters: Double,
         profile: RouteProfile,
-        allowUnknown: Bool
+        allowUnknown: Bool,
+        deadline: Date? = nil
     ) async -> [String: Double] {
         await ensureActivePackAsync(for: [from, toward])
         guard let pack = activePack else { return [:] }
@@ -1110,7 +1136,11 @@ final class GraphPackStore {
         }
         let packRef = pack
         let work = Task.detached(priority: .userInitiated) {
-            OnDeviceRouter(pack: packRef).reachableGraphMeters(
+            var router = OnDeviceRouter(pack: packRef)
+            router.executionCancelled = {
+                Task.isCancelled || (deadline.map { Date() >= $0 } ?? false)
+            }
+            return router.reachableGraphMeters(
                 from: from, toward: toward, pumps: localPumps, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
@@ -1535,7 +1565,11 @@ final class GraphPackStore {
                 }
             }
         }
-        return out
+        // Fuel packs intentionally retain every OSM/provider observation. The
+        // routing search does not need to snap the same forecourt repeatedly,
+        // though. Collapse only close fuel duplicates; distinct stations and
+        // every region remain discoverable.
+        return POIDeduper.collapseNearby(out)
     }
 
     private func loadedFuel(regionId: String) -> [POIFeature] {

@@ -237,6 +237,11 @@ final class PackRoutingSource: RoutingSource {
             matchLimitMeters: req.options?.matchLimitMeters
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
+            RoutingDebugLog.shared.event(
+                "on-device route failed from=\(endpoints.0.latitude),\(endpoints.0.longitude) "
+                    + "to=\(endpoints.1.latitude),\(endpoints.1.longitude) "
+                    + "profile=\(req.profile.rawValue) reason=\(String(describing: result))"
+            )
             throw RoutingError.server("No route is available on the installed pack.")
         }
         var response = RouteResponse(
@@ -287,6 +292,9 @@ final class PackRoutingSource: RoutingSource {
         guard req.locations.count == 2 else { throw RoutingError.invalidEndpoints }
         let start = coordinate(req.locations[0])
         let end = coordinate(req.locations[1])
+        let budgetDeadline = req.fuel.windowTimeBudgetMs.map {
+            Date().addingTimeInterval(max(0.001, Double($0) / 1_000))
+        }
         let stations = packs.fuelStations(from: start, to: end)
         guard !stations.isEmpty else {
             return FuelChainResponse(
@@ -306,7 +314,8 @@ final class PackRoutingSource: RoutingSource {
                 pumps: stations,
                 maxMeters: req.fuel.usableRangeMeters,
                 profile: req.profile,
-                allowUnknown: req.accessPolicy.motorizedUnknown
+                allowUnknown: req.accessPolicy.motorizedUnknown,
+                deadline: budgetDeadline
             )
             let first = reachable.values.min()
             return FuelChainResponse(
@@ -336,9 +345,6 @@ final class PackRoutingSource: RoutingSource {
             : returnedStopLimit
         var carriedHistory = Set(req.options?.priorEdgeIds ?? [])
         var carriedArrival = req.options?.arrivalEdgeId
-        let budgetDeadline = req.fuel.windowTimeBudgetMs.map {
-            Date().addingTimeInterval(max(0.001, Double($0) / 1_000))
-        }
         let probeLogging = req.fuel.riderLegId == "private-device-hybrid-probe"
 
         func logProbePhase(_ phase: String) {
@@ -393,7 +399,8 @@ final class PackRoutingSource: RoutingSource {
                     to: end.locationCoordinate,
                     maxMeters: firstCap,
                     profile: req.profile,
-                    allowUnknown: req.accessPolicy.motorizedUnknown
+                    allowUnknown: req.accessPolicy.motorizedUnknown,
+                    deadline: budgetDeadline
                 )
                 logProbePhase("shortest-end")
             }
@@ -419,7 +426,8 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    deadline: budgetDeadline
                 )
                 logProbePhase("direct-end")
                 if budgetExpired() { return budgetResponse("after-direct-route") }
@@ -473,7 +481,8 @@ final class PackRoutingSource: RoutingSource {
                 pumps: stations,
                 maxMeters: firstCap,
                 profile: req.profile,
-                allowUnknown: req.accessPolicy.motorizedUnknown
+                allowUnknown: req.accessPolicy.motorizedUnknown,
+                deadline: budgetDeadline
             )
             logProbePhase("reachable-end")
             logProbePhase("avoidance-begin")
@@ -526,7 +535,8 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    deadline: budgetDeadline
                 )
                 logProbePhase("candidate-\(rank)-end")
                 if budgetExpired() { return budgetResponse("after-candidate-\(rank)") }
@@ -564,7 +574,8 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    deadline: budgetDeadline
                 )
                 logProbePhase("continuation-\(rank)-end")
                 if budgetExpired() { return budgetResponse("after-continuation-\(rank)") }
@@ -585,7 +596,8 @@ final class PackRoutingSource: RoutingSource {
                         pumps: stations,
                         maxMeters: req.fuel.usableRangeMeters,
                         profile: req.profile,
-                        allowUnknown: req.accessPolicy.motorizedUnknown
+                        allowUnknown: req.accessPolicy.motorizedUnknown,
+                        deadline: budgetDeadline
                     )
                 }
                 var onwardExclusions = visited
