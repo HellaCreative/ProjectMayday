@@ -14,6 +14,12 @@ onboarding; a route that crosses regions asks for the missing published packs
 as one explicit, size-labelled decision. The home offer is a preparation step,
 not a route build, and the private worktree remains the only affected checkout.
 
+The on-device fuel flood now prepares each pump's snap metadata before graph
+expansion and tracks pump projection endpoints as search targets. It may finish
+early only when all target projections are settled, while unresolved targets
+still force the complete bounded flood. This is intended to remove repeated
+geometry work without silently reducing fuel coverage.
+
 The owner-provided diagnostic for the NS→NB, 200 km fuel-range route completed
 in about 16 seconds from the phone UI, but it selected the live source and made
 HTTP fuel requests. It therefore confirms the current online product path, not

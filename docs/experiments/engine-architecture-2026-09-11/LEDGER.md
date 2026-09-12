@@ -41,6 +41,13 @@ set, and a long multi-region plan should disclose its expected time and memory
 cost before starting. This policy must be backed by actual pack availability and
 cannot silently fall back to a server route when the device-only mode is chosen.
 
+The current private fuel refinement prepares each pump's snap metadata before
+graph expansion and tracks pump projection endpoints as search targets. It may
+finish early only after every target projection is settled; unresolved targets
+still force the complete bounded flood. This preserves the prior routine's
+coverage while removing repeat geometry work where the target set is settled.
+The arm64 Dev build succeeds; device timing awaits an unlocked White run.
+
 Active mission: MISSION.md. Continue until its architecture/integration, repeated WV, and concurrency criteria are met, or a specific external dependency prevents meaningful progress. The prior preparation candidate is parked, not a preferred architecture.
 
 ## Isolation and resource budget

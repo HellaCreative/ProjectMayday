@@ -483,7 +483,32 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool,
         cityWall: Bool
     ) -> [Double]? {
+        exploreNodeMeters(
+            from: from,
+            toward: toward,
+            maxMeters: maxMeters,
+            profile: profile,
+            allowUnknown: allowUnknown,
+            cityWall: cityWall,
+            targetSnaps: nil
+        )
+    }
+
+    /// Target-aware form used by fuel reachability. It preserves the distances
+    /// this routine would produce with a complete flood, but stops once every
+    /// legal pump projection has been settled. A pump with no legal projection
+    /// is already proven unreachable and does not keep the flood alive.
+    private func exploreNodeMeters(
+        from: CLLocationCoordinate2D,
+        toward: CLLocationCoordinate2D,
+        maxMeters: Double,
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        cityWall: Bool,
+        targetSnaps: [[EdgeSnap]]?
+    ) -> [Double]? {
         _ = cityWall
+        _ = toward
         let snaps = nearestEdgeSnaps(
             to: from, allowUnknown: allowUnknown, profile: profile,
             maxMeters: Self.preferredMatchMeters
@@ -496,6 +521,32 @@ nonisolated struct OnDeviceRouter {
         var dist = [Double](repeating: .infinity, count: n)
         var prevEdge = [Int](repeating: -1, count: n)
         var heap = MinHeap()
+
+        // Each option is an endpoint of a snapped pump edge. Once that node is
+        // popped, its shortest distance is final and the corresponding pump
+        // projection has an exact best-path candidate. We wait for every
+        // option, rather than the first one, so the returned pump distance is
+        // still the same minimum that a complete flood would produce here.
+        var targetOptionsByNode: [Int: Int] = [:]
+        if let targetSnaps {
+            for pumpSnaps in targetSnaps {
+                for snap in pumpSnaps {
+                    guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
+                    if pack.hasDirectedArc(from: snap.nodeA, to: snap.nodeB, edge: snap.edgeIndex),
+                       snap.nodeA >= 0, snap.nodeA < n {
+                        targetOptionsByNode[snap.nodeA, default: 0] += 1
+                    }
+                    if pack.hasDirectedArc(from: snap.nodeB, to: snap.nodeA, edge: snap.edgeIndex),
+                       snap.nodeB >= 0, snap.nodeB < n {
+                        targetOptionsByNode[snap.nodeB, default: 0] += 1
+                    }
+                }
+            }
+        }
+        var pendingTargetOptions = targetOptionsByNode.values.reduce(0, +)
+        if targetSnaps != nil, pendingTargetOptions == 0 {
+            return dist
+        }
         // Seed every nearby eligible edge, not only the geometric nearest.
         // Fuel forecourts and GPS fixes often sit beside a disconnected service
         // spur while a through-road is only a few metres farther away.
@@ -521,6 +572,12 @@ nonisolated struct OnDeviceRouter {
             if Task.isCancelled { return nil }
             if cur.cost != dist[cur.node] { continue }
             if cur.cost > maxMeters { break }
+            if let settled = targetOptionsByNode[cur.node] {
+                pendingTargetOptions -= settled
+                if pendingTargetOptions == 0, targetSnaps != nil {
+                    break
+                }
+            }
             let arcStart = Int(pack.nodeOffsets[cur.node])
             let arcEnd = Int(pack.nodeOffsets[cur.node + 1])
             guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
@@ -533,8 +590,6 @@ nonisolated struct OnDeviceRouter {
                     ei: ei, from: cur.node, to: toNode,
                     startEi: -1, endEi: -1, incomingEi: prevEdge[cur.node]
                 ) { continue }
-                let attr = pack.edgeAttrs[ei]
-                let access = GraphV2Pack.unpackAccess(attr)
                 if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
                 let newCost = cur.cost + Double(pack.edgeMeters[ei])
                 if newCost > maxMeters { continue }
@@ -581,18 +636,39 @@ nonisolated struct OnDeviceRouter {
         profile: RouteProfile,
         allowUnknown: Bool
     ) -> [String: Double] {
+        guard !pumps.isEmpty else { return [:] }
+        let targetSnaps = pumps.map { pump -> [EdgeSnap] in
+            let point = CLLocationCoordinate2D(latitude: pump.latitude, longitude: pump.longitude)
+            // Road distance cannot be shorter than the straight-line distance;
+            // skip impossible pumps before doing any geometry projection.
+            guard meters(from, point) <= maxMeters else { return [] }
+            return fuelSnaps(to: point, allowUnknown: allowUnknown, profile: profile)
+        }
         let wall = true
         guard let dist = exploreNodeMeters(
             from: from, toward: toward, maxMeters: maxMeters, profile: profile,
-            allowUnknown: allowUnknown, cityWall: wall
+            allowUnknown: allowUnknown, cityWall: wall, targetSnaps: targetSnaps
         ) else { return [:] }
         var out: [String: Double] = [:]
-        for pump in pumps {
+        for (pump, snaps) in zip(pumps, targetSnaps) {
             if Task.isCancelled { return [:] }
-            let ll = CLLocationCoordinate2D(latitude: pump.latitude, longitude: pump.longitude)
-            if let m = graphMeters(to: ll, dist: dist, profile: profile, allowUnknown: allowUnknown),
-               m <= maxMeters {
-                out[pump.id] = m
+            var best = Double.infinity
+            for snap in snaps {
+                guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
+                let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
+                let access = max(0, snap.distanceMeters)
+                if pack.hasDirectedArc(from: snap.nodeA, to: snap.nodeB, edge: snap.edgeIndex),
+                   snap.nodeA >= 0, snap.nodeA < dist.count, dist[snap.nodeA].isFinite {
+                    best = min(best, dist[snap.nodeA] + access + max(0, snap.distanceAlongM))
+                }
+                if pack.hasDirectedArc(from: snap.nodeB, to: snap.nodeA, edge: snap.edgeIndex),
+                   snap.nodeB >= 0, snap.nodeB < dist.count, dist[snap.nodeB].isFinite {
+                    best = min(best, dist[snap.nodeB] + access + max(0, edgeM - snap.distanceAlongM))
+                }
+            }
+            if best.isFinite,
+               best <= maxMeters {
+                out[pump.id] = best
             }
         }
         return out
