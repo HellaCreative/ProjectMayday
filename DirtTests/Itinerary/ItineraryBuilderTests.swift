@@ -128,6 +128,23 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
     }
 
+    @Test func identicalNewPinBuildsReceiveDifferentRouteSeeds() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "pack")
+        source.distances[key(points[0], points[1])] = 100_000
+
+        _ = await build(points, source: source, usable: nil)
+        let firstSeed = source.routeRequests.first?.options?.sessionSeed
+        source.routeRequests.removeAll()
+
+        _ = await build(points, source: source, usable: nil)
+        let secondSeed = source.routeRequests.first?.options?.sessionSeed
+
+        #expect(firstSeed != nil)
+        #expect(secondSeed != nil)
+        #expect(firstSeed != secondSeed)
+    }
+
     @Test func packFuelWindowConsumesProvenRoutesWithoutSecondRouteSearch() async throws {
         let start = point(0)
         let pump = point(0.45)
