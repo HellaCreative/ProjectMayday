@@ -234,7 +234,8 @@ final class PackRoutingSource: RoutingSource {
             avoidMotorways: req.options?.avoidMotorways == true,
             preferBackRoads: req.options?.preferBackRoads == true,
             mapZoom: req.options?.mapZoom,
-            matchLimitMeters: req.options?.matchLimitMeters
+            matchLimitMeters: req.options?.matchLimitMeters,
+            fastSearch: true
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
             RoutingDebugLog.shared.event(
