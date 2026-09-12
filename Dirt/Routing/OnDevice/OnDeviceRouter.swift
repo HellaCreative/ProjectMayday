@@ -619,6 +619,7 @@ nonisolated struct OnDeviceRouter {
         var best = Double.infinity
         let snaps = fuelSnaps(to: point, allowUnknown: allowUnknown, profile: profile)
         for snap in snaps {
+            if executionCancelled() { return nil }
             guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
             let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
             let access = max(0, snap.distanceMeters)
@@ -659,9 +660,10 @@ nonisolated struct OnDeviceRouter {
         ) else { return [:] }
         var out: [String: Double] = [:]
         for (pump, snaps) in zip(pumps, targetSnaps) {
-            if Task.isCancelled { return [:] }
+            if Task.isCancelled || executionCancelled() { return [:] }
             var best = Double.infinity
             for snap in snaps {
+                if executionCancelled() { return [:] }
                 guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
                 let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
                 let access = max(0, snap.distanceMeters)
@@ -3726,6 +3728,7 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool,
         profile: RouteProfile
     ) -> [EdgeSnap] {
+        guard !executionCancelled() else { return [] }
         guard NativeFuelPreparation.enabled else {
             return nearestEdgeSnaps(
                 to: point, allowUnknown: allowUnknown, profile: profile,
@@ -3734,12 +3737,12 @@ nonisolated struct OnDeviceRouter {
         }
         let key = "\(point.longitude.bitPattern):\(point.latitude.bitPattern):\(profile.rawValue):\(allowUnknown)"
         if let cached = FuelSnapCache.shared.get(key, pack: pack) { return cached }
-        guard !Task.isCancelled else { return [] }
+        guard !Task.isCancelled, !executionCancelled() else { return [] }
         let snaps = nearestEdgeSnaps(
             to: point, allowUnknown: allowUnknown, profile: profile,
             maxMeters: Self.preferredMatchMeters
         )
-        guard !Task.isCancelled else { return [] }
+        guard !Task.isCancelled, !executionCancelled() else { return [] }
         FuelSnapCache.shared.put(snaps, key: key, pack: pack)
         return snaps
     }
@@ -3857,7 +3860,9 @@ nonisolated struct OnDeviceRouter {
 
         var checked = Set<Int>()
         for radius in 0...maxRadius {
+            if executionCancelled() { return [] }
             for ei in grid.edgeIndices(nearLat: lat, lon: lon, radiusCells: radius) {
+                if executionCancelled() { return [] }
                 if checked.contains(ei) { continue }
                 checked.insert(ei)
                 if pack.version < 4 || !pack.legalTopology {
@@ -3891,6 +3896,7 @@ nonisolated struct OnDeviceRouter {
 
                 var along = 0.0
                 for i in 1..<poly.count {
+                    if executionCancelled() { return [] }
                     let segA = poly[i - 1]
                     let segB = poly[i]
                     let segM = meters(segA, segB)
