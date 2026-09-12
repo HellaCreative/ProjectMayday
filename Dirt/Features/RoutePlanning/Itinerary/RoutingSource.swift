@@ -876,11 +876,14 @@ struct RoutingSourcePolicy {
             } else {
                 chosen = isOnline() ? live : pack
             }
+            let selectedPath = chosen.name == pack.name
+                ? needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) }
+                : nil
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
                     "provinces=[\(provinces.joined(separator: ","))] " +
                     "installed=[\(installed.joined(separator: ","))] " +
-                    "path=\(needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) } ?? "nil") " +
+                    "selectedPath=\(selectedPath ?? "nil") " +
                     "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline()) " +
                     "selected=\(chosen.name) " +
                     "selectionReason=\(packsCover && useInstalled ? "installed-packs" : "online-or-fallback")"
