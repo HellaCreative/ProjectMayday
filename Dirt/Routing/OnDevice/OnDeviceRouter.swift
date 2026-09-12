@@ -692,9 +692,23 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool
     ) -> Double? {
         let wall = true
+        // The old form flooded every eligible node inside the range and only
+        // snapped the destination after the flood completed. Fuel planning
+        // calls this as a feasibility probe, so a 180 km cap could spend the
+        // entire window exploring roads that cannot improve the destination
+        // answer. Make the destination a settled target: the flood still
+        // returns the exact minimum for every legal destination snap, but it
+        // stops as soon as those snaps are finalized.
+        let destinationSnaps = fuelSnaps(
+            to: to,
+            allowUnknown: allowUnknown,
+            profile: profile
+        )
+        guard !destinationSnaps.isEmpty else { return nil }
         guard let dist = exploreNodeMeters(
             from: from, toward: to, maxMeters: maxMeters, profile: profile,
-            allowUnknown: allowUnknown, cityWall: wall
+            allowUnknown: allowUnknown, cityWall: wall,
+            targetSnaps: [destinationSnaps]
         ) else { return nil }
         return graphMeters(to: to, dist: dist, profile: profile, allowUnknown: allowUnknown)
     }
