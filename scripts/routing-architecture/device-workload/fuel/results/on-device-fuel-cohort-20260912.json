@@ -100,7 +100,7 @@
       ]
     }
   ],
-  "decision": "Keep 1f4382d as the private candidate. Device install remains paused until the fast path has a broader host matrix and the source-walk/pump approach qualification is addressed.",
+  "decision": "Keep 3e3ce62 as the private candidate. Host evidence meets the 1.8s single-region one-stop gate; device install remains paused while multi-stop/cross-region and strict pump-access qualification continue.",
   "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
   "recovery": "Do not install to white from this checkpoint. Rebuild the private probe from the current source and rerun the fixture before any device test.",
   "routeReuse": {
@@ -151,8 +151,8 @@
     "decision": "Rejected: the endpoint arguments are not consumed by the native router yet, so the trial was behaviorally a no-op. Do not carry dead plumbing into the device candidate."
   },
   "fastOnDeviceCandidate": {
-    "checkpoint": "eb314e4",
-    "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; cross-region and multi-stop windows retain the full qualified planner. The returned start\u2192pump response now appends the short mapped-forecourt approach so displayed geometry closes exactly at the fuel stop; it remains explicitly labelled soft-stitch/unverified until customer-access edges are authored.",
+    "checkpoint": "3e3ce62",
+    "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; cross-region and multi-stop windows retain the full qualified planner. The returned start\u2192pump response now appends the short mapped-forecourt approach so displayed geometry closes exactly at the fuel stop; it remains explicitly labelled soft-stitch/unverified until customer-access edges are authored. Fast candidate ordering preserves the existing urban-core avoidance preference, and required first-station requests stay on the qualified planner.",
     "hostFixture": {
       "pack": "NS fabric-v4-20260908-01",
       "targetCohort": 16,
