@@ -300,6 +300,32 @@ final class RoutePlannerModel {
             reroute()
         }
     }
+    /// Rider-facing route preferences shared by the refined planning surface.
+    /// The current pack engine directly supports highway and back-road choices;
+    /// the remaining values are retained so the same preference snapshot can be
+    /// carried into the richer online planner when available.
+    var ridePreferences: RidePreferences?
+
+    var displayedRidePreferences: RidePreferences {
+        ridePreferences ?? RidePreferences(
+            preferDifferentRoads: preferBackRoads,
+            wander: 1,
+            avoidCities: true,
+            avoidHighways: avoidMotorways
+        )
+    }
+
+    func applyRidePreferences(_ preferences: RidePreferences) {
+        let next = preferences.normalized
+        guard next != displayedRidePreferences else { return }
+        ridePreferences = next
+        suppressPlannerReroute = true
+        avoidMotorways = next.avoidHighways
+        preferBackRoads = next.preferDifferentRoads ?? false
+        suppressPlannerReroute = false
+        reroute()
+    }
+
     var allowUnknown = false {
         didSet {
             if oldValue != allowUnknown {

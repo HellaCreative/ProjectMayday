@@ -7,6 +7,8 @@ struct OfflinePacksSheet: View {
 
     @Environment(AppEnvironment.self) private var app
     @Binding var isPresented: Bool
+    @State private var busyIDs: Set<String> = []
+    @State private var actionError: String?
 
     private var packs: GraphPackStore { app.graphPacks }
     private var rows: [GraphPackStore.InstalledPackManagementRow] {
@@ -18,6 +20,9 @@ struct OfflinePacksSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DirtSpace.group) {
                     intro
+                    if let actionError {
+                        Text(actionError).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
+                    }
                     if rows.isEmpty {
                         emptyState
                     } else {
@@ -38,7 +43,7 @@ struct OfflinePacksSheet: View {
                     Button("Done") { isPresented = false }
                         .font(DirtType.rowTitle)
                         .fontWeight(.semibold)
-                        .foregroundStyle(DirtTheme.orange)
+                        .foregroundStyle(DirtTheme.action)
                         .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
                 }
             }
@@ -57,7 +62,7 @@ struct OfflinePacksSheet: View {
             Text("Installed routing packs")
                 .font(DirtType.title)
                 .foregroundStyle(DirtTheme.ink)
-            Text("DIRT offers your current region after location access and asks before adding regions to a route. You can delete a pack here; you cannot browse or pre-download unrelated regions.")
+            Text("Packs are installed when a route needs them. Update installed packs here when a new version is available, or delete them to free space.")
                 .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -79,38 +84,67 @@ struct OfflinePacksSheet: View {
     }
 
     private func installedRow(_ row: GraphPackStore.InstalledPackManagementRow) -> some View {
-        HStack(alignment: .center, spacing: DirtSpace.inner) {
+        HStack(spacing: DirtSpace.inner) {
             VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                 Text(row.title)
                     .font(DirtType.rowTitle)
                     .foregroundStyle(DirtTheme.ink)
                 Text(row.revisionLabel)
                     .font(DirtType.helper)
-                    .foregroundStyle(row.revisionState == .stale ? DirtTheme.orange : DirtTheme.muted)
+                    .foregroundStyle(row.revisionState == .stale ? DirtTheme.action : DirtTheme.muted)
                 Text(sizeLabel(bytes: row.bytes))
                     .font(DirtType.metricInline)
-                    .foregroundStyle(DirtTheme.muted.opacity(0.9))
+                    .foregroundStyle(DirtTheme.muted)
             }
-            Spacer(minLength: DirtSpace.tight)
-            Button("Delete") {
-                packs.deleteRegion(row.id)
+            Spacer(minLength: 0)
+            HStack(spacing: DirtSpace.row) {
+                if busyIDs.contains(row.id) {
+                    ProgressView().tint(DirtTheme.orange)
+                        .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
+                        .accessibilityLabel("Updating pack")
+                } else {
+                    if row.revisionState == .stale {
+                        Button("Update") { perform(row.id, update: true) }
+                            .foregroundStyle(DirtTheme.action)
+                            .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
+                    }
+                    Button("Delete", role: .destructive) { perform(row.id, update: false) }
+                        .foregroundStyle(DirtTheme.danger)
+                        .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
+                }
             }
             .font(DirtType.rowTitle)
             .fontWeight(.semibold)
-            .foregroundStyle(DirtTheme.danger)
-            .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
         }
         .padding(DirtSpace.inner)
         .frame(minHeight: DirtHit.control)
         .background(
-            DirtTheme.orange.opacity(0.08),
+            DirtTheme.rowFill,
             in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
         )
         .overlay(
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.orange.opacity(0.35), lineWidth: 1)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
         )
+    }
+
+    private func perform(_ id: String, update: Bool) {
+        guard busyIDs.insert(id).inserted else { return }
+        actionError = nil
+        Task {
+            defer { busyIDs.remove(id) }
+            do {
+                if update {
+                    try await packs.installVerifiedPacks([id], replaceInstalled: true)
+                } else {
+                    packs.deleteRegion(id)
+                }
+            } catch {
+                actionError = "Could not \(update ? "update" : "delete") pack. \(error.localizedDescription)"
+            }
+        }
     }
 
     private func sizeLabel(bytes: Int64) -> String {
