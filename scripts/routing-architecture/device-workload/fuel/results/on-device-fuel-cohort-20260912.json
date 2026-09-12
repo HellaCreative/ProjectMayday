@@ -235,6 +235,49 @@
         "error": "fuel_window_budget_exceeded",
         "routeCalls": 2
       }
-    ]
+    ],
+    "concurrency": {
+      "fourProcesses": {
+        "seconds": [
+          1.742,
+          1.744,
+          1.742,
+          1.742
+        ],
+        "status": "complete",
+        "timeBudgetExpired": false,
+        "rssMiB": [
+          88.4,
+          90.9,
+          88.4,
+          88.6
+        ]
+      },
+      "eightProcesses": {
+        "seconds": [
+          2.379,
+          2.329,
+          2.391,
+          2.393,
+          1.868,
+          1.869,
+          2.325,
+          2.4
+        ],
+        "status": "unknown",
+        "timeBudgetExpired": true,
+        "rssMiB": [
+          94.9,
+          86.9,
+          85.0,
+          91.1,
+          90.3,
+          94.8,
+          94.5,
+          88.6
+        ]
+      },
+      "interpretation": "Single-process and four-way host runs meet the 1.8s cutoff. Eight-way contention on one Mac exceeds it while each process remains under 95 MiB RSS; this is CPU contention, not graph-memory growth."
+    }
   }
 }
