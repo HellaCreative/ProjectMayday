@@ -211,6 +211,13 @@ nonisolated struct OnDeviceRouter {
     /// returned route still goes through the same legal snap and turn checks.
     var fastSearch: Bool = false
 
+    /// Build the pack's edge index during the location/pack warmup task so a
+    /// rider's first fuel hop does not pay the full spatial-index construction
+    /// cost on the routing critical path.
+    static func prewarmSpatialIndex(for pack: GraphV2Pack) {
+        _ = PackEdgeSpatialIndex.shared.grid(for: pack)
+    }
+
     /// New packs carry OSM-derived local cores. Static boxes remain a temporary
     /// compatibility fallback for older installed packs.
     private var packUrbanCores: [UrbanCore.Box] {
@@ -893,6 +900,7 @@ nonisolated struct OnDeviceRouter {
         // avoidance cost so they do not sever otherwise valid rural routes.
         ctx.settlementWall = false
         ctx.settlementFallback = profile != .cleanest ? true : settlementFallback
+        ctx.fastSearch = fastSearch
         ctx.cleanMetroMultiplier = cleanMetroMultiplier
         let e4 = RoadTierStats.e4Flags(
             for: profile,
@@ -921,8 +929,12 @@ nonisolated struct OnDeviceRouter {
             ) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
                 hunt.costMode = costMode
-                // A fresh request seed is an intentional route variation.
-                hunt.variety = sessionSeed != 0
+                // A fresh request seed is an intentional route variation for
+                // ordinary planning. A fuel hop is a single bounded legal-leg
+                // proof; keeping one label per node prevents the resource
+                // fan from consuming the whole station-hop budget. The next
+                // route window still receives a fresh seed.
+                hunt.variety = !fastSearch && sessionSeed != 0
                 hunt.corridorMeters = width
                 hunt.hardCorridor = width != nil
                 hunt.boundedSearch = true
@@ -1745,7 +1757,11 @@ nonisolated struct OnDeviceRouter {
         }
 
         var slackToDest: [Double]? = nil
-        if let cap = ctx.maxPathMeters, cap.isFinite, cap < .greatestFiniteMagnitude / 4 {
+        // Fast fuel hops already enforce the candidate-specific cap in the
+        // forward search. The reverse flood is a valuable pruning bound for
+        // full route planning, but duplicating that graph walk on every phone
+        // station hop adds latency without changing the legal result.
+        if !fastSearch, let cap = ctx.maxPathMeters, cap.isFinite, cap < .greatestFiniteMagnitude / 4 {
             slackToDest = fillShortestMeters(
                 from: endVirt,
                 capMeters: cap,
@@ -2235,7 +2251,8 @@ nonisolated struct OnDeviceRouter {
                 legs: legs,
                 nodeFallback: fallback,
                 profile: profile,
-                allowUnknown: policyUnknown
+                allowUnknown: policyUnknown,
+                fastFuelPrune: ctx.fastSearch
             ),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
@@ -2651,7 +2668,8 @@ nonisolated struct OnDeviceRouter {
                 legs: legs,
                 nodeFallback: [startSnap.projected, endSnap.projected],
                 profile: profile,
-                allowUnknown: policyUnknown
+                allowUnknown: policyUnknown,
+                fastFuelPrune: ctx.fastSearch
             ),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
@@ -3298,7 +3316,8 @@ nonisolated struct OnDeviceRouter {
             legs: legs,
             nodeFallback: [startSnap.projected, endSnap.projected],
             profile: profile,
-            allowUnknown: allowUnknown && profile != .cleanest
+            allowUnknown: allowUnknown && profile != .cleanest,
+            fastFuelPrune: ctx.fastSearch
         ))
     }
 
@@ -3308,7 +3327,8 @@ nonisolated struct OnDeviceRouter {
         legs: [Leg],
         nodeFallback: [CLLocationCoordinate2D],
         profile: RouteProfile = .balanced,
-        allowUnknown: Bool = false
+        allowUnknown: Bool = false,
+        fastFuelPrune: Bool = false
     ) -> Result {
         var worked = legs
 
@@ -3316,7 +3336,10 @@ nonisolated struct OnDeviceRouter {
         // Clean+leaves lockstep: JS `pruneGeographicLoops` is a no-op on the NS
         // fixture routes; Swift's proximity-grid variant can drop short stubs and
         // break edge-id identity. Skip prune so both engines keep the Dijkstra list.
-        let skipGeoPrune = profile == .cleanest && pack.hasLeaves
+        // Clean+leaves keeps the exact lockstep path for ordinary planning.
+        // Fast fuel hops are independently bounded and still need the same
+        // meaningful-loop guard as Dirt/Balanced before a pump is committed.
+        let skipGeoPrune = profile == .cleanest && pack.hasLeaves && !fastFuelPrune
         let hasGeometry = worked.contains { $0.coordinates.count >= 3 }
             || pack.geometry != nil
         if hasGeometry, !worked.isEmpty, !skipGeoPrune {
@@ -3328,13 +3351,16 @@ nonisolated struct OnDeviceRouter {
                     surfaceName: $0.surfaceName
                 )
             }
+            // Fast fuel hops still need loop erasure. They use a coarser
+            // meaningful-loop threshold to avoid spending the full route
+            // budget on dozens of tiny geometry revisits while preserving
+            // the rider-visible detours and out-and-backs.
+            let pruningOptions = fastFuelPrune
+                ? OnDevicePathPruning.Options(cellMeters: 40, matchMeters: 60, minLoopMeters: 100)
+                : OnDevicePathPruning.Options(cellMeters: 20, matchMeters: 30, minLoopMeters: 20)
             let pruned = OnDevicePathPruning.pruneGeographicLoops(
                 pieces,
-                options: OnDevicePathPruning.Options(
-                    cellMeters: 20,
-                    matchMeters: 30,
-                    minLoopMeters: 20
-                )
+                options: pruningOptions
             )
             worked = pruned.edges.map { edge in
                 let prior = worked.first(where: { $0.edgeId == edge.edgeId })

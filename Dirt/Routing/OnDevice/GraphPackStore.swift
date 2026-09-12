@@ -1306,6 +1306,10 @@ final class GraphPackStore {
     /// does not pay decode latency on the routing critical path.
     func warmupActivePack(near coordinate: CLLocationCoordinate2D) async {
         await ensureActivePackAsync(for: [coordinate])
+        guard let pack = activePack else { return }
+        await Task.detached(priority: .utility) {
+            OnDeviceRouter.prewarmSpatialIndex(for: pack)
+        }.value
     }
 
     /// When online, fetch missing `geometry.v1` for installed regions before paint.

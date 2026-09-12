@@ -57,7 +57,54 @@ struct DirtApp: App {
             RoutingDebugLog.shared.event("hybrid-probe \(message)")
             print("[HybridProbe] \(message)")
         }
-        emit("begin ns-nb fuel profiles=3 rangeMeters=193121 preparation=active")
+        func summary(
+            _ response: FuelChainResponse,
+            profile: RouteProfile,
+            label: String,
+            began: TimeInterval,
+            fromStop: String? = nil
+        ) -> String {
+            let stops = response.stops?.map(\.id).joined(separator: ",") ?? "-"
+            let meters = response.graphMeters?.map { String(format: "%.0f", $0) }.joined(separator: ",") ?? "-"
+            let regions = response.regionIds?.joined(separator: ",") ?? "-"
+            let window = response.windowComplete.map { $0 ? "complete" : "partial" } ?? "-"
+            let gap = response.gapMeters.map { String(format: "%.0f", $0) } ?? "-"
+            let strategy = response.diagnostics?.strategy ?? "-"
+            let matched = response.diagnostics.map { String(describing: $0.matchedFuel) } ?? "-"
+            let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
+            let error = response.error ?? "-"
+            let origin = fromStop.map { " fromStop=\($0)" } ?? ""
+            let loopAudit: String
+            if let route = response.routes?.first, let segments = route.segments {
+                let pieces = segments.compactMap { segment -> OnDevicePathPruning.EdgePiece? in
+                    guard let geometry = segment.geometry, geometry.count >= 2 else { return nil }
+                    return OnDevicePathPruning.EdgePiece(
+                        edgeId: segment.edgeId ?? "",
+                        coords: geometry.map(\.locationCoordinate),
+                        meters: segment.distanceMeters ?? 0,
+                        surfaceName: segment.surfaceClass ?? "unknown"
+                    )
+                }
+                let audit = OnDevicePathPruning.pruneGeographicLoops(
+                    pieces,
+                    options: OnDevicePathPruning.Options(
+                        cellMeters: 40,
+                        matchMeters: 60,
+                        minLoopMeters: 100
+                    )
+                )
+                loopAudit = " auditLoops=\(audit.prunedLoopCount) auditLoopMeters=\(Int(audit.prunedMeters))"
+            } else {
+                loopAudit = ""
+            }
+            return "profile=\(profile.rawValue) \(label) status=\(response.status) seconds=\(seconds)"
+                + " regions=\(regions) window=\(window) strategy=\(strategy) matched=\(matched)"
+                + " stops=\(stops) graphMeters=\(meters) gapMeters=\(gap) error=\(error)\(loopAudit)\(origin)"
+        }
+        let warmupBegan = ProcessInfo.processInfo.systemUptime
+        await app.graphPacks.warmupActivePack(near: start.locationCoordinate)
+        let warmupSeconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - warmupBegan)
+        emit("begin ns-nb fuel profiles=3 rangeMeters=193121 preparation=active warmupSeconds=\(warmupSeconds)")
         for (profile, profileMeters) in profiles {
             emit("profile-begin=\(profile.rawValue)")
             let began = ProcessInfo.processInfo.systemUptime
@@ -79,16 +126,45 @@ struct DirtApp: App {
             )
             do {
                 let response = try await source.fuelChain(request)
-                let stops = response.stops?.map(\.id).joined(separator: ",") ?? "-"
-                let meters = response.graphMeters?.map { String(format: "%.0f", $0) }.joined(separator: ",") ?? "-"
-                let regions = response.regionIds?.joined(separator: ",") ?? "-"
-                let window = response.windowComplete.map { $0 ? "complete" : "partial" } ?? "-"
-                let gap = response.gapMeters.map { String(format: "%.0f", $0) } ?? "-"
-                let strategy = response.diagnostics?.strategy ?? "-"
-                let matched = response.diagnostics.map { String(describing: $0.matchedFuel) } ?? "-"
-                let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
-                let error = response.error ?? "-"
-                emit("profile=\(profile.rawValue) status=\(response.status) seconds=\(seconds) regions=\(regions) window=\(window) strategy=\(strategy) matched=\(matched) stops=\(stops) graphMeters=\(meters) gapMeters=\(gap) error=\(error)")
+                emit(summary(response, profile: profile, label: "window1", began: began))
+
+                // The production itinerary should not attempt a destination
+                // proof for every fuel hop. Verify the intended contract
+                // directly: begin the next bounded search at the committed
+                // pump, exclude that pump, and ask only for the next pump.
+                if let stop = response.stops?.first {
+                    let window2Began = ProcessInfo.processInfo.systemUptime
+                    let window2 = FuelChainRequest(
+                        profile: profile,
+                        from: stop.coordinate,
+                        to: end,
+                        allowUnknown: false,
+                        usableRangeMeters: 193_121.28,
+                        firstLegMaxMeters: 193_121.28,
+                        requireFuelStopBeforeEnd: true,
+                        minimumFuelStops: 1,
+                        profileMeters: profileMeters,
+                        riderLegId: "private-device-hybrid-probe-window2",
+                        excludedStationIds: [stop.id],
+                        windowMaxStops: 1,
+                        allowPartialWindow: true,
+                        windowTimeBudgetMs: 20_000,
+                        mapZoom: 8
+                    )
+                    do {
+                        let second = try await source.fuelChain(window2)
+                        emit(summary(
+                            second,
+                            profile: profile,
+                            label: "window2",
+                            began: window2Began,
+                            fromStop: stop.id
+                        ))
+                    } catch {
+                        let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - window2Began)
+                        emit("profile=\(profile.rawValue) window2 failure=\(error) seconds=\(seconds) fromStop=\(stop.id)")
+                    }
+                }
             } catch {
                 let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
                 emit("profile=\(profile.rawValue) failure=\(error) seconds=\(seconds)")

@@ -385,44 +385,7 @@ final class PackRoutingSource: RoutingSource {
                 sessionSeed: seed,
                 excluding: Set(req.fuel.excludedStationIds ?? [])
             )
-            let fastAvoidanceBoxes = await packs.fuelAvoidanceBoxes(
-                from: start.locationCoordinate,
-                toward: end.locationCoordinate
-            )
             let rankedOrder = Dictionary(uniqueKeysWithValues: ranked.enumerated().map { ($1.id, $0) })
-            let urbanRanked = ranked.sorted {
-                let aUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
-                    $0, start: start, destination: end, boxes: fastAvoidanceBoxes
-                )
-                let bUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
-                    $1, start: start, destination: end, boxes: fastAvoidanceBoxes
-                )
-                if aUrban != bUrban { return !aUrban }
-                return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
-            }
-            // The geographic reachability above is an air-distance lower
-            // bound. A pump at the absolute tank edge leaves no room for a
-            // Dirt detour, so try the conservative 80% band first and retain
-            // the edge-band candidates as a correctness-preserving fallback.
-            let conservative = urbanRanked.filter {
-                guard let air = approximateReachability[$0.id] else { return false }
-                return air <= firstCap * 0.80
-            }
-            let conservativeIDs = Set(conservative.map(\.id))
-            // Within the conservative band, prefer a mid-range pump. This
-            // gives the continuation real fuel margin on Dirt detours instead
-            // of selecting an early town pump or the absolute tank edge.
-            let targetAir = firstCap * 0.72
-            func fastRangeScore(_ station: POIFeature) -> Double {
-                guard let air = approximateReachability[station.id] else { return .greatestFiniteMagnitude }
-                return abs(air - targetAir)
-            }
-            let orderedConservative = conservative.sorted {
-                let aScore = fastRangeScore($0)
-                let bScore = fastRangeScore($1)
-                if abs(aScore - bScore) > 1_000 { return aScore < bScore }
-                return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
-            }
             // A partial window only needs the next legal pump. Keep that
             // decision local: prefer a forward station in the departure pack
             // and the smallest useful air-distance, then let the next window
@@ -451,9 +414,55 @@ final class PackRoutingSource: RoutingSource {
                 if abs(aAir - bAir) > 2_000 { return aAir < bAir }
                 return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
             }
-            let fastRanked = req.fuel.allowPartialWindow == true
-                ? partialRanked
-                : orderedConservative + urbanRanked.filter { !conservativeIDs.contains($0.id) }
+            let fastRanked: [POIFeature]
+            if req.fuel.allowPartialWindow == true {
+                // The bounded one-pump contract does not need urban-box
+                // scoring: it chooses the nearest forward pump in the
+                // departure pack and proves the road leg. Avoid loading and
+                // sorting avoidance geometry on every phone fuel window.
+                fastRanked = partialRanked
+            } else {
+                let fastAvoidanceBoxes = await packs.fuelAvoidanceBoxes(
+                    from: start.locationCoordinate,
+                    toward: end.locationCoordinate
+                )
+                let urbanRanked = ranked.sorted {
+                    let aUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
+                        $0, start: start, destination: end, boxes: fastAvoidanceBoxes
+                    )
+                    let bUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
+                        $1, start: start, destination: end, boxes: fastAvoidanceBoxes
+                    )
+                    if aUrban != bUrban { return !aUrban }
+                    return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
+                }
+                // The geographic reachability above is an air-distance lower
+                // bound. A pump at the absolute tank edge leaves no room for
+                // a Dirt detour, so try the conservative 80% band first and
+                // retain the edge-band candidates as a correctness-preserving
+                // fallback.
+                let conservative = urbanRanked.filter {
+                    guard let air = approximateReachability[$0.id] else { return false }
+                    return air <= firstCap * 0.80
+                }
+                let conservativeIDs = Set(conservative.map(\.id))
+                // Within the conservative band, prefer a mid-range pump. This
+                // gives the continuation real fuel margin on Dirt detours
+                // instead of selecting an early town pump or the absolute
+                // tank edge.
+                let targetAir = firstCap * 0.72
+                func fastRangeScore(_ station: POIFeature) -> Double {
+                    guard let air = approximateReachability[station.id] else { return .greatestFiniteMagnitude }
+                    return abs(air - targetAir)
+                }
+                let orderedConservative = conservative.sorted {
+                    let aScore = fastRangeScore($0)
+                    let bScore = fastRangeScore($1)
+                    if abs(aScore - bScore) > 1_000 { return aScore < bScore }
+                    return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
+                }
+                fastRanked = orderedConservative + urbanRanked.filter { !conservativeIDs.contains($0.id) }
+            }
             for candidate in fastRanked.prefix(3) {
                 guard Date() < fastDeadline else { break }
                 let candidateCoordinate = CLLocationCoordinate2D(
@@ -486,16 +495,27 @@ final class PackRoutingSource: RoutingSource {
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
+                    // Fuel stations must be proven against a nearby road;
+                    // scanning the full zoom-aware pin radius adds work and
+                    // cannot qualify a station whose approach is farther than
+                    // the 150 m endpoint contract anyway.
+                    matchLimitMeters: req.options?.matchLimitMeters ?? OnDeviceRouter.preferredMatchMeters,
                     fastSearch: true,
                     deadline: fastDeadline
                 )
                 switch firstResult {
                 case .success(let firstRoute):
+                    let endpointGap = Int(GeoMath.meters(
+                        firstRoute.coordinates.last ?? start.locationCoordinate,
+                        candidateCoordinate
+                    ))
                     RoutingDebugLog.shared.event(
                         "fuel fast candidate=\(candidate.id) first=success meters=\(Int(firstRoute.distanceMeters)) "
                             + "airMeters=\(Int(approximateReachability[candidate.id] ?? -1)) "
                             + "region=\(GraphPackStore.primaryRegionId(containing: candidateCoordinate) ?? "-") "
-                            + "endpointGap=\(Int(GeoMath.meters(firstRoute.coordinates.last ?? start.locationCoordinate, candidateCoordinate))) "
+                            + "endpointGap=\(endpointGap) "
+                            + "searchMs=\(firstRoute.searchMeta.elapsedMs) pops=\(firstRoute.searchMeta.pops) timedOut=\(firstRoute.searchMeta.timedOut ? 1 : 0) "
+                            + "backtrackMeters=\(Int(firstRoute.backtrackMeters)) dirtPct=\(firstRoute.reportedDirtPercent) points=\(firstRoute.coordinates.count) "
                             + "elapsedMs=\(Int((ProcessInfo.processInfo.systemUptime - candidateBegan) * 1000))"
                     )
                 case .failure(let failure):
@@ -591,6 +611,7 @@ final class PackRoutingSource: RoutingSource {
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
+                    matchLimitMeters: req.options?.matchLimitMeters ?? OnDeviceRouter.preferredMatchMeters,
                     fastSearch: true,
                     deadline: fastDeadline
                 )

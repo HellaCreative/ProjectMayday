@@ -295,6 +295,9 @@ nonisolated struct HopSearchContext: Sendable {
     var settlementFallback: Bool
     var noBacktrack: Bool
     var variety: Bool
+    /// Fast bounded fuel-hop search may use a lighter finalization path after
+    /// the forward graph proof has already enforced its cap.
+    var fastSearch: Bool
     var corridorMeters: Double?
     var hardCorridor: Bool
     var boundedSearch: Bool
@@ -328,6 +331,7 @@ nonisolated struct HopSearchContext: Sendable {
             settlementFallback: true,
             noBacktrack: true,
             variety: profile != .cleanest,
+            fastSearch: false,
             corridorMeters: HopSearchPolicy.corridorMeters(for: profile),
             hardCorridor: false,
             boundedSearch: false,
