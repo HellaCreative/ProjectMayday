@@ -223,4 +223,51 @@ struct OnDevicePackBenchmarkTests {
             }
         }
     }
+
+    @Test("NS to NB cross-region route loads a bounded seam proof")
+    @MainActor
+    func nsToNBCrossRegionUsesCanonicalSeamBeforeDeadline() async throws {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory
+            .appendingPathComponent("dirt-cross-region-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+        let versionRoot = tempRoot.appendingPathComponent(
+            AppConfig.v4CandidateReleaseId,
+            isDirectory: true
+        )
+        for region in ["ns", "nb"] {
+            let destination = versionRoot.appendingPathComponent(region, isDirectory: true)
+            try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+            for name in ["graph.v4.bin", "geometry.v1.bin", "cross-pack-seams.v2.json"] {
+                let source = root.appendingPathComponent("\(region)/\(name)")
+                guard fm.fileExists(atPath: source.path) else {
+                    Issue.record("Missing \(region) \(name) fixture")
+                    continue
+                }
+                try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
+            }
+        }
+
+        let store = GraphPackStore(cacheRoot: tempRoot)
+        let from = CLLocationCoordinate2D(latitude: 44.764830, longitude: -63.340243)
+        let to = CLLocationCoordinate2D(latitude: 47.903181, longitude: -66.074515)
+        let began = ProcessInfo.processInfo.systemUptime
+        let result = await store.routeOnDeviceDetailed(
+            from: from,
+            to: to,
+            profile: .dirt,
+            allowUnknown: false,
+            fastSearch: true,
+            deadline: Date().addingTimeInterval(20)
+        )
+        let elapsed = ProcessInfo.processInfo.systemUptime - began
+        switch result {
+        case .success(let route):
+            print("[RealV4] NS→NB chained success=\(String(format: "%.3f", elapsed))s meters=\(Int(route.distanceMeters)) dirt=\(route.reportedDirtPercent)")
+            #expect(route.distanceMeters > 0)
+            #expect(route.coordinates.count > 2)
+        case .failure(let failure):
+            Issue.record("NS→NB chained route failed after \(String(format: "%.3f", elapsed))s: \(failure)")
+        }
+    }
 }

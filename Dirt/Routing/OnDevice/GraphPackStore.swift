@@ -119,7 +119,15 @@ final class GraphPackStore {
     /// province into resident routing state.
     private var decodedPackCache: [String: GraphV2Pack] = [:]
     private var decodedPackCacheOrder: [String] = []
+    /// Seam sidecars are loaded only for a cross-region request. Keeping this
+    /// separate from the graph cache avoids parsing a large border document
+    /// (for example NB's Maine entries) on every ordinary route.
+    private var decodedPackSeamRegions: Set<String> = []
     private static let decodedPackCacheLimit = 2
+
+    /// Test-only injection point for immutable fixture packs. Production uses
+    /// the app's Application Support directory below.
+    private let configuredCacheRoot: URL?
 
     /// When true, a checksum-valid installed revision is not replaced in place.
     var protectInstalledRevisions = false
@@ -146,6 +154,10 @@ final class GraphPackStore {
     }()
 
     private var cacheRoot: URL {
+        if let configuredCacheRoot {
+            try? FileManager.default.createDirectory(at: configuredCacheRoot, withIntermediateDirectories: true)
+            return configuredCacheRoot
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         let url = base.appendingPathComponent("dirt-graph-packs", isDirectory: true)
@@ -156,7 +168,8 @@ final class GraphPackStore {
     /// True while any quiet auto-download is in flight (one region at a time).
     var isQuietDownloadInFlight: Bool { !quietDownloadIds.isEmpty }
 
-    init() {
+    init(cacheRoot: URL? = nil) {
+        configuredCacheRoot = cacheRoot
         seedLocalV3PacksFromDocumentsIfPresent()
         refreshInstalledFromDisk()
         Task { await refreshCatalog() }
@@ -658,6 +671,7 @@ final class GraphPackStore {
         packedFuelByRegion.removeValue(forKey: id)
         decodedPackCache.removeValue(forKey: id)
         decodedPackCacheOrder.removeAll { $0 == id }
+        decodedPackSeamRegions.remove(id)
         if activePack?.regionId?.lowercased() == id {
             activePack = nil
             loadedRegionIds.removeAll { $0.lowercased() == id }
@@ -981,6 +995,7 @@ final class GraphPackStore {
                 guard deadline.map({ Date() < $0 }) ?? true,
                       let finalPack = await decodedInstalledPack(regionId: regionId)
                 else { return nil }
+                let finalStartedAt = ProcessInfo.processInfo.systemUptime
                 let final = await routeOnDeviceInRegion(
                     from: current, to: to, regionId: regionId,
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -1002,10 +1017,18 @@ final class GraphPackStore {
                     deadline: deadline,
                     packOverride: finalPack
                 )
+                let finalElapsedMs = Int((ProcessInfo.processInfo.systemUptime - finalStartedAt) * 1_000)
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
                     if case .failure(let reason) = final { lastFailure = reason }
+                    RoutingDebugLog.shared.event(
+                        "on-device final hop region=\(regionId) elapsedMs=\(finalElapsedMs) result=failure"
+                    )
                     return nil
                 }
+                RoutingDebugLog.shared.event(
+                    "on-device final hop region=\(regionId) elapsedMs=\(finalElapsedMs) "
+                        + "meters=\(Int(last.distanceMeters))"
+                )
                 return OnDeviceRouter.Result.concatenating(hops + [last])
             }
 
@@ -1013,34 +1036,57 @@ final class GraphPackStore {
             guard deadline.map({ Date() < $0 }) ?? true,
                   let localPack = await decodedInstalledPack(regionId: regionId),
                   localPack.regionId?.lowercased() == regionId else { return nil }
-            let anchors = CrossPackSeam.operationalCandidates(
-                from: current,
-                to: to,
-                anchors: localPack.crossPackSeams[nextRegionId] ?? [],
-                urbanCores: localPack.urbanCores,
-                pack: localPack
-            )
-            guard !anchors.isEmpty else { return nil }
-
             guard deadline.map({ Date() < $0 }) ?? true,
                   let remotePack = await decodedInstalledPack(regionId: nextRegionId),
                   remotePack.regionId?.lowercased() == nextRegionId else { return nil }
-            let reverseAnchors = remotePack.crossPackSeams[regionId] ?? []
+
+            // Use the smaller of the two immutable proof documents. A region
+            // can have many unrelated borders (NB's Maine sidecar is much
+            // larger than its NS side), while the requested crossing has only
+            // a small set of shared anchors. The proof contains both edge
+            // identities, so it remains valid in either travel direction.
+            let seamSourceID: String
+            let localSeamBytes = seamFileBytes(regionId: regionId)
+            let remoteSeamBytes = seamFileBytes(regionId: nextRegionId)
+            if let localSeamBytes, let remoteSeamBytes {
+                seamSourceID = localSeamBytes <= remoteSeamBytes ? regionId : nextRegionId
+            } else {
+                seamSourceID = localSeamBytes != nil ? regionId : nextRegionId
+            }
+            guard deadline.map({ Date() < $0 }) ?? true,
+                  let seamPack = await decodedInstalledPackWithSeams(regionId: seamSourceID) else {
+                return nil
+            }
+            let sourceAnchors: [GraphV2Pack.CrossPackSeamAnchor]
+            if seamSourceID == regionId {
+                sourceAnchors = seamPack.crossPackSeams[nextRegionId] ?? []
+            } else {
+                sourceAnchors = seamPack.crossPackSeams[regionId] ?? []
+            }
+            let anchors = CrossPackSeam.operationalCandidates(
+                from: current,
+                to: to,
+                anchors: sourceAnchors,
+                urbanCores: seamPack.urbanCores,
+                pack: seamPack
+            )
+            guard !anchors.isEmpty else { return nil }
+
+            // The canonical sidecar is independently hash-verified and records
+            // the remote OSM way. Confirm that way exists in the current remote
+            // graph even when its much larger reverse sidecar was not parsed.
+            let remoteWayIDs = Set(remotePack.osmWayIds)
 
             for anchor in anchors.prefix(fastSearch ? 2 : 8) {
                 guard deadline.map({ Date() < $0 }) ?? true else { return nil }
                 guard seamAttempts < maximumSeamAttempts else { return nil }
-                guard let reverse = reverseAnchors.first(where: {
-                    $0.osmWayId == anchor.osmWayId
-                        && abs($0.latitude - anchor.latitude) < 0.00002
-                        && abs($0.longitude - anchor.longitude) < 0.00002
-                        && $0.gapMeters <= 2
-                }) else { continue }
+                guard let way = Int64(anchor.osmWayId), remoteWayIDs.contains(way) else { continue }
                 seamAttempts += 1
                 let seam = CLLocationCoordinate2D(
-                    latitude: (anchor.latitude + reverse.latitude) / 2,
-                    longitude: (anchor.longitude + reverse.longitude) / 2
+                    latitude: anchor.latitude,
+                    longitude: anchor.longitude
                 )
+                let hopStartedAt = ProcessInfo.processInfo.systemUptime
                 let hop = await routeOnDeviceInRegion(
                     from: current, to: seam, regionId: regionId,
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -1062,10 +1108,20 @@ final class GraphPackStore {
                     deadline: deadline,
                     packOverride: localPack
                 )
+                let hopElapsedMs = Int((ProcessInfo.processInfo.systemUptime - hopStartedAt) * 1_000)
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
                     if case .failure(let reason) = hop { lastFailure = reason }
+                    RoutingDebugLog.shared.event(
+                        "on-device seam hop region=\(regionId)→\(nextRegionId) "
+                            + "way=\(anchor.osmWayId) elapsedMs=\(hopElapsedMs) result=failure"
+                    )
                     continue
                 }
+                RoutingDebugLog.shared.event(
+                    "on-device seam hop region=\(regionId)→\(nextRegionId) "
+                        + "way=\(anchor.osmWayId) elapsedMs=\(hopElapsedMs) "
+                        + "meters=\(Int(routed.distanceMeters))"
+                )
                 if let result = await search(
                     regionIndex: regionIndex + 1,
                     current: seam,
@@ -1729,7 +1785,8 @@ final class GraphPackStore {
         regionId: String,
         graphURL: URL,
         geometryURL: URL,
-        seamsURL: URL
+        seamsURL: URL,
+        includeSeams: Bool = true
     ) -> GraphV2Pack? {
         guard let data = try? Data(contentsOf: graphURL, options: [.mappedIfSafe]),
               let pack = try? GraphV2Pack(data: data) else { return nil }
@@ -1739,7 +1796,8 @@ final class GraphPackStore {
            let geom = try? GeometryV1Pack(data: geomData) {
             pack.geometry = geom
         }
-        if pack.version >= 4,
+        if includeSeams,
+           pack.version >= 4,
            FileManager.default.fileExists(atPath: seamsURL.path),
            let seamData = try? Data(contentsOf: seamsURL),
            (try? pack.applyCrossPackSeams(data: seamData)) == nil {
@@ -1803,18 +1861,56 @@ final class GraphPackStore {
         let seamsURL = seamsFileURL(regionId: preferred)
         // Let SwiftUI paint “Calculating route” before we touch disk.
         await Task.yield()
+        let decodeStartedAt = ProcessInfo.processInfo.systemUptime
         let pack = await Task.detached(priority: .userInitiated) {
             Self.decodePack(
                 regionId: preferred,
                 graphURL: graphURL,
                 geometryURL: geometryURL,
-                seamsURL: seamsURL
+                seamsURL: seamsURL,
+                includeSeams: false
             )
         }.value
+        let decodeElapsedMs = Int((ProcessInfo.processInfo.systemUptime - decodeStartedAt) * 1_000)
+        RoutingDebugLog.shared.event(
+            "on-device pack decode region=\(preferred) elapsedMs=\(decodeElapsedMs) "
+                + "graphBytes=\(Self.fileSize(graphURL)) geometryBytes=\(Self.fileSize(geometryURL))"
+        )
         guard let pack else { return nil }
         decodedPackCache[preferred] = pack
         touchDecodedPack(preferred)
         return pack
+    }
+
+    /// Load seam metadata for one cached graph only when a cross-region route
+    /// actually needs it. This keeps the graph/geometry decode path bounded;
+    /// the caller chooses the smaller of the two neighboring sidecars before
+    /// invoking this method.
+    private func decodedInstalledPackWithSeams(regionId: String) async -> GraphV2Pack? {
+        let id = regionId.lowercased()
+        guard let pack = await decodedInstalledPack(regionId: id) else { return nil }
+        if decodedPackSeamRegions.contains(id) { return pack }
+        let seamsURL = seamsFileURL(regionId: id)
+        guard FileManager.default.fileExists(atPath: seamsURL.path) else { return pack }
+        let data = await Task.detached(priority: .userInitiated) {
+            try? Data(contentsOf: seamsURL, options: [.mappedIfSafe])
+        }.value
+        guard let data, (try? pack.applyCrossPackSeams(data: data)) != nil else { return nil }
+        decodedPackSeamRegions.insert(id)
+        return pack
+    }
+
+    private func seamFileBytes(regionId: String) -> Int64? {
+        let path = seamsFileURL(regionId: regionId.lowercased()).path
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+              let number = attrs[.size] as? NSNumber else { return nil }
+        return number.int64Value
+    }
+
+    nonisolated private static func fileSize(_ url: URL) -> Int64 {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let number = attrs[.size] as? NSNumber else { return 0 }
+        return number.int64Value
     }
 
     private func touchDecodedPack(_ regionId: String) {
@@ -1828,6 +1924,7 @@ final class GraphPackStore {
             }
             let evicted = decodedPackCacheOrder.remove(at: index)
             decodedPackCache.removeValue(forKey: evicted)
+            decodedPackSeamRegions.remove(evicted)
         }
     }
 

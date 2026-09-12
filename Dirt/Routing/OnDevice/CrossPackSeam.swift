@@ -45,8 +45,16 @@ enum CrossPackSeam {
             urbanCores: urbanCores
         )
         guard geometric.count > 1 else { return geometric }
+        // Score all requested way IDs in one graph pass. The previous
+        // implementation scanned the complete OSM-way array once per seam
+        // anchor (NB→NS can expose hundreds of anchors), turning a tiny
+        // ranking step into several seconds on a phone. Most anchors share a
+        // way, so one pass is both faster and smaller than retaining a global
+        // way-to-edge index in every decoded pack.
+        let scores = operationalScores(for: geometric, pack: pack)
         let scored = geometric.enumerated().map { index, anchor in
-            (index: index, anchor: anchor, score: operationalScore(anchor, pack: pack))
+            let way = Int64(anchor.osmWayId) ?? -1
+            return (index: index, anchor: anchor, score: scores[way] ?? 100_000)
         }
         return scored.sorted {
             if $0.score != $1.score { return $0.score < $1.score }
@@ -54,17 +62,18 @@ enum CrossPackSeam {
         }.map(\.anchor)
     }
 
-    private static func operationalScore(
-        _ anchor: GraphV2Pack.CrossPackSeamAnchor,
+    private static func operationalScores(
+        for anchors: [GraphV2Pack.CrossPackSeamAnchor],
         pack: GraphV2Pack
-    ) -> Int {
-        guard let way = Int64(anchor.osmWayId),
+    ) -> [Int64: Int] {
+        let requested = Set(anchors.compactMap { Int64($0.osmWayId) })
+        guard !requested.isEmpty,
               let fromArr = pack.edgeFrom,
-              let toArr = pack.edgeTo else {
-            return 100_000
-        }
-        var best = 100_000
-        for ei in pack.osmWayIds.indices where pack.osmWayIds[ei] == way {
+              let toArr = pack.edgeTo else { return [:] }
+        var scores: [Int64: Int] = [:]
+        scores.reserveCapacity(requested.count)
+        for ei in pack.osmWayIds.indices where requested.contains(pack.osmWayIds[ei]) {
+            let way = pack.osmWayIds[ei]
             let a = Int(fromArr[ei])
             let b = Int(toArr[ei])
             guard a >= 0, b >= 0, a + 1 < pack.nodeOffsets.count,
@@ -78,9 +87,10 @@ enum CrossPackSeam {
             let deadEndPenalty = minimumDegree <= 1 ? 10_000 : 0
             let degreePenalty = max(0, 3 - minimumDegree) * 100
             let highwayPenalty = pack.roadClassLeaf(ei) == "motorway" ? 250 : 0
-            best = min(best, deadEndPenalty + degreePenalty + highwayPenalty)
+            let score = deadEndPenalty + degreePenalty + highwayPenalty
+            if score < (scores[way] ?? 100_000) { scores[way] = score }
         }
-        return best
+        return scores
     }
 
     private static func distanceToChord(
