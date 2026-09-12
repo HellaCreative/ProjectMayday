@@ -263,11 +263,14 @@ final class PackRoutingSource: RoutingSource {
         // bounded failure. Without this deadline a no-path Dirt search could
         // spend the router's seven-second candidate cap before the UI learned
         // that the request was not viable.
-        // The measured 40 km Dirt envelope completes the difficult Yarmouth
-        // case in about 2.06 s on the simulator. Keep a narrow 2.2 s ceiling:
-        // a genuine hard case may finish, while a dead search still returns
-        // promptly instead of consuming the seven-second candidate cap.
-        let fastDeadline = Date().addingTimeInterval(2.2)
+        // The measured 40 km Dirt envelope completes the difficult same-region
+        // Yarmouth case in about 2.06 s on the simulator. Keep a narrow 2.2 s
+        // ceiling there so a dead search returns promptly. A cross-region
+        // route must prove one legal hop per pack; give that bounded chain
+        // enough time to finish its two searches without falling back to the
+        // old seven-second candidate cap.
+        let fastBudget: TimeInterval = neededRegions.count > 1 ? 3.5 : 2.2
+        let fastDeadline = Date().addingTimeInterval(fastBudget)
         let result = await packs.routeOnDeviceDetailed(
             from: endpoints.0.locationCoordinate,
             to: endpoints.1.locationCoordinate,

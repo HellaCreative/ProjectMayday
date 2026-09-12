@@ -133,6 +133,8 @@ routes do not parse any seam sidecar. A focused real-pack test now succeeds:
 | NS→NB, Dirt, current V4 packs | 2.47 s total; 1 seam attempt; 1.22 s NS hop; 0.89 s NB final hop; 771.5 km; 58% Dirt |
 
 The route itself is now correct and deterministic under the bounded search;
-the remaining device check is to confirm the same `seamAttempts=1` result on
+the pack route now allows a 3.5 s cross-region budget (same-region remains
+2.2 s) so that this two-hop proof is not cancelled just before completion.
+The remaining device check is to confirm the same `seamAttempts=1` result on
 White. The focused suite is green (4 tests); the full suite must remain green
 before installing this candidate.
