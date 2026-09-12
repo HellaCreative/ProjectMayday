@@ -151,8 +151,8 @@
     "decision": "Rejected: the endpoint arguments are not consumed by the native router yet, so the trial was behaviorally a no-op. Do not carry dead plumbing into the device candidate."
   },
   "fastOnDeviceCandidate": {
-    "checkpoint": "1f4382d",
-    "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; cross-region and multi-stop windows retain the full qualified planner.",
+    "checkpoint": "eb314e4",
+    "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; cross-region and multi-stop windows retain the full qualified planner. The returned start\u2192pump response now appends the short mapped-forecourt approach so displayed geometry closes exactly at the fuel stop; it remains explicitly labelled soft-stitch/unverified until customer-access edges are authored.",
     "hostFixture": {
       "pack": "NS fabric-v4-20260908-01",
       "targetCohort": 16,
@@ -194,12 +194,12 @@
       "result": "three distinct Dirt geometries for identical endpoints"
     },
     "focusedGate": {
-      "passed": 64,
+      "passed": 57,
       "failed": 0,
       "destination": "iPhone 17 simulator iOS 26.5",
-      "deviceInstall": false,
-      "xcresult": "/Users/richardsmith/Library/Developer/Xcode/DerivedData/Dirt-dvzfopsyljqyraczanjdqbjemhmu/Logs/Test/Test-DIRT Dev-2026.09.12_09-56-55--0300.xcresult"
+      "scope": "PackFirstRoutingTests + ItineraryBuilderTests",
+      "deviceInstall": false
     },
-    "limitation": "The 1.63s native replay is a single-region, one-stop NS fixture. Long multi-stop and cross-region itineraries still require more than one response window; strict source-walk fuel continuity still reports approach gaps."
+    "limitation": "The appended approach closes display geometry but does not certify forecourt access; strict source-walk audit must still qualify that connector."
   }
 }
