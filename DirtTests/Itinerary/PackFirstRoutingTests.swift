@@ -299,6 +299,7 @@ struct PackFirstRoutingTests {
             downloadBytes: 1_000_000_000
         )
         #expect(prompt.message.contains("110 seconds to 3 minutes"))
+        #expect(prompt.message.contains("3 routing packs"))
     }
 
     @Test func homePackOfferIsOneTimeAndIncludesSize() {

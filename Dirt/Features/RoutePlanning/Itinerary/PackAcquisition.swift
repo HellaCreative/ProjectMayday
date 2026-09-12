@@ -58,7 +58,8 @@ struct PackConsentPrompt: Equatable, Sendable {
             let duration = regionIDs.count > 2
                 ? " Routes across more than two regions can take about 110 seconds to 3 minutes on this phone."
                 : ""
-            return "Installing \(names)\(size) improves routing speed and enables offline rerouting.\(duration)"
+            let count = regionIDs.count > 1 ? "\(regionIDs.count) routing packs: " : ""
+            return "Installing \(count)\(names)\(size) improves routing speed and enables offline rerouting.\(duration)"
         case .update:
             return "A newer approved \(names) pack is available\(size). Updating is recommended. You can keep using the installed revision."
         }
