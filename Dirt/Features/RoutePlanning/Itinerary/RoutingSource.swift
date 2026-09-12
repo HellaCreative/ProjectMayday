@@ -424,9 +424,26 @@ final class PackRoutingSource: RoutingSource {
         // legal pump hop before returning. Partial windows deliberately stop
         // there; the next itinerary window starts at that pump. Non-partial
         // callers may still request the complete continuation proof below.
+        // A route can need a pump even when the caller did not explicitly
+        // mark the window as mandatory.  The itinerary builder intentionally
+        // leaves that flag clear while it is deciding whether the destination
+        // can be carried.  Once the cheap geographic lower bound already
+        // exceeds the usable first-leg range, carrying to the destination is
+        // impossible, so go straight to the bounded next-pump search instead
+        // of spending the full reachability budget proving the same fact.
+        let lowerBoundRequiresPump = req.fuel.profileMeters.isFinite
+            && req.fuel.profileMeters > req.fuel.firstLegMaxMeters + 1
+        let shouldPlanNextPump = req.fuel.requireFuelStopBeforeEnd || lowerBoundRequiresPump
         if req.fuel.minimumFuelStops <= 1,
-           req.fuel.requireFuelStopBeforeEnd,
+           shouldPlanNextPump,
            req.fuel.requiredFirstStationId == nil {
+            if lowerBoundRequiresPump && !req.fuel.requireFuelStopBeforeEnd {
+                RoutingDebugLog.shared.event(
+                    "fuel fast-path trigger reason=range-lower-bound "
+                        + "profileMeters=\(Int(req.fuel.profileMeters)) "
+                        + "firstLegMaxMeters=\(Int(req.fuel.firstLegMaxMeters))"
+                )
+            }
             // A chained seam has activation and stitch overhead in addition
             // to the local graph search. Give cross-region fuel qualification
             // a shorter hard budget so a rejected window still returns inside
