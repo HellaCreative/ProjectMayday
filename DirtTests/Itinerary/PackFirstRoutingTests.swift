@@ -38,6 +38,21 @@ struct PackFirstRoutingTests {
         #expect(policy.select(for: nsRequest()).name == "pack")
     }
 
+    @Test func onDeviceOnlyNeverFallsBackToLiveWhenPackCoverageIsMissing() {
+        let live = NamedFakeRoutingSource(name: "live")
+        let pack = NamedFakeRoutingSource(name: "pack")
+        let policy = RoutingSourcePolicy(
+            isOnline: { true },
+            installedPacks: FakePackCoverage(installed: [], published: ["ns"]),
+            live: live,
+            pack: pack,
+            preferInstalledPacks: true,
+            onDeviceOnly: true
+        )
+        #expect(policy.select(for: nsRequest()).name == "pack")
+        #expect(live.routeRequests.isEmpty)
+    }
+
     @Test func installedNSIsSelectedWhileOffline() {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")

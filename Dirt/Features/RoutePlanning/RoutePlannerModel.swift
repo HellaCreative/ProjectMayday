@@ -570,7 +570,8 @@ final class RoutePlannerModel {
                 packs: graphPacks,
                 live: live,
                 pack: pack,
-                preferInstalledPacks: true
+                preferInstalledPacks: true,
+                onDeviceOnly: true
             )
         }
         self.packAcquisition = packAcquisition ?? PackAcquisitionCoordinator(store: graphPacks)

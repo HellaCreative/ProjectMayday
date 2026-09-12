@@ -841,14 +841,16 @@ struct RoutingSourcePolicy {
         packs: GraphPackStore,
         live: any RoutingSource,
         pack: any RoutingSource,
-        preferInstalledPacks: Bool = true
+        preferInstalledPacks: Bool = true,
+        onDeviceOnly: Bool = false
     ) {
         self.init(
             isOnline: { network.isOnline },
             installedPacks: packs,
             live: live,
             pack: pack,
-            preferInstalledPacks: preferInstalledPacks
+            preferInstalledPacks: preferInstalledPacks,
+            onDeviceOnly: onDeviceOnly
         )
     }
 
@@ -858,6 +860,7 @@ struct RoutingSourcePolicy {
         live: any RoutingSource,
         pack: any RoutingSource,
         preferInstalledPacks: Bool = false,
+        onDeviceOnly: Bool = false,
         report: @escaping @MainActor (String) -> Void = { RoutingDebugLog.shared.event($0) }
     ) {
         let useInstalled = preferInstalledPacks
@@ -871,7 +874,7 @@ struct RoutingSourcePolicy {
             let packsCover = installedPacksCover(locations, registry: installedPacks)
             let singleRegion = provinces.count <= 1
             let chosen: any RoutingSource
-            if packsCover && useInstalled {
+            if useInstalled && (packsCover || onDeviceOnly) {
                 chosen = pack
             } else {
                 chosen = isOnline() ? live : pack
@@ -879,6 +882,14 @@ struct RoutingSourcePolicy {
             let selectedPath = chosen.name == pack.name
                 ? needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) }
                 : nil
+            let selectionReason: String
+            if onDeviceOnly {
+                selectionReason = "on-device-required-pack"
+            } else if packsCover && useInstalled {
+                selectionReason = "installed-packs"
+            } else {
+                selectionReason = "online-or-fallback"
+            }
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
                     "provinces=[\(provinces.joined(separator: ","))] " +
@@ -886,7 +897,7 @@ struct RoutingSourcePolicy {
                     "selectedPath=\(selectedPath ?? "nil") " +
                     "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline()) " +
                     "selected=\(chosen.name) " +
-                    "selectionReason=\(packsCover && useInstalled ? "installed-packs" : "online-or-fallback")"
+                    "selectionReason=\(selectionReason)"
             )
             return chosen
         }
