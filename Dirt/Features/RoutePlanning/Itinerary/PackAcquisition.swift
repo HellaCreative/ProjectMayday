@@ -55,7 +55,10 @@ struct PackConsentPrompt: Equatable, Sendable {
         case .home:
             return "Download \(names) now\(size) so route planning and offline rerouting stay on this phone."
         case .download:
-            return "Installing \(names)\(size) improves routing speed and enables offline rerouting."
+            let duration = regionIDs.count > 2
+                ? " Routes across more than two regions can take about 110 seconds to 3 minutes on this phone."
+                : ""
+            return "Installing \(names)\(size) improves routing speed and enables offline rerouting.\(duration)"
         case .update:
             return "A newer approved \(names) pack is available\(size). Updating is recommended. You can keep using the installed revision."
         }

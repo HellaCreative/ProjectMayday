@@ -259,6 +259,16 @@ struct PackFirstRoutingTests {
         #expect(prompt.message.contains("139 MB"))
     }
 
+    @Test func multiRegionConsentSetsLongRouteExpectation() {
+        let prompt = PackConsentPrompt(
+            kind: .download,
+            regionIDs: ["ns", "nb", "qc"],
+            regionTitles: ["Nova Scotia", "New Brunswick", "Quebec"],
+            downloadBytes: 1_000_000_000
+        )
+        #expect(prompt.message.contains("110 seconds to 3 minutes"))
+    }
+
     @Test func homePackOfferIsOneTimeAndIncludesSize() {
         let coverage = FakePackCoverage(installed: [], published: ["ns"])
         let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
