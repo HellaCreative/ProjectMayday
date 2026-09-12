@@ -200,6 +200,41 @@
       "scope": "PackFirstRoutingTests + ItineraryBuilderTests",
       "deviceInstall": false
     },
-    "limitation": "The appended approach closes display geometry but does not certify forecourt access; strict source-walk audit must still qualify that connector."
+    "limitation": "The appended approach closes display geometry but does not certify forecourt access; strict source-walk audit must still qualify that connector.",
+    "hostMatrix": [
+      {
+        "label": "NS short",
+        "fixture": "/tmp/dirt-ns-short-259785a.json",
+        "budgetSeconds": 1.8,
+        "seconds": 1.631,
+        "status": "complete",
+        "routeCalls": 2,
+        "legsMeters": [
+          102448.1,
+          120551.83
+        ]
+      },
+      {
+        "label": "NS long in-pack",
+        "fixture": "/tmp/ns-long.json",
+        "budgetSeconds": 1.8,
+        "seconds": 1.225,
+        "status": "complete",
+        "routeCalls": 2,
+        "legsMeters": [
+          177255.59,
+          36749.07
+        ]
+      },
+      {
+        "label": "NS out-of-coverage error",
+        "fixture": "/tmp/ns-xlong.json",
+        "budgetSeconds": 1.8,
+        "seconds": 1.907,
+        "status": "unknown",
+        "error": "fuel_window_budget_exceeded",
+        "routeCalls": 2
+      }
+    ]
   }
 }
