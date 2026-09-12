@@ -95,6 +95,38 @@ struct PackFirstRoutingTests {
         #expect(coverage.installCalls.isEmpty)
     }
 
+    @Test func acceptingRoutePackConsentResumesWithInstalledPack() async {
+        let live = NamedFakeRoutingSource(name: "live")
+        let pack = NamedFakeRoutingSource(name: "pack")
+        let coverage = FakePackCoverage(installed: [], published: ["ns"])
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let policy = RoutingSourcePolicy(
+            isOnline: { true },
+            installedPacks: coverage,
+            live: live,
+            pack: pack,
+            preferInstalledPacks: true
+        )
+        let model = makePackFirstModel(
+            live: live, pack: pack, policy: policy, acquisition: coordinator
+        )
+        model.selectMode(.plan)
+        model.apply(
+            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
+            source: "plan"
+        )
+        #expect(model.packConsent?.regionIDs == ["ns"])
+
+        await model.acceptPackConsent()
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.packConsent == nil)
+        #expect(coverage.installed == ["ns"])
+        #expect(coverage.installCalls == [["ns"]])
+        #expect(live.routeRequests.isEmpty)
+        #expect(pack.routeRequests.isEmpty == false)
+    }
+
     @Test func failedPackInstallKeepsConsentAvailableForRetry() async {
         let coverage = FakePackCoverage(installed: [], published: ["ns"])
         coverage.installError = PackAcquisitionError.downloadFailed(
