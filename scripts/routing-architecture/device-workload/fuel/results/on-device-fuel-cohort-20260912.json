@@ -100,9 +100,9 @@
       ]
     }
   ],
-  "decision": "Keep 3e3ce62 as the private candidate. Host evidence meets the 1.8s single-region one-stop gate; device install remains paused while multi-stop/cross-region and strict pump-access qualification continue.",
+  "decision": "Keep 0917972 as the private candidate. Do not install to white yet. The next device run should use this build only after the cross-region pack replay and source-walk qualification are recorded.",
   "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
-  "recovery": "Do not install to white from this checkpoint. Rebuild the private probe from the current source and rerun the fixture before any device test.",
+  "recovery": "Do not install to white from an older checkpoint. Build 0917972 or newer from the private branch; keep production and published packs unchanged.",
   "routeReuse": {
     "checkpoint": "434aa7b",
     "change": "PackRoutingSource returns the already-proven start\u2192pump and pump\u2192destination routes; ItineraryBuilder consumes a complete pack window without issuing a second route search.",
@@ -151,7 +151,7 @@
     "decision": "Rejected: the endpoint arguments are not consumed by the native router yet, so the trial was behaviorally a no-op. Do not carry dead plumbing into the device candidate."
   },
   "fastOnDeviceCandidate": {
-    "checkpoint": "02089a2",
+    "checkpoint": "0917972",
     "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; installed cross-region seams now use the same bounded path, while multi-stop and required-first-station windows retain the full qualified planner. The returned start\u2192pump response appends the short mapped-forecourt approach so displayed geometry closes exactly at the fuel stop; it remains explicitly labelled soft-stitch/unverified until customer-access edges are authored. Fast candidate ordering preserves the existing urban-core avoidance preference.",
     "hostFixture": {
       "pack": "NS fabric-v4-20260908-01",
@@ -200,7 +200,7 @@
       "scope": "PackFirstRoutingTests + ItineraryBuilderTests",
       "deviceInstall": false
     },
-    "limitation": "The appended approach closes display geometry but does not certify forecourt access; strict source-walk audit must still qualify that connector.",
+    "limitation": "Host timing evidence is still from the native current-router facade. Strict source-walk/forecourt access remains unverified, and a physical iPhone plus a multi-pack NS\u2192NB replay are still required before release.",
     "hostMatrix": [
       {
         "label": "NS short",
@@ -284,6 +284,12 @@
       "measuredHostSuccess": false,
       "scope": "Source and build verified; no new physical-device run and no cross-region native facade replay in this checkpoint",
       "guard": "Requires both endpoint packs and factory-proven seams; deadline remains 1.8s; failure returns fuel_fast_path_no_qualified_route"
+    },
+    "directRouteGate": {
+      "budgetSeconds": 1.8,
+      "enabled": true,
+      "scope": "PackRoutingSource direct on-device requests; no route or error may remain inside the old seven-second Dirt candidate cap",
+      "validation": "Debug build passed; focused pack/itinerary gate 57 passed, 0 failed"
     }
   }
 }
