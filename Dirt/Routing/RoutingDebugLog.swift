@@ -48,9 +48,25 @@ final class RoutingDebugLog {
         if entries.count > maxEntries {
             entries.removeFirst(entries.count - maxEntries)
         }
+        if Self.shouldPersistSnapshot(for: message) {
+            persistLatestSnapshot()
+        }
         #if DEBUG
         print("[DirtDebug]", message)
         #endif
+    }
+
+    private static func shouldPersistSnapshot(for message: String) -> Bool {
+        [
+            "policy ",
+            "build start",
+            "fuel operation begin",
+            "fuel advisory",
+            "fuel combined progress",
+            "fuel forward committed",
+            "on-device route failed",
+            "FAIL "
+        ].contains { message.hasPrefix($0) }
     }
 
     func routeAttempt(
