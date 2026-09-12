@@ -100,12 +100,12 @@
       ]
     }
   ],
-  "decision": "Keep 6afb123 as the private candidate. The bounded on-device fuel planner now commits one proven next pump and continues from that pump; the simulator two-window gate passes for all three profiles. Do not install to white yet.",
+  "decision": "Keep 6afb123 as the private on-device candidate. The simulator and authorized iPhone 16 white two-window gates pass for Cleanest, Dirt, and Balanced with no live/server route request. Proceed to owner hands-on validation; do not promote production.",
   "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
   "recovery": "Do not install to white from an older checkpoint. Build 6afb123 or newer from the private branch; keep production and published packs unchanged.",
   "routeReuse": {
     "checkpoint": "434aa7b",
-    "change": "PackRoutingSource returns the already-proven start\u2192pump and pump\u2192destination routes; ItineraryBuilder consumes a complete pack window without issuing a second route search.",
+    "change": "PackRoutingSource returns the already-proven start→pump and pump→destination routes; ItineraryBuilder consumes a complete pack window without issuing a second route search.",
     "regressionTest": "ItineraryBuilderTests.packFuelWindowConsumesProvenRoutesWithoutSecondRouteSearch",
     "focusedGate": {
       "passed": 58,
@@ -198,10 +198,10 @@
       "failed": 0,
       "destination": "iPhone 17 simulator iOS 26.5",
       "scope": "PackFirstRoutingTests + ItineraryBuilderTests + ItineraryRebuildTests; includes identical-pin fresh-seed assertion",
-      "deviceInstall": false,
+      "deviceInstall": true,
       "lastRun": "2026-09-12 15:04 local"
     },
-    "limitation": "The partial station connector remains labelled soft-stitch until customer-access edges are authored and the strict source-walk audit accepts it. The private iPhone 17 simulator NS\u2192NB two-window probe succeeds for Cleanest, Dirt, and Balanced with zero residual loops over the fast 100 m audit threshold; no physical-device run has been made.",
+    "limitation": "The partial station connector remains labelled soft-stitch until customer-access edges are authored and the strict source-walk audit accepts it. The simulator and authorized iPhone 16 NS→NB two-window probes succeed for Cleanest, Dirt, and Balanced with zero residual loops over the fast 100 m audit threshold; full rider-created routes still require owner validation.",
     "hostMatrix": [
       {
         "label": "NS short",
@@ -286,7 +286,7 @@
       "simulatorProbe": {
         "destination": "iPhone 17 simulator iOS 26.5",
         "packs": "private fabric-v4-20260909-01 NS+NB",
-        "fixture": "44.764805,-63.340248 \u2192 47.013162,-65.244265",
+        "fixture": "44.764805,-63.340248 → 47.013162,-65.244265",
         "window": "two partial next-pump windows; usable 180000m; windowMaxStops=1",
         "warmupSeconds": 0.617,
         "profiles": {
@@ -347,7 +347,7 @@
         },
         "result": "Both windows returned a proven pump per profile; window two began at the first pump, excluded it, selected a different pump, and remained under one second."
       },
-      "scope": "Private simulator pack replay only; no physical-device run and no live/server request.",
+      "scope": "Private simulator and authorized iPhone 16 pack replay only; no live/server route request.",
       "guard": "Requires both endpoint packs and factory-proven seams; partial windows commit only a proven next pump and return windowComplete=false."
     },
     "directRouteGate": {
@@ -356,6 +356,66 @@
       "scope": "PackRoutingSource direct on-device requests; no route or error may remain inside the old seven-second Dirt candidate cap",
       "validation": "Debug build passed; focused pack/itinerary gate 58 passed, 0 failed",
       "focusedGatePassed": 76
+    },
+    "physicalDeviceProbe": {
+      "destination": "white iPhone 16 (iPhone17,3), iOS 26.6.2",
+      "deviceId": "B1A97A1C-5418-5143-9134-42260494B443",
+      "packs": "private fabric-v4-20260909-01 NS+NB copied to appDataContainer",
+      "fixture": "44.764805,-63.340248 → 47.013162,-65.244265",
+      "window": "two partial next-pump windows; usable 193121m; windowMaxStops=1",
+      "preparationSeconds": 0.857,
+      "profiles": {
+        "cleanest": {
+          "window1Seconds": 0.591,
+          "window2Seconds": 0.607,
+          "stops": [
+            "osm:w175673953",
+            "osm:n5297488441"
+          ],
+          "graphMeters": [
+            79653,
+            37168
+          ],
+          "auditLoops": [
+            0,
+            0
+          ]
+        },
+        "dirt": {
+          "window1Seconds": 0.604,
+          "window2Seconds": 0.631,
+          "stops": [
+            "osm:w243757537",
+            "osm:n5297488441"
+          ],
+          "graphMeters": [
+            78323,
+            42776
+          ],
+          "auditLoops": [
+            0,
+            0
+          ]
+        },
+        "balanced": {
+          "window1Seconds": 0.649,
+          "window2Seconds": 0.616,
+          "stops": [
+            "osm:w175673953",
+            "osm:n5297488441"
+          ],
+          "graphMeters": [
+            80672,
+            35583
+          ],
+          "auditLoops": [
+            0,
+            0
+          ]
+        }
+      },
+      "networkRouteRequests": 0,
+      "result": "Authorized white iPhone 16 completed both proven-pump windows for all three profiles on installed packs; each second window began at the first pump, excluded it, selected a different pump, and remained under one second."
     }
   }
 }
