@@ -1164,8 +1164,13 @@ final class RoutePlannerModel {
             )
         case calculatingFuelRangeToast:
             return ProgressToastContent(
-                title: "Checking fuel range",
-                detail: "Calculating distance and fuel needs"
+                title: "Finding next fuel stop",
+                detail: "Preparing the next fuel leg"
+            )
+        case "Finding next fuel stop":
+            return ProgressToastContent(
+                title: "Finding next fuel stop",
+                detail: "Preparing the next fuel leg"
             )
         case "Checking fuel after destination":
             return ProgressToastContent(
@@ -1180,20 +1185,26 @@ final class RoutePlannerModel {
         default:
             if message.hasPrefix("Creating fuel stop ") {
                 return ProgressToastContent(
-                    title: message,
-                    detail: "Fuel stop required"
+                    title: "Routing to next fuel stop",
+                    detail: "Building one legal fuel leg"
                 )
             }
             if message.hasPrefix("Fuel stop "), message.hasSuffix(" added") {
                 return ProgressToastContent(
-                    title: message,
-                    detail: "Continuing the route"
+                    title: "Fuel stop added",
+                    detail: "Continuing toward the waypoint"
                 )
             }
             if message.hasPrefix("Checking range after fuel stop ") {
                 return ProgressToastContent(
-                    title: message,
-                    detail: "Calculating the remaining route"
+                    title: "Finding next fuel stop",
+                    detail: "Continuing in the waypoint direction"
+                )
+            }
+            if message.hasPrefix("Finding next fuel stop after stop ") {
+                return ProgressToastContent(
+                    title: "Finding next fuel stop",
+                    detail: "Continuing in the waypoint direction"
                 )
             }
             return nil

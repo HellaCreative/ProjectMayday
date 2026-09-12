@@ -783,7 +783,11 @@ nonisolated struct OnDeviceRouter {
                 ends: endRaw,
                 allowUnknown: allowUnknown
             )
-            v4Pairs = connected.pairs
+            // The fast phone path gets a small, deterministic snap-pair set.
+            // Full planning retains every legal pair; fast fuel qualification
+            // must not spend its whole response budget retrying equivalent
+            // endpoint projections.
+            v4Pairs = fastSearch ? Array(connected.pairs.prefix(1)) : connected.pairs
             startRejects.append(contentsOf: connected.rejectionReasons)
             endRejects.append(contentsOf: connected.rejectionReasons)
             guard let first = v4Pairs.first else { return .failure(.cannotSnapEnd) }
@@ -899,7 +903,13 @@ nonisolated struct OnDeviceRouter {
         ctx.preferBackRoads = e4.preferBackRoads
 
         if profile == .dirt {
-            let base = HopSearchPolicy.dirtCorridorMeters
+            // Fuel windows route to the next nearby pump, not the final
+            // waypoint. A compact fast corridor prevents a 30 km hop from
+            // exploring the whole 60 km adventure fan while retaining the
+            // wider corridor for ordinary route planning.
+            let base = fastSearch
+                ? min(HopSearchPolicy.dirtCorridorMeters, 20_000)
+                : HopSearchPolicy.dirtCorridorMeters
             let comparisonWidths = fastSearch ? [base] : [base * 2, base]
             let connectivityWidths: [Double?] = fastSearch ? [nil] : [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double, objective: String)] = []
@@ -996,18 +1006,26 @@ nonisolated struct OnDeviceRouter {
         }
 
         if profile == .balanced {
-            let base = HopSearchPolicy.balancedCorridorMeters
-            let multipliers: [Double] = [1, 2, 3, 4, 6, 8]
+            let base = fastSearch
+                ? min(HopSearchPolicy.balancedCorridorMeters, 12_000)
+                : HopSearchPolicy.balancedCorridorMeters
+            let multipliers: [Double] = fastSearch ? [1] : [1, 2, 3, 4, 6, 8]
             var lastEnvelopeFailure: Failure = .noPath
             for width in multipliers.map({ base * $0 }) + [0] {
                 var envelope = ctx
-                envelope.costMode = .balancedResource
+                // The first fuel hop is a local legal-leg proof. Resource
+                // labels are valuable for a full Balanced itinerary but add
+                // a large state space to this bounded phone search; the
+                // profile cost still preserves Balanced surface weighting.
+                envelope.costMode = fastSearch ? .profile : .balancedResource
                 envelope.variety = false
                 envelope.corridorMeters = width > 0 ? width : nil
                 envelope.hardCorridor = width > 0
                 envelope.boundedSearch = true
-                envelope.timeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
-                envelope.popCap = HopSearchPolicy.pass2PopCap * 10
+                envelope.timeCapSeconds = fastSearch ? 2.0 : HopSearchPolicy.pass2TimeCapSeconds
+                envelope.popCap = fastSearch
+                    ? HopSearchPolicy.pass2PopCap
+                    : HopSearchPolicy.pass2PopCap * 10
                 envelope.maxPathMeters = maxRouteMeters
                 lastFailure = .noPath
                 switch runProfile(envelope) {
@@ -1039,7 +1057,9 @@ nonisolated struct OnDeviceRouter {
             envelope.boundedSearch = true
             envelope.settlementWall = false
             envelope.settlementFallback = false
-            envelope.timeCapSeconds = ctx.pavedOnly ? 12.0 : HopSearchPolicy.pass2TimeCapSeconds
+            envelope.timeCapSeconds = fastSearch
+                ? 2.0
+                : (ctx.pavedOnly ? 12.0 : HopSearchPolicy.pass2TimeCapSeconds)
             envelope.popCap = HopSearchPolicy.pass2PopCap
             envelope.maxPathMeters = maxRouteMeters
             switch runProfile(envelope) {
@@ -1827,6 +1847,9 @@ nonisolated struct OnDeviceRouter {
                 guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
 
                 for i in arcStart..<arcEnd {
+                    if (i & 63) == 0, Task.isCancelled || executionCancelled() {
+                        return .failure(.searchLimit("cancelled"))
+                    }
                     let toNode = Int(pack.edgeTargets[i])
                     let ei = Int(pack.edgeUndirectedIndex[i])
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
@@ -2290,6 +2313,9 @@ nonisolated struct OnDeviceRouter {
                 let arcEnd = Int(pack.nodeOffsets[node + 1])
                 guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
                 for i in arcStart..<arcEnd {
+                    if (i & 63) == 0, Task.isCancelled || executionCancelled() {
+                        return .failure(.searchLimit("cancelled"))
+                    }
                     let toNode = Int(pack.edgeTargets[i])
                     let ei = Int(pack.edgeUndirectedIndex[i])
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }

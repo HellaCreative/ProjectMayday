@@ -874,7 +874,9 @@ final class GraphPackStore {
         guard regions.count >= 2 else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
         var seamAttempts = 0
-        let maximumSeamAttempts = max(24, min(96, (regions.count - 1) * 8))
+        let maximumSeamAttempts = fastSearch
+            ? max(2, min(8, (regions.count - 1) * 2))
+            : max(24, min(96, (regions.count - 1) * 8))
 
         func search(
             regionIndex: Int,
@@ -930,7 +932,7 @@ final class GraphPackStore {
                   remotePack.regionId?.lowercased() == nextRegionId else { return nil }
             let reverseAnchors = remotePack.crossPackSeams[regionId] ?? []
 
-            for anchor in anchors.prefix(8) {
+            for anchor in anchors.prefix(fastSearch ? 2 : 8) {
                 guard seamAttempts < maximumSeamAttempts else { return nil }
                 guard let reverse = reverseAnchors.first(where: {
                     $0.osmWayId == anchor.osmWayId

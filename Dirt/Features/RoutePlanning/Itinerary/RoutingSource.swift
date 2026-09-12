@@ -344,19 +344,20 @@ final class PackRoutingSource: RoutingSource {
         }
         // First response path for the phone. A full target-aware flood is the
         // right qualification tool, but it can spend several seconds proving
-        // stations that will never be selected. For one-stop Dirt windows we
-        // use a small geographic cohort, then require two complete legal road
-        // searches before returning anything. The same bounded calls may span
-        // installed regional seams; the route store proves those seams rather
-        // than treating a province boundary as a route failure. This keeps
-        // both success and failure inside the rider-facing two-second envelope
-        // without making fuel safety depend on straight-line distance.
-        if req.profile == .dirt,
-           req.fuel.minimumFuelStops <= 1,
+        // stations that will never be selected. For one-stop windows across
+        // every profile we use a small geographic cohort and prove the next
+        // legal pump hop before returning. Partial windows deliberately stop
+        // there; the next itinerary window starts at that pump. Non-partial
+        // callers may still request the complete continuation proof below.
+        if req.fuel.minimumFuelStops <= 1,
            req.fuel.requireFuelStopBeforeEnd,
-           req.fuel.allowPartialWindow == true,
            req.fuel.requiredFirstStationId == nil {
-            let fastCutoff = Date().addingTimeInterval(1.8)
+            // A chained seam has activation and stitch overhead in addition
+            // to the local graph search. Give cross-region fuel qualification
+            // a shorter hard budget so a rejected window still returns inside
+            // the rider-facing two-second contract; same-region routes keep
+            // the wider direct-route budget.
+            let fastCutoff = Date().addingTimeInterval(crossesRegion ? 1.45 : 1.8)
             let fastDeadline = budgetDeadline.map { min($0, fastCutoff) } ?? fastCutoff
             let firstCap = req.fuel.firstLegMaxMeters
             let destinationCap = req.fuel.destinationFuelUsedLimitMeters
@@ -388,6 +389,7 @@ final class PackRoutingSource: RoutingSource {
                 from: start.locationCoordinate,
                 toward: end.locationCoordinate
             )
+            let rankedOrder = Dictionary(uniqueKeysWithValues: ranked.enumerated().map { ($1.id, $0) })
             let urbanRanked = ranked.sorted {
                 let aUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
                     $0, start: start, destination: end, boxes: fastAvoidanceBoxes
@@ -396,14 +398,79 @@ final class PackRoutingSource: RoutingSource {
                     $1, start: start, destination: end, boxes: fastAvoidanceBoxes
                 )
                 if aUrban != bUrban { return !aUrban }
-                return false
+                return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
             }
-            for candidate in urbanRanked.prefix(3) {
+            // The geographic reachability above is an air-distance lower
+            // bound. A pump at the absolute tank edge leaves no room for a
+            // Dirt detour, so try the conservative 80% band first and retain
+            // the edge-band candidates as a correctness-preserving fallback.
+            let conservative = urbanRanked.filter {
+                guard let air = approximateReachability[$0.id] else { return false }
+                return air <= firstCap * 0.80
+            }
+            let conservativeIDs = Set(conservative.map(\.id))
+            // Within the conservative band, prefer a mid-range pump. This
+            // gives the continuation real fuel margin on Dirt detours instead
+            // of selecting an early town pump or the absolute tank edge.
+            let targetAir = firstCap * 0.72
+            func fastRangeScore(_ station: POIFeature) -> Double {
+                guard let air = approximateReachability[station.id] else { return .greatestFiniteMagnitude }
+                return abs(air - targetAir)
+            }
+            let orderedConservative = conservative.sorted {
+                let aScore = fastRangeScore($0)
+                let bScore = fastRangeScore($1)
+                if abs(aScore - bScore) > 1_000 { return aScore < bScore }
+                return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
+            }
+            // A partial window only needs the next legal pump. Keep that
+            // decision local: prefer a forward station in the departure pack
+            // and the smallest useful air-distance, then let the next window
+            // repeat the same decision from the new pump. The final waypoint
+            // remains a direction/corridor filter in rankedProgressFuel; it
+            // is no longer a requirement for proving this first hop.
+            let departureRegion = GraphPackStore.primaryRegionId(
+                containing: start.locationCoordinate
+            )
+            let partialRanked = ranked.sorted {
+                let aSameRegion = departureRegion != nil
+                    && GraphPackStore.primaryRegionId(
+                        containing: CLLocationCoordinate2D(
+                            latitude: $0.latitude, longitude: $0.longitude
+                        )
+                    ) == departureRegion
+                let bSameRegion = departureRegion != nil
+                    && GraphPackStore.primaryRegionId(
+                        containing: CLLocationCoordinate2D(
+                            latitude: $1.latitude, longitude: $1.longitude
+                        )
+                    ) == departureRegion
+                if aSameRegion != bSameRegion { return aSameRegion }
+                let aAir = approximateReachability[$0.id] ?? .greatestFiniteMagnitude
+                let bAir = approximateReachability[$1.id] ?? .greatestFiniteMagnitude
+                if abs(aAir - bAir) > 2_000 { return aAir < bAir }
+                return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
+            }
+            let fastRanked = req.fuel.allowPartialWindow == true
+                ? partialRanked
+                : orderedConservative + urbanRanked.filter { !conservativeIDs.contains($0.id) }
+            for candidate in fastRanked.prefix(3) {
                 guard Date() < fastDeadline else { break }
                 let candidateCoordinate = CLLocationCoordinate2D(
                     latitude: candidate.latitude,
                     longitude: candidate.longitude
                 )
+                // Do not give a nearby next pump the entire destination
+                // window. A candidate-specific cap keeps the local proof
+                // focused on reaching this station while allowing a generous
+                // detour margin for Dirt and preserving the rider's hard
+                // range ceiling.
+                let candidateAirMeters = approximateReachability[candidate.id] ?? firstCap
+                let candidateRouteCap = min(
+                    firstCap,
+                    max(candidateAirMeters * 3, candidateAirMeters + 20_000)
+                )
+                let candidateBegan = ProcessInfo.processInfo.systemUptime
                 let firstResult = await packs.routeOnDeviceDetailed(
                     from: start.locationCoordinate,
                     to: candidateCoordinate,
@@ -414,7 +481,7 @@ final class PackRoutingSource: RoutingSource {
                     arrivalEdgeId: req.options?.arrivalEdgeId,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
                     sessionSeed: seed,
-                    maxRouteMeters: firstCap,
+                    maxRouteMeters: candidateRouteCap,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
@@ -422,31 +489,26 @@ final class PackRoutingSource: RoutingSource {
                     fastSearch: true,
                     deadline: fastDeadline
                 )
+                switch firstResult {
+                case .success(let firstRoute):
+                    RoutingDebugLog.shared.event(
+                        "fuel fast candidate=\(candidate.id) first=success meters=\(Int(firstRoute.distanceMeters)) "
+                            + "airMeters=\(Int(approximateReachability[candidate.id] ?? -1)) "
+                            + "region=\(GraphPackStore.primaryRegionId(containing: candidateCoordinate) ?? "-") "
+                            + "endpointGap=\(Int(GeoMath.meters(firstRoute.coordinates.last ?? start.locationCoordinate, candidateCoordinate))) "
+                            + "elapsedMs=\(Int((ProcessInfo.processInfo.systemUptime - candidateBegan) * 1000))"
+                    )
+                case .failure(let failure):
+                    RoutingDebugLog.shared.event(
+                        "fuel fast candidate=\(candidate.id) first=failure \(failure) "
+                            + "airMeters=\(Int(approximateReachability[candidate.id] ?? -1)) "
+                            + "region=\(GraphPackStore.primaryRegionId(containing: candidateCoordinate) ?? "-") "
+                            + "elapsedMs=\(Int((ProcessInfo.processInfo.systemUptime - candidateBegan) * 1000))"
+                    )
+                }
                 guard case .success(let firstRoute) = firstResult,
                       firstRoute.distanceMeters <= firstCap + 1,
-                      Date() < fastDeadline
-                else { continue }
-                let continuationResult = await packs.routeOnDeviceDetailed(
-                    from: candidateCoordinate,
-                    to: end.locationCoordinate,
-                    profile: req.profile,
-                    allowUnknown: req.accessPolicy.motorizedUnknown,
-                    avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
-                    priorEdgeIds: Set((req.options?.priorEdgeIds ?? []) + firstRoute.edgeIds),
-                    arrivalEdgeId: firstRoute.edgeIds.last ?? req.options?.arrivalEdgeId,
-                    backtrackFactor: req.options?.backtrackFactor ?? 4,
-                    sessionSeed: seed,
-                    maxRouteMeters: destinationCap,
-                    regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
-                    cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
-                    avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true,
-                    fastSearch: true,
-                    deadline: fastDeadline
-                )
-                guard case .success(let continuation) = continuationResult,
-                      continuation.distanceMeters <= destinationCap + 1,
-                      Date() < fastDeadline
+                      (req.fuel.allowPartialWindow == true || Date() < fastDeadline)
                 else { continue }
                 guard let firstEndpoint = firstRoute.coordinates.last,
                       GeoMath.meters(firstEndpoint, candidateCoordinate)
@@ -471,51 +533,128 @@ final class PackRoutingSource: RoutingSource {
                     priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])
                 ).appendingFuelStopEndpoint(to: stop.coordinate)
                 let firstMeters = firstResponse.distanceMeters ?? firstRoute.distanceMeters
-                let candidateReport = FuelStationCandidate(
-                    id: candidate.id,
-                    meters: firstMeters,
-                    dirtPct: firstRoute.reportedDirtPercent,
-                    departureId: "start",
-                    latitude: candidate.latitude,
-                    longitude: candidate.longitude,
-                    name: candidate.displayName,
-                    validForward: true,
-                    remainingGraphMeters: continuation.distanceMeters,
-                    canFinish: true,
-                    rank: 1,
-                    candidateSource: "fast-geographic-cohort"
+                if req.fuel.allowPartialWindow == true {
+                    RoutingDebugLog.shared.event(
+                        "fuel fast candidate=\(candidate.id) partial-pump committed "
+                            + "meters=\(Int(firstMeters)) elapsedMs=\(Int((ProcessInfo.processInfo.systemUptime - candidateBegan) * 1000))"
+                    )
+                    let candidateReport = FuelStationCandidate(
+                        id: candidate.id,
+                        meters: firstMeters,
+                        dirtPct: firstRoute.reportedDirtPercent,
+                        departureId: "start",
+                        latitude: candidate.latitude,
+                        longitude: candidate.longitude,
+                        name: candidate.displayName,
+                        validForward: true,
+                        remainingGraphMeters: nil,
+                        canFinish: false,
+                        rank: 1,
+                        candidateSource: "fast-geographic-partial"
+                    )
+                    return FuelChainResponse(
+                        status: "complete",
+                        error: nil,
+                        message: "Fuel window ends at the proven station; the next window will continue from there.",
+                        regionIds: GraphPackStore.regionIds(containingAny: [
+                            start.locationCoordinate, end.locationCoordinate
+                        ]),
+                        stops: [stop],
+                        graphMeters: [firstMeters],
+                        diagnostics: FuelChainDiagnostics(
+                            strategy: "pack-fast-proven-pump",
+                            states: 1,
+                            dijkstraPops: nil,
+                            matchedFuel: stations.count,
+                            elapsedMs: nil,
+                            candidateK: 1,
+                            stationsReachableWithinRange: nil,
+                            candidatesEvaluated: 1
+                        ),
+                        routes: [firstResponse],
+                        stationCandidates: [candidateReport],
+                        windowComplete: false
+                    )
+                }
+                let continuationResult = await packs.routeOnDeviceDetailed(
+                    from: candidateCoordinate,
+                    to: end.locationCoordinate,
+                    profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown,
+                    avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                    priorEdgeIds: Set((req.options?.priorEdgeIds ?? []) + firstRoute.edgeIds),
+                    arrivalEdgeId: firstRoute.edgeIds.last ?? req.options?.arrivalEdgeId,
+                    backtrackFactor: req.options?.backtrackFactor ?? 4,
+                    sessionSeed: seed,
+                    maxRouteMeters: destinationCap,
+                    regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
+                    cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+                    avoidMotorways: req.options?.avoidMotorways == true,
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    fastSearch: true,
+                    deadline: fastDeadline
                 )
-                return FuelChainResponse(
-                    status: "complete",
-                    error: nil,
-                    message: nil,
-                    regionIds: GraphPackStore.regionIds(containingAny: [
-                        start.locationCoordinate, end.locationCoordinate
-                    ]),
-                    stops: [stop],
-                    graphMeters: [firstMeters, continuation.distanceMeters],
-                    diagnostics: FuelChainDiagnostics(
-                        strategy: "pack-fast-proven-continuation",
-                        states: 2,
-                        dijkstraPops: nil,
-                        matchedFuel: stations.count,
-                        elapsedMs: nil,
-                        candidateK: 1,
-                        stationsReachableWithinRange: nil,
-                        candidatesEvaluated: 1
-                    ),
-                    routes: [
-                        firstResponse,
-                        RouteResponse(onDevice: continuation, priorEdgeIDs: Set(firstRoute.edgeIds))
-                    ],
-                    stationCandidates: [candidateReport],
-                    windowComplete: true
-                )
+                switch continuationResult {
+                case .success(let continuation):
+                    RoutingDebugLog.shared.event(
+                        "fuel fast candidate=\(candidate.id) continuation=success meters=\(Int(continuation.distanceMeters)) "
+                            + "elapsedMs=\(Int((ProcessInfo.processInfo.systemUptime - candidateBegan) * 1000))"
+                    )
+                case .failure(let failure):
+                    RoutingDebugLog.shared.event(
+                        "fuel fast candidate=\(candidate.id) continuation=failure \(failure) "
+                            + "elapsedMs=\(Int((ProcessInfo.processInfo.systemUptime - candidateBegan) * 1000))"
+                    )
+                }
+                if case .success(let continuation) = continuationResult,
+                   continuation.distanceMeters <= destinationCap + 1,
+                   Date() < fastDeadline {
+                    let candidateReport = FuelStationCandidate(
+                        id: candidate.id,
+                        meters: firstMeters,
+                        dirtPct: firstRoute.reportedDirtPercent,
+                        departureId: "start",
+                        latitude: candidate.latitude,
+                        longitude: candidate.longitude,
+                        name: candidate.displayName,
+                        validForward: true,
+                        remainingGraphMeters: continuation.distanceMeters,
+                        canFinish: true,
+                        rank: 1,
+                        candidateSource: "fast-geographic-cohort"
+                    )
+                    return FuelChainResponse(
+                        status: "complete",
+                        error: nil,
+                        message: nil,
+                        regionIds: GraphPackStore.regionIds(containingAny: [
+                            start.locationCoordinate, end.locationCoordinate
+                        ]),
+                        stops: [stop],
+                        graphMeters: [firstMeters, continuation.distanceMeters],
+                        diagnostics: FuelChainDiagnostics(
+                            strategy: "pack-fast-proven-continuation",
+                            states: 2,
+                            dijkstraPops: nil,
+                            matchedFuel: stations.count,
+                            elapsedMs: nil,
+                            candidateK: 1,
+                            stationsReachableWithinRange: nil,
+                            candidatesEvaluated: 1
+                        ),
+                        routes: [
+                            firstResponse,
+                            RouteResponse(onDevice: continuation, priorEdgeIDs: Set(firstRoute.edgeIds))
+                        ],
+                        stationCandidates: [candidateReport],
+                        windowComplete: true
+                    )
+                }
             }
             return FuelChainResponse(
                 status: "unknown",
                 error: "fuel_fast_path_no_qualified_route",
-                message: "No qualified fuel continuation was found within the on-device response budget.",
+                message: "No legal next fuel station could be reached within the on-device response budget.",
                 regionIds: GraphPackStore.regionIds(containingAny: [
                     start.locationCoordinate, end.locationCoordinate
                 ]),

@@ -63,6 +63,8 @@ final class RoutingDebugLog {
             "fuel operation begin",
             "fuel advisory",
             "fuel combined progress",
+            "fuel fast",
+            "hybrid-probe",
             "fuel forward committed",
             "on-device route failed",
             "FAIL "

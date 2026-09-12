@@ -35,13 +35,13 @@ struct RoutePlannerModelItineraryTests {
     @Test func progressNotificationNumbersEachFuelStop() {
         #expect(RoutePlannerModel.progressToastContent(for: "Creating fuel stop 1")
             == RoutePlannerModel.ProgressToastContent(
-                title: "Creating fuel stop 1",
-                detail: "Fuel stop required"
+                title: "Routing to next fuel stop",
+                detail: "Building one legal fuel leg"
             ))
         #expect(RoutePlannerModel.progressToastContent(for: "Fuel stop 2 added")
             == RoutePlannerModel.ProgressToastContent(
-                title: "Fuel stop 2 added",
-                detail: "Continuing the route"
+                title: "Fuel stop added",
+                detail: "Continuing toward the waypoint"
             ))
         #expect(RoutePlannerModel.isPersistentProgressToast("Checking range after fuel stop 2"))
     }

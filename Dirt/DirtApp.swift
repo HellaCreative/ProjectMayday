@@ -53,9 +53,13 @@ struct DirtApp: App {
             (.balanced, 390_138.634)
         ]
         let source = PackRoutingSource(packs: app.graphPacks, cache: RouteResponseCache())
-        print("[HybridProbe] begin ns-nb fuel profiles=3 rangeMeters=193121 preparation=active")
+        func emit(_ message: String) {
+            RoutingDebugLog.shared.event("hybrid-probe \(message)")
+            print("[HybridProbe] \(message)")
+        }
+        emit("begin ns-nb fuel profiles=3 rangeMeters=193121 preparation=active")
         for (profile, profileMeters) in profiles {
-            print("[HybridProbe] profile-begin=\(profile.rawValue)")
+            emit("profile-begin=\(profile.rawValue)")
             let began = ProcessInfo.processInfo.systemUptime
             let request = FuelChainRequest(
                 profile: profile,
@@ -68,6 +72,8 @@ struct DirtApp: App {
                 minimumFuelStops: 1,
                 profileMeters: profileMeters,
                 riderLegId: "private-device-hybrid-probe",
+                windowMaxStops: 1,
+                allowPartialWindow: true,
                 windowTimeBudgetMs: 20_000,
                 mapZoom: 8
             )
@@ -82,13 +88,13 @@ struct DirtApp: App {
                 let matched = response.diagnostics.map { String(describing: $0.matchedFuel) } ?? "-"
                 let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
                 let error = response.error ?? "-"
-                print("[HybridProbe] profile=\(profile.rawValue) status=\(response.status) seconds=\(seconds) regions=\(regions) window=\(window) strategy=\(strategy) matched=\(matched) stops=\(stops) graphMeters=\(meters) gapMeters=\(gap) error=\(error)")
+                emit("profile=\(profile.rawValue) status=\(response.status) seconds=\(seconds) regions=\(regions) window=\(window) strategy=\(strategy) matched=\(matched) stops=\(stops) graphMeters=\(meters) gapMeters=\(gap) error=\(error)")
             } catch {
                 let seconds = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
-                print("[HybridProbe] profile=\(profile.rawValue) failure=\(error) seconds=\(seconds)")
+                emit("profile=\(profile.rawValue) failure=\(error) seconds=\(seconds)")
             }
         }
-        print("[HybridProbe] end")
+        emit("end")
     }
     #endif
 }
