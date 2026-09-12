@@ -18,7 +18,8 @@ remains authoritative after consent.
 
 The prompt now names the selected home region correctly and adds the rider
 facing expectation for routes spanning more than two regions (about 110
-seconds to 3 minutes on the phone). A 17-test focused simulator run passes;
+seconds to 3 minutes on the phone). An 18-test focused simulator run passes,
+including acceptance followed by a pack-only route;
 the private arm64 Dev build was rebuilt and installed on White, but the phone
 is currently locked so the authorized probe cannot launch yet.
 

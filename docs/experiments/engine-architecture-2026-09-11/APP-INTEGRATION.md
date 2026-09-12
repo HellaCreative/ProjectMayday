@@ -84,3 +84,7 @@ The download alert names the selected regions and, for routes spanning more
 than two regions, explains that planning may take about 110 seconds to 3
 minutes on the phone. The focused suite now has 17 passing tests; the latest
 arm64 Dev build is installed on White, which is currently locked.
+
+The suite now has 18 passing tests, including the acceptance path: after the
+download completes, the pending route selects the installed pack and makes no
+live request.
