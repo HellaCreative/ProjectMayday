@@ -138,3 +138,27 @@ the pack route now allows a 3.5 s cross-region budget (same-region remains
 The remaining device check is to confirm the same `seamAttempts=1` result on
 White. The focused suite is green (4 tests); the full suite must remain green
 before installing this candidate.
+
+## 2026-09-12 fuel-window lower-bound repair
+
+The next White-device log showed that pack routing itself was healthy but the
+fuel planner still entered its generic target-aware reachability flood with
+`forceStop=0`. It spent the full 20-second window before falling back to an
+unverified road route, even when the destination's straight-line lower bound
+already exceeded the 180 km usable range. This was a planner control-flow
+failure, not a missing station or a device-speed limit.
+
+Checkpoint `a378d22` makes the bounded one-pump path trigger whenever that
+lower bound exceeds the first-leg cap. The destination remains a direction
+filter for station ordering; it is no longer used to justify an expensive
+reachability search before the first pump. Short legs whose lower bound fits
+the cap retain the direct on-device route fast path. The next device log
+should include `fuel fast-path trigger reason=range-lower-bound` followed by a
+`fuel fast candidate` and a committed pump, rather than
+`fuel_window_budget_exceeded`.
+
+The focused simulator verification after this change passed 51 tests across
+FuelAssist, ItineraryBuilder, and the real V4 on-device benchmark suites. The
+updated DIRT Dev app was built and installed on the authorized White iPhone
+16 (UDID `B1A97A1C-5418-5143-9134-42260494B443`); automated launch was denied
+only because iOS reported the phone locked.
