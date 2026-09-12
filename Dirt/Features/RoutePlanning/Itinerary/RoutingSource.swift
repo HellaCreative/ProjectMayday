@@ -375,7 +375,21 @@ final class PackRoutingSource: RoutingSource {
                 sessionSeed: seed,
                 excluding: Set(req.fuel.excludedStationIds ?? [])
             )
-            for candidate in ranked.prefix(3) {
+            let fastAvoidanceBoxes = await packs.fuelAvoidanceBoxes(
+                from: start.locationCoordinate,
+                toward: end.locationCoordinate
+            )
+            let urbanRanked = ranked.sorted {
+                let aUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
+                    $0, start: start, destination: end, boxes: fastAvoidanceBoxes
+                )
+                let bUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
+                    $1, start: start, destination: end, boxes: fastAvoidanceBoxes
+                )
+                if aUrban != bUrban { return !aUrban }
+                return false
+            }
+            for candidate in urbanRanked.prefix(3) {
                 guard Date() < fastDeadline else { break }
                 let candidateCoordinate = CLLocationCoordinate2D(
                     latitude: candidate.latitude,
