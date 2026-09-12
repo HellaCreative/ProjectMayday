@@ -124,7 +124,8 @@ final class AppEnvironment {
         poiManager             = POIManager(
             mapState: mapState,
             graphPacks: graphPacks,
-            network: network
+            network: network,
+            onDeviceOnly: true
         )
         networkOverlayManager  = NetworkOverlayManager(mapState: mapState, graphPacks: graphPacks)
         routingGraphDebug      = RoutingGraphDebugManager(
