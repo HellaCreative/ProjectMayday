@@ -179,3 +179,35 @@ suite passes 41 tests. The next White log should show
 `fuel destination escape deferred source=pack reason=next-pump-sequence`, then
 the lower-bound fast path and a committed pump; it should not show a 20-second
 fuel-window fallback for a route that has stations in the installed pack.
+
+## 2026-09-12 bounded pump qualification
+
+The first bounded implementation used a 75% air-distance trigger for the
+direct destination proof. That still spent a route search on four near-edge
+windows after a pump (95–130 km of straight-line distance remained), even
+though the Dirt graph could not carry those hops within 180 km. The result was
+correct but took 14.8–15.8 seconds for the full NS itinerary.
+
+The candidate now uses a 50% trigger for both the direct proof and the pack
+fuel lower bound. A destination that is well inside half the remaining tank is
+still proved directly; otherwise the planner immediately qualifies the next
+forward pump. The phone path keeps a 16-station geographic cohort and proves
+at most three local candidates, with a balanced connector fallback only for a
+station approach that strict Dirt cannot legally reach.
+
+Measured on the serial simulator with immutable `fabric-v4-20260909-01` NS
+pack bytes:
+
+| Case | Result |
+| --- | --- |
+| First fuel pump, NS Dirt | 1.13 s route proof; 20.9 km graph hop; proven pump |
+| Full NS Dirt itinerary, 551.6 km | 6.62 s total; 9 proven pump stops; 10 built legs; final hop 0.26 s |
+| Itinerary behavior tests | 41 tests passed |
+| Pack acquisition/source tests | 19 tests passed |
+| Fuel and real-pack benchmark tests | 13 tests passed |
+
+There were no advisory or unverified fuel statuses in the full itinerary, and
+the logs show only `source=pack` with no routing network request. The old
+12-second assertion remains valid; the measured total is now below it by more
+than five seconds. The candidate is ready for one authorized White-device
+build and a physical NS pack confirmation.

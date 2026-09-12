@@ -37,6 +37,12 @@ nonisolated enum HopSearchPolicy {
     static let fuelPreferTank: Double = 0.75
     /// The rider-entered range is already the safety limit; do not silently shave 5%.
     static let fuelMaxTank: Double = 1.0
+    /// Straight-line distance is only a lower bound. A Dirt detour can exceed
+    /// the cap well before the air distance reaches the tank edge, so start
+    /// the bounded next-pump search at half the usable range. A direct route
+    /// proof still wins for short hops; this threshold only avoids repeating a
+    /// doomed full-destination search after a previous pump.
+    static let fuelAirLowerBoundFraction: Double = 0.50
 
     /// 0 = selection zone (75%+ consumed), 1 is retained for compatibility,
     /// 2 = early sparse-corridor fallback.

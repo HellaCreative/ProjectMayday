@@ -64,10 +64,12 @@ final class ItineraryBuilder {
     /// as proved; dense Ontario/Quebec requests get enough room to prove both
     /// sides of one pump without reaching Vercel's platform timeout.
     private static let liveFuelWindowBudgetMs = 20_000
-    /// A short rider leg should be proved as one ordinary graph route. The
-    /// air-distance bound is deliberately conservative, but 0.35 rejected a
-    /// 64 km leg with a 180 km reserve-adjusted tank (the exact failure seen
-    /// on the phone) before the direct route was even attempted.
+    /// A short rider leg should be proved as one ordinary graph route. A
+    /// direct route proof is worthwhile only while the destination is well
+    // inside the remaining tank. Near the tank edge a Dirt route can be much
+    // longer than its straight-line distance; probing it first merely burns
+    // the rider-facing deadline before the next-pump search begins. Keep the
+    // same conservative half-range trigger used by the pack fuel planner.
     private static let directFuelAirFraction = 0.50
     private var currentGeneration: Int?
     /// Current map zoom for V4 tap-radius. Set by the planner before `build`.
@@ -1097,6 +1099,7 @@ final class ItineraryBuilder {
                     ),
                     riderDestination.coordinate
                 )
+                var directFuelRouteFailed = false
                 let shouldTryDirectFuelRoute = source.supportsDirectFuelCarry
                     && !forceFuelStop
                     && requiredStationID == nil
@@ -1106,53 +1109,65 @@ final class ItineraryBuilder {
                     // station search. Short legs like 67 km vs 180 km remain
                     // well inside this bound.
                     && directAirMeters <= directFuelCap * Self.directFuelAirFraction + 1
-                if shouldTryDirectFuelRoute,
-                   let response = try? await source.route(routeRequest(
-                       profile: activeProfile,
-                       allowUnknown: activeAllowUnknown,
-                       from: current,
-                       to: riderDestination.coordinate,
-                       avoidEdgeIDs: itinerary.impassableEdgeIDs,
-                       maxPathMeters: directFuelCap,
-                       history: history,
-                       avoidMotorways: activeAvoidMotorways,
-                       preferBackRoads: riderLeg.preferBackRoads
-                   )),
-                   let meters = try? responseMeters(response),
-                   meters <= directFuelCap + 1 {
-                    let arrivalFuel = destinationFuelStop == nil
-                        ? fuelUsed + meters
-                        : 0
-                    let built = BuiltLeg(
-                        riderLegID: riderLeg.id,
-                        fromCoordinate: current,
-                        toCoordinate: riderDestination.coordinate,
-                        endsAtFuelStop: nil,
-                        response: response,
-                        fuelUsedOnArrivalMeters: arrivalFuel,
-                        routeProfile: activeProfile
-                    )
-                    builtLegs.append(built)
-                    history.append(response)
-                    fuelUsed = arrivalFuel
-                    current = riderDestination.coordinate
-                    statuses[riderLeg.id] = .built
-                    committed = replacing(
-                        riderLegID: riderLeg.id,
-                        with: builtLegs,
-                        in: committed,
-                        status: .built
-                    )
-                    RoutingDebugLog.shared.event(
-                        "fuel direct carry riderLeg=\(riderLeg.id) "
-                            + "meters=\(Int(meters)) remaining=\(Int(remaining)) "
-                            + "arrivalLimit=\(effectiveArrivalFuelLimit.map { Int($0) } ?? -1) "
-                            + "routeSource=pack"
-                    )
-                    progressWatchdog.recordProgress()
-                    onProgress(committed)
-                    onFuelStatus("Route ready")
-                    break
+                if shouldTryDirectFuelRoute {
+                    let directResponse = try? await source.route(routeRequest(
+                        profile: activeProfile,
+                        allowUnknown: activeAllowUnknown,
+                        from: current,
+                        to: riderDestination.coordinate,
+                        avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                        maxPathMeters: directFuelCap,
+                        history: history,
+                        avoidMotorways: activeAvoidMotorways,
+                        preferBackRoads: riderLeg.preferBackRoads
+                    ))
+                    if let response = directResponse,
+                       let meters = try? responseMeters(response),
+                       meters <= directFuelCap + 1 {
+                        let arrivalFuel = destinationFuelStop == nil
+                            ? fuelUsed + meters
+                            : 0
+                        let built = BuiltLeg(
+                            riderLegID: riderLeg.id,
+                            fromCoordinate: current,
+                            toCoordinate: riderDestination.coordinate,
+                            endsAtFuelStop: nil,
+                            response: response,
+                            fuelUsedOnArrivalMeters: arrivalFuel,
+                            routeProfile: activeProfile
+                        )
+                        builtLegs.append(built)
+                        history.append(response)
+                        fuelUsed = arrivalFuel
+                        current = riderDestination.coordinate
+                        statuses[riderLeg.id] = .built
+                        committed = replacing(
+                            riderLegID: riderLeg.id,
+                            with: builtLegs,
+                            in: committed,
+                            status: .built
+                        )
+                        RoutingDebugLog.shared.event(
+                            "fuel direct carry riderLeg=\(riderLeg.id) "
+                                + "meters=\(Int(meters)) remaining=\(Int(remaining)) "
+                                + "arrivalLimit=\(effectiveArrivalFuelLimit.map { Int($0) } ?? -1) "
+                                + "routeSource=pack"
+                        )
+                        progressWatchdog.recordProgress()
+                        onProgress(committed)
+                        onFuelStatus("Route ready")
+                        break
+                    } else {
+                        // A failed direct proof is evidence that this hop
+                        // cannot be carried on the remaining tank. Tell the
+                        // next pump window that a stop is mandatory instead of
+                        // falling into the unbounded legacy reachability path.
+                        directFuelRouteFailed = true
+                        RoutingDebugLog.shared.event(
+                            "fuel direct carry probe failed riderLeg=\(riderLeg.id) "
+                                + "airMeters=\(Int(directAirMeters)) cap=\(Int(directFuelCap))"
+                        )
+                    }
                 }
 
                 onFuelStatus(committedFuelStopCount == 0
@@ -1259,8 +1274,8 @@ final class ItineraryBuilder {
                         allowUnknown: activeAllowUnknown,
                         usableRangeMeters: fuel.usableMeters,
                         firstLegMaxMeters: remaining,
-                        requireFuelStopBeforeEnd: forceFuelStop,
-                        minimumFuelStops: forceFuelStop ? 1 : 0,
+                        requireFuelStopBeforeEnd: forceFuelStop || directFuelRouteFailed,
+                        minimumFuelStops: (forceFuelStop || directFuelRouteFailed) ? 1 : 0,
                         destinationFuelUsedLimitMeters: arrivalFuelLimit,
                         profileMeters: straightLineMeters(current, riderDestination.coordinate),
                         riderLegId: riderLeg.id.uuidString,

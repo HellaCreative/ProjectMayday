@@ -270,4 +270,121 @@ struct OnDevicePackBenchmarkTests {
             Issue.record("NS→NB chained route failed after \(String(format: "%.3f", elapsed))s: \(failure)")
         }
     }
+
+    @Test("NS fuel fast path returns a proven first pump")
+    @MainActor
+    func nsFuelFastPathReturnsFirstPump() async throws {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory
+            .appendingPathComponent("dirt-fuel-fast-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+        let versionRoot = tempRoot.appendingPathComponent(
+            AppConfig.v4CandidateReleaseId,
+            isDirectory: true
+        )
+        let destination = versionRoot.appendingPathComponent("ns", isDirectory: true)
+        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+        for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"] {
+            let source = root.appendingPathComponent("ns/\(name)")
+            guard fm.fileExists(atPath: source.path) else {
+                Issue.record("Missing ns \(name) fixture")
+                return
+            }
+            try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
+        }
+
+        let store = GraphPackStore(cacheRoot: tempRoot)
+        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+        let start = RouteCoordinate(longitude: -63.340343, latitude: 44.764811)
+        let end = RouteCoordinate(longitude: -60.416804, latitude: 46.298675)
+        let began = ProcessInfo.processInfo.systemUptime
+        let response = try await source.fuelChain(FuelChainRequest(
+            profile: .dirt,
+            from: start,
+            to: end,
+            allowUnknown: false,
+            usableRangeMeters: 180_000,
+            firstLegMaxMeters: 180_000,
+            requireFuelStopBeforeEnd: false,
+            minimumFuelStops: 0,
+            profileMeters: GeoMath.meters(start, end),
+            riderLegId: "real-pack-fuel-fast-path",
+            windowMaxStops: 1,
+            allowPartialWindow: true,
+            windowTimeBudgetMs: 20_000,
+            mapZoom: 8
+        ))
+        let elapsed = ProcessInfo.processInfo.systemUptime - began
+        print("[RealV4] fuel-fast status=\(response.status) seconds=\(String(format: "%.3f", elapsed)) stops=\(response.stops?.count ?? 0) meters=\(response.graphMeters ?? []) strategy=\(response.diagnostics?.strategy ?? "-")")
+        #expect(response.isComplete)
+        #expect(response.stops?.isEmpty == false)
+        #expect((response.graphMeters?.first ?? .infinity) <= 180_001)
+        #expect(elapsed < 3.0)
+    }
+
+    @Test("NS on-device itinerary commits fuel stops instead of advisory fallback")
+    @MainActor
+    func nsOnDeviceItineraryCommitsFuelStops() async throws {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory
+            .appendingPathComponent("dirt-fuel-itinerary-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+        let versionRoot = tempRoot.appendingPathComponent(
+            AppConfig.v4CandidateReleaseId,
+            isDirectory: true
+        )
+        let destination = versionRoot.appendingPathComponent("ns", isDirectory: true)
+        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+        for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"] {
+            let source = root.appendingPathComponent("ns/\(name)")
+            guard fm.fileExists(atPath: source.path) else {
+                Issue.record("Missing ns \(name) fixture")
+                return
+            }
+            try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
+        }
+
+        let store = GraphPackStore(cacheRoot: tempRoot)
+        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+        let start = RouteCoordinate(longitude: -63.340343, latitude: 44.764811)
+        let end = RouteCoordinate(longitude: -60.416804, latitude: 46.298675)
+        let first = RiderWaypoint(coordinate: start)
+        let last = RiderWaypoint(coordinate: end)
+        let itinerary = RiderItinerary(
+            waypoints: [first, last],
+            legs: [RiderLeg(
+                from: first.id,
+                to: last.id,
+                profile: .dirt,
+                allowUnknown: false,
+                avoidMotorways: false
+            )],
+            generation: 1,
+            impassableEdgeIDs: []
+        )
+        var statuses: [String] = []
+        let began = ProcessInfo.processInfo.systemUptime
+        let result = await ItineraryBuilder().build(
+            itinerary,
+            from: 0,
+            reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 200_000,
+                usableMeters: 180_000,
+                reservePercent: 10,
+                automaticPlanningEnabled: true
+            ),
+            source: .fixed(source),
+            onFuelStatus: { statuses.append($0) },
+            onProgress: { _ in }
+        )
+        let elapsed = ProcessInfo.processInfo.systemUptime - began
+        let stops = result.legs.compactMap { $0.endsAtFuelStop?.stationID }
+        print("[RealV4] fuel-itinerary seconds=\(String(format: "%.3f", elapsed)) legs=\(result.legs.count) stops=\(stops) statuses=\(statuses)")
+        #expect(result.legs.count >= 2)
+        #expect(!stops.isEmpty)
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+        #expect(statuses.contains { $0.contains("Fuel stop") })
+        #expect(elapsed < 12.0)
+    }
 }

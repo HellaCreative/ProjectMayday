@@ -432,7 +432,8 @@ final class PackRoutingSource: RoutingSource {
         // impossible, so go straight to the bounded next-pump search instead
         // of spending the full reachability budget proving the same fact.
         let lowerBoundRequiresPump = req.fuel.profileMeters.isFinite
-            && req.fuel.profileMeters > req.fuel.firstLegMaxMeters + 1
+            && req.fuel.profileMeters
+                > req.fuel.firstLegMaxMeters * HopSearchPolicy.fuelAirLowerBoundFraction + 1
         let shouldPlanNextPump = req.fuel.requireFuelStopBeforeEnd || lowerBoundRequiresPump
         if req.fuel.minimumFuelStops <= 1,
            shouldPlanNextPump,
@@ -461,6 +462,9 @@ final class PackRoutingSource: RoutingSource {
                 from: start,
                 to: end,
                 maxMeters: firstCap,
+                // Keep discovery bounded on the phone. The route proof still
+                // tries only three candidates; widening this cohort consumes
+                // the same deadline before any route search can begin.
                 limit: 16
             )
             let approximateReachability = Dictionary(uniqueKeysWithValues: targets.map { station in
@@ -476,6 +480,11 @@ final class PackRoutingSource: RoutingSource {
                 usableRangeMeters: req.fuel.usableRangeMeters,
                 sessionSeed: seed,
                 excluding: Set(req.fuel.excludedStationIds ?? [])
+            )
+            RoutingDebugLog.shared.event(
+                "fuel fast cohort stations=\(stations.count) targets=\(targets.count) "
+                    + "ranked=\(ranked.count) partial=\(req.fuel.allowPartialWindow == true ? 1 : 0) "
+                    + "deadlineMs=\(max(0, Int(fastDeadline.timeIntervalSinceNow * 1_000)))"
             )
             let rankedOrder = Dictionary(uniqueKeysWithValues: ranked.enumerated().map { ($1.id, $0) })
             // A partial window only needs the next legal pump. Keep that
@@ -501,9 +510,24 @@ final class PackRoutingSource: RoutingSource {
                         )
                     ) == departureRegion
                 if aSameRegion != bSameRegion { return aSameRegion }
+                let aProgress = GeoMath.progressAlongAB(
+                    from: start, to: end,
+                    point: RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+                )
+                let bProgress = GeoMath.progressAlongAB(
+                    from: start, to: end,
+                    point: RouteCoordinate(longitude: $1.longitude, latitude: $1.latitude)
+                )
                 let aAir = approximateReachability[$0.id] ?? .greatestFiniteMagnitude
                 let bAir = approximateReachability[$1.id] ?? .greatestFiniteMagnitude
-                if abs(aAir - bAir) > 2_000 { return aAir < bAir }
+                // Take the next forward pump, rather than trying to jump to
+                // the tank edge. The short hop is both the rider's stated
+                // contract and the cheapest proof on a phone. `ranked` has
+                // already filtered out behind-the-rider and destination-edge
+                // candidates; air distance is therefore a safe lower-bound
+                // ordering, with progress breaking near-ties.
+                if abs(aAir - bAir) > 1_000 { return aAir < bAir }
+                if abs(aProgress - bProgress) > 2_000 { return aProgress < bProgress }
                 return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
             }
             let fastRanked: [POIFeature]
@@ -512,7 +536,13 @@ final class PackRoutingSource: RoutingSource {
                 // scoring: it chooses the nearest forward pump in the
                 // departure pack and proves the road leg. Avoid loading and
                 // sorting avoidance geometry on every phone fuel window.
-                fastRanked = partialRanked
+                let comfort = partialRanked.filter {
+                    (approximateReachability[$0.id] ?? firstCap) <= firstCap * 0.80
+                }
+                let comfortIDs = Set(comfort.map(\.id))
+                fastRanked = comfort.isEmpty
+                    ? partialRanked
+                    : comfort + partialRanked.filter { !comfortIDs.contains($0.id) }
             } else {
                 let fastAvoidanceBoxes = await packs.fuelAvoidanceBoxes(
                     from: start.locationCoordinate,
@@ -555,6 +585,10 @@ final class PackRoutingSource: RoutingSource {
                 }
                 fastRanked = orderedConservative + urbanRanked.filter { !conservativeIDs.contains($0.id) }
             }
+            RoutingDebugLog.shared.event(
+                "fuel fast ranked-ready count=\(fastRanked.count) "
+                    + "deadlineMs=\(max(0, Int(fastDeadline.timeIntervalSinceNow * 1_000)))"
+            )
             for candidate in fastRanked.prefix(3) {
                 guard Date() < fastDeadline else { break }
                 let candidateCoordinate = CLLocationCoordinate2D(
@@ -572,7 +606,7 @@ final class PackRoutingSource: RoutingSource {
                     max(candidateAirMeters * 3, candidateAirMeters + 20_000)
                 )
                 let candidateBegan = ProcessInfo.processInfo.systemUptime
-                let firstResult = await packs.routeOnDeviceDetailed(
+                var firstResult = await packs.routeOnDeviceDetailed(
                     from: start.locationCoordinate,
                     to: candidateCoordinate,
                     profile: req.profile,
@@ -595,6 +629,40 @@ final class PackRoutingSource: RoutingSource {
                     fastSearch: true,
                     deadline: fastDeadline
                 )
+                // A pump is a safety waypoint, so the approach may use a
+                // practical paved connector when a strict Dirt search cannot
+                // legally reach the mapped forecourt. Keep the rider's profile
+                // for the corridor and continuation; relax only this bounded
+                // station approach, and only while the fast deadline remains.
+                if case .failure = firstResult,
+                   req.profile == .dirt,
+                   Date() < fastDeadline {
+                    let relaxed = await packs.routeOnDeviceDetailed(
+                        from: start.locationCoordinate,
+                        to: candidateCoordinate,
+                        profile: .balanced,
+                        allowUnknown: req.accessPolicy.motorizedUnknown,
+                        avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                        priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
+                        arrivalEdgeId: req.options?.arrivalEdgeId,
+                        backtrackFactor: req.options?.backtrackFactor ?? 4,
+                        sessionSeed: seed,
+                        maxRouteMeters: candidateRouteCap,
+                        regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
+                        cleanMetroMultiplier: nil,
+                        avoidMotorways: false,
+                        preferBackRoads: false,
+                        matchLimitMeters: req.options?.matchLimitMeters ?? OnDeviceRouter.preferredMatchMeters,
+                        fastSearch: true,
+                        deadline: fastDeadline
+                    )
+                    if case .success = relaxed {
+                        RoutingDebugLog.shared.event(
+                            "fuel fast candidate=\(candidate.id) relaxed-profile=balanced"
+                        )
+                        firstResult = relaxed
+                    }
+                }
                 switch firstResult {
                 case .success(let firstRoute):
                     let endpointGap = Int(GeoMath.meters(
@@ -763,6 +831,33 @@ final class PackRoutingSource: RoutingSource {
                         windowComplete: true
                     )
                 }
+            }
+            if req.fuel.allowPartialWindow == true {
+                RoutingDebugLog.shared.event(
+                    "fuel fast gap no-proven-pump stations=\(stations.count) "
+                        + "targets=\(targets.count) ranked=\(fastRanked.count)"
+                )
+                return FuelChainResponse(
+                    status: "gap",
+                    error: "no_proven_forward_fuel_pump",
+                    message: "No forward fuel stop could be proven within the usable range.",
+                    regionIds: GraphPackStore.regionIds(containingAny: [
+                        start.locationCoordinate, end.locationCoordinate
+                    ]),
+                    stops: [],
+                    graphMeters: [],
+                    diagnostics: FuelChainDiagnostics(
+                        strategy: "pack-fast-pump-gap",
+                        states: 0,
+                        dijkstraPops: nil,
+                        matchedFuel: stations.count,
+                        elapsedMs: nil,
+                        candidateK: fastRanked.count,
+                        stationsReachableWithinRange: nil,
+                        candidatesEvaluated: min(3, fastRanked.count)
+                    ),
+                    stationCandidates: []
+                )
             }
             return FuelChainResponse(
                 status: "unknown",
