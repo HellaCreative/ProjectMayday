@@ -822,13 +822,15 @@ struct RoutingSourcePolicy {
         network: NetworkPathMonitor,
         packs: GraphPackStore,
         live: any RoutingSource,
-        pack: any RoutingSource
+        pack: any RoutingSource,
+        preferInstalledPacks: Bool = true
     ) {
         self.init(
             isOnline: { network.isOnline },
             installedPacks: packs,
             live: live,
-            pack: pack
+            pack: pack,
+            preferInstalledPacks: preferInstalledPacks
         )
     }
 
@@ -837,8 +839,10 @@ struct RoutingSourcePolicy {
         installedPacks: any RoutingInstalledPackRegistry,
         live: any RoutingSource,
         pack: any RoutingSource,
+        preferInstalledPacks: Bool = false,
         report: @escaping @MainActor (String) -> Void = { RoutingDebugLog.shared.event($0) }
     ) {
+        let useInstalled = preferInstalledPacks
         selector = { request in
             let locations = request.locations.map {
                 CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
@@ -848,14 +852,20 @@ struct RoutingSourcePolicy {
             let installed = needed.filter { installedPacks.isRoutingPackInstalled($0) }
             let packsCover = installedPacksCover(locations, registry: installedPacks)
             let singleRegion = provinces.count <= 1
-            let chosen = isOnline() ? live : pack
+            let chosen: any RoutingSource
+            if packsCover && useInstalled {
+                chosen = pack
+            } else {
+                chosen = isOnline() ? live : pack
+            }
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
                     "provinces=[\(provinces.joined(separator: ","))] " +
                     "installed=[\(installed.joined(separator: ","))] " +
                     "path=\(needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) } ?? "nil") " +
                     "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline()) " +
-                    "selected=\(chosen.name)"
+                    "selected=\(chosen.name) " +
+                    "selectionReason=\(packsCover && useInstalled ? "installed-packs" : "online-or-fallback")"
             )
             return chosen
         }

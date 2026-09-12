@@ -25,6 +25,19 @@ struct PackFirstRoutingTests {
         #expect(pack.routeRequests.isEmpty)
     }
 
+    @Test func installedPacksCanBePreferredWhileOnline() {
+        let live = NamedFakeRoutingSource(name: "live")
+        let pack = NamedFakeRoutingSource(name: "pack")
+        let policy = RoutingSourcePolicy(
+            isOnline: { true },
+            installedPacks: FakePackCoverage(installed: ["ns"], published: ["ns"]),
+            live: live,
+            pack: pack,
+            preferInstalledPacks: true
+        )
+        #expect(policy.select(for: nsRequest()).name == "pack")
+    }
+
     @Test func installedNSIsSelectedWhileOffline() {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
