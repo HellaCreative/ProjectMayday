@@ -1,5 +1,21 @@
 # Architectural experiment ledger
 
+## 2026-09-12 — route build now gates on regional pack consent
+
+Private checkpoint `route-pack-consent` wires the regional pack workflow into
+the real route-build entry point. A route samples each straight waypoint span
+at roughly 100 km intervals (bounded to 64 samples per span) and requests the
+published packs covering that corridor, rather than checking endpoints only.
+When any required pack is missing or stale, route construction pauses before
+the live or pack routing source is called. The consent prompt carries the
+region list and exact catalog byte total; accepting installs the verified
+packs and resumes the same request, while declining records the existing live
+fallback warning and proceeds. The existing home-region offer remains a
+separate onboarding action. Sixteen focused simulator tests pass after this
+integration. This does not yet make device-only routing mandatory and does not
+claim that a straight-line sample captures every road detour; the route graph
+remains authoritative after consent.
+
 ## 2026-09-12 — device-first clarification and regional fuel proof bound
 
 Private checkpoint `ebe2144` changes the real app's routing selector: when all

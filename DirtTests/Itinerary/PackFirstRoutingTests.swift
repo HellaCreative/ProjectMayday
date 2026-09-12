@@ -69,7 +69,7 @@ struct PackFirstRoutingTests {
         #expect(prompt.message.contains("offline rerouting"))
     }
 
-    @Test func onlinePlanningUsesLiveWithoutWaitingForPackInstall() async {
+    @Test func onlinePlanningRequestsPackBeforeUsingLive() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
         let coverage = FakePackCoverage(installed: [], published: ["ns"])
@@ -88,11 +88,9 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
-        await model.waitForCanonicalBuildForTesting()
-
-        #expect(model.packConsent == nil)
+        #expect(model.packConsent?.regionIDs == ["ns"])
         #expect(model.itinerary.waypoints.count == 2)
-        #expect(live.routeRequests.isEmpty == false)
+        #expect(live.routeRequests.isEmpty)
         #expect(pack.routeRequests.isEmpty)
         #expect(coverage.installCalls.isEmpty)
     }
@@ -137,6 +135,7 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
+        model.declinePackConsent()
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.packConsent == nil)
@@ -210,6 +209,7 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
+        model.declinePackConsent()
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.packConsent == nil)
@@ -369,6 +369,8 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "fromHere"
         )
+        planModel.declinePackConsent()
+        fromModel.declinePackConsent()
         await planModel.waitForCanonicalBuildForTesting()
         await fromModel.waitForCanonicalBuildForTesting()
 

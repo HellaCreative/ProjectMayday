@@ -69,3 +69,13 @@ fuel route: the 22-case continuity gate, physical pump access, larger-region
 parity and Dirt/Balanced completion remain separate qualification work. The
 road seam is loaded and discoverable; the current on-device fuel planner does
 not meet a 20-second cross-region window on White.
+# Route-build pack gate (private candidate)
+
+The app now evaluates regional coverage before starting a canonical route
+build. It samples long waypoint spans, presents the required published packs
+and their exact combined download size, and waits for an explicit decision.
+Accepting installs verified packs and retries the pending build; declining
+uses the existing online fallback path and records the offline warning. The
+gate is covered by the 16-test PackFirstRoutingTests suite. A home-region
+offer is still presented after the first authorized location fix and does not
+start routing by itself.

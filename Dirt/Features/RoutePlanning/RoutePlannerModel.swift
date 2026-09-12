@@ -715,6 +715,18 @@ final class RoutePlannerModel {
     private func resumePendingPackBuild() {
         guard let pending = pendingPackBuild else { return }
         pendingPackBuild = nil
+        let coordinates = itinerary.waypoints.map(\.coordinate).map(\.locationCoordinate)
+        let decision = packAcquisition.evaluate(
+            coordinates: coordinates,
+            protectInstalledRevisions: graphPacks.protectInstalledRevisions
+        )
+        if case .requestConsent = decision {
+            pendingPackBuild = pending
+            isRouting = false
+            isAssemblingRoute = false
+            refreshMap()
+            return
+        }
         startCanonicalBuild(
             from: pending.from,
             through: pending.through,
@@ -730,6 +742,30 @@ final class RoutePlannerModel {
         replanFromStationID: String? = nil
     ) {
         let requested = itinerary
+        let pending = (
+            from: legIndex,
+            through: throughLegIndex,
+            reuse: reuse,
+            replanFromStationID: replanFromStationID
+        )
+        if packAcquisition.consent != nil {
+            pendingPackBuild = pending
+            isRouting = false
+            isAssemblingRoute = false
+            refreshMap()
+            return
+        }
+        let packDecision = packAcquisition.evaluate(
+            coordinates: requested.waypoints.map(\.coordinate).map(\.locationCoordinate),
+            protectInstalledRevisions: graphPacks.protectInstalledRevisions
+        )
+        if case .requestConsent = packDecision {
+            pendingPackBuild = pending
+            isRouting = false
+            isAssemblingRoute = false
+            refreshMap()
+            return
+        }
         let fuel = FuelRangePrefs.snapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)
         canonicalBuildStartCount += 1

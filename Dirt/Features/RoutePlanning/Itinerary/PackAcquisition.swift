@@ -140,7 +140,33 @@ enum PackAcquisitionEvaluator {
     static func requiredRegionIDs(
         for coordinates: [CLLocationCoordinate2D]
     ) -> [String] {
-        GraphPackStore.regionIds(containingAny: coordinates)
+        var ordered = GraphPackStore.regionIds(containingAny: coordinates)
+        func append(_ ids: [String]) {
+            for id in ids where !ordered.contains(id) {
+                ordered.append(id)
+            }
+        }
+        guard coordinates.count >= 2 else { return ordered }
+
+        // Waypoints are not the route geometry yet. Sample each straight
+        // waypoint span so a long plan asks for the regional packs along its
+        // corridor instead of only the endpoint packs. The eventual route
+        // build remains authoritative for road continuity and detours.
+        for pair in zip(coordinates, coordinates.dropFirst()) {
+            let from = pair.0
+            let to = pair.1
+            let span = GeoMath.meters(from, to)
+            let steps = min(64, max(2, Int(ceil(span / 100_000))))
+            for step in 1...steps {
+                let t = Double(step) / Double(steps)
+                let point = CLLocationCoordinate2D(
+                    latitude: from.latitude + (to.latitude - from.latitude) * t,
+                    longitude: from.longitude + (to.longitude - from.longitude) * t
+                )
+                append(GraphPackStore.regionIds(containingAny: [point]))
+            }
+        }
+        return ordered
     }
 
     static func decide(
