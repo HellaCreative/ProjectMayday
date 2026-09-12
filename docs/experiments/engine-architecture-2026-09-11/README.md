@@ -235,3 +235,9 @@ Checkpoint `801e20a` contains the bounded forecourt snap and the NS→NB fuel
 integration regression. The corresponding White build is version 2 (15),
 installed from `/tmp/Dirt-EngineArchitecture-DeviceBuild8` on device
 `B1A97A1C-5418-5143-9134-42260494B443`.
+
+The short-hop contract is also covered against the real pack. A 70.8 km NS
+Dirt leg with automatic fuel enabled completes in 0.98 s end to end (130 ms
+graph search), produces one built leg and zero generated fuel stops, and emits
+`Route ready`. This prevents the former 10–15 s fuel-window path from
+regressing onto ordinary rides.

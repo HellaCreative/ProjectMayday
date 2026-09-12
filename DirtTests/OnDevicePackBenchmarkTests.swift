@@ -322,6 +322,72 @@ struct OnDevicePackBenchmarkTests {
         #expect(elapsed < 3.0)
     }
 
+    @Test("NS short pack leg bypasses fuel planning")
+    @MainActor
+    func nsOnDeviceShortLegBypassesFuelPlanner() async throws {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory
+            .appendingPathComponent("dirt-short-fuel-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+        let versionRoot = tempRoot.appendingPathComponent(
+            AppConfig.v4CandidateReleaseId,
+            isDirectory: true
+        )
+        let destination = versionRoot.appendingPathComponent("ns", isDirectory: true)
+        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+        for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"] {
+            let source = root.appendingPathComponent("ns/\(name)")
+            guard fm.fileExists(atPath: source.path) else {
+                Issue.record("Missing ns \(name) fixture")
+                return
+            }
+            try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
+        }
+
+        let store = GraphPackStore(cacheRoot: tempRoot)
+        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+        let start = RouteCoordinate(longitude: -63.340343, latitude: 44.764811)
+        let end = RouteCoordinate(longitude: -63.057616, latitude: 45.091108)
+        let first = RiderWaypoint(coordinate: start)
+        let last = RiderWaypoint(coordinate: end)
+        let itinerary = RiderItinerary(
+            waypoints: [first, last],
+            legs: [RiderLeg(
+                from: first.id,
+                to: last.id,
+                profile: .dirt,
+                allowUnknown: false,
+                avoidMotorways: false
+            )],
+            generation: 1,
+            impassableEdgeIDs: []
+        )
+        var statuses: [String] = []
+        let began = ProcessInfo.processInfo.systemUptime
+        let result = await ItineraryBuilder().build(
+            itinerary,
+            from: 0,
+            reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 200_000,
+                usableMeters: 180_000,
+                reservePercent: 10,
+                automaticPlanningEnabled: true
+            ),
+            source: .fixed(source),
+            onFuelStatus: { statuses.append($0) },
+            onProgress: { _ in }
+        )
+        let elapsed = ProcessInfo.processInfo.systemUptime - began
+        let stops = result.legs.compactMap { $0.endsAtFuelStop?.stationID }
+        print("[RealV4] NS short fuel seconds=\(String(format: "%.3f", elapsed)) legs=\(result.legs.count) stops=\(stops) statuses=\(statuses)")
+        #expect(result.legs.count == 1)
+        #expect(stops.isEmpty)
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+        #expect(!statuses.contains { $0.contains("Fuel stop") })
+        #expect(elapsed < 2.0)
+    }
+
     @Test("NS on-device itinerary commits fuel stops instead of advisory fallback")
     @MainActor
     func nsOnDeviceItineraryCommitsFuelStops() async throws {
