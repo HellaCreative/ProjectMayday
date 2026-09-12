@@ -88,6 +88,7 @@ final class RoutingDebugLog {
             "FAIL \(context): \(error.localizedDescription) "
                 + "domain=\(ns.domain) code=\(ns.code)"
         )
+        persistLatestSnapshot()
     }
 
         func liveRouteDiagnostics(_ response: RouteResponse, requestID: String? = nil) {
@@ -126,6 +127,7 @@ final class RoutingDebugLog {
                 + "endpointSources=\(d?.endpointResolutionSources ?? "-") "
                 + "attempts=[\(attemptText)]"
         )
+        persistLatestSnapshot()
     }
 
     func snapSelection(
@@ -276,6 +278,19 @@ final class RoutingDebugLog {
                 + "failureReason=\(d?.failureReason ?? response.error ?? "-") "
                 + "msg=\(response.message ?? "-")"
         )
+        persistLatestSnapshot()
+    }
+
+    /// Keep the latest routing session available for private device
+    /// diagnostics without requiring a tester link or in-app share sheet.
+    /// Snapshots are written only after completed live responses or failures.
+    private func persistLatestSnapshot() {
+        guard let data = text.data(using: .utf8) else { return }
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let url = caches.appendingPathComponent("dirt-app-debug-latest.txt")
+        Task.detached(priority: .utility) {
+            try? data.write(to: url, options: .atomic)
+        }
     }
 
     func copyToPasteboard() {
