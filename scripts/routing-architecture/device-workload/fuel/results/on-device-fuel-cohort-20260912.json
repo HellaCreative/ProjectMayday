@@ -102,5 +102,17 @@
   ],
   "decision": "Use 32 as the default discovery cohort. It retains more corridor alternatives than 16 while matching the selected stop and continuation in this real NS pack fixture.",
   "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
-  "recovery": "Do not install to white from this checkpoint. Rebuild the private probe from the current source and rerun the fixture before any device test."
+  "recovery": "Do not install to white from this checkpoint. Rebuild the private probe from the current source and rerun the fixture before any device test.",
+  "routeReuse": {
+    "checkpoint": "434aa7b",
+    "change": "PackRoutingSource returns the already-proven start\u2192pump and pump\u2192destination routes; ItineraryBuilder consumes a complete pack window without issuing a second route search.",
+    "regressionTest": "ItineraryBuilderTests.packFuelWindowConsumesProvenRoutesWithoutSecondRouteSearch",
+    "focusedGate": {
+      "passed": 64,
+      "failed": 0,
+      "destination": "iPhone 17 simulator iOS 26.5",
+      "deviceInstall": false
+    },
+    "qualification": "This verifies the client reuse path with a scripted pack source. Real-pack strict NativeFuelContinuity still has the documented pump-approach/source-walk qualification."
+  }
 }
