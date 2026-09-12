@@ -565,7 +565,11 @@ final class RoutePlannerModel {
             )
             let pack = PackRoutingSource(packs: graphPacks, cache: cache)
             self.routingSourcePolicy = RoutingSourcePolicy(
-                network: network, packs: graphPacks, live: live, pack: pack
+                network: network,
+                packs: graphPacks,
+                live: live,
+                pack: pack,
+                preferInstalledPacks: false
             )
         }
         self.packAcquisition = packAcquisition ?? PackAcquisitionCoordinator(store: graphPacks)
