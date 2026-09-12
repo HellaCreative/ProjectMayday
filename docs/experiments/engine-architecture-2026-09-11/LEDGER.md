@@ -16,6 +16,12 @@ integration. This does not yet make device-only routing mandatory and does not
 claim that a straight-line sample captures every road detour; the route graph
 remains authoritative after consent.
 
+The prompt now names the selected home region correctly and adds the rider
+facing expectation for routes spanning more than two regions (about 110
+seconds to 3 minutes on the phone). A 17-test focused simulator run passes;
+the private arm64 Dev build was rebuilt and installed on White, but the phone
+is currently locked so the authorized probe cannot launch yet.
+
 ## 2026-09-12 — device-first clarification and regional fuel proof bound
 
 Private checkpoint `ebe2144` changes the real app's routing selector: when all
