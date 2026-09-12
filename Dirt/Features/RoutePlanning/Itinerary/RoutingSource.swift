@@ -434,9 +434,14 @@ final class PackRoutingSource: RoutingSource {
                     address: candidate.address,
                     graphMeters: firstRoute.distanceMeters
                 )
+                let firstResponse = RouteResponse(
+                    onDevice: firstRoute,
+                    priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])
+                ).appendingFuelStopEndpoint(to: stop.coordinate)
+                let firstMeters = firstResponse.distanceMeters ?? firstRoute.distanceMeters
                 let candidateReport = FuelStationCandidate(
                     id: candidate.id,
-                    meters: firstRoute.distanceMeters,
+                    meters: firstMeters,
                     dirtPct: firstRoute.reportedDirtPercent,
                     departureId: "start",
                     latitude: candidate.latitude,
@@ -456,7 +461,7 @@ final class PackRoutingSource: RoutingSource {
                         start.locationCoordinate, end.locationCoordinate
                     ]),
                     stops: [stop],
-                    graphMeters: [firstRoute.distanceMeters, continuation.distanceMeters],
+                    graphMeters: [firstMeters, continuation.distanceMeters],
                     diagnostics: FuelChainDiagnostics(
                         strategy: "pack-fast-proven-continuation",
                         states: 2,
@@ -468,7 +473,7 @@ final class PackRoutingSource: RoutingSource {
                         candidatesEvaluated: 1
                     ),
                     routes: [
-                        RouteResponse(onDevice: firstRoute, priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])),
+                        firstResponse,
                         RouteResponse(onDevice: continuation, priorEdgeIDs: Set(firstRoute.edgeIds))
                     ],
                     stationCandidates: [candidateReport],
@@ -1190,6 +1195,61 @@ private func normalizedEdgeIDs(_ ids: [String]?) -> [String] {
 }
 
 private extension RouteResponse {
+    /// Pack station coordinates often sit a few metres inside a forecourt,
+    /// beyond the legal road projection. Keep the returned window geometrically
+    /// continuous by explicitly carrying that short approach into the stop.
+    /// The connector is labelled as a soft stitch so diagnostics can continue
+    /// to report the approach as unverified until a customer-access edge is
+    /// authored in the pack.
+    func appendingFuelStopEndpoint(to endpoint: RouteCoordinate) -> RouteResponse {
+        guard let geometry, let last = geometry.last else { return self }
+        let gap = CLLocation(latitude: last.latitude, longitude: last.longitude)
+            .distance(from: CLLocation(latitude: endpoint.latitude, longitude: endpoint.longitude))
+        guard gap > 1 else { return self }
+        let approach = RouteSegment(
+            surfaceClass: "access",
+            trackClass: "connector",
+            accessClass: "motorized_permissive",
+            distanceMeters: gap,
+            geometry: [last, endpoint],
+            coords: nil,
+            edgeId: "soft-stitch-fuel",
+            structureType: nil,
+            structureLeaf: nil,
+            layer: 0,
+            crossingLabel: nil,
+            waterCrossing: false,
+            surfaceLeaf: "unpaved"
+        )
+        var joinedGeometry = geometry
+        joinedGeometry.append(endpoint)
+        var joinedSegments = segments ?? []
+        joinedSegments.append(approach)
+        return RouteResponse(
+            status: status,
+            error: error,
+            message: message,
+            distanceMeters: (distanceMeters ?? 0) + gap,
+            estimatedMovingSeconds: estimatedMovingSeconds,
+            estimatedElapsedSeconds: estimatedElapsedSeconds,
+            geometry: joinedGeometry,
+            segments: joinedSegments,
+            stats: stats,
+            maneuvers: maneuvers,
+            warnings: warnings,
+            dirtPercentValue: dirtPercentValue,
+            pavedPercentValue: pavedPercentValue,
+            backtrackMeters: backtrackMeters,
+            backtrackPct: backtrackPct,
+            backtrackReason: backtrackReason,
+            restrictedMeters: restrictedMeters,
+            restrictedReason: restrictedReason,
+            debug: debug,
+            serviceContract: serviceContract,
+            serviceBuild: serviceBuild
+        )
+    }
+
     init(onDevice local: OnDeviceRouter.Result, priorEdgeIDs: Set<String>) {
         let geometry = local.coordinates.map {
             RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
