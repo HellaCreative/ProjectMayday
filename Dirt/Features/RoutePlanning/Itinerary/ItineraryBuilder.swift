@@ -1256,10 +1256,10 @@ final class ItineraryBuilder {
                 if chain.reachesDestination {
                     plannedTargets.append((riderDestination.coordinate, nil))
                 }
-                if source.supportsCombinedFuelPlanning,
-                   let plannedRoutes = chain.routes,
+                if let plannedRoutes = chain.routes,
                    !plannedTargets.isEmpty,
-                   plannedRoutes.count >= plannedTargets.count {
+                   plannedRoutes.count >= plannedTargets.count,
+                   (source.supportsCombinedFuelPlanning || chain.reachesDestination) {
                     // Validate the entire returned window before committing any
                     // hop. A malformed later hop must not leave a half-consumed
                     // chain and then rebuild the first stop a second time.

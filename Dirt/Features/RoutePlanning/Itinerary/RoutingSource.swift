@@ -799,6 +799,19 @@ final class PackRoutingSource: RoutingSource {
                stops.count >= req.fuel.minimumFuelStops,
                choice.validForward,
                let continuation = continuationRoutesByID[station.id] {
+                let first = evaluatedRoutesByID[station.id]
+                let plannedRoutes: [RouteResponse]? = first.map {
+                    [
+                        RouteResponse(
+                            onDevice: $0,
+                            priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])
+                        ),
+                        RouteResponse(
+                            onDevice: continuation,
+                            priorEdgeIDs: Set(req.options?.priorEdgeIds ?? []).union($0.edgeIds)
+                        )
+                    ]
+                }
                 return FuelChainResponse(
                     status: "complete", error: nil, message: nil,
                     regionIds: GraphPackStore.regionIds(containingAny: [
@@ -810,6 +823,7 @@ final class PackRoutingSource: RoutingSource {
                         strategy: "pack-forward-proven-continuation", states: stops.count + 1,
                         dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
                     ),
+                    routes: plannedRoutes,
                     stationCandidates: stationCandidates,
                     windowComplete: true
                 )

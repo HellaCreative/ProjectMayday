@@ -128,6 +128,30 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
     }
 
+    @Test func packFuelWindowConsumesProvenRoutesWithoutSecondRouteSearch() async throws {
+        let start = point(0)
+        let pump = point(0.45)
+        let destination = point(1)
+        let source = FakeRoutingSource(name: "pack")
+        source.providePlannedRoutes = true
+        source.distances[key(start, destination)] = 250_000
+        source.distances[key(start, pump)] = 100_000
+        source.distances[key(pump, destination)] = 120_000
+        source.fuelStops = [fuelStop("pack-pump", at: pump)]
+        source.fuelStopResponses = [[fuelStop("pack-pump", at: pump)]]
+        source.fuelWindowCompleteResponses = [true]
+
+        let result = await build([start, destination], source: source, usable: 220_000)
+
+        #expect(result.legs.count == 2)
+        #expect(result.legs.first?.endsAtFuelStop?.stationID == "pack-pump")
+        let planningRequests = source.fuelChainRequests.filter {
+            $0.fuel.probeFirstReachableStation != true
+        }
+        #expect(planningRequests.count == 1)
+        #expect(source.routeRequests.isEmpty)
+    }
+
     @Test func atlanticDevRequestsCombinedFuelGeometry() async throws {
         #if DIRT_DEVELOPMENT
         let start = RouteCoordinate(longitude: -63.340241, latitude: 44.764845)
@@ -140,7 +164,7 @@ struct ItineraryBuilderTests {
         #expect(source.routeRequests.isEmpty)
         #expect(source.fuelChainRequests.count == 1)
         #expect(source.fuelChainRequests[0].fuel.windowMaxStops == 12)
-        #expect(source.fuelChainRequests[0].fuel.forwardFeeler == false)
+        #expect(source.fuelChainRequests[0].fuel.forwardFeeler != true)
         #endif
     }
 
@@ -1320,6 +1344,7 @@ struct IncrementalItineraryRebuildTests {
 private final class FakeRoutingSource: RoutingSource {
     let name: String
     var supportsCombinedFuelPlanning = false
+    var providePlannedRoutes = false
     var distances: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []
     var fuelStopResponses: [[FuelChainStop]] = []
@@ -1435,7 +1460,7 @@ private final class FakeRoutingSource: RoutingSource {
             : fuelGraphMeterResponses.removeFirst()
         let routePoints = [pair.0] + selectedStops.map(\.coordinate)
             + (windowComplete ? [pair.1] : [])
-        let plannedRoutes: [RouteResponse]? = supportsCombinedFuelPlanning
+        let plannedRoutes: [RouteResponse]? = (supportsCombinedFuelPlanning || providePlannedRoutes)
             ? zip(routePoints, routePoints.dropFirst()).compactMap { endpoints in
                 distances[key(endpoints.0, endpoints.1)].map {
                     response(from: endpoints.0, to: endpoints.1, meters: $0)
