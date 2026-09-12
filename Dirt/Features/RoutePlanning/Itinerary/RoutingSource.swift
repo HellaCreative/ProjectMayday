@@ -346,7 +346,8 @@ final class PackRoutingSource: RoutingSource {
            !crossesRegion,
            req.fuel.minimumFuelStops <= 1,
            req.fuel.requireFuelStopBeforeEnd,
-           req.fuel.allowPartialWindow == true {
+           req.fuel.allowPartialWindow == true,
+           req.fuel.requiredFirstStationId == nil {
             let fastCutoff = Date().addingTimeInterval(1.8)
             let fastDeadline = budgetDeadline.map { min($0, fastCutoff) } ?? fastCutoff
             let firstCap = req.fuel.firstLegMaxMeters
