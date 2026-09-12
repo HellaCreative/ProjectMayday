@@ -7,7 +7,11 @@ import Foundation
 /// This cache stores only completed fuel snap metadata and never road topology.
 nonisolated enum NativeFuelPreparation {
     static let enabled = true
-    static let cacheLimit = 256
+    /// A fuel window can contain hundreds of stations. Keep all snap metadata
+    /// for a regional pack so Clean/Dirt/Balanced and the next hop do not
+    /// repeat geometry projection, while still bounding the cache when a
+    /// device visits many packs in one process.
+    static let cacheLimit = 4096
 }
 
 /// Zoom-aware tap radius. Screen distance, not a second road network.

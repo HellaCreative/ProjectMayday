@@ -1089,10 +1089,29 @@ final class GraphPackStore {
     ) async -> [String: Double] {
         await ensureActivePackAsync(for: [from, toward])
         guard let pack = activePack else { return [:] }
+        // A regional graph cannot prove a pump from a different regional pack.
+        // The broad A→B fuel prefilter intentionally includes both sides of a
+        // border so later hops can use the next pack, but feeding those pumps
+        // into this local flood causes needless snap work and can make a
+        // station appear reachable merely because its point lies in the bbox.
+        // Keep the station list broad at the itinerary layer and constrain it
+        // only for this exact graph proof.
+        let localPumps: [POIFeature]
+        if let regionID = pack.regionId?.lowercased() {
+            localPumps = pumps.filter { pump in
+                let point = CLLocationCoordinate2D(
+                    latitude: pump.latitude,
+                    longitude: pump.longitude
+                )
+                return Self.primaryRegionId(containing: point)?.lowercased() == regionID
+            }
+        } else {
+            localPumps = pumps
+        }
         let packRef = pack
         let work = Task.detached(priority: .userInitiated) {
             OnDeviceRouter(pack: packRef).reachableGraphMeters(
-                from: from, toward: toward, pumps: pumps, maxMeters: maxMeters,
+                from: from, toward: toward, pumps: localPumps, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
         }
