@@ -122,15 +122,15 @@ after roughly 4.4 seconds. NB's seam sidecar is 7.9 MiB because it also
 contains its Maine, Quebec, PEI, and other border records. The route was
 parsing that complete document before it could try the small NS↔NB proof.
 
-The candidate now decodes graph and geometry first, then loads only the
-smaller neighboring seam sidecar for the requested crossing. It verifies each
-canonical anchor's OSM way against the current remote graph and does not
-invent a connector from coordinate proximity. Ordinary same-region routes do
-not parse any seam sidecar. A focused real-pack test now succeeds:
+The candidate now decodes both graph/geometry files in parallel, then loads
+only the smaller neighboring seam sidecar for the requested crossing. It
+verifies each canonical anchor's OSM way against the current remote graph and
+does not invent a connector from coordinate proximity. Ordinary same-region
+routes do not parse any seam sidecar. A focused real-pack test now succeeds:
 
 | Case | Result |
 | --- | --- |
-| NS→NB, Dirt, current V4 packs | 2.59 s total; 1 seam attempt; 1.21 s NS hop; 0.86 s NB final hop; 771.5 km; 58% Dirt |
+| NS→NB, Dirt, current V4 packs | 2.47 s total; 1 seam attempt; 1.22 s NS hop; 0.89 s NB final hop; 771.5 km; 58% Dirt |
 
 The route itself is now correct and deterministic under the bounded search;
 the remaining device check is to confirm the same `seamAttempts=1` result on

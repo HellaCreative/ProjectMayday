@@ -1033,11 +1033,16 @@ final class GraphPackStore {
             }
 
             let nextRegionId = regions[regionIndex + 1]
+            // Decode both sides while their mmap-backed files are cold. The
+            // actor serializes cache mutation, but each decode itself is
+            // detached, so this overlaps the independent disk/JSON work.
+            async let localPackResult = decodedInstalledPack(regionId: regionId)
+            async let remotePackResult = decodedInstalledPack(regionId: nextRegionId)
             guard deadline.map({ Date() < $0 }) ?? true,
-                  let localPack = await decodedInstalledPack(regionId: regionId),
+                  let localPack = await localPackResult,
                   localPack.regionId?.lowercased() == regionId else { return nil }
             guard deadline.map({ Date() < $0 }) ?? true,
-                  let remotePack = await decodedInstalledPack(regionId: nextRegionId),
+                  let remotePack = await remotePackResult,
                   remotePack.regionId?.lowercased() == nextRegionId else { return nil }
 
             // Use the smaller of the two immutable proof documents. A region
