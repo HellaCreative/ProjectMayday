@@ -218,6 +218,12 @@ final class PackRoutingSource: RoutingSource {
             return cached
         }
         if req.options?.maxPathMeters != nil { _ = cache.value(for: key) }
+        // A direct phone route has the same rider-facing contract as the
+        // bounded fuel path: return a qualified result quickly or surface a
+        // bounded failure. Without this deadline a no-path Dirt search could
+        // spend the router's seven-second candidate cap before the UI learned
+        // that the request was not viable.
+        let fastDeadline = Date().addingTimeInterval(1.8)
         let result = await packs.routeOnDeviceDetailed(
             from: endpoints.0.locationCoordinate,
             to: endpoints.1.locationCoordinate,
@@ -235,7 +241,8 @@ final class PackRoutingSource: RoutingSource {
             preferBackRoads: req.options?.preferBackRoads == true,
             mapZoom: req.options?.mapZoom,
             matchLimitMeters: req.options?.matchLimitMeters,
-            fastSearch: true
+            fastSearch: true,
+            deadline: fastDeadline
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
             RoutingDebugLog.shared.event(
