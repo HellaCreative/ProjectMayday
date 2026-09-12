@@ -100,9 +100,9 @@
       ]
     }
   ],
-  "decision": "Keep 4f28dd6 as the private candidate. Do not install to white yet. The next device run should use this build only after the cross-region pack replay and source-walk qualification are recorded.",
+  "decision": "Keep 1dc7f8b as the private candidate. Do not install to white yet. The on-device fuel window now commits one proven next pump and continues from that pump; the simulator probe is the remaining internal gate before a device run.",
   "correctness_note": "The planner proves each selected station with a profile route and continuation. The strict NativeFuelContinuity audit still reports unverified 26-34 m pump approach geometry and source-walk mismatches; this remains a qualification item and is not being hidden by the speed result.",
-  "recovery": "Do not install to white from an older checkpoint. Build 2be4197 or newer from the private branch; keep production and published packs unchanged.",
+  "recovery": "Do not install to white from an older checkpoint. Build 1dc7f8b or newer from the private branch; keep production and published packs unchanged.",
   "routeReuse": {
     "checkpoint": "434aa7b",
     "change": "PackRoutingSource returns the already-proven start\u2192pump and pump\u2192destination routes; ItineraryBuilder consumes a complete pack window without issuing a second route search.",
@@ -151,8 +151,8 @@
     "decision": "Rejected: the endpoint arguments are not consumed by the native router yet, so the trial was behaviorally a no-op. Do not carry dead plumbing into the device candidate."
   },
   "fastOnDeviceCandidate": {
-    "checkpoint": "2be4197",
-    "change": "Pack route requests and one-stop Dirt fuel windows use a bounded fastSearch corridor. Fuel windows select a small geographic cohort but return only after legal start\u2192pump and pump\u2192destination routes are both proven; installed cross-region seams now use the same bounded path, while multi-stop and required-first-station windows retain the full qualified planner. The returned start\u2192pump response appends the short mapped-forecourt approach so displayed geometry closes exactly at the fuel stop; it remains explicitly labelled soft-stitch/unverified until customer-access edges are authored. Fast candidate ordering preserves the existing urban-core avoidance preference.",
+    "checkpoint": "1dc7f8b",
+    "change": "Pack fuel planning now treats the waypoint only as a forward-direction guide. For partial windows it selects the nearest useful forward station in the departure pack, proves and returns only the start-to-pump route, and starts the next window from that pump. It no longer requires an A\u2192pump\u2192destination continuation before committing a normal station. All profiles use the bounded path; cross-region seams use limited fast attempts, nearby hops use a compact corridor, and progress text presents finding the next stop and routing to it.",
     "hostFixture": {
       "pack": "NS fabric-v4-20260908-01",
       "targetCohort": 16,
@@ -168,8 +168,8 @@
       "timeBudgetExpired": false,
       "scope": "macOS native facade using the current OnDeviceRouter source; not physical-phone qualification"
     },
-    "errorContract": "Returns fuel_fast_path_no_qualified_route with windowComplete=false when no candidate is legally proven before cutoff.",
-    "correctnessGate": "Each returned hop is a profile route with legal snapping/turn checks, each leg is bounded by firstLegMaxMeters or usableRangeMeters, and a fast candidate is rejected when the mapped forecourt is more than 150m from the returned road endpoint. Strict source-walk fuel continuity still remains required for the accepted under-150m connector.",
+    "errorContract": "Returns fuel_fast_path_no_qualified_route with windowComplete=false only when no legal next station hop is proven; this is a station-hop failure, not evidence that the pack has no fuel stations.",
+    "correctnessGate": "Each returned first hop is a profile route with legal snapping/turn checks, bounded by the candidate-specific cap inside the rider range, and rejected when the mapped forecourt is more than 150m from the returned road endpoint. The next window must prove the following hop. Strict source-walk fuel continuity still remains required for the soft station connector.",
     "routeVariance": {
       "seeds": [
         1,
@@ -194,14 +194,14 @@
       "result": "three distinct Dirt geometries for identical endpoints; fresh pin builds also receive distinct seeds and saved routes remain reproducible"
     },
     "focusedGate": {
-      "passed": 58,
+      "passed": 76,
       "failed": 0,
       "destination": "iPhone 17 simulator iOS 26.5",
       "scope": "PackFirstRoutingTests + ItineraryBuilderTests + ItineraryRebuildTests; includes identical-pin fresh-seed assertion",
       "deviceInstall": false,
-      "lastRun": "2026-09-12 10:23 local"
+      "lastRun": "2026-09-12 14:24 local"
     },
-    "limitation": "The fast connector is now capped at the authored 150m station snap radius, but it remains a labelled soft-stitch until customer-access edges are authored and the strict source-walk audit accepts it. Host timing evidence is from the native current-router facade; the simulator cross-region probe did not emit a usable result and no physical-device run has been made.",
+    "limitation": "The partial station connector remains labelled soft-stitch until customer-access edges are authored and the strict source-walk audit accepts it. The simulator NS\u2192NB probe is successful for all three profiles as a partial pump window, but current cold-profile timings are Cleanest 1.63s, Dirt 2.27s, Balanced 2.62s; no physical-device run has been made.",
     "hostMatrix": [
       {
         "label": "NS short",
@@ -283,14 +283,42 @@
     "crossRegionFastPath": {
       "enabled": true,
       "measuredHostSuccess": false,
-      "scope": "Source and build verified; no new physical-device run and no cross-region native facade replay in this checkpoint",
-      "guard": "Requires both endpoint packs and factory-proven seams; deadline remains 1.8s; failure returns fuel_fast_path_no_qualified_route"
+      "simulatorProbe": {
+        "destination": "iPhone 17 simulator iOS 26.5",
+        "packs": "private fabric-v4-20260909-01 NS+NB",
+        "fixture": "44.764805,-63.340248 \u2192 47.013162,-65.244265",
+        "window": "partial next-pump window; usable 180000m; windowMaxStops=1",
+        "profiles": {
+          "cleanest": {
+            "seconds": 1.634,
+            "status": "complete",
+            "stop": "osm:w243757537",
+            "graphMeters": 79459
+          },
+          "dirt": {
+            "seconds": 2.273,
+            "status": "complete",
+            "stop": "osm:w175673953",
+            "graphMeters": 78590
+          },
+          "balanced": {
+            "seconds": 2.618,
+            "status": "complete",
+            "stop": "osm:w243757537",
+            "graphMeters": 79860
+          }
+        },
+        "result": "All three profiles returned a proven first pump without destination continuation; Dirt and Balanced remain above the 2s target."
+      },
+      "scope": "Private simulator pack replay only; no physical-device run and no live/server request.",
+      "guard": "Requires both endpoint packs and factory-proven seams; partial windows commit only a proven next pump and return windowComplete=false."
     },
     "directRouteGate": {
       "budgetSeconds": 1.8,
       "enabled": true,
       "scope": "PackRoutingSource direct on-device requests; no route or error may remain inside the old seven-second Dirt candidate cap",
-      "validation": "Debug build passed; focused pack/itinerary gate 58 passed, 0 failed"
+      "validation": "Debug build passed; focused pack/itinerary gate 58 passed, 0 failed",
+      "focusedGatePassed": 76
     }
   }
 }
