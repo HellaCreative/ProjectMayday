@@ -1,6 +1,6 @@
 # Baseline recovery — September 13, 2026
 
-Status: **recovery investigation; not accepted for phone installation or release**.
+Status: **production-derived DEV build 40 installed and owner-accepted as the app foundation; on-device routing migration remains unqualified**.
  
 ## Superseding owner direction: production app foundation
 
@@ -52,7 +52,42 @@ is not route acceptance or permission to modify production.
   full requested/reached destination reporting require replay and phone review.
 - Target: White iPhone only. Red and `com.mayday.dirt` are untouched.
 
-Build, installation and owner acceptance results will be appended when observed.
+### Foundation installation and owner acceptance
+
+- Xcode device build succeeded; development environment verification and code
+  signing verification passed. The matching production verification scripts
+  were restored because the experiment script still expected the obsolete
+  StoreKit relative path.
+- Xcode CoreDevice installed and launched `com.mayday.dirt.dev` on White.
+  Device inventory independently confirms version 2, build 40.
+- Owner explicitly accepted the foundation: “Yes this is the right foundational
+  build.” The owner initially questioned the motorcycle animation, then confirmed
+  “There it is. Yeah we're good.” This accepts the app foundation, not local-route
+  parity or a completed scalability migration.
+- App rollback checkpoint: `53b7105`. No subsequent computation changes belong
+  to that installed artifact.
+- Serial simulator suite passed: **312 tests in 38 suites**, 38.835 seconds of
+  test execution, using only the authorized existing simulator. Initial run
+  exposed three stale release01 assertions in one configuration test; corrected
+  expectations match documented release02 URLs. A method-filtered attempt ran
+  zero tests and is not counted; the subsequent full suite passed. App
+  configuration is unchanged. Result: `/tmp/Dirt-Production-Foundation-40-verified.xcresult`.
+
+### Confirmed migration gaps in the production source
+
+`PackRoutingSource` rejects non-nil ride preferences for both route and fuel
+requests. `RoutingSourcePolicy` selects live whenever online; navigation recovery
+also falls back to live. Typed local failures are collapsed into a generic
+no-route message. These are concrete remaining migration boundaries, not
+permission to simplify features or change route rules.
+
+The pre-experiment app checkpoint records accepted DEV service `139a173`.
+That service contains ride-preference behavior absent from this worktree's older
+JavaScript sources, including continuous wander distance cost and highway/city
+preferences. Comparisons must explicitly identify the service revision; testing
+against whichever JavaScript happens to be checked out would repeat the earlier
+baseline mistake. No preference formula has been ported or changed yet.
+
 
 ## Historical investigation (superseded as an app foundation)
 
@@ -77,14 +112,14 @@ older service build, not proof of expected exact V4 geometry. Its Clean multi-st
 row even contains repeated tiny Sydney-area stops; that observation does not
 override the frozen forward-progress law.
 
-The restored app shell, theme, planner card, map controls, Groups, Layers, Profile,
-and navigation HUD match both `71aa7fd` and the accepted continuity revision
-`9c15324`. This task makes no view/layout changes. See
-`RECOVERY-SOURCE-INVENTORY.json` for per-file blob identities and comparisons.
-Existing later files for unused ride preferences/Loop and pack acquisition are
-not evidence that those product flows are accepted or enabled by this recovery.
+The abandoned historical restoration matched the old `71aa7fd` / `9c15324`
+app shell. The owner rejected that as the product foundation. Its
+`RECOVERY-SOURCE-INVENTORY.json` describes only that abandoned state. Current
+DEV instead preserves all production-line app files from `91cc3cc`, including
+ride preferences and Loop; the owner accepted this foundation on White.
 
-DEV configuration selects the immutable candidate `fabric-v4-20260908-02`.
+The abandoned replay configuration selected immutable candidate `fabric-v4-20260908-02`.
+Current build 40 retains production-line release `fabric-v4-20260909-02`.
 Production continues to use its public catalog and ordinary online source policy.
 Installed-pack preference is explicitly limited to DEV. Replay checks every
 accepted graph, geometry, fuel and seam file against its manifest byte count and
