@@ -674,3 +674,20 @@ for example, Canso Dirt now completes 232.742 km through `osm:w547642605` rather
 than 379.457 km through a different station. This is not an unbounded-profile
 change or a claim that the shorter ride is more enjoyable. Long cross-region
 qualification remains open.
+
+### Owner-requested phone review build 42
+
+The owner explicitly requested an in-progress DEV installation while development
+continues. This authorizes this review build despite unresolved route qualification.
+DEV 2 (42) is prepared from tested routing checkpoint `8575eaa`, with only the DEV
+build number advanced. Pending regional-search caching is excluded. Production
+UI remains based on the owner-accepted `91cc3cc` foundation. The DEV catalog still
+uses `fabric-v4-20260909-02`; the exact historical native replays above use
+`fabric-v4-20260908-02`. This pack difference remains unqualified and must not be
+represented as phone route parity. The initial-refill and connector-cap tests pass;
+long cross-region fuel planning, custom settings and variety remain incomplete.
+
+Target is White (`00008140-000414593A61801C`), development bundle
+`com.mayday.dirt.dev` only. Installation and launch verification are pending.
+The saved DEV 2 (40) application remains the phone foundation rollback artifact at
+`.build/accepted-foundation-40/Dirt.app`. Production and other devices are excluded.
