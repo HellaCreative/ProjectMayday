@@ -175,7 +175,7 @@ final class RoutePlannerModel {
         let selectedProfile = profile, selectedAllow = allowUnknown
         var preferences = displayedRidePreferences
         preferences.preferDifferentRoads = true
-        let fuel = FuelRangePrefs.snapshot
+        let fuel = effectiveFuelSnapshot
         let policy = routingSourcePolicy
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -223,6 +223,7 @@ final class RoutePlannerModel {
                 self.ridePreferences = preferences
                 self.itinerary = winner.0
                 self.built = winner.1
+                self.builtFuelSnapshot = fuel
                 self.destination = start
                 self.routeIdentity = "loop:\(runID.uuidString)"
                 self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(winner.3 / 1000)) km · About \(Int(winner.4 / 1000)) km shared roads"
@@ -315,6 +316,20 @@ final class RoutePlannerModel {
     // Canonical rider intent and its disposable routed projection.
     private(set) var itinerary = RiderItinerary()
     private(set) var built: BuiltItinerary?
+    private var hasSavedCanonicalPlan = false
+    private var savedRoutingSourceMode: String?
+    private var restoredFuelSnapshot: FuelRangePrefs.Snapshot?
+    private(set) var builtFuelSnapshot: FuelRangePrefs.Snapshot?
+
+    /// Loaded route assumptions stay attached to that route until an explicit
+    /// fuel edit. Merely opening a ride never changes the rider's global defaults.
+    var effectiveFuelSnapshot: FuelRangePrefs.Snapshot {
+        restoredFuelSnapshot ?? FuelRangePrefs.snapshot
+    }
+
+    var displayedFuelSnapshot: FuelRangePrefs.Snapshot {
+        builtFuelSnapshot ?? effectiveFuelSnapshot
+    }
     private(set) var acknowledgedFuelGapIDs = Set<String>()
     var stages: [Stage] {
         guard let built else { return [] }
@@ -555,6 +570,7 @@ final class RoutePlannerModel {
         case .fromHere, .plan:
             return built?.legs.map(\.response) ?? []
         case .saved:
+            if hasSavedCanonicalPlan { return built?.legs.map(\.response) ?? [] }
             return fromHereResponse.map { [$0] } ?? []
         }
     }
@@ -601,7 +617,7 @@ final class RoutePlannerModel {
     }
 
     var fuelUsableRangeKm: Double {
-        FuelRangePrefs.usableKilometers(for: FuelRangePrefs.kilometers)
+        displayedFuelSnapshot.usableMeters / 1_000
     }
 
     var fuelReserveMarginKm: Double {
@@ -676,7 +692,7 @@ final class RoutePlannerModel {
               stages[index].fuelGroupID != nil,
               let meters = stages[index].response?.distanceMeters
         else { return nil }
-        let margin = FuelRangePrefs.usableKilometers(for: FuelRangePrefs.kilometers) - meters / 1000
+        let margin = displayedFuelSnapshot.usableMeters / 1_000 - meters / 1000
         if margin >= 0 {
             return "\(Int(margin.rounded())) km br"
         }
@@ -761,6 +777,15 @@ final class RoutePlannerModel {
         let change = reduce(before, action)
         guard change.itinerary != before else { return }
         itinerary = change.itinerary
+        if savedRoutingSourceMode == "loop" {
+            switch action {
+            case .append, .insert, .move, .delete, .replaceAll, .clear:
+                // An edited rider path is now a plan. Preserve original Loop
+                // provenance only while its chosen anchors remain unchanged.
+                savedRoutingSourceMode = Mode.plan.rawValue
+            default: break
+            }
+        }
         RoutingDebugLog.shared.event(
             ItineraryLog.line(action: action, before: before, after: itinerary, source: source)
         )
@@ -933,7 +958,7 @@ final class RoutePlannerModel {
             }
         }
         let preferences = ridePreferences
-        let fuel = FuelRangePrefs.snapshot
+        let fuel = effectiveFuelSnapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
@@ -963,6 +988,7 @@ final class RoutePlannerModel {
                 onProgress: { [weak self] progress in
                     guard let self, self.itinerary.generation == progress.generation else { return }
                     self.built = progress
+                    self.builtFuelSnapshot = fuel
                     self.advanceRouteBuildCamera(with: progress)
                     self.refreshMap()
                 }
@@ -985,6 +1011,7 @@ final class RoutePlannerModel {
                 return
             }
             self.built = result
+            self.builtFuelSnapshot = fuel
             self.syncSnappedDestinationPin(from: result)
             self.advanceRouteBuildCamera(with: result)
             let currentGapIDs = Set(result.riderLegStatus.values.compactMap { status -> String? in
@@ -1336,6 +1363,10 @@ final class RoutePlannerModel {
         fromHereResponse = nil
         // New intent — this is not the library route that may have been on the map.
         savedRouteOrigin = nil
+        hasSavedCanonicalPlan = false
+        savedRoutingSourceMode = nil
+        restoredFuelSnapshot = nil
+        builtFuelSnapshot = nil
         destination = point
         destinationName = nil
         // Keep start override when relocating B; GPS recovery may still need it.
@@ -2011,7 +2042,7 @@ final class RoutePlannerModel {
               let legIndex = itinerary.legs.firstIndex(where: { $0.id == context.riderLeg.id }),
               let stopIndex = original.legs.firstIndex(where: { $0 == context.leg }) else { return }
         let runID = UUID(), requested = itinerary, preferences = ridePreferences
-        let fuel = FuelRangePrefs.snapshot, zoom = mapState.mapZoom
+        let fuel = effectiveFuelSnapshot, zoom = mapState.mapZoom
         fuelReplacementRunID = runID
         toast = "Checking nearby fuel stops"
         fuelReplacementTask = Task { @MainActor [weak self] in
@@ -2294,6 +2325,10 @@ final class RoutePlannerModel {
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil
+        hasSavedCanonicalPlan = false
+        savedRoutingSourceMode = nil
+        restoredFuelSnapshot = nil
+        builtFuelSnapshot = nil
         pendingPackBuild = nil
         pendingGroupTracking = nil
         activeGroupTracking = nil
@@ -2352,7 +2387,25 @@ final class RoutePlannerModel {
     @discardableResult
     func continuePlanningFromSavedTrack() -> Bool {
         pendingGroupTracking = nil
-        guard mode == .saved, let response = fromHereResponse else { return false }
+        guard mode == .saved else { return false }
+        if hasSavedCanonicalPlan, let built, built.generation == itinerary.generation {
+            invalidateInFlightRoutes()
+            let name = destinationName
+            destination = nil
+            destinationName = nil
+            fromHereResponse = nil
+            errorMessage = nil
+            mode = .plan
+            showingLoop = false
+            hasSavedCanonicalPlan = false
+            routeIdentity = "plan:\(itinerary.waypoints.last?.id.uuidString ?? UUID().uuidString)"
+            presentRouteCard = true
+            toast = name.map { "Planning from “\($0)”" } ?? "Planning from saved route"
+            refreshMap()
+            mapState.fit(built.legs.flatMap { $0.response.coordinates })
+            return true
+        }
+        guard let response = fromHereResponse else { return false }
         let coords = response.coordinates
         guard let start = coords.first,
               let end = destination ?? coords.last
@@ -2402,6 +2455,10 @@ final class RoutePlannerModel {
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil
+        hasSavedCanonicalPlan = false
+        savedRoutingSourceMode = nil
+        restoredFuelSnapshot = nil
+        builtFuelSnapshot = nil
         mapState.selectPlannerPin(nil)
         mode = .plan
         refreshMap()
@@ -2420,6 +2477,10 @@ final class RoutePlannerModel {
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil
+        hasSavedCanonicalPlan = false
+        savedRoutingSourceMode = nil
+        restoredFuelSnapshot = nil
+        builtFuelSnapshot = nil
         mapState.selectPlannerPin(nil)
         suppressPlannerReroute = true
         profile = keptProfile
@@ -2449,6 +2510,10 @@ final class RoutePlannerModel {
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil
+        hasSavedCanonicalPlan = false
+        savedRoutingSourceMode = nil
+        restoredFuelSnapshot = nil
+        builtFuelSnapshot = nil
         mapState.selectPlannerPin(nil)
         mode = .fromHere
         refreshMap()
@@ -2488,7 +2553,7 @@ final class RoutePlannerModel {
     func refreshMap() {
         syncNetworkAccessPolicy()
         let displayLegIDs: [UUID?]
-        if mode == .fromHere || mode == .plan {
+        if mode == .fromHere || mode == .plan || hasSavedCanonicalPlan {
             displayLegIDs = (built?.legs ?? []).map { Optional($0.riderLegID) }
         } else {
             displayLegIDs = []
@@ -2513,6 +2578,10 @@ final class RoutePlannerModel {
                 markers.append(contentsOf: canonicalMarkers(riderPinsLocked: true))
             }
         case .saved:
+            if hasSavedCanonicalPlan {
+                markers.append(contentsOf: canonicalMarkers(riderPinsLocked: true))
+                break
+            }
             // Show both endpoints so a loaded route has visible first + second pins.
             if let start = fromHereResponse?.coordinates.first {
                 markers.append(
@@ -2678,6 +2747,7 @@ final class RoutePlannerModel {
         existing.segments = activeResponses.flatMap { $0.segments ?? [] }
         existing.surfaceFamilyMode = activeSurfaceFamilyMode
         existing.ridePreferencesData = ridePreferences.flatMap { try? JSONEncoder().encode($0) }
+        existing.routingPlanData = currentSavedRoutingPlan.flatMap { try? JSONEncoder().encode($0) }
         try? context.save()
         savedRouteOrigin = SavedRouteOrigin(id: existing.id, name: existing.name)
         toast = "Updated “\(existing.name)”"
@@ -2695,6 +2765,7 @@ final class RoutePlannerModel {
             surfaceFamilyMode: activeSurfaceFamilyMode
         )
         route.ridePreferencesData = ridePreferences.flatMap { try? JSONEncoder().encode($0) }
+        route.routingPlanData = currentSavedRoutingPlan.flatMap { try? JSONEncoder().encode($0) }
         context.insert(route)
         try? context.save()
         // Adopt the new record so a second Save updates it rather than stacking copies.
@@ -2708,21 +2779,58 @@ final class RoutePlannerModel {
         return try? context.fetch(descriptor).first
     }
 
+    private var currentSavedRoutingPlan: SavedRoutingPlan? {
+        guard let built, built.generation == itinerary.generation,
+              let fuel = builtFuelSnapshot else { return nil }
+        let value = SavedRoutingPlan(itinerary: itinerary, built: built,
+            ridePreferences: ridePreferences, fuel: fuel,
+            profile: profile, allowUnknown: allowUnknown, avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads,
+            sourceMode: savedRoutingSourceMode ?? (showingLoop ? "loop" : mode.rawValue),
+            loopDistanceKM: loopDistanceKM, loopDirection: loopDirection.rawValue,
+            loopSummary: loopSummary)
+        return value.isSupported ? value : nil
+    }
+
     func loadSavedRoute(_ saved: SavedRoute) {
+        invalidateInFlightRoutes()
+        let oldSuppression = suppressPlannerReroute
+        suppressPlannerReroute = true
+        defer { suppressPlannerReroute = oldSuppression }
+        itinerary = RiderItinerary()
+        built = nil
+        showingLoop = false
         ridePreferences = saved.ridePreferencesData.flatMap { try? JSONDecoder().decode(RidePreferences.self, from: $0) }
+        profile = saved.profile
         mode = .saved
         applyStoredRouteGeometry(
-            name: saved.name,
-            coordinates: saved.coordinates,
-            distanceMeters: saved.distanceMeters,
-            dirtPercent: saved.dirtPercent,
-            pavedPercent: saved.pavedPercent,
-            identity: "saved:\(saved.id.uuidString)",
-            imported: false,
-            networkSegments: saved.segments,
-            surfaceFamilyMode: saved.surfaceFamilyMode
-        )
-        // Set after applying geometry — that path clears the origin for imports.
+            name: saved.name, coordinates: saved.coordinates,
+            distanceMeters: saved.distanceMeters, dirtPercent: saved.dirtPercent,
+            pavedPercent: saved.pavedPercent, identity: "saved:\(saved.id.uuidString)",
+            imported: false, networkSegments: saved.segments,
+            surfaceFamilyMode: saved.surfaceFamilyMode)
+        if let plan = SavedRoutingPlan.decode(saved.routingPlanData) {
+            itinerary = plan.itinerary
+            built = plan.built
+            itineraryBuilder.setCurrentGeneration(itinerary.generation)
+            ridePreferences = plan.ridePreferences
+            profile = plan.profile
+            allowUnknown = plan.allowUnknown
+            avoidMotorways = plan.avoidMotorways
+            preferBackRoads = plan.preferBackRoads
+            builtFuelSnapshot = plan.fuel.snapshot
+            restoredFuelSnapshot = plan.fuel.snapshot
+            savedRoutingSourceMode = plan.sourceMode
+            loopDistanceKM = plan.loopDistanceKM
+            loopDirection = LoopDirection(rawValue: plan.loopDirection) ?? .north
+            loopSummary = plan.loopSummary
+            hasSavedCanonicalPlan = true
+            destination = itinerary.waypoints.last?.coordinate
+            toast = nil
+            refreshMap()
+        } else if saved.routingPlanData != nil {
+            toast = "Saved geometry loaded; detailed planning state is unavailable."
+        }
         savedRouteOrigin = SavedRouteOrigin(id: saved.id, name: saved.name)
     }
 
@@ -2861,6 +2969,10 @@ final class RoutePlannerModel {
         built = nil
         // importGPX saves this track as its own record right after seeding the plan.
         savedRouteOrigin = nil
+        hasSavedCanonicalPlan = false
+        savedRoutingSourceMode = nil
+        restoredFuelSnapshot = nil
+        builtFuelSnapshot = nil
 
         let response = makeStoredRouteResponse(
             coordinates: coords,
@@ -2900,6 +3012,10 @@ final class RoutePlannerModel {
         // Whatever was loaded before is no longer what's on the map; loadSavedRoute
         // re-establishes the link straight after this returns.
         savedRouteOrigin = nil
+        hasSavedCanonicalPlan = false
+        savedRoutingSourceMode = nil
+        restoredFuelSnapshot = nil
+        builtFuelSnapshot = nil
         destination = coordinates.last
         destinationName = name
         fromHereResponse = makeStoredRouteResponse(
@@ -3122,6 +3238,7 @@ final class RoutePlannerModel {
     /// Rebuild the current route after the rider changes automatic planning,
     /// tank range, or reserve (From here / Plan).
     func reapplyFuelAssist(rangeKm requestedRangeKm: Double? = nil) {
+        restoredFuelSnapshot = nil
         let rangeKm = requestedRangeKm ?? FuelRangePrefs.kilometers
         guard rangeKm > 0 else { return }
         guard mode == .fromHere || mode == .plan else { return }
@@ -3142,6 +3259,7 @@ final class RoutePlannerModel {
     /// Invalidates an in-flight itinerary as soon as the rider grabs the fuel
     /// slider. The released value starts exactly one replacement job.
     func cancelFuelAssistForRangeEdit() {
+        restoredFuelSnapshot = nil
         buildTask?.cancel()
         itineraryBuilder.cancelCurrentBuild()
         isAssemblingRoute = false

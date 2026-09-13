@@ -1,6 +1,6 @@
 import Foundation
 
-struct FuelStop: Equatable, Sendable {
+struct FuelStop: Equatable, Codable, Sendable {
     let coordinate: RouteCoordinate
     let stationID: String?
     let name: String?
@@ -25,7 +25,7 @@ struct FuelStop: Equatable, Sendable {
     }
 }
 
-struct FuelGap: Equatable, Sendable {
+struct FuelGap: Equatable, Codable, Sendable {
     let id: String
     let gapMeters: Double
     let overByMeters: Double
@@ -42,7 +42,7 @@ struct FuelGap: Equatable, Sendable {
     }
 }
 
-enum LegStatus: Equatable, Sendable {
+enum LegStatus: Equatable, Codable, Sendable {
     case pending
     case built
     case gap(FuelGap)
@@ -50,7 +50,7 @@ enum LegStatus: Equatable, Sendable {
     case failed(String)
 }
 
-struct BuiltLeg: Equatable, Sendable {
+struct BuiltLeg: Equatable, Codable, Sendable {
     let riderLegID: UUID
     let fromCoordinate: RouteCoordinate
     let toCoordinate: RouteCoordinate
@@ -95,7 +95,7 @@ struct BuiltLeg: Equatable, Sendable {
     }
 }
 
-struct BuiltItinerary: Equatable, Sendable {
+struct BuiltItinerary: Equatable, Codable, Sendable {
     let generation: Int
     let legs: [BuiltLeg]
     let riderLegStatus: [UUID: LegStatus]

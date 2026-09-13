@@ -370,6 +370,9 @@ nonisolated struct OnDeviceRouter {
             }
             return routed
         }
+        if result.searchMeta.rideObjective == "initial-fuel-presence" {
+            return .success(result) // No movement means no invented incoming direction.
+        }
         if let turns = worker.legalTurnState {
             do { result.terminalContinuation = try worker.terminalContinuation(for: result, turns: turns) }
             catch { return .failure(.searchLimit("legalContinuationUnavailable")) }
@@ -881,7 +884,32 @@ nonisolated struct OnDeviceRouter {
         guard !endRaw.isEmpty else { return .failure(.cannotSnapEnd) }
 
         let tapSeparation = meters(from, to)
-        if tapSeparation < Self.identicalEndsMeters {
+        if initialFuelApproach, incomingContinuation == nil,
+           startEndpointKind == "customers", endEndpointKind == "customers",
+           from.latitude == to.latitude, from.longitude == to.longitude {
+            // Presence must lie on the actual matched road, not across a
+            // nearby barrier or on a convenient replacement snap.
+            let present = startRaw.contains { snap in
+                guard snap.distanceMeters <= 0.001,
+                      endRaw.contains(where: { $0.edgeIndex == snap.edgeIndex && $0.distanceMeters <= 0.001 })
+                else { return false }
+                return [(snap.nodeA, snap.nodeB), (snap.nodeB, snap.nodeA)].contains { a, b in
+                    pack.hasDirectedArc(from: a, to: b, edge: snap.edgeIndex)
+                        && pack.v4AccessAllowed(ei: snap.edgeIndex, from: a, to: b,
+                            startEi: snap.edgeIndex, endEi: snap.edgeIndex,
+                            allowUnknown: allowUnknown && profile != .cleanest,
+                            startEndpointKind: "customers", endEndpointKind: "customers")
+                }
+            }
+            guard present else { return .failure(.cannotSnapStart) }
+            var presence = Result(coordinates: [from, to], distanceMeters: 0,
+                edgeIds: [], legs: [], dirtPercent: 0, pavedPercent: 0,
+                unknownAccessPercent: 0, reportedDirtPercent: 0,
+                reportedPavedPercent: 0, unknownSurfacePercent: 0)
+            presence.searchMeta.rideObjective = "initial-fuel-presence"
+            return .success(presence)
+        }
+        if tapSeparation < Self.identicalEndsMeters && !initialFuelApproach {
             return .failure(.identicalEnds)
         }
         let coincidentSiblings = coincidentSiblingLists()
@@ -1551,7 +1579,7 @@ nonisolated struct OnDeviceRouter {
         // Same snapped edge: paint the along-edge span (find-path-v2 vBetween).
         if startSnap.edgeIndex >= 0,
            startSnap.edgeIndex == endSnap.edgeIndex,
-           abs(startSnap.distanceAlongM - endSnap.distanceAlongM) > 1 {
+           abs(startSnap.distanceAlongM - endSnap.distanceAlongM) > (initialFuelApproach ? 0 : 1) {
             let sameEi = startSnap.edgeIndex
             let edgeA = Int(pack.edgeFrom?[sameEi] ?? -1)
             let edgeB = Int(pack.edgeTo?[sameEi] ?? -1)
@@ -1648,7 +1676,7 @@ nonisolated struct OnDeviceRouter {
         )
         guard between.count >= 2 else { return nil }
         let alongM = lineMeters(between)
-        guard alongM > 1 else { return nil }
+        guard alongM > (initialFuelApproach ? 0 : 1) else { return nil }
 
         let surface = OnDeviceProfileCosts.surfaceName(
             code: GraphV2Pack.unpackSurface(pack.edgeAttrs[ei])
@@ -1973,8 +2001,8 @@ nonisolated struct OnDeviceRouter {
         var measuredLabelCapacity = 0
         var measuredLabelPages = 0
         func publishLabelAllocation() {
+            guard labels.allocationRevision != measuredLabelPages else { return }
             let stats = labels.statistics
-            guard stats.allocatedPages != measuredLabelPages else { return }
             measurement?.increment(.labelPagesAllocated, by: UInt64(stats.allocatedPages - measuredLabelPages))
             measurement?.increment(.labelsCreated, by: UInt64(stats.allocatedLabelCapacity - measuredLabelCapacity))
             measurement?.set(.labelBytes, to: UInt64(stats.allocatedPayloadBytes))
@@ -2012,12 +2040,13 @@ nonisolated struct OnDeviceRouter {
             return hops >= cap
         }
         func pathRecord(_ label: Int) -> PathRetrace.Span? {
-            if labels[label].predecessor < 0 { return nil }
-            if labels[label].predecessorKind == 0 {
-                let ei = labels[label].predecessorData
+            let row = labels[label]
+            if row.predecessor < 0 { return nil }
+            if row.predecessorKind == 0 {
+                let ei = row.predecessorData
                 return .init(edge: ei, lower: 0, upper: Double(pack.edgeMeters[ei]))
             }
-            return labels[label].predecessorKind == 1 ? virt[labels[label].predecessorData].roadSpan : nil
+            return row.predecessorKind == 1 ? virt[row.predecessorData].roadSpan : nil
         }
         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
             guard pack.version >= 4, let span else { return false }
@@ -2217,18 +2246,19 @@ nonisolated struct OnDeviceRouter {
                     }
                     let cost = cur.cost + step
                     let newDirt = edgeIsDirt(ei)
-                    let oldDirt = labels[toState].predecessorKind == 0 ? edgeIsDirt(labels[toState].predecessorData) : false
+                    let previousLabel = labels[toState]
+                    let oldDirt = previousLabel.predecessorKind == 0 ? edgeIsDirt(previousLabel.predecessorData) : false
                     var action = HopSearchPolicy.considerRelax(
                         newCost: cost,
-                        oldCost: labels[toState].cost,
+                        oldCost: previousLabel.cost,
                         newEi: ei,
-                        oldEi: labels[toState].predecessorData,
+                        oldEi: previousLabel.predecessorData,
                         node: toState,
                         newIsDirt: newDirt,
                         oldIsDirt: oldDirt,
                         seed: ctx.sessionSeed,
                         variety: ctx.variety,
-                        slotsUsed: Int(labels[toState].slots)
+                        slotsUsed: Int(previousLabel.slots)
                     )
                     if action != .reject, retraces(cur.node, .init(edge: ei, lower: 0, upper: Double(pack.edgeMeters[ei]))) { action = .reject }
                     if action == .stealPred, createsLabelCycle(from: cur.node, through: toState) {
@@ -2257,17 +2287,18 @@ nonisolated struct OnDeviceRouter {
                 for toNode in sibs {
                     let cost = cur.cost
                     let newMeters = labels[cur.node].pathMeters
+                    let previousLabel = labels[toNode]
                     var action = HopSearchPolicy.considerRelax(
                         newCost: cost,
-                        oldCost: labels[toNode].cost,
+                        oldCost: previousLabel.cost,
                         newEi: -1,
-                        oldEi: labels[toNode].predecessorData,
+                        oldEi: previousLabel.predecessorData,
                         node: toNode,
                         newIsDirt: false,
                         oldIsDirt: false,
                         seed: ctx.sessionSeed,
                         variety: false,
-                        slotsUsed: Int(labels[toNode].slots)
+                        slotsUsed: Int(previousLabel.slots)
                     )
                     if action == .stealPred, createsLabelCycle(from: cur.node, through: toNode) {
                         action = .reject
@@ -2411,17 +2442,18 @@ nonisolated struct OnDeviceRouter {
                     let toState = item.to < n && v.ei >= 0
                         ? (continuationState ?? turnState.stateForArrival(node: item.to, incomingEdge: v.ei))
                         : item.to
+                    let previousLabel = labels[toState]
                     var action = HopSearchPolicy.considerRelax(
                         newCost: cost,
-                        oldCost: labels[toState].cost,
+                        oldCost: previousLabel.cost,
                         newEi: v.ei,
-                        oldEi: labels[toState].predecessorData,
+                        oldEi: previousLabel.predecessorData,
                         node: toState,
                         newIsDirt: false,
                         oldIsDirt: false,
                         seed: ctx.sessionSeed,
                         variety: ctx.variety,
-                        slotsUsed: Int(labels[toState].slots)
+                        slotsUsed: Int(previousLabel.slots)
                     )
                     if action != .reject, retraces(cur.node, v.roadSpan) { action = .reject }
                     if action == .stealPred, createsLabelCycle(from: cur.node, through: toState) {
@@ -2461,12 +2493,13 @@ nonisolated struct OnDeviceRouter {
         while node != startVirt {
             hops += 1
             if hops > total + 4 { return .failure(.noPath) }
-            let parent = labels[node].predecessor
+            let labelRow = labels[node]
+            let parent = labelRow.predecessor
             guard parent >= 0 else { return .failure(.noPath) }
             if let span = pathRecord(node) { traversedSpans.append(span) }
-            if labels[node].predecessorKind == 1 {
-                let v = virt[labels[node].predecessorData]
-                let forward = labels[node].forward
+            if labelRow.predecessorKind == 1 {
+                let v = virt[labelRow.predecessorData]
+                let forward = labelRow.forward
                 let coords = forward ? v.coords : Array(v.coords.reversed())
                 let surface: String
                 let id: String
@@ -2479,7 +2512,7 @@ nonisolated struct OnDeviceRouter {
                     )
                     id = pack.edgeId(v.ei)
                 }
-                if coords.count >= 2, v.meters > 0.5 {
+                if coords.count >= 2, v.meters > (initialFuelApproach ? 0 : 0.5) {
                     legs.append(Leg(
                         coordinates: coords,
                         distanceMeters: v.meters,
@@ -2499,10 +2532,10 @@ nonisolated struct OnDeviceRouter {
                         toNode: v.junctionStitch ? nil : virtualTraversalNodes(v, forward: forward, startSnap: startSnap, endSnap: endSnap).to
                     ))
                 }
-            } else if labels[node].predecessorKind == 2 {
+            } else if labelRow.predecessorKind == 2 {
                 // Coincident duplicate-node stitch — no geometry.
             } else {
-                let ei = labels[node].predecessorData
+                let ei = labelRow.predecessorData
                 let aNode = turnState.graphNode(of: parent)
                 let bNode = turnState.graphNode(of: node)
                 guard aNode >= 0, aNode < n, bNode >= 0, bNode < n else {
@@ -2607,8 +2640,8 @@ nonisolated struct OnDeviceRouter {
         var measuredLabelCapacity = 0
         var measuredLabelPages = 0
         func publishLabelAllocation() {
+            guard labelStore.allocationRevision != measuredLabelPages else { return }
             let stats = labelStore.statistics
-            guard stats.allocatedPages != measuredLabelPages else { return }
             measurement?.increment(.labelPagesAllocated, by: UInt64(stats.allocatedPages - measuredLabelPages))
             measurement?.increment(.labelsCreated, by: UInt64(stats.allocatedLabelCapacity - measuredLabelCapacity))
             measurement?.set(.labelBytes, to: UInt64(stats.allocatedPayloadBytes))
@@ -2646,12 +2679,13 @@ nonisolated struct OnDeviceRouter {
             return hops >= cap
         }
         func pathRecord(_ label: Int) -> PathRetrace.Span? {
-            if labelStore[label].predecessor < 0 { return nil }
-            if labelStore[label].predecessorKind == 0 {
-                let ei = labelStore[label].predecessorData
+            let row = labelStore[label]
+            if row.predecessor < 0 { return nil }
+            if row.predecessorKind == 0 {
+                let ei = row.predecessorData
                 return .init(edge: ei, lower: 0, upper: Double(pack.edgeMeters[ei]))
             }
-            return labelStore[label].predecessorKind == 1 ? virt[labelStore[label].predecessorData].roadSpan : nil
+            return row.predecessorKind == 1 ? virt[row.predecessorData].roadSpan : nil
         }
         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
             guard pack.version >= 4, let span else { return false }
@@ -2694,12 +2728,13 @@ nonisolated struct OnDeviceRouter {
                 abort = "timeCap"
                 break
             }
-            if cur.cost != labelStore[cur.node].cost { continue }
-            let metersSoFar = labelStore[cur.node].pathMeters
+            let currentLabel = labelStore[cur.node]
+            if cur.cost != currentLabel.cost { continue }
+            let metersSoFar = currentLabel.pathMeters
             if metersSoFar > cap { continue }
             let state = sid(cur.node)
             let node = turnState.graphNode(of: state)
-            let dirtSoFar = labelStore[cur.node].dirtMeters
+            let dirtSoFar = currentLabel.dirtMeters
 
             if node < n {
                 let arcStart = Int(pack.nodeOffsets[node])
@@ -2803,17 +2838,18 @@ nonisolated struct OnDeviceRouter {
                         edgeID: pack.edgeId(ei),
                         ctx: ctx
                     )
+                    let previousLabel = labelStore[toLab]
                     var action = HopSearchPolicy.considerRelax(
                         newCost: newScore,
-                        oldCost: labelStore[toLab].cost,
+                        oldCost: previousLabel.cost,
                         newEi: ei,
-                        oldEi: labelStore[toLab].predecessorData,
+                        oldEi: previousLabel.predecessorData,
                         node: toState,
                         newIsDirt: addDirt > 0,
-                        oldIsDirt: labelStore[toLab].dirtMeters > (labelStore[toLab].pathMeters.isFinite ? labelStore[toLab].pathMeters * 0.4 : 0),
+                        oldIsDirt: previousLabel.dirtMeters > (previousLabel.pathMeters.isFinite ? previousLabel.pathMeters * 0.4 : 0),
                         seed: ctx.sessionSeed,
                         variety: ctx.variety,
-                        slotsUsed: Int(labelStore[toLab].slots)
+                        slotsUsed: Int(previousLabel.slots)
                     )
                     if action != .reject, retraces(cur.node, .init(edge: ei, lower: 0, upper: Double(pack.edgeMeters[ei]))) { action = .reject }
                     if action == .stealPred, createsLabelCycle(from: cur.node, through: toLab) {
@@ -3019,12 +3055,13 @@ nonisolated struct OnDeviceRouter {
         while sid(label) != startVirt {
             hops += 1
             if hops > labels + 4 { return .failure(.noPath) }
-            let parent = labelStore[label].predecessor
+            let labelRow = labelStore[label]
+            let parent = labelRow.predecessor
             guard parent >= 0 else { return .failure(.noPath) }
             if let span = pathRecord(label) { traversedSpans.append(span) }
-            if labelStore[label].predecessorKind == 1 {
-                let v = virt[labelStore[label].predecessorData]
-                let forward = labelStore[label].forward
+            if labelRow.predecessorKind == 1 {
+                let v = virt[labelRow.predecessorData]
+                let forward = labelRow.forward
                 let coords = forward ? v.coords : Array(v.coords.reversed())
                 let surface: String
                 let id: String
@@ -3037,7 +3074,7 @@ nonisolated struct OnDeviceRouter {
                     )
                     id = pack.edgeId(v.ei)
                 }
-                if coords.count >= 2, v.meters > 0.5 {
+                if coords.count >= 2, v.meters > (initialFuelApproach ? 0 : 0.5) {
                     legs.append(Leg(
                         coordinates: coords,
                         distanceMeters: v.meters,
@@ -3057,10 +3094,10 @@ nonisolated struct OnDeviceRouter {
                         toNode: v.junctionStitch ? nil : virtualTraversalNodes(v, forward: forward, startSnap: startSnap, endSnap: endSnap).to
                     ))
                 }
-            } else if labelStore[label].predecessorKind == 2 {
+            } else if labelRow.predecessorKind == 2 {
                 // Coincident duplicate-node stitch — no geometry.
             } else {
-                let ei = labelStore[label].predecessorData
+                let ei = labelRow.predecessorData
                 let aNode = turnState.graphNode(of: sid(parent))
                 let bNode = turnState.graphNode(of: sid(label))
                 guard aNode < n, bNode < n, ei >= 0 else {
@@ -4807,8 +4844,17 @@ nonisolated struct OnDeviceRouter {
         case .edge:
             // There is no mapped turn junction in the middle of this parent.
             // Continue its directed remainder; do not restart its automaton.
-            guard edge == imported.incomingEdge, targetNode == imported.toNode else { return -1 }
-            return imported.stateAtParentEnd
+            guard edge == imported.incomingEdge else { return -1 }
+            if targetNode == imported.toNode { return imported.stateAtParentEnd }
+            // Reversing on the same two-way road creates no new connection.
+            // Only admit the case with no restriction context to discard;
+            // active via-way or adjacent turn context remains explicit unknown.
+            guard targetNode == imported.fromNode,
+                  incomingContinuation?.restrictionContext.isEmpty == true,
+                  incomingContinuation?.activeRestrictions.isEmpty == true,
+                  pack.hasDirectedArc(from: imported.toNode, to: imported.fromNode, edge: edge)
+            else { return -1 }
+            return turns.stateForArrival(node: imported.fromNode, incomingEdge: edge)
         }
     }
 
@@ -4867,10 +4913,17 @@ nonisolated struct OnDeviceRouter {
                 throw NativeRoutingContinuationError.unavailableLegalState
             }
             if first, let imported = importedArrival, case .edge = imported.location {
-                guard edge == imported.incomingEdge, from == imported.fromNode, to == imported.toNode else {
+                guard edge == imported.incomingEdge,
+                      (from == imported.fromNode && to == imported.toNode)
+                        || (from == imported.toNode && to == imported.fromNode) else {
                     throw NativeRoutingContinuationError.illegalDirection
                 }
-                // Already entered this parent before the split; no second transition.
+                let resumed = continuationStartState(edge: edge, targetNode: to,
+                    movement: leg.distanceMeters, turns: turns)
+                guard resumed >= 0 else { throw NativeRoutingContinuationError.illegalDirection }
+                state = resumed
+                // Same direction resumes the already-entered parent. A proven
+                // unrestricted reversal carries its new directed arrival.
             } else if let priorState = state {
                 if !first && edge == previousEdge && from == previousFrom && to == previousTo {
                     // Consecutive geometry fragments of the same directed parent.

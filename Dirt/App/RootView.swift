@@ -1068,9 +1068,9 @@ struct RootView: View {
 
     private var fuelRangeButton: some View {
         Button {
-            mapFuelRangeKm = FuelRangePrefs.kilometers
-            mapFuelReservePercent = FuelRangePrefs.reservePercent
-            mapAutomaticFuelPlanning = FuelRangePrefs.automaticPlanningEnabled
+            mapFuelRangeKm = app.planner.displayedFuelSnapshot.tankMeters / 1_000
+            mapFuelReservePercent = app.planner.displayedFuelSnapshot.reservePercent
+            mapAutomaticFuelPlanning = app.planner.displayedFuelSnapshot.automaticPlanningEnabled
             withAnimation(.easeInOut(duration: 0.18)) {
                 fuelControlsOpen.toggle()
             }
@@ -1078,8 +1078,8 @@ struct RootView: View {
             VStack(spacing: 1) {
                 Image(systemName: "fuelpump.fill")
                     .font(.system(size: 14, weight: .bold))
-                Text(FuelRangePrefs.automaticPlanningEnabled
-                    ? "\(Int(FuelRangePrefs.kilometers))"
+                Text(app.planner.displayedFuelSnapshot.automaticPlanningEnabled
+                    ? "\(Int(app.planner.displayedFuelSnapshot.tankMeters / 1_000))"
                     : "OFF")
                     .font(.dirtMono(8, weight: .bold))
                     .monospacedDigit()
@@ -1095,8 +1095,8 @@ struct RootView: View {
         }
         .accessibilityLabel("Fuel range")
         .accessibilityValue(
-            FuelRangePrefs.automaticPlanningEnabled
-                ? "Automatic planning on, \(Int(FuelRangePrefs.kilometers)) kilometers, \(Int(FuelRangePrefs.reservePercent)) percent reserve"
+            app.planner.displayedFuelSnapshot.automaticPlanningEnabled
+                ? "Automatic planning on, \(Int(app.planner.displayedFuelSnapshot.tankMeters / 1_000)) kilometers, \(Int(app.planner.displayedFuelSnapshot.reservePercent)) percent reserve"
                 : "Automatic planning off"
         )
         .accessibilityHint("Opens fuel range controls")
@@ -1132,6 +1132,7 @@ struct RootView: View {
                     set: { enabled in
                         mapAutomaticFuelPlanning = enabled
                         FuelRangePrefs.automaticPlanningEnabled = enabled
+                        FuelRangePrefs.reservePercent = mapFuelReservePercent
                         RoutingDebugLog.shared.event(
                             "ui automatic fuel planning=\(enabled ? 1 : 0) recalc=1"
                         )
@@ -1160,6 +1161,8 @@ struct RootView: View {
                         "ui fuel slider begin range=\(Int(mapFuelRangeKm))km"
                     )
                 } else {
+                    FuelRangePrefs.automaticPlanningEnabled = mapAutomaticFuelPlanning
+                    FuelRangePrefs.reservePercent = mapFuelReservePercent
                     FuelRangePrefs.kilometers = mapFuelRangeKm
                     FuelRangePrefs.lastEnabledKilometers = mapFuelRangeKm
                     RoutingDebugLog.shared.event(
@@ -1180,6 +1183,7 @@ struct RootView: View {
                     ForEach([0, 5, 10, 15, 20, 25, 30], id: \.self) { percent in
                         Button("\(percent)%") {
                             mapFuelReservePercent = Double(percent)
+                            FuelRangePrefs.automaticPlanningEnabled = mapAutomaticFuelPlanning
                             FuelRangePrefs.reservePercent = Double(percent)
                             RoutingDebugLog.shared.event(
                                 "ui fuel reserve selected=\(percent)% recalc=1"

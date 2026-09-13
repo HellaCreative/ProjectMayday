@@ -733,8 +733,16 @@ final class ItineraryBuilder {
         var waypointFuelStops = preservedWaypointFuelStops
         if startIndex == 0, resume == nil, kept.isEmpty,
            let first = itinerary.waypoints.first, let leg = itinerary.legs.first {
-            if let station = try? await source.fuelStation(near: first.coordinate,
-                within: HopSearchPolicy.fuelWaypointSnapMeters) {
+            let station: FuelChainStop?
+            if source.supportsCombinedFuelPlanning {
+                station = try? await source.verifiedInitialFuelStation(at: first.coordinate,
+                    profile: leg.profile, allowUnknown: leg.allowsUnknown(
+                        departingFrom: leg.from.uuidString, effectiveProfile: leg.profile))
+            } else {
+                station = try? await source.fuelStation(near: first.coordinate,
+                    within: HopSearchPolicy.fuelWaypointSnapMeters)
+            }
+            if let station {
                 waypointFuelStops[first.id] = FuelStop(coordinate: station.coordinate,
                     stationID: station.id, name: station.displayName, afterRiderLegID: leg.id)
             } else { waypointFuelStops[first.id] = nil }
@@ -744,6 +752,12 @@ final class ItineraryBuilder {
         if firstWaypointToProbe < waypointProbeEnd {
             for waypointIndex in firstWaypointToProbe..<waypointProbeEnd {
                 let waypoint = itinerary.waypoints[waypointIndex]
+                // Nearby station discovery is not a legal visit. Native stages
+                // refill only at routed generated pumps; rider pins stay intact.
+                if source.supportsCombinedFuelPlanning {
+                    waypointFuelStops[waypoint.id] = nil
+                    continue
+                }
                 if let station = try? await source.fuelStation(
                     near: waypoint.coordinate,
                     within: HopSearchPolicy.fuelWaypointSnapMeters
@@ -792,12 +806,10 @@ final class ItineraryBuilder {
                     forwardFeeler: true
                 ), zoom: DirtSnapRequestContext.mapZoom))
                 if escape.isComplete {
-                    // Nil after an exhaustive full-tank probe means the
-                    // destination itself has no safe fuel escape. A zero arrival
-                    // limit forces an honest gap instead of pretending otherwise.
+                    // This estimate reserves planning room only. The selected
+                    // arrival must subsequently prove its actual legal escape.
                     finalEscapeFuelMeters = escape.firstReachableStationMeters
                         .map { min(fuel.usableMeters, max(0, $0)) }
-                        ?? fuel.usableMeters
                     RoutingDebugLog.shared.event(
                         "fuel destination escape meters=\(Int(finalEscapeFuelMeters ?? 0)) "
                             + "arrivalLimit=\(Int(max(0, fuel.usableMeters - (finalEscapeFuelMeters ?? 0))))"
@@ -1213,8 +1225,7 @@ final class ItineraryBuilder {
                         requiredFirstStationId: requiredStationID,
                         forwardFeeler: crossesProvinceBoundary && !canConsumeCombinedWindow,
                         routeFirstPlan: source.supportsCombinedFuelPlanning,
-                        ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
-                            && index == itinerary.legs.count - 1
+                        ensureDestinationFuelEscape: index == itinerary.legs.count - 1
                             && !finalWaypointIsFuel,
                         startEndpointKind: departureID == riderLeg.from.uuidString && waypointFuelStops[riderLeg.from] == nil ? nil : "customers"
                     ), zoom: DirtSnapRequestContext.mapZoom))
@@ -1241,6 +1252,10 @@ final class ItineraryBuilder {
 
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed, cancelled: Task.isCancelled)
+                }
+
+                if chain.destinationEscapeMeters != nil {
+                    finalEscapeVerificationWarning = nil
                 }
 
                 // A response belongs to this exact departure. Never reuse an

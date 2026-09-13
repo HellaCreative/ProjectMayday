@@ -33,6 +33,7 @@ nonisolated final class DemandSearchLabels {
         /// buckets, object headers and allocator rounding are additional. Observe
         /// those with RoutingMeasurement; never label this value total memory.
         let logicalPageDirectoryEntryBytes: Int
+        let logicalLookupCacheBytes: Int
     }
 
     private final class Page {
@@ -57,6 +58,15 @@ nonisolated final class DemandSearchLabels {
     let maximumPages: Int
     private let shouldStop: () -> Bool
     private var pages: [Int: Page] = [:]
+    // Four fixed cache slots alias existing pages; they never allocate or retain
+    // extra label payload beyond the owning page directory. Negative entries
+    // are replaced immediately when their page is created.
+    private var cached0: (key: Int, page: Page?) = (-1, nil)
+    private var cached1: (key: Int, page: Page?) = (-1, nil)
+    private var cached2: (key: Int, page: Page?) = (-1, nil)
+    private var cached3: (key: Int, page: Page?) = (-1, nil)
+    private let pageShift: Int
+    private(set) var allocationRevision = 0
     private var allocatedLabelCapacity = 0
     private var allocatedPayloadBytes = 0
 
@@ -68,6 +78,7 @@ nonisolated final class DemandSearchLabels {
         }
         self.stateCount = stateCount
         self.pageCapacity = pageCapacity
+        pageShift = pageCapacity.nonzeroBitCount == 1 ? pageCapacity.trailingZeroBitCount : -1
         maximumPayloadBytes = maxPayloadBytes
         self.shouldStop = shouldStop
         let fullPageBytes = pageCapacity * MemoryLayout<Label>.stride
@@ -80,9 +91,40 @@ nonisolated final class DemandSearchLabels {
     }
 
     subscript(state: Int) -> Label {
-        precondition(state >= 0 && state < stateCount, "Invalid routing label state")
-        guard let page = pages[state / pageCapacity] else { return Label() }
-        return page.values[state % pageCapacity]
+        @inline(__always) get {
+            precondition(state >= 0 && state < stateCount, "Invalid routing label state")
+            guard let page = self.page(for: pageKey(state)) else { return Label() }
+            return page.values[pageOffset(state)]
+        }
+    }
+
+    @inline(__always) private func pageKey(_ state: Int) -> Int {
+        pageShift >= 0 ? state >> pageShift : state / pageCapacity
+    }
+
+    @inline(__always) private func pageOffset(_ state: Int) -> Int {
+        pageShift >= 0 ? state & (pageCapacity - 1) : state % pageCapacity
+    }
+
+    @inline(__always) private func page(for key: Int) -> Page? {
+        switch key & 3 {
+        case 0: if cached0.key == key { return cached0.page }
+        case 1: if cached1.key == key { return cached1.page }
+        case 2: if cached2.key == key { return cached2.page }
+        default: if cached3.key == key { return cached3.page }
+        }
+        let found = pages[key]
+        remember(key, page: found)
+        return found
+    }
+
+    @inline(__always) private func remember(_ key: Int, page: Page?) {
+        switch key & 3 {
+        case 0: cached0 = (key, page)
+        case 1: cached1 = (key, page)
+        case 2: cached2 = (key, page)
+        default: cached3 = (key, page)
+        }
     }
 
     /// The caller should invoke this only for accepted relaxations. Exhausting
@@ -92,12 +134,12 @@ nonisolated final class DemandSearchLabels {
     func mutate(_ state: Int, _ body: (inout Label) -> Void) throws {
         guard state >= 0 && state < stateCount else { throw StorageError.invalidState(state) }
         guard !shouldStop() else { throw StorageError.cancelled }
-        let key = state / pageCapacity
+        let key = pageKey(state)
         let page: Page
-        if let existing = pages[key] {
+        if let existing = self.page(for: key) {
             page = existing
         } else {
-            let first = state - state % pageCapacity
+            let first = state - pageOffset(state)
             let capacity = min(pageCapacity, stateCount - first)
             let requiredBytes = capacity * MemoryLayout<Label>.stride
             guard pages.count < maximumPages,
@@ -106,10 +148,12 @@ nonisolated final class DemandSearchLabels {
             }
             page = Page(count: capacity)
             pages[key] = page
+            remember(key, page: page)
+            allocationRevision += 1
             allocatedLabelCapacity += capacity
             allocatedPayloadBytes += requiredBytes
         }
-        body(&page.values[state % pageCapacity])
+        body(&page.values[pageOffset(state)])
     }
 
     var statistics: Statistics {
@@ -119,7 +163,8 @@ nonisolated final class DemandSearchLabels {
             allocatedPayloadBytes: allocatedPayloadBytes,
             maximumPayloadBytes: maximumPayloadBytes,
             maximumPages: maximumPages,
-            logicalPageDirectoryEntryBytes: pages.count * (MemoryLayout<Int>.stride + MemoryLayout<Page>.stride)
+            logicalPageDirectoryEntryBytes: pages.count * (MemoryLayout<Int>.stride + MemoryLayout<Page>.stride),
+            logicalLookupCacheBytes: 4 * MemoryLayout<(Int, Page?)>.stride
         )
     }
 }

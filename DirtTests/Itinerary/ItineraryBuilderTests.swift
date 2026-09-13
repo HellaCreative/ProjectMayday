@@ -37,12 +37,38 @@ struct FuelPlanningProgressWatchdogTests {
 
 @MainActor
 struct ItineraryBuilderTests {
+    @Test func nearbyDiscoveryDoesNotSkipInitialApproachOrResetRiderFuel() async throws {
+        let start = point(0), pump = point(0.001), via = point(1), destination = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.supportsCombinedFuelPlanning = true
+        source.waypointFuelStations[key(start, start)] = fuelStop("near-origin", at: pump)
+        source.waypointFuelStations[key(via, via)] = fuelStop("across-barrier", at: point(1.001))
+        source.waypointFuelStations[key(destination, destination)] = fuelStop("near-destination", at: point(2.001))
+        source.fuelStopResponses = [[fuelStop("legal-pump", at: pump)], [], []]
+        source.fuelWindowCompleteResponses = [false, true, true]
+        source.distances[key(start, pump)] = 0.25
+        source.distances[key(pump, via)] = 60_000
+        source.distances[key(via, destination)] = 50_000
+        let result = await build([start, via, destination], source: source, usable: 180_000)
+        let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
+        #expect(plans.first?.fuel.initialFillUp == true)
+        #expect(result.legs.first?.toCoordinate == pump)
+        #expect(result.legs.first?.response.distanceMeters == 0.25)
+        #expect(result.waypointFuelStops.isEmpty)
+        #expect(result.legs.last?.fuelUsedOnArrivalMeters == 110_000)
+        #expect(plans.last?.fuel.firstLegMaxMeters == 120_000)
+        #expect(plans.last?.fuel.ensureDestinationFuelEscape == true)
+        #expect(result.legs.last?.toCoordinate == destination)
+    }
+
+
     @Test(arguments: [false, true])
     func moreThanSixteenSuccessfulFuelContinuationsReachDestination(combined: Bool) async throws {
         let start = point(0), destination = point(21)
         let source = FakeRoutingSource(name: "pack")
         source.supportsCombinedFuelPlanning = combined
         source.waypointFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
+        source.verifiedOriginFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
         let pumps = (1...20).map { fuelStop("pump-\($0)", at: point(Double($0))) }
         source.fuelStopResponses = pumps.map { [$0] } + [[]]
         source.fuelWindowCompleteResponses = Array(repeating: false, count: pumps.count) + [true]
@@ -71,6 +97,7 @@ struct ItineraryBuilderTests {
         let start = point(0), destination = point(2)
         let source = FakeRoutingSource(name: "pack")
         source.waypointFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
+        source.verifiedOriginFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
         source.distances[key(start, destination)] = 250_000
         // Every proposed pump has an unrouteable incoming stage. The fake
         // supplies more than the budget so only the planner can stop repetition.
@@ -96,6 +123,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "pack")
         source.supportsCombinedFuelPlanning = combined
         source.waypointFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
+        source.verifiedOriginFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
         source.distances[key(start, pump)] = 100_000
         source.distances[key(pump, pump)] = 0
         source.distances[key(pump, destination)] = 250_000
@@ -159,6 +187,7 @@ struct ItineraryBuilderTests {
         let start = point(0), end = point(2)
         let source = FakeRoutingSource(name: "pack")
         source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+        source.verifiedOriginFuelStations[key(start, start)] = fuelStop("origin", at: start)
         source.distances[key(start, end)] = 400_000
         source.fuelStops = (1...20).map { fuelStop("dead-end-\($0)", at: point(Double($0) / 100)) }
         for pump in source.fuelStops {
@@ -196,6 +225,7 @@ struct ItineraryBuilderTests {
         var itinerary = makeItinerary([start, end])
         if required {
             source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+            source.verifiedOriginFuelStations[key(start, start)] = fuelStop("origin", at: start)
             let leg = try #require(itinerary.legs.first)
             itinerary = reduce(itinerary, .setFuelStopOverride(legID: leg.id,
                 departureAnchorID: leg.from.uuidString, stationID: "selected")).itinerary
@@ -216,6 +246,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "pack")
         source.supportsCombinedFuelPlanning = true
         source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+        source.verifiedOriginFuelStations[key(start, start)] = fuelStop("origin", at: start)
         source.distances[key(start, end)] = 400_000
         source.distances[key(start, a)] = 100_000
         source.distances[key(a, b)] = 100_000
@@ -242,6 +273,7 @@ struct ItineraryBuilderTests {
         let start = point(0), end = point(2)
         let source = FakeRoutingSource(name: "pack")
         source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+        source.verifiedOriginFuelStations[key(start, start)] = fuelStop("origin", at: start)
         source.distances[key(start, end)] = 50_000
         if gap { source.gapWhenFirstLegMaxBelow[key(start, end)] = 180_001 }
         let itinerary = makeItinerary([start, end])
@@ -260,6 +292,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "pack")
         source.supportsCombinedFuelPlanning = true
         source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+        source.verifiedOriginFuelStations[key(start, start)] = fuelStop("origin", at: start)
         source.fuelStopResponses = [[fuelStop("pump", at: pump)]]
         source.distances[key(start, pump)] = 100_000
         source.distances[key(pump, end)] = 50_000
@@ -397,6 +430,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "live")
         // This test starts at a mapped pump; the initial refill is at the origin.
         source.waypointFuelStations[key(points[0], points[0])] = fuelStop("starting-pump", at: points[0])
+        source.verifiedOriginFuelStations[key(points[0], points[0])] = fuelStop("starting-pump", at: points[0])
         source.supportsCombinedFuelPlanning = true
         source.distances[key(points[0], points[1])] = 100_000
 
@@ -416,6 +450,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "live")
         // This test starts at a mapped pump; the initial refill is at the origin.
         source.waypointFuelStations[key(start, start)] = fuelStop("starting-pump", at: start)
+        source.verifiedOriginFuelStations[key(start, start)] = fuelStop("starting-pump", at: start)
         source.supportsCombinedFuelPlanning = true
         source.distances[key(start, destination)] = 250_000
         let result = await build([start, destination], source: source, usable: 333_000)
@@ -487,6 +522,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "live")
         // This test starts at a mapped pump; the initial refill is at the origin.
         source.waypointFuelStations[key(points[0], points[0])] = fuelStop("starting-pump", at: points[0])
+        source.verifiedOriginFuelStations[key(points[0], points[0])] = fuelStop("starting-pump", at: points[0])
         source.supportsCombinedFuelPlanning = true
         source.distances[key(points[0], points[1])] = 100_000
         source.distances[key(points[1], points[2])] = 100_000
@@ -1214,6 +1250,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "live")
         // This test starts at a mapped pump; the initial refill is at the origin.
         source.waypointFuelStations[key(origin, origin)] = fuelStop("starting-pump", at: origin)
+        source.verifiedOriginFuelStations[key(origin, origin)] = fuelStop("starting-pump", at: origin)
         source.distances[key(origin, onStation)] = 200_000
         source.distances[key(onStation, destination)] = 200_000
         source.distances[key(origin, dragged)] = 210_000
@@ -1327,6 +1364,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "live")
         // This test starts at a mapped pump; the initial refill is at the origin.
         source.waypointFuelStations[key(points[0], points[0])] = fuelStop("starting-pump", at: points[0])
+        source.verifiedOriginFuelStations[key(points[0], points[0])] = fuelStop("starting-pump", at: points[0])
         source.supportsCombinedFuelPlanning = true
         for index in 0..<(points.count - 1) {
             source.distances[key(points[index], points[index + 1])] = 50_000
@@ -1561,6 +1599,7 @@ struct IncrementalItineraryRebuildTests {
         let source = FakeRoutingSource(name: "live")
         // The starting refill occurs at this mapped origin station.
         source.waypointFuelStations[key(points[0], points[0])] = fuelStop("starting-pump", at: points[0])
+        source.verifiedOriginFuelStations[key(points[0], points[0])] = fuelStop("starting-pump", at: points[0])
         source.distances[key(points[0], points[1])] = 100_000
         source.distances[key(points[1], points[2])] = 100_000
         source.distances[key(points[2], points[3])] = 154_000
@@ -1670,6 +1709,7 @@ private final class FakeRoutingSource: RoutingSource {
     var routeRequests: [RouteRequest] = []
     var fuelChainRequests: [FuelChainRequest] = []
     var waypointFuelStations: [String: FuelChainStop] = [:]
+    var verifiedOriginFuelStations: [String: FuelChainStop] = [:]
     var firstReachableStationMeters: [String: Double] = [:]
     var gapWhenFirstLegMaxBelow: [String: Double] = [:]
     var failKey: String?
@@ -1807,6 +1847,11 @@ private final class FakeRoutingSource: RoutingSource {
             stationCandidates: stationCandidates,
             windowComplete: windowComplete
         )
+    }
+
+    func verifiedInitialFuelStation(at point: RouteCoordinate, profile: RouteProfile,
+                                    allowUnknown: Bool) async throws -> FuelChainStop? {
+        verifiedOriginFuelStations[key(point, point)]
     }
 
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {

@@ -6,6 +6,30 @@ import Foundation
 /// OSM way and exact vertex. Runtime only ranks those real crossings by the
 /// rider's A→B alignment.
 enum CrossPackSeam {
+    /// Ranking orders attempts; it does not prove that omitted candidates are
+    /// disconnected. Native routing applies settlement/profile fallback rules,
+    /// including necessary urban crossings, to each actual approach and exit.
+    struct CandidateFrontier {
+        enum Step {
+            case candidate(GraphV2Pack.CrossPackSeamAnchor)
+            case exhausted
+            case limited(String)
+        }
+        private let anchors: [GraphV2Pack.CrossPackSeamAnchor]
+        private var cursor = 0
+        init(_ anchors: [GraphV2Pack.CrossPackSeamAnchor]) { self.anchors = anchors }
+        var remainingCount: Int { anchors.count - cursor }
+
+        mutating func next(remainingAttempts: Int, stopReason: String?) -> Step {
+            if let stopReason { return .limited(stopReason) }
+            guard cursor < anchors.count else { return .exhausted }
+            guard remainingAttempts > 0 else { return .limited("regionalSeamWorkLimit") }
+            let anchor = anchors[cursor]
+            cursor += 1
+            return .candidate(anchor)
+        }
+    }
+
     static func candidates(
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
@@ -14,12 +38,6 @@ enum CrossPackSeam {
     ) -> [GraphV2Pack.CrossPackSeamAnchor] {
         let ordered = anchors.enumerated()
             .filter { $0.element.gapMeters <= 2 && !$0.element.osmWayId.isEmpty }
-            .filter {
-                !UrbanCore.isNear(
-                    CLLocationCoordinate2D(latitude: $0.element.latitude, longitude: $0.element.longitude),
-                    boxes: urbanCores
-                )
-            }
             .sorted {
                 let a = distanceToChord($0.element, from: from, to: to)
                 let b = distanceToChord($1.element, from: from, to: to)

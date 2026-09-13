@@ -16,6 +16,8 @@ final class SavedRoute {
     /// Compatibility with DEV builds that saved per-leg seeds. Retain the
     /// optional storage column while routing behavior is recovered.
     var routeSeedsData: Data?
+    /// Additive versioned canonical plan. Nil keeps legacy library entries readable.
+    var routingPlanData: Data?
     var surfaceFamilyMode: String?
     var createdAt: Date
 

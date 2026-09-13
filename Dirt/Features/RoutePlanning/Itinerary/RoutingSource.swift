@@ -7,11 +7,13 @@ protocol RoutingSource: AnyObject {
     var supportsCombinedFuelPlanning: Bool { get }
     func route(_ req: RouteRequest) async throws -> RouteResponse
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse
+    func verifiedInitialFuelStation(at point: RouteCoordinate, profile: RouteProfile, allowUnknown: Bool) async throws -> FuelChainStop?
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop?
 }
 
 extension RoutingSource {
     var supportsCombinedFuelPlanning: Bool { false }
+    func verifiedInitialFuelStation(at point: RouteCoordinate, profile: RouteProfile, allowUnknown: Bool) async throws -> FuelChainStop? { nil }
 }
 
 @MainActor
@@ -210,6 +212,73 @@ final class PackRoutingSource: RoutingSource {
         return max(0, min(remainingMeters, arrivalUsedLimitMeters - alreadyUsed))
     }
 
+    enum DestinationEscapeProof {
+        case verified(meters: Double)
+        case unknown(String)
+    }
+
+    /// Proves one actual legal escape after the selected arrival. Candidate
+    /// discovery is only an opportunity to try; an empty/incomplete set never
+    /// establishes a fuel gap. The caller's existing window remains in force.
+    static func verifyDestinationEscape(
+        arrival: NativeRoutingContinuation?, remainingMeters: Double,
+        from: RouteCoordinate? = nil, stations: [POIFeature],
+        route: (POIFeature, NativeRoutingContinuation, Double) async -> Swift.Result<OnDeviceRouter.Result, OnDeviceRouter.Failure>
+    ) async -> DestinationEscapeProof {
+        guard let arrival, remainingMeters.isFinite, remainingMeters >= 0 else {
+            return .unknown("The legal arrival and remaining fuel could not be verified.")
+        }
+        let began = ProcessInfo.processInfo.systemUptime
+        var ordered: [(station: POIFeature, lowerBound: Double, originalIndex: Int)] = []
+        ordered.reserveCapacity(stations.count)
+        for (index, station) in stations.enumerated() {
+            if let reason = RoutingWorkContext.stopReason {
+                return .unknown("Destination fuel escape preparation was not completed: \(reason).")
+            }
+            let distance = from.map { origin in
+                CLLocation(latitude: origin.latitude, longitude: origin.longitude).distance(
+                    from: CLLocation(latitude: station.latitude, longitude: station.longitude))
+            } ?? 0
+            ordered.append((station, distance.isFinite ? distance : .infinity, index))
+        }
+        // This lower bound orders work only. Every retained station can still
+        // be attempted; actual routed distance and legal state decide proof.
+        if from != nil {
+            ordered.sort {
+                if $0.lowerBound != $1.lowerBound { return $0.lowerBound < $1.lowerBound }
+                if $0.station.id != $1.station.id { return $0.station.id < $1.station.id }
+                return $0.originalIndex < $1.originalIndex
+            }
+        }
+        RoutingDebugLog.shared.event("destination escape begin candidates=\(ordered.count) remaining=\(Int(remainingMeters))m")
+        for (index, entry) in ordered.enumerated() {
+            let station = entry.station
+            if let reason = RoutingWorkContext.stopReason {
+                return .unknown("Destination fuel escape was not completed: \(reason).")
+            }
+            RoutingDebugLog.shared.event("destination escape candidate=\(station.id) attempt=\(index + 1) "
+                + "distanceLowerBound=\(entry.lowerBound)m remaining=\(Int(remainingMeters))m")
+            let candidate = await route(station, arrival, remainingMeters)
+            switch candidate {
+            case .success(let routed):
+                RoutingDebugLog.shared.event("destination escape result=route candidate=\(station.id) "
+                    + "meters=\(routed.distanceMeters) elapsed=\(ProcessInfo.processInfo.systemUptime - began)s")
+            case .failure(let failure):
+                RoutingDebugLog.shared.event("destination escape result=unverified candidate=\(station.id) "
+                    + "cause=\(failure) elapsed=\(ProcessInfo.processInfo.systemUptime - began)s")
+            }
+            if let reason = RoutingWorkContext.stopReason {
+                return .unknown("Destination fuel escape was not completed: \(reason).")
+            }
+            if case .success(let routed) = candidate,
+               routed.distanceMeters.isFinite, routed.distanceMeters >= 0,
+               routed.distanceMeters <= remainingMeters + 1 {
+                return .verified(meters: routed.distanceMeters)
+            }
+        }
+        return .unknown("A legal fuel escape within the fuel remaining after arrival has not been proved.")
+    }
+
     private func requireInstalledPacks(_ locations: [RouteLocation]) throws {
         let coordinates = locations.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
         let needed = GraphPackStore.requiredRoutingRegionIDs(for: coordinates)
@@ -366,7 +435,8 @@ final class PackRoutingSource: RoutingSource {
             let first = reachable.values.min()
             try RoutingWorkContext.check()
             return FuelChainResponse(
-                status: "complete", error: nil, message: nil,
+                status: first == nil ? "unknown" : "complete", error: nil,
+                message: first == nil ? "No destination fuel estimate is available; a gap has not been proved." : nil,
                 regionIds: GraphPackStore.regionIds(containingAny: [
                     start.locationCoordinate, end.locationCoordinate
                 ]),
@@ -383,6 +453,7 @@ final class PackRoutingSource: RoutingSource {
         var stops: [FuelChainStop] = []
         var graphMeters: [Double] = []
         var plannedRoutes: [RouteResponse] = []
+        var plannedNativeRoutes: [OnDeviceRouter.Result] = []
         var stationCandidates: [FuelStationCandidate] = []
         let returnedStopLimit = min(12, max(1, req.fuel.windowMaxStops ?? 12))
         let maximumStops = returnedStopLimit
@@ -442,6 +513,7 @@ final class PackRoutingSource: RoutingSource {
             var incompleteSearchReason: String?
             var directFallback: Double?
             var directRoute: RouteResponse?
+            var verifiedEscapeMeters: Double?
             if let direct,
                direct <= destinationLimit + 1 {
                 let routed = await packs.routeOnDeviceDetailed(
@@ -466,6 +538,41 @@ final class PackRoutingSource: RoutingSource {
                 if case .failure(.searchLimit(let reason)) = routed { incompleteSearchReason = reason }
                 if case .success(let route) = routed, route.distanceMeters <= destinationLimit + 1,
                    (carriedHistory.isEmpty || retraceMeters(route, history: carriedHistory) <= 1_000) {
+                    if req.fuel.ensureDestinationFuelEscape == true, !mustPump {
+                        let proof = await Self.verifyDestinationEscape(
+                            arrival: route.terminalContinuation,
+                            remainingMeters: max(0, firstCap - route.distanceMeters),
+                            from: end, stations: stations
+                        ) { station, arrival, cap in
+                            await packs.routeOnDeviceDetailed(
+                                from: end.locationCoordinate,
+                                to: .init(latitude: station.latitude, longitude: station.longitude),
+                                profile: req.profile, allowUnknown: req.accessPolicy.motorizedUnknown,
+                                avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                                priorEdgeIds: carriedHistory.union(route.edgeIds),
+                                arrivalEdgeId: route.edgeIds.last,
+                                arrivalContinuation: arrival,
+                                backtrackFactor: req.options?.backtrackFactor ?? 4,
+                                sessionSeed: req.options?.sessionSeed ?? 0,
+                                maxRouteMeters: cap,
+                                cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+                                avoidMotorways: req.options?.avoidMotorways == true,
+                                preferBackRoads: req.options?.preferBackRoads == true,
+                                mapZoom: req.options?.mapZoom, matchLimitMeters: req.options?.matchLimitMeters,
+                                startEndpointKind: nil, endEndpointKind: "customers")
+                        }
+                        switch proof {
+                        case .verified(let meters): verifiedEscapeMeters = meters
+                        case .unknown(let message):
+                            let completeRoad = OnDeviceRouter.Result.concatenating(plannedNativeRoutes + [route])
+                            return FuelChainResponse(status: "unknown", error: "destination_escape_unverified",
+                                message: message, regionIds: nil, stops: stops,
+                                graphMeters: graphMeters + [route.distanceMeters], diagnostics: nil,
+                                routes: plannedRoutes + [RouteResponse(onDevice: route, priorEdgeIDs: carriedHistory)],
+                                foundationRoute: completeRoad.map { RouteResponse(onDevice: $0, priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])) },
+                                windowComplete: false)
+                        }
+                    }
                     directFallback = route.distanceMeters
                     directRoute = RouteResponse(onDevice: route, priorEdgeIDs: carriedHistory)
                 }
@@ -489,6 +596,7 @@ final class PackRoutingSource: RoutingSource {
                     ),
                     routes: windowComplete ? plannedRoutes + [directRoute].compactMap { $0 } : Array(plannedRoutes.prefix(visibleStops.count)),
                     stationCandidates: stationCandidates,
+                    destinationEscapeMeters: verifiedEscapeMeters,
                     windowComplete: windowComplete
                 )
             }
@@ -755,6 +863,7 @@ final class PackRoutingSource: RoutingSource {
                         ),
                         routes: windowComplete ? plannedRoutes + [directRoute].compactMap { $0 } : Array(plannedRoutes.prefix(visibleStops.count)),
                         stationCandidates: stationCandidates,
+                        destinationEscapeMeters: verifiedEscapeMeters,
                         windowComplete: windowComplete
                     )
                 }
@@ -814,6 +923,7 @@ final class PackRoutingSource: RoutingSource {
             // Repeated edges and immediate U-turns remain expensive on every
             // downstream hop, not just the first request in the chain.
             if let route = evaluatedRoutesByID[station.id] {
+                plannedNativeRoutes.append(route)
                 plannedRoutes.append(RouteResponse(onDevice: route, priorEdgeIDs: carriedHistory))
                 carriedHistory.formUnion(route.edgeIds)
                 carriedArrival = route.edgeIds.last ?? carriedArrival
@@ -922,6 +1032,26 @@ final class PackRoutingSource: RoutingSource {
             return (FuelChainStop(id: station.id, latitude: station.latitude, longitude: station.longitude,
                 name: station.name, brand: station.brand, address: station.address, graphMeters: 0), distance)
         }.sorted { $0.1 < $1.1 }.map { $0.0 }
+    }
+
+    /// Presence is distinct from nearby discovery: exact mapped coordinates still
+    /// require native customer-access matching before an initial tank reset.
+    func verifiedInitialFuelStation(at point: RouteCoordinate, profile: RouteProfile,
+                                    allowUnknown: Bool) async throws -> FuelChainStop? {
+        for station in fuelStations(near: point, within: 1)
+            where station.coordinate == point {
+            try RoutingWorkContext.check()
+            let result = await packs.routeOnDeviceDetailed(
+                from: point.locationCoordinate, to: point.locationCoordinate,
+                profile: profile, allowUnknown: allowUnknown,
+                startEndpointKind: "customers", endEndpointKind: "customers",
+                initialFuelApproach: true)
+            try RoutingWorkContext.check()
+            if case .success(let route) = result,
+               route.distanceMeters == 0,
+               route.searchMeta.rideObjective == "initial-fuel-presence" { return station }
+        }
+        return nil
     }
 
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {

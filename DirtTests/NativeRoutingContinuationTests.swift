@@ -5,6 +5,50 @@ import Testing
 
 struct NativeRoutingContinuationTests {
     @Test(arguments: [RouteProfile.dirt, .balanced, .cleanest])
+    func initialStationPresenceAndSubmeterApproachRequireLegalMatchedRoad(profile: RouteProfile) throws {
+        let pack = try GraphV2Pack(data: fixture())
+        pack.geometry = try GeometryV1Pack(data: fixture(name: "legal-topology-restrictions.geometry.v1.bin"))
+        let a = coordinate(pack, try node(pack, 1)), b = coordinate(pack, try node(pack, 2))
+        let station = CLLocationCoordinate2D(latitude: (a.latitude + b.latitude) / 2,
+                                             longitude: (a.longitude + b.longitude) / 2)
+        var router = OnDeviceRouter(pack: pack)
+        router.initialFuelApproach = true
+        router.startEndpointKind = "customers"
+        router.endEndpointKind = "customers"
+        router.matchLimitMeters = 1
+        let present = router.routeDetailed(from: station, to: station, profile: profile, allowUnknown: false)
+        guard case .success(let presence) = present else { Issue.record("Station presence failed: \(present)"); return }
+        #expect(presence.distanceMeters == 0)
+        #expect(presence.terminalContinuation == nil)
+        #expect(presence.searchMeta.rideObjective == "initial-fuel-presence")
+        let origin = CLLocationCoordinate2D(latitude: station.latitude + (a.latitude - station.latitude) * 0.0001,
+                                            longitude: station.longitude + (a.longitude - station.longitude) * 0.0001)
+        let short = router.routeDetailed(from: origin, to: station, profile: profile, allowUnknown: false)
+        guard case .success(let approach) = short else { Issue.record("Short approach failed: \(short)"); return }
+        #expect(approach.distanceMeters > 0 && approach.distanceMeters < 0.5)
+        #expect(approach.legs.contains { $0.edgeIndex != nil && $0.distanceMeters > 0 })
+        #expect(approach.terminalContinuation != nil)
+        let offRoad = CLLocationCoordinate2D(latitude: station.latitude + 0.00002, longitude: station.longitude)
+        #expect(!succeeded(router.routeDetailed(from: offRoad, to: offRoad, profile: profile, allowUnknown: false)))
+        var prohibited = try fixture()
+        let accessOffset = Int(read32(prohibited, 112))
+        prohibited[accessOffset] = 2
+        prohibited[accessOffset + 1] = 2
+        let forbiddenPack = try GraphV2Pack(data: prohibited)
+        forbiddenPack.geometry = pack.geometry
+        var forbiddenRouter = OnDeviceRouter(pack: forbiddenPack)
+        forbiddenRouter.initialFuelApproach = true
+        forbiddenRouter.startEndpointKind = "customers"
+        forbiddenRouter.endEndpointKind = "customers"
+        forbiddenRouter.matchLimitMeters = 1
+        #expect(!succeeded(forbiddenRouter.routeDetailed(from: station, to: station,
+            profile: profile, allowUnknown: true)))
+        router.initialFuelApproach = false
+        #expect(!succeeded(router.routeDetailed(from: station, to: station, profile: profile, allowUnknown: false)))
+    }
+
+
+    @Test(arguments: [RouteProfile.dirt, .balanced, .cleanest])
     func splitNodeAndViaWayRoutesPreserveLegalOutcome(profile: RouteProfile) throws {
         for nodeRestriction in [false, true] {
             var bytes = try fixture()
@@ -65,6 +109,43 @@ struct NativeRoutingContinuationTests {
                 profile: profile, allowUnknown: false, arrivalContinuation: token, sessionSeed: 0)
             #expect(succeeded(onward) == reverse)
         }
+    }
+
+    @Test(arguments: [RouteProfile.dirt, .balanced, .cleanest])
+    func unrestrictedFractionalArrivalCanReturnAlongSameTwoWayRoad(profile: RouteProfile) throws {
+        var bytes = try fixture()
+        write32(&bytes, Int(read32(bytes, 120)), 0)
+        let pack = try GraphV2Pack(data: bytes)
+        pack.geometry = try GeometryV1Pack(data: fixture(name: "legal-topology-restrictions.geometry.v1.bin"))
+        var router = OnDeviceRouter(pack: pack)
+        router.matchLimitMeters = 5
+        let start = CLLocationCoordinate2D(latitude: 0, longitude: 0.0001)
+        let arrival = CLLocationCoordinate2D(latitude: 0, longitude: 0.00075)
+        let pump = CLLocationCoordinate2D(latitude: 0, longitude: 0.00025)
+        let approach = router.routeDetailed(from: start, to: arrival,
+            profile: profile, allowUnknown: false, sessionSeed: 0)
+        guard case .success(let first) = approach else { Issue.record("Approach failed"); return }
+        let token = try #require(first.terminalContinuation)
+        #expect(token.restrictionContext.isEmpty)
+        let onward = router.routeDetailed(from: arrival, to: pump, profile: profile,
+            allowUnknown: false, arrivalContinuation: token, sessionSeed: 0, maxRouteMeters: 100)
+        guard case .success(let result) = onward else { Issue.record("Two-way return failed: \(onward)"); return }
+        #expect(result.distanceMeters > 50 && result.distanceMeters < 60)
+        let returned = try #require(result.terminalContinuation)
+        #expect(returned.incoming.fromNodeID == token.incoming.toNodeID)
+        #expect(returned.incoming.toNodeID == token.incoming.fromNodeID)
+        #expect(result.legs.allSatisfy { $0.edgeIndex == first.legs.first?.edgeIndex })
+
+        // The same reversal must still obey directed access, even with Unknown on.
+        let incoming = try #require(first.legs.first?.edgeIndex)
+        bytes[Int(read32(bytes, 112)) + incoming * 2 + 1] = 2
+        let denied = try GraphV2Pack(data: bytes)
+        denied.geometry = pack.geometry
+        var deniedRouter = OnDeviceRouter(pack: denied)
+        deniedRouter.matchLimitMeters = 5
+        let blocked = deniedRouter.routeDetailed(from: arrival, to: pump, profile: profile,
+            allowUnknown: true, arrivalContinuation: token, sessionSeed: 0, maxRouteMeters: 100)
+        #expect(!succeeded(blocked))
     }
 
     private func succeeded(_ result: Swift.Result<OnDeviceRouter.Result, OnDeviceRouter.Failure>) -> Bool {

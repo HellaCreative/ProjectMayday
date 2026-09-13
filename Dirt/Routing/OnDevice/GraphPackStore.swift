@@ -1014,6 +1014,12 @@ final class GraphPackStore {
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         guard regions.count >= 2 else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
+        var incompleteFailure: OnDeviceRouter.Failure?
+        func recordFailure(_ reason: OnDeviceRouter.Failure) {
+            lastFailure = reason
+            // A later failed approach cannot erase an earlier unfinished search.
+            if case .searchLimit = reason { incompleteFailure = reason }
+        }
         var seamAttempts = 0
         var missingRecordedSeam = false
         let maximumSeamAttempts = max(24, min(96, (regions.count - 1) * 8))
@@ -1032,7 +1038,9 @@ final class GraphPackStore {
         ) async -> OnDeviceRouter.Result? {
             let regionId = regions[regionIndex]
             await activateInstalledPack(regionId: regionId)
-            guard let historyPack = activePack, historyPack.regionId?.lowercased() == regionId else { return nil }
+            guard let historyPack = activePack, historyPack.regionId?.lowercased() == regionId else {
+                recordFailure(.searchLimit("regionalPackUnavailable")); return nil
+            }
             let localHistory = regionIndex == 0 ? usedEdges : historyPack.localRoadIDs(matching: canonicalHistory)
             let localArrival = canonicalArrival.flatMap {
                 historyPack.localRoadIDs(matching: [$0]).sorted().first
@@ -1063,7 +1071,7 @@ final class GraphPackStore {
                     recordedStartNode: currentRecordedNode
                 )
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
-                    if case .failure(let reason) = final { lastFailure = reason }
+                    if case .failure(let reason) = final { recordFailure(reason) }
                     return nil
                 }
                 return OnDeviceRouter.Result.concatenating(hops + [last])
@@ -1072,35 +1080,55 @@ final class GraphPackStore {
             let nextRegionId = regions[regionIndex + 1]
             await activateInstalledPack(regionId: regionId)
             guard let localPack = activePack,
-                  localPack.regionId?.lowercased() == regionId else { return nil }
+                  localPack.regionId?.lowercased() == regionId else {
+                recordFailure(.searchLimit("regionalPackUnavailable")); return nil
+            }
             let anchors = CrossPackSeam.candidates(
                 from: current,
                 to: to,
                 anchors: localPack.crossPackSeams[nextRegionId] ?? [],
                 urbanCores: localPack.urbanCores
             )
-            guard !anchors.isEmpty else { return nil }
+            guard !anchors.isEmpty else {
+                recordFailure(.searchLimit("regionalSeamDataUnavailable"))
+                return nil
+            }
 
             await activateInstalledPack(regionId: nextRegionId)
             guard let remotePack = activePack,
-                  remotePack.regionId?.lowercased() == nextRegionId else { return nil }
+                  remotePack.regionId?.lowercased() == nextRegionId else {
+                recordFailure(.searchLimit("regionalPackUnavailable")); return nil
+            }
             let reverseAnchors = remotePack.crossPackSeams[regionId] ?? []
 
-            for anchor in anchors.prefix(8) {
-                guard seamAttempts < maximumSeamAttempts else { return nil }
+            var frontier = CrossPackSeam.CandidateFrontier(anchors)
+            while true {
+                let anchor: GraphV2Pack.CrossPackSeamAnchor
+                switch frontier.next(remainingAttempts: maximumSeamAttempts - seamAttempts,
+                                     stopReason: RoutingWorkContext.stopReason) {
+                case .candidate(let next): anchor = next
+                case .exhausted: return nil
+                case .limited(let reason):
+                    recordFailure(.searchLimit(reason))
+                    return nil
+                }
                 guard let reverse = reverseAnchors.first(where: {
                     $0.osmWayId == anchor.osmWayId
                         && abs($0.latitude - anchor.latitude) < 0.00002
                         && abs($0.longitude - anchor.longitude) < 0.00002
                         && $0.gapMeters <= 2
-                }) else { continue }
+                }) else {
+                    missingRecordedSeam = true
+                    recordFailure(.searchLimit("recordedSeamReciprocalUnavailable"))
+                    continue
+                }
                 let recordedNode = anchor.osmNodeId
                 if localPack.version >= 4 || remotePack.version >= 4 {
                     guard let recordedNode, reverse.osmNodeId == recordedNode,
                           localPack.osmNodeIds.contains(recordedNode),
                           remotePack.osmNodeIds.contains(recordedNode) else {
                         missingRecordedSeam = true
-                        lastFailure = .searchLimit("recordedSeamNodeUnavailable")
+                        recordFailure(.searchLimit("recordedSeamNodeUnavailable"))
                         continue
                     }
                 }
@@ -1132,7 +1160,7 @@ final class GraphPackStore {
                     recordedEndNode: recordedNode
                 )
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
-                    if case .failure(let reason) = hop { lastFailure = reason }
+                    if case .failure(let reason) = hop { recordFailure(reason) }
                     continue
                 }
                 RoutingDebugLog.shared.event("seam approach expectedWay=\(anchor.osmWayId) matchedWay=\(routed.snapDiagnostics?.end?.osmWayId ?? "unknown") offset=\(routed.snapDiagnostics?.end?.distanceM ?? -1)m")
@@ -1151,7 +1179,6 @@ final class GraphPackStore {
                     return result
                 }
             }
-            return nil
         }
 
         if let result = await search(
@@ -1168,7 +1195,13 @@ final class GraphPackStore {
         ) {
             return .success(result)
         }
+        if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
+        if let incompleteFailure { return .failure(incompleteFailure) }
         if missingRecordedSeam { return .failure(.searchLimit("recordedSeamNodeUnavailable")) }
+        if case .noPath = lastFailure, Self.hasUnsearchedRegionAlternative(for: regions,
+            allowedRegionIds: Set(Self.roadReachableNeighbours.keys)) {
+            return .failure(.searchLimit("regionalAlternativesUnsearched"))
+        }
         return .failure(lastFailure)
     }
 
@@ -1446,6 +1479,30 @@ final class GraphPackStore {
             }
         }
         return nil
+    }
+
+    /// Classification only: another administrative chain remains unexamined.
+    /// This does not claim its roads are connected, request/download its packs,
+    /// or bypass verified seam and native approach/exit proofs.
+    static func hasUnsearchedRegionAlternative(for selected: [String],
+                                               allowedRegionIds: Set<String>) -> Bool {
+        guard selected.count > 1, let start = selected.first, let end = selected.last else { return false }
+        for (blockedFrom, blockedTo) in zip(selected, selected.dropFirst()) {
+            var queue = [start], cursor = 0
+            var seen: Set<String> = [start]
+            while cursor < queue.count {
+                let current = queue[cursor]
+                cursor += 1
+                for neighbor in (roadReachableNeighbours[current] ?? []).sorted()
+                where allowedRegionIds.contains(neighbor) && !seen.contains(neighbor) {
+                    if (current == blockedFrom && neighbor == blockedTo)
+                        || (current == blockedTo && neighbor == blockedFrom) { continue }
+                    if neighbor == end { return true }
+                    seen.insert(neighbor); queue.append(neighbor)
+                }
+            }
+        }
+        return false
     }
 
     private static let roadReachableNeighbours: [String: Set<String>] = [
