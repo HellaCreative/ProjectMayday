@@ -1,5 +1,7 @@
 # Open Terrain — native implementation status
 
+Routing behavior is maintained only in [ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md). This document describes presentation, not routing architecture or computation policy.
+
 Source review: September 9, 2026, current local working tree. This is an implementation inventory, not a visual acceptance report or release qualification. No build, simulator, screenshot, installation or physical-device inspection was performed for this document.
 
 ## Authority and scope

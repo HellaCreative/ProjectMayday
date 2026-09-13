@@ -1,10 +1,14 @@
 ---
-description: Dirt is developed only in this iOS repo.
+description: Work in the assigned checkout of the DIRT repository.
 alwaysApply: true
 ---
 
-# One workspace
+# DIRT workspace
 
-Product, pack-fabric, and live `/api/route` live here: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`.
+Confirm the current checkout and branch before editing. Preserve existing work
+and use the checkout assigned to the task; do not switch folders or reset history
+because an older document names another path.
 
-Do not open another folder to build Dirt.
+General workspace and test guidance is in `AGENTS.md`. Routing workspace ownership
+and every routing, fuel, pack, and release instruction are defined only in
+`docs/ROUTING-SOURCE-OF-TRUTH.md`.

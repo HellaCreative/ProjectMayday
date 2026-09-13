@@ -10,9 +10,8 @@
 **Physical result:** Richard confirmed the Fuel, Campgrounds, Lodging, and
 Liquor layers working on device on 2026-09-05.
 
-This freeze covers Rider Services only. It does not reopen or replace the
-separate routing freeze in
-[ROUTING-FREEZE-2026-09-03.md](ROUTING-FREEZE-2026-09-03.md).
+This record covers Rider Services display/data only. Routing requirements and
+fuel planning are maintained in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 
 ## Accepted contract
 
@@ -21,8 +20,8 @@ separate routing freeze in
 - Campground, lodging, and liquor are checksum-verified whole-region files in
   the separate Rider Services catalog. They never participate in graph-pack
   activation and cannot block Start Navigation.
-- The shipping app and deployed DIRT services never contact Overpass or another
-  public OSM data server at runtime. OSM/Geofabrik is build-time input only.
+- Rider Services display does not contact Overpass or another public OSM data
+  server at runtime. Its OSM/Geofabrik input is prepared before publication.
 - Online requests use the environment-selected DIRT `/api/poi`; the app retains
   verified regional files for offline display and falls back only to bytes that
   match the catalog size and SHA-256.

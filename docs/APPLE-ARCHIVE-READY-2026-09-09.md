@@ -19,7 +19,7 @@ with Apple Distribution certificate and no debugger attachment.
 Archive remains version2 build17; owner knows to choose an unused build number
 before upload. No upload, Apple server validation, processing, beta review or
 App Store approval is claimed. This is packaging readiness, not national engine
-qualification. National engine activation remains a separate service task.
+qualification. Routing readiness is defined only in `ROUTING-SOURCE-OF-TRUTH.md`.
 
 The first scheme action exposed missing EXPANDED_CODE_SIGN_IDENTITY; the script
 now derives the certificate fingerprint directly from the archive signature.

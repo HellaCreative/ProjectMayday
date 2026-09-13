@@ -1,8 +1,9 @@
 # DIRT — Cleanup Tracker
 
-Non-functional cleanups: remove temporary/testing scaffolding, tidy the interface, delete
-dead code. Batch these when convenient; none are routing-behavior changes. Keep the city
-tester (Rick uses it).
+Historical interface cleanup candidates. Verify that an item still applies and
+that the current task authorizes it before changing the approved interface.
+Routing, fuel, pack acquisition, search limits, and functional fixes are defined
+only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 
 ## Interface / UI
 - [ ] Remove the **"NS · no pack" badge** (E3 test badge; not for production).
@@ -20,18 +21,6 @@ tester (Rick uses it).
       gap used between the icons elsewhere.
 - [ ] **Remove the PACKS button from the routing map** → move that affordance into the
       Layers sheet. (Cleans up the routing interface.)
-
-### Pack management model (NOTE: partly a FEATURE, tied to cross-province horizon — not pure cleanup)
-New model (replaces manual pack downloads):
-- Packs **auto-download when a route is created**, for every region the route crosses
-  (NS→NB downloads both; NS→BC downloads all regions along the way).
-- **No manual pack download** anymore (remove that old functionality).
-- The user can **delete** downloaded packs (they're small), or keep them.
-- Downloaded packs are **surfaced/managed in the Profile section** ("we let them know where
-  that pack exists in profiles").
-The auto-download + delete + profile-management is FUNCTIONAL work that belongs with the
-cross-province/state stitching + pack-rebuild horizon — not the last cleanup pass. Only the
-"remove PACKS button from routing map" piece is cleanup.
 
 ### Map style + route line (visual)
 - [ ] **Roads too faint on both Normal and Rich styles** — darken / add contrast so roads
@@ -75,21 +64,10 @@ Panel structure (grouping + clear-route):
       rider clears individual legs (per-leg clear). Global "Clear route" belongs only to the
       CLOSED/collapsed state of the Fuel Plan panel.
 
-## Temporary testing scaffolding (comment out or remove)
-- [ ] Any hardcoded test pins / debug dumps left in the routing or app code.
-- [ ] **Budgets / caps used only for testing** (Rick to specify which — e.g. debug pop caps,
-      temporary corridor/time budgets, forced fuel range). List each with its real value.
-- [ ] `publish-packs-cdn.js` legacy aws-s3 path — either wire it to fail-loud or remove it so
-      it can't be mistaken for the real (wrangler) publish path. (avoid future confusion)
+## Temporary interface scaffolding
 
-## Code smells from the audit (safe, low-priority)
-- [ ] `router.js:850` defaults missing access to `motorized_permissive` — should be
-      `motorized_unknown` (display/stats only). (audit P2-6)
-- [ ] `ferry.js` `parseOsmDuration` 10–180 boundary is ad hoc — require explicit HH:MM/unit.
-      (audit P1-4)
-- [ ] `METRO_CORE_WALL` hardcoded static metro boxes — move to pack-derived urban cores
-      (flagged "temporary" in OnDeviceRouter.swift:131). (audit P2-5)
+- [ ] Review temporary non-routing interface placeholders against the current
+      approved design before removing them.
 
-## Notes
-- Not cleanup, tracked elsewhere: Dirt/Balanced leaf migration, fuel comfort window,
-  route-distance regression tests — those are functional and belong in the main work plan.
+Routing test fixtures, diagnostic controls, runtime limits, and pack tools are not
+interface cleanup. Their work and acceptance are defined only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).

@@ -1,18 +1,18 @@
 # DIRT iOS — Overview
 
 > **Current authority:** Read
-> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md)
+> [`ROUTING-SOURCE-OF-TRUTH.md`](ROUTING-SOURCE-OF-TRUTH.md)
 > first. Start Navigation, cues, and HUD:
 > [`00-NAVIGATION-SOURCE-OF-TRUTH.md`](00-NAVIGATION-SOURCE-OF-TRUTH.md).
 > This page is a short technical introduction and does not define current
 > routing status or work priority.
 
-Native SwiftUI client for the DIRT dual-sport navigator. No staging.
+Native SwiftUI client for the DIRT dual-sport navigator. Environment isolation is described in `ENVIRONMENTS-AND-RELEASES.md`.
 
 | | |
 | --- | --- |
-| **Develop here** | `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` |
-| Working branch | `feature/routing-itinerary-rebuild` |
+| **Develop here** | `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt` |
+| Working checkout | Use the assigned product checkout; see `AGENTS.md` |
 | Agent primer | [../AGENTS.md](../AGENTS.md) |
 | Packs + live API | `scripts/pack-fabric/` |
 
@@ -29,14 +29,13 @@ TestFlight / signing steps live in [../README_TESTFLIGHT.md](../README_TESTFLIGH
 
 MapLibre Native renders the map. Current and intended routing-source behaviour,
 pack acquisition, fuel construction, and regional policy are defined only in the
-canonical routing document. Accounts and groups are Supabase. Non-routing POIs
-may use Overpass.
+canonical routing document. Accounts and groups are Supabase. Non-routing POI delivery is described in `RIDER-SERVICES-FREEZE-2026-09-05.md`.
 
 ## Doc index
 
 | Doc | Scope |
 | --- | --- |
-| [00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](./00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md) | Canonical product, routing, source policy, current state, and priority |
+| [ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md) | Canonical product, routing, source policy, current state, and priority |
 | [00-NAVIGATION-SOURCE-OF-TRUTH.md](./00-NAVIGATION-SOURCE-OF-TRUTH.md) | Canonical Start Navigation, Junction/Rally cues, HUD, in-ride waypoints |
 | [../AGENTS.md](../AGENTS.md) | New-agent primer (Vercel vs R2, branch) |
 | [00-OVERVIEW.md](./00-OVERVIEW.md) | This file |

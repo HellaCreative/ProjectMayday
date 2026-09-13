@@ -19,7 +19,7 @@ rounded:
 
 Richard approved the route planner’s glass surfaces, compact icon-and-title tabs and orange active treatment as the baseline for all future UI work. Preserve this native visual language when adding or revising interfaces. The September 9 visual consistency pass extends this treatment across existing application sheets and shared controls, while preserving established behavior.
 
-Implementation examples live in [RoutePlannerCard.swift](Dirt/Features/RoutePlanning/RoutePlannerCard.swift); shared tokens live in [DirtTheme.swift](Dirt/DesignSystem/DirtTheme.swift). The [scoped planner reference](Dirt/Features/RoutePlanning/DESIGN.md) records its particular layout and behavior. [Product and routing authority](docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md) remains unchanged.
+Implementation examples live in [RoutePlannerCard.swift](Dirt/Features/RoutePlanning/RoutePlannerCard.swift); shared tokens live in [DirtTheme.swift](Dirt/DesignSystem/DirtTheme.swift). The [scoped planner reference](Dirt/Features/RoutePlanning/DESIGN.md) records its particular layout and behavior. [Product and routing authority](docs/ROUTING-SOURCE-OF-TRUTH.md) remains unchanged.
 
 ## Colors
 

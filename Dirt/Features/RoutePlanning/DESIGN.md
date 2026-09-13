@@ -24,7 +24,7 @@ spacing:
 
 This reference covers only `RoutePlannerCard.swift`. Planning controls sit over the map using the existing DIRT materials, system typography, orange accents, and compact rounded controls. The map remains the rider's spatial reference while the form explains the next action.
 
-Implementation authority is `RoutePlannerCard.swift` and `../../DesignSystem/DirtTheme.swift`. Product and routing authority remains [the product and routing source of truth](../../../docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md). The user-approved baseline for future UI is recorded in [the root design reference](../../../DESIGN.md). This scoped document does not change routing behavior.
+Implementation authority is `RoutePlannerCard.swift` and `../../DesignSystem/DirtTheme.swift`. Product and routing authority remains [the product and routing source of truth](../../../docs/ROUTING-SOURCE-OF-TRUTH.md). The user-approved baseline for future UI is recorded in [the root design reference](../../../DESIGN.md). This scoped document does not change routing behavior.
 
 **Key Characteristics:**
 
@@ -64,10 +64,11 @@ Use the existing continuous rounded sheet family and compact control shapes. The
 
 ## Components
 
-- **Planning tabs:** From here (`location`), Loop (`arrow.triangle.2.circlepath`), Plan (`point.topleft.down.to.point.bottomright.curvepath`), Saved (`bookmark`). Keep all four visible. Entering Loop confirms replacement when an itinerary or route exists.
-- **Loop setup:** the ride starts and ends at the rider’s current GPS location. Direction is an eight-point compass menu (North, Northeast, East, Southeast, South, Southwest, West, Northwest), initially North. Distance spans 50–500 total kilometres in 25-kilometre steps, initially 100 km, with visible “km” and an accessibility value in kilometres. Surface is a native menu bound to the existing route profiles. There are no start, map-pin, or “towards” setup controls.
-- **Loop generation:** Create Loop remains available without placing pins and uses `DirtCTAStyle.brand()` with dark `onOrange` text. Tapping checks location authorization and availability, showing an actionable permission or waiting-for-location error if needed. Routing disables setup controls, displays progress and offers Cancel. When a loop finishes, setup and creation controls are replaced by the legs, standard route notices/details/statistics and Save/Export/Start actions, followed by Clear route. Clear immediately resets the route and restores setup in the Loop tab, retaining direction, distance and surface selections. Setup errors remain inline.
-- **Create Return Route:** remains an action for an eligible open itinerary. It adds a route back to the starting point; it is distinct from the dedicated Loop setup.
+The planner presents From here, Loop, Plan, and Saved tabs; compact setup
+controls; progress/cancellation; and route review actions. Keep visual layout,
+materials, typography, and accessibility in this design reference. Loop logic,
+waypoint behavior, route actions, errors, and data policy are defined only in
+[the routing source of truth](../../../docs/ROUTING-SOURCE-OF-TRUTH.md).
 
 ## Do's and Don'ts
 

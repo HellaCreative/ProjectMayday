@@ -19,9 +19,11 @@ No third-party nav SDK. MapLibre Native + SwiftUI.
 
 ---
 
-## Production endpoints
+## Existing configuration inventory
 
-Defined in `Dirt/Networking/AppConfig.swift`:
+Configuration is implemented in `Dirt/Networking/AppConfig.swift`. The endpoint
+examples below identify existing integrations, not routing-source selection or
+current release acceptance. Routing decisions are defined only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 
 | Constant | URL |
 | --- | --- |
@@ -31,7 +33,8 @@ Defined in `Dirt/Networking/AppConfig.swift`:
 | `livePOIURL` | Build-selected DIRT `/api/poi`; server provides bounded OSM Overpass fallback |
 | `mapStyleURL` | bundled `shortbread-style.json` |
 
-There is **no staging**. Do not introduce alternate hosts without an explicit product decision.
+Development/production isolation and environment configuration are documented in
+[ENVIRONMENTS-AND-RELEASES.md](ENVIRONMENTS-AND-RELEASES.md).
 
 ---
 
@@ -101,7 +104,9 @@ Map tap / long-press callbacks are wired into the planner at init. `DirtApp` inj
 
 ### 1. Workspace / path disconnect
 
-**Develop only in** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`. Open `Dirt.xcodeproj`. Packs and live `/api/route` are `scripts/pack-fabric/`. Confirm the open project path before any change.
+Open `Dirt.xcodeproj` in the checkout assigned to the current task. Confirm its
+path and branch before editing. General workspace guidance is in
+[AGENTS.md](../AGENTS.md); routing workspace ownership is in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 
 ### 2. Xcode GUI scheme + SPM resolution (`e98f6d4`)
 
@@ -126,5 +131,5 @@ Archive ≠ distributable IPA. Automatic signing without an App Store profile bl
 1. Read [../AGENTS.md](../AGENTS.md), then `Dirt/Networking/AppConfig.swift`, `Dirt/DirtApp.swift`, `Dirt/App/AppEnvironment.swift`.
 2. Skim `Dirt.xcodeproj/project.pbxproj` SPM sections + `Package.resolved` for pinned versions.
 3. Read [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md) before touching signing or CI.
-4. **Invariants:** do not add a second backend host; keep deployment target and bundle IDs unless Rick asks; preserve the explicit shared `DIRT Dev` and `DIRT Production` schemes and never restore an ambiguous third scheme.
+4. Preserve the build-selected development/production isolation, deployment target, bundle IDs, and explicit shared `DIRT Dev` / `DIRT Production` schemes unless the current task authorizes changing them. Routing architecture and execution choices belong only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 5. **Open questions:** whether to commit DerivedData-free CI scripts; ASC API key placement for non-interactive uploads.

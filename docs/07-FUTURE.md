@@ -6,18 +6,18 @@ Work explicitly out of v1 scope, plus a practical App Store path. Do not treat t
 
 ## Audit hardening backlog (2026-07-27)
 
-From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** were implemented in-session; the rest stay here until prioritized.
+This dated list records non-routing audit items. Confirm their current status
+before acting. Routing fixes, pack work, and their qualification are tracked
+only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 
 | Priority | Item | Notes | Status |
 | --- | --- | --- | --- |
-| High | Stale on-device routing responses can overwrite newer intent | Request generation + stage-id apply; ignore mismatched replies | **Done** |
 | High | Failed POI / network manifest `Task` sticks for the session | Clear task on failure so a later refresh retries | **Done** |
 | High | Release builds include tester auth + subscription bypass | Debug or an explicit `DIRT_PRE_RELEASE_TESTER_UNLOCK` compilation condition only; public Release scrubs persisted bypass values | **Done** |
 | High | Live sharing can publish `(0,0)` before GPS is ready | Wait for a fresh, accurate fix; reject sentinel coordinates locally and remotely | **Done** |
-| High | Gzip decode uses a fixed 8× output ceiling | `Data.gunzipped()` — grow buffer / stream; current packs may be fine until blank provinces appear | Open |
 | Medium | `IPHONEOS_DEPLOYMENT_TARGET = 26.0` | Richard deliberately selected iOS 26.0 as the launch minimum; the Release verifier locks the archive metadata to that value | **Done** |
-| Medium | Inconsistent HTTP response validation | Shared client: require `200..<300`, size limits, better diagnostics for R2 manifests / Overpass / pack chunks | Open |
-| Medium | Thin tests around critical state machines | Highest ROI: stale-route ordering, stage delete during route, presence coords, manifest retry, StoreKit/trial transitions | Open |
+| Medium | Inconsistent HTTP response validation | Review response validation and diagnostics for non-routing network clients | Open |
+| Medium | Thin tests around critical state machines | Presence coordinates, non-routing manifest retry, and StoreKit/trial transitions | Open |
 | Low | `GPXParser` unused `var track` | Change to `let` | Open |
 
 ---
@@ -29,9 +29,9 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 | POI / Rider Services overlays | Overpass + fuel filter | Keep respecting `@AppStorage` prefs; existence confirmation later |
 | NSTDB / provincial road overlays | Toggles only | Same — MapLibre sources/layers per installed province pack |
 | Supabase Realtime | Private `group:{id}` channel + 10s ordinary / 5s distress persisted presence | Push notifications / durable alert history ([03-GROUPS.md](./03-GROUPS.md)) |
-| Shared incidents | `rider_alerts` + Realtime peer banner | Historical-alert UI; optional `avoidEdgeIds` recalculate |
+| Shared incidents | `rider_alerts` + Realtime peer banner | Historical-alert UI; routing implications belong in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md) |
 | Corridor offline tiles | BBox pyramid z8–14 | True corridor / budgeted tile set closer to a true corridor |
-| GPX import | Track/route import, traced display, local save, and continue-as-plan | Optional rider-to-track connector plus corridor-constrained DIRT rebuild and loop-direction choice |
+| GPX import | Track/route import, traced display, local save, and continue-as-plan | Import interface work; any routing conversion belongs in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md) |
 
 ---
 
@@ -50,15 +50,11 @@ None of these exist in the current target capabilities beyond location backgroun
 
 ---
 
-## On-device routing
+## Routing work
 
-Shipped. `GraphPackStore` + `OnDeviceRouter` on R2 `graph.v2` packs. Costing must stay in lockstep with `pack-fabric/routing/lib/profile-costs.js`.
-
----
-
-## Packs / performance (later)
-
-Pack streaming lives in **this** repo: `scripts/pack-fabric/` → R2. Routing and pack laws: [00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](./00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+Routing, fuel, pack delivery, performance, current work, and acceptance are defined
+only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md). This future-work list does not
+set a routing backlog, source policy, or implementation baseline.
 
 ---
 
@@ -89,7 +85,7 @@ Operational path also in [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 1. Unblock TestFlight (signing + upload).
 2. Overlay streams.
 3. Corridor offline tiles.
-4. Shared-incident avoidance / avoid-edge.
+4. Shared-incident presentation.
 5. Voice / haptics.
 6. Live Activities → Watch → CarPlay.
 
@@ -100,7 +96,6 @@ Operational path also in [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 | Non-goal | Why |
 | --- | --- |
 | Non-native map shell | Locked native SwiftUI + MapLibre ([00-OVERVIEW.md](./00-OVERVIEW.md)) |
-| Staging backend | Production hosts only |
 | Replacing MapLibre with Apple MapKit | Shortbread + overlay model is the product map |
 | Inventing features from ChatGPT outlines | Outlines are reference-only; code in this repo wins |
 | Shipping CarPlay in the first store binary | Entitlements and review cost outweigh v1 learning |
@@ -112,5 +107,6 @@ Operational path also in [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 1. Read [../AGENTS.md](../AGENTS.md) then [00-OVERVIEW.md](./00-OVERVIEW.md). Work only in this iOS repo.
 2. Confirm the feature is absent in code (search `Dirt/`) — do not re-document invented work as done.
 3. For overlays/realtime/incidents, read the iOS code in `Dirt/`.
-4. **Invariants:** native SwiftUI only; no second backend; Clean⊥Allow; green CTA law.
+4. Preserve the current native interface and development/production isolation.
+   Routing decisions are defined only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 5. **Open questions:** Rick’s priority between realtime vs overlays; ASC privacy policy URL; whether Live Activities are wanted before public TestFlight.

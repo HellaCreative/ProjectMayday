@@ -1,18 +1,21 @@
 # DIRT — Navigation Source of Truth
 
-**Authority:** canonical Start Navigation, cue, HUD, and in-ride waypoint document
+**Authority:** navigation presentation, cues, HUD, audio and session lifecycle.
+Routing and route-data decisions are defined only in
+[ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md).
 
 **Owner:** Richard Smith
 
-**Last reconciled:** 2026-08-25
+**Routing documentation consolidated:** 2026-09-13. This edit changes no
+navigation implementation and claims no new device acceptance.
 
-**Repository:** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
+**Repository:** `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`
 
 This is the first document to read before changing Start Navigation, turn-by-turn,
 rally cues, the navigation HUD, or in-ride waypoint callouts.
 
 Routing, fuel, and packs remain governed by
-[00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+[ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md).
 That document does not define how the rider is spoken to or what the HUD counts
 down. This one does.
 
@@ -29,9 +32,9 @@ already accepted the line and is moving.
 
 Start Navigation must:
 
-1. lock the first rider/fuel-stage basemap and the rider's current regional
-   routing pack (or warn before riding without current-region offline reroute),
-   then prepare later map stages and regions incrementally as the ride advances;
+1. complete the route/data readiness handoff defined in the sole routing
+   source of truth, presenting its progress, cancellation and availability
+   state accurately;
 2. follow the polyline in course-up detail, with overview on demand;
 3. speak and show the selected detail level — Junction/Essential or
    Rally/Everything;
@@ -107,9 +110,10 @@ Every maneuver carries:
 - display and spoken meaning;
 - stage identity when the maneuver is an arrival.
 
-The JavaScript live engine and Swift on-device engine author Junction and
-Continue Straight from the same graph rules. Rally curves are derived from route
-geometry with the same 6→1 classifier in both engines. Junction mode filters to
+The active routing implementation supplies graph-authored Junction and
+Continue Straight decisions. Rally curves are derived from route geometry using
+the same 6→1 meaning. Engine selection and qualification belong to the routing
+source of truth. Junction mode filters to
 essential decisions. Rally mode merges those same decisions with the geometry
 curves, suppressing any curve within the junction attention window. A curve can
 never replace a junction, and distinct nearby junctions are never collapsed.
@@ -186,39 +190,28 @@ in multiple places.
 
 ## 4. Named waypoints in navigation
 
-Planner names are the navigation names. Do not invent a second scheme.
+Navigation uses the ordered named-stage handoff defined by
+[the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md). It does not invent a
+second naming scheme or redefine rider/fuel ownership or refill state.
 
-- Rider waypoints: Point 1, Point 2, Point 3, …
-- Generated fuel: F1, F2, F3, …
-- A rider waypoint that is a packed pump stays a Point and is also a refuel;
-  the HUD may show the station name as subtitle.
-
-`RoutePlannerModel.stageEndpointTitle` already produces `Point 1 → F1`.
-Navigation must receive that ordered list (along-metres + title) at Begin Ride
-and after a recalculate. Arrival at a stage is “Arriving at F1”, not “stage 2”.
-
-The handoff is an ordered `NavigationStage` value containing stable stage ID,
-along-metres, title, optional station subtitle, kind (rider waypoint, generated
-fuel, rider fuel waypoint, destination), and refuel-on-arrival. Recalculation
-may change along-metres but must not rename or reorder the remaining stages.
+Display the supplied Point/F title and optional station subtitle. Arrival at a
+stage is “Arriving at F1”, not “stage 2”. Use the handoff's stable stage identity,
+along-route distance, title, kind and relevant arrival metadata at Begin Ride
+and after recalculation. Route and fuel decisions remain with the routing
+contract; the HUD presents their result.
 
 ---
 
 ## 5. Start, ride, end
 
-1. **Start Navigation** — enter the prefetching phase, lock pin edit, prefetch
-   only the first rider/fuel-stage corridor, and download only the rider's
-   current regional routing pack. The session is not active yet; the complete
-   route must never be scanned or bulk-downloaded at this gate.
-2. **Begin Ride** — activate the session, background GPS, course-up camera,
-   keep the screen awake. Seed the cue card from the last fix. Quietly save the
-   next map stage while riding; on actual entry into another province/state,
-   activate or acquire that region's routing pack.
-3. **End Ride** — confirm, stop speech, restore the planner, offer track
-   contribute when the ride earned it.
-
-A declined or missing pack must warn that offline reroute may fail before Begin
-Ride. “Ride with live maps only” is last resort, not the happy path.
+1. **Start Navigation** — enter preparation and lock pin editing. Present the
+   readiness, progress, cancellation and availability outcome defined in the
+   routing source of truth. The ride session is not active yet.
+2. **Begin Ride** — activate the session, background GPS, course-up camera and
+   keep-awake state. Seed the cue card from the last fix. Route-data acquisition
+   and ongoing readiness follow the sole routing source of truth.
+3. **End Ride** — confirm, stop speech, restore the planner and offer track
+   contribution when the ride earned it.
 
 Mid-ride off-route: hysteresis, then recalculate. Cancel an in-flight
 recalculate if the rider is back on the line. Recalculate must not wipe elapsed
@@ -234,9 +227,10 @@ elapsed rider time, climb, ridden edge history, completed stages, remaining
 stage names, per-leg profile, and fuel order. It resets only progress local to
 the replacement line.
 
-Normal recalculation continues toward the next named waypoint and cannot route
-behind the rider unless the rider explicitly chooses Backtrack. A generation or
-task identity prevents a late cancelled response from replacing a newer line.
+Recalculation target, route ownership and recovery rules belong to the routing
+source of truth. Navigation keeps its cue/session state aligned with the accepted
+replacement. A generation or task identity prevents a late cancelled response
+from replacing a newer line.
 
 Keep-awake policy is synchronized centrally whenever scene phase or navigation
 phase changes. Background/inactive always clears the idle-timer override;
@@ -244,30 +238,13 @@ returning active reapplies it while a ride is active.
 
 ---
 
-## 6. Current implementation (not the law)
+## 6. Implementation and evidence
 
-As of 2026-08-25 the code does not yet match this document. Treat the following
-as defects, not product:
-
-- Default cue mode `ALL` builds Rally curves and Junction-shaped wiggles from
-  the same polyline and can speak both.
-- Cue distance bands are fixed (450 / 180 / 40 m), three spoken beats, last-key
-  only (jitter can repeat). New speech stops the previous utterance.
-- Continue-straight is not emitted. Graph degree is unused on device.
-- Live `/api/route` maneuvers are discarded whenever geometry cues exist.
-- HUD “km to go” is remaining on the whole line. Stage titles are not passed in.
-- `startedAt` exists; elapsed rider time is not shown.
-- `KeepAwakePrefs.sync` is not called from Begin Ride.
-- `NavigationSession.beginPrefetch()` is unused.
-- Only a maneuver-filtering smoke test exists. There are no session-level tests
-  for speech cadence/deduplication, continue-straight, named-stage arrival,
-  reroute continuity, or F1 countdown.
-
-Code: `Dirt/Features/Navigation/` (`NavigationSession`, `NavCueBuilder`,
-`NavigationCueSettings`, `NavigationHUD`, `NavigationPipView`,
-`OfflineMapPrepOverlay`), plus `RoutePlannerModel.startNavigation` /
-`beginRideAfterOfflineReady` / `recalculateFromRider`, `MapState` navigation
-camera, `LocationService`, `KeepAwakePrefs`.
+Navigation code lives in `Dirt/Features/Navigation/`, with planner handoff,
+map camera, location and keep-awake integration elsewhere in the app. Inspect
+the current implementation and device evidence before declaring a defect fixed
+or a feature qualified. Historical August field notes are not a current
+implementation status or a mandate to restore an older build.
 
 ---
 
@@ -286,25 +263,13 @@ dual-sport fabric. Do not take CarPlay as a prerequisite for this law.
 
 ---
 
-## 8. Field evidence (2026-08-24)
-
-Still open against this document:
-
-- Voice talks too much / cuts itself off / repeats a curve.
-- Silent at straight-through intersections.
-- Rider does not yet trust turn-by-turn or Rally.
-
-Fix the cue types and the waypoint countdown before adding more chrome.
-
----
-
-## 9. Definition of done and regression matrix
+## 8. Definition of done and regression matrix
 
 Navigation changes are complete only when automated tests cover:
 
 - Junction/Essential filtering and Rally/Everything inclusion, including
   junction priority over nearby curves and migration from stored `ALL`;
-- equivalent maneuver classification from live and on-device routing fixtures;
+- equivalent maneuver meaning for every currently supported routing source;
 - Rally 6→1 direction (wide/easy to hairpin), never inverted;
 - real-junction filtering and Continue Straight through a genuine decision;
 - adaptive prepare/now distance clamps at walking, trail, road, and highway
@@ -316,9 +281,8 @@ Navigation changes are complete only when automated tests cover:
   and later legs;
 - cancellation when the rider returns to the line and rejection of late stale
   reroute responses;
-- only the current region pack gated at Start, later region acquisition on
-  actual boundary entry, no repeated same-region work, and explicit
-  degraded-mode copy on failure;
+- preparation and availability presentation consistent with the routing source
+  of truth, with cancellation and honest failure/degraded-state copy;
 - keep-awake transitions for active, inactive, background, reroute, and End;
 - portrait and landscape layouts at the supported iPhone sizes.
 
@@ -326,15 +290,16 @@ Physical gates: phone speaker, Bluetooth helmet with Music playing, one rural
 Junction ride, one Rally ride, a fuel-stage arrival, an off-route return, and an
 offline reroute.
 
-## 10. Locked implementation order
+## 9. Navigation implementation sequence
 
 1. Freeze the maneuver and `NavigationStage` contracts with fixtures.
 2. Keep two levels, Junction/Essential and Rally/Everything; migrate the retired
    `ALL` preference and default to Junction.
-3. Author graph Junction/Continue Straight and matching Rally classification in
-   both routing engines; stop discarding authoritative maneuvers.
+3. Consume graph Junction/Continue Straight and matching Rally classification
+   from the accepted routing handoff; preserve authoritative maneuvers.
 4. Build the monotonic speech queue and adaptive cadence.
 5. Add named-waypoint countdown, elapsed rider time, and continuity state.
 6. Complete prefetch, keep-awake, and cancellable reroute lifecycle.
 7. Refine portrait/landscape HUD hierarchy only after the functions are green.
-8. Run automated gates, install on WHITE, then complete the physical gates.
+8. Run automated gates, then complete the physical gates on an authorized
+   device. This document does not grant device-installation permission.

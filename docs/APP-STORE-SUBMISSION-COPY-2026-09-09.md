@@ -55,7 +55,7 @@ Support: https://dirtmoto.app/support/
 
 motorcycle,dual sport,adventure,gravel,dirt,GPX,navigation,trail,offline,route
 
-## App Review notes (2320 characters)
+## App Review notes
 
 DIRT is a native dual-sport motorcycle route planner and navigation app.
 
@@ -63,7 +63,7 @@ CORE REVIEW FLOW
 1. Allow Location When In Use to use From here and Loop. Manual route planning can also use chosen map waypoints.
 2. Open Route. From here uses your current location and a long-pressed destination. Plan supports multiple waypoints. Loop takes a direction, target distance, and surface preference and returns to the current starting location.
 3. Profiles are Dirt, Balanced, and Clean. Rider settings above the route sheet include wander, city/highway preferences, and access choices. Allow Unknown does not certify public access.
-4. Inspect route legs and surface information. Online planning uses the live routing service. Navigation preparation obtains the needed near-term map/routing data. Regional map packs can also be managed in Layers.
+4. Inspect route legs and surface information. Navigation preparation obtains the needed near-term map/routing data. Regional map packs can also be managed in Layers.
 5. Save is free. Export GPX requires DIRT PRO. Navigation includes two free starts on the device, then requires DIRT PRO. A start is counted when a ride begins, not when preparation is cancelled. The counter uses Keychain and may survive reinstall.
 
 SUBSCRIPTIONS
