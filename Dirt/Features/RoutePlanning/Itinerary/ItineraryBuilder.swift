@@ -440,7 +440,9 @@ final class ItineraryBuilder {
             }
             if fuelBacktrackAttempts > 0 { committed = fuelAttemptBase }
             var fuelUsed = resume != nil ? 0 : (fuelReplan ? 0 : carriedFuel(from: kept))
-            var finalHistory = resume == nil && fuelReplan ? EdgeHistory() : EdgeHistory(legs: kept)
+            var finalHistory = resume == nil && fuelReplan
+                ? EdgeHistory(legalContinuation: kept.last?.response.terminalContinuation)
+                : EdgeHistory(legs: kept)
             for index in finalStartIndex..<lastBuildable {
             guard let base = baseline[index] else { break }
             let riderLeg = itinerary.legs[index]
@@ -999,7 +1001,11 @@ final class ItineraryBuilder {
             var builtLegs = resumesThisLeg?.riderLegPrefix ?? []
             var excludedStations = excludedFuelStationsByLeg[index] ?? []
             var forceFuelStop = forcedFuelLegIndex == index
-            var attempts = 0
+            // Bound failed or stationary work, not the number of valid fuel
+            // stages in a long ride. Only a new committed advance renews this.
+            var attemptsWithoutProgress = 0
+            var fuelChoiceCheckpoints: [FuelChoiceCheckpoint] = []
+            var failedFuelChoices = 0
             var lastRejectedStationID: String?
             var lastRejectedReason: String?
             var advisoryFoundationRoute: RouteResponse?
@@ -1038,14 +1044,14 @@ final class ItineraryBuilder {
                     ].compactMap { $0 }.joined(separator: "; ")
                     RoutingDebugLog.shared.event(
                         "fuel progress timeout gen=\(itinerary.generation) "
-                            + "riderLeg=\(riderLeg.id) attempts=\(attempts) committed=\(committed.legs.count) "
+                            + "riderLeg=\(riderLeg.id) attempts=\(attemptsWithoutProgress) committed=\(committed.legs.count) "
                             + "lastRejectedStation=\(lastRejectedStationID ?? "-") "
                             + "lastRejectedCause=\(lastRejectedReason ?? "-")"
                     )
                     return await finishWithFuelAdvisory(.unknown(diagnostic))
                 }
-                attempts += 1
-                guard attempts <= 16 else {
+                attemptsWithoutProgress += 1
+                guard attemptsWithoutProgress <= 16 else {
                     return await finishWithFuelAdvisory(.unknown(
                         "Fuel planning could not find a stable forward sequence."
                     ))
@@ -1166,7 +1172,7 @@ final class ItineraryBuilder {
                 )
                 RoutingDebugLog.shared.event(
                     "fuel operation begin gen=\(itinerary.generation) "
-                        + "riderLeg=\(riderLeg.id) attempt=\(attempts) "
+                        + "riderLeg=\(riderLeg.id) attempt=\(attemptsWithoutProgress) "
                         + "profile=\(activeProfile.rawValue) "
                         + "from=\(String(format: "%.5f,%.5f", current.latitude, current.longitude)) "
                         + "to=\(String(format: "%.5f,%.5f", riderDestination.coordinate.latitude, riderDestination.coordinate.longitude)) "
@@ -1198,6 +1204,7 @@ final class ItineraryBuilder {
                         avoidMotorways: activeAvoidMotorways,
                         priorEdgeIds: history.edgeIDs,
                         arrivalEdgeId: history.arrivalEdgeID,
+                        arrivalContinuation: history.legalContinuation,
                         backtrackFactor: 4,
                         excludedStationIds: Array(excludedStations),
                         windowMaxStops: requestedWindowStops,
@@ -1217,7 +1224,7 @@ final class ItineraryBuilder {
                     RoutingDebugLog.shared.routeFailure(
                         error,
                         context: "fuel operation gen=\(itinerary.generation) "
-                            + "riderLeg=\(riderLeg.id) attempt=\(attempts) "
+                            + "riderLeg=\(riderLeg.id) attempt=\(attemptsWithoutProgress) "
                             + "active=\(active(itinerary) ? 1 : 0)"
                     )
                     guard active(itinerary) else {
@@ -1232,6 +1239,10 @@ final class ItineraryBuilder {
                     ))
                 }
 
+                guard active(itinerary) else {
+                    return dropped(itinerary, committed: committed, cancelled: Task.isCancelled)
+                }
+
                 // A response belongs to this exact departure. Never reuse an
                 // earlier foundation after advancing to a committed pump.
                 advisoryFoundationRoute = chain.foundationRoute?.isComplete == true ? chain.foundationRoute : nil
@@ -1243,6 +1254,38 @@ final class ItineraryBuilder {
                     ))
                 }
                 if chain.isGap {
+                    if !fuelChoiceCheckpoints.isEmpty {
+                        guard failedFuelChoices < 16 else {
+                            return await finishWithFuelAdvisory(.unknown(
+                                "Fuel planning exhausted its bounded alternative search."
+                            ))
+                        }
+                        let checkpoint = fuelChoiceCheckpoints.removeLast()
+                        failedFuelChoices += 1
+                        builtLegs = Array(builtLegs.prefix(checkpoint.prefixCount))
+                        current = checkpoint.departure
+                        fuelUsed = checkpoint.fuelUsed
+                        history = checkpoint.history
+                        excludedStations = checkpoint.exclusions
+                        excludedStations.insert(checkpoint.chosenStationID)
+                        forceFuelStop = checkpoint.forceFuelStop
+                        advisoryFoundationRoute = nil
+                        advisoryFoundationStart = nil
+                        lastRejectedStationID = checkpoint.chosenStationID
+                        lastRejectedReason = "The selected pump's continuation failed."
+                        statuses[riderLeg.id] = .pending
+                        committed = replacing(riderLegID: riderLeg.id, with: builtLegs,
+                            in: committed, status: .pending)
+                        RoutingDebugLog.shared.event(
+                            "fuel same-leg rewind riderLeg=\(riderLeg.id) "
+                                + "rejected=\(checkpoint.chosenStationID) failedChoices=\(failedFuelChoices)"
+                        )
+                        onFuelStatus("Rechecking an earlier fuel stop")
+                        onProgress(committed)
+                        // Restoring a checkpoint is not forward progress and
+                        // does not renew either work deadline or retry quota.
+                        continue
+                    }
                     if allowFuelRewind,
                        resume == nil,
                        index > 0,
@@ -1334,8 +1377,31 @@ final class ItineraryBuilder {
                                 + "routes=\(plannedRoutes.count) targets=\(plannedTargets.count)"
                         )
                     } else {
+                        // Validate all pump advances before consuming any of the
+                        // window. A repeated/stationary pump is not a refill and
+                        // cannot reset fuel or leave a duplicate committed stage.
+                        var previousTarget = current
+                        var visitedTargets = excludedStations
+                        var pumpsAdvance = true
+                        for hopIndex in plannedTargets.indices {
+                            let planned = plannedTargets[hopIndex]
+                            if let stop = planned.stop {
+                                if plannedMeters[hopIndex] <= 0 || previousTarget == planned.coordinate
+                                    || !visitedTargets.insert(stop.id).inserted {
+                                    pumpsAdvance = false
+                                    lastRejectedStationID = stop.id
+                                    lastRejectedReason = "Fuel response did not advance to a new pump."
+                                    break
+                                }
+                            }
+                            previousTarget = planned.coordinate
+                        }
+                        guard pumpsAdvance else { continue }
                         var departureCandidateID = "start"
                         for hopIndex in plannedTargets.indices {
+                            guard active(itinerary) else {
+                                return dropped(itinerary, committed: committed, cancelled: Task.isCancelled)
+                            }
                             let planned = plannedTargets[hopIndex]
                             let response = plannedRoutes[hopIndex]
                             let meters = plannedMeters[hopIndex]
@@ -1373,6 +1439,19 @@ final class ItineraryBuilder {
                                 routeProfile: activeProfile,
                                 validFuelTargets: validFuelTargets
                             )
+                            let advances = meters > 0 && current != planned.coordinate
+                                && (planned.stop.map { !excludedStations.contains($0.id) } ?? true)
+                            if let stop = planned.stop {
+                                if fuelStop?.isInitialFillUp == true || (hopIndex == 0 && requiredStationID != nil) {
+                                    fuelChoiceCheckpoints.removeAll()
+                                } else {
+                                    fuelChoiceCheckpoints.append(FuelChoiceCheckpoint(
+                                        prefixCount: builtLegs.count, departure: current,
+                                        fuelUsed: fuelUsed, history: history, exclusions: excludedStations,
+                                        forceFuelStop: hopIndex == 0 ? forceFuelStop : false,
+                                        chosenStationID: stop.id))
+                                }
+                            }
                             builtLegs.append(built)
                             history.append(response, beginsRide: fuelStop?.isInitialFillUp == true)
                             fuelUsed = arrivalFuel
@@ -1384,13 +1463,19 @@ final class ItineraryBuilder {
                                 in: committed,
                                 status: statuses[riderLeg.id] ?? .pending
                             )
-                            progressWatchdog.recordProgress()
+                            if advances {
+                                attemptsWithoutProgress = 0
+                                progressWatchdog.recordProgress()
+                            }
                             RoutingDebugLog.shared.event(
                                 "fuel combined progress gen=\(itinerary.generation) "
                                     + "riderLeg=\(riderLeg.id) hop=\(hopIndex + 1)/\(plannedTargets.count) "
                                     + "kind=\(planned.stop == nil ? "waypoint" : "pump")"
                             )
                             onProgress(committed)
+                            guard active(itinerary) else {
+                                return dropped(itinerary, committed: committed, cancelled: Task.isCancelled)
+                            }
                             if let stop = planned.stop {
                                 excludedStations.insert(stop.id)
                                 departureCandidateID = stop.id
@@ -1569,6 +1654,13 @@ final class ItineraryBuilder {
                 let response = validatedOption.response
                 let meters = validatedOption.meters
                 let target = chosenStop?.coordinate ?? riderDestination.coordinate
+                if let chosenStop,
+                   meters <= 0 || current == target || excludedStations.contains(chosenStop.id) {
+                    lastRejectedStationID = chosenStop.id
+                    lastRejectedReason = "Fuel response did not advance to a new pump."
+                    excludedStations.insert(chosenStop.id)
+                    continue
+                }
                 let fuelStop = chosenStop.map {
                     FuelStop(
                         coordinate: $0.coordinate,
@@ -1600,6 +1692,18 @@ final class ItineraryBuilder {
                     routeProfile: activeProfile,
                     validFuelTargets: validFuelTargets
                 )
+                let advances = meters > 0 && current != target
+                    && (chosenStop.map { !excludedStations.contains($0.id) } ?? true)
+                if let chosenStop {
+                    if initialFillUp || requiredStationID != nil {
+                        fuelChoiceCheckpoints.removeAll()
+                    } else {
+                        fuelChoiceCheckpoints.append(FuelChoiceCheckpoint(
+                            prefixCount: builtLegs.count, departure: current,
+                            fuelUsed: fuelUsed, history: history, exclusions: excludedStations,
+                            forceFuelStop: forceFuelStop, chosenStationID: chosenStop.id))
+                    }
+                }
                 builtLegs.append(built)
                 history.append(response, beginsRide: fuelStop?.isInitialFillUp == true)
                 fuelUsed = arrivalFuel
@@ -1618,9 +1722,12 @@ final class ItineraryBuilder {
                     in: committed,
                     status: statuses[riderLeg.id] ?? .pending
                 )
-                progressWatchdog.recordProgress()
+                if advances {
+                    attemptsWithoutProgress = 0
+                    progressWatchdog.recordProgress()
+                }
                 RoutingDebugLog.shared.event(
-                    "fuel progress renewed gen=\(itinerary.generation) "
+                    "fuel progress renewed=\(advances ? 1 : 0) gen=\(itinerary.generation) "
                         + "riderLeg=\(riderLeg.id) kind=\(chosenStop == nil ? "waypoint" : "pump") "
                         + "committed=\(committed.legs.count)"
                 )
@@ -2016,6 +2123,7 @@ final class ItineraryBuilder {
                     avoidMotorways: activeAvoidMotorways,
                     priorEdgeIds: sublegHistory.edgeIDs,
                     arrivalEdgeId: sublegHistory.arrivalEdgeID,
+                    arrivalContinuation: sublegHistory.legalContinuation,
                     backtrackFactor: 4,
                     excludedStationIds: Array(excluded),
                     // A stage-specific access policy must stop at the next
@@ -2240,6 +2348,18 @@ private func isReusableRouteStatus(_ status: LegStatus?) -> Bool {
     case .pending, .failed, nil:
         return false
     }
+}
+
+/// State before a replaceable generated refill. Restoring this value removes
+/// its approach as well as its tank reset and recreational/legal arrival history.
+private struct FuelChoiceCheckpoint {
+    let prefixCount: Int
+    let departure: RouteCoordinate
+    let fuelUsed: Double
+    let history: EdgeHistory
+    let exclusions: Set<String>
+    let forceFuelStop: Bool
+    let chosenStationID: String
 }
 
 private struct FuelResume {
@@ -2578,6 +2698,7 @@ private func routeRequest(
         avoidEdgeIds: Array(avoidEdgeIDs),
         priorEdgeIds: history.edgeIDs,
         arrivalEdgeId: history.arrivalEdgeID,
+        arrivalContinuation: history.legalContinuation,
         backtrackFactor: 4,
         sessionSeed: sessionSeed,
         maxPathMeters: maxPathMeters,
@@ -2607,16 +2728,24 @@ private struct EdgeHistory: Equatable {
     private var recent: [Entry] = []
     private var recentMeters = 0.0
     private(set) var arrivalEdgeID: String?
+    private(set) var legalContinuation: NativeRoutingContinuation?
 
     var edgeIDs: [String] { recent.map(\.id) }
 
     init() {}
+
+    init(legalContinuation: NativeRoutingContinuation?) {
+        self.legalContinuation = legalContinuation
+    }
 
     init(legs: [BuiltLeg]) {
         for leg in legs { append(leg.response, beginsRide: leg.endsAtFuelStop?.isInitialFillUp == true) }
     }
 
     mutating func append(_ response: RouteResponse, beginsRide: Bool = false) {
+        // Legal arrival belongs to the actual last response, independently of
+        // recreational history. Nil must not retain a token at an older place.
+        legalContinuation = response.terminalContinuation
         if beginsRide {
             recent.removeAll()
             recentMeters = 0

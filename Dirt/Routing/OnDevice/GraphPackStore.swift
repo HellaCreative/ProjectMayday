@@ -127,6 +127,7 @@ final class GraphPackStore {
         let avoid: Set<String>
         let prior: Set<String>
         let arrival: String?
+        let arrivalContinuation: NativeRoutingContinuation?
         let backtrackFactor: Double
         let seed: UInt64
         let cap: Double?
@@ -164,12 +165,14 @@ final class GraphPackStore {
 
     private var task: Task<Void, Never>?
     private var downloadTasks: [String: Task<Void, Never>] = [:]
+    private var downloadOperationIDs: [String: UUID] = [:]
     /// Region ids started by auto-download (cancelled on End Nav).
     private var quietDownloadIds: Set<String> = []
     /// Last primary region we already considered for auto-download (spam guard).
     private var lastAutoDownloadRegionId: String?
     private var publishedIds: Set<String> = ["ns"] // known live until manifest loads
     private var catalogIdentityLoaded = false
+    @ObservationIgnored private var catalogRefreshTask: Task<Void, Never>?
     private var manifestFilesByRegion: [String: [PackManifest.File]] = [:]
     @ObservationIgnored private var navigationRegionRequirementCache = NavigationRegionRequirementCache()
 
@@ -329,13 +332,30 @@ final class GraphPackStore {
     @ObservationIgnored private var lastCatalogRefreshAt: Date?
 
     func refreshCatalog() async {
+        await startCatalogRefresh().value
+    }
+
+    private func startCatalogRefresh() -> Task<Void, Never> {
+        if let catalogRefreshTask { return catalogRefreshTask }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.refreshCatalogRequest()
+            self.catalogRefreshTask = nil
+        }
+        catalogRefreshTask = task
+        return task
+    }
+
+    private func refreshCatalogRequest() async {
         isRefreshingCatalog = true
         defer {
             isRefreshingCatalog = false
             lastCatalogRefreshAt = Date()
         }
         do {
-            let (data, response) = try await session.data(from: AppConfig.packManifestURL)
+            var request = URLRequest(url: AppConfig.packManifestURL)
+            request.timeoutInterval = 15
+            let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 applyCatalog(published: publishedIds, sizes: [:])
                 return
@@ -345,7 +365,6 @@ final class GraphPackStore {
             manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
                 ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
             })
-            catalogIdentityLoaded = true
             var sizes: [String: Int64] = [:]
             var published = Set<String>()
             for region in manifest.regions {
@@ -368,6 +387,7 @@ final class GraphPackStore {
             )
             applyCatalog(published: published, sizes: sizes)
             refreshInstalledFromDisk()
+            catalogIdentityLoaded = true
         } catch {
             applyCatalog(published: publishedIds, sizes: [:])
             refreshInstalledFromDisk()
@@ -380,6 +400,32 @@ final class GraphPackStore {
             return
         }
         await refreshCatalog()
+    }
+
+    func requiresRoutingCatalogReadiness(for regionIDs: [String]) -> Bool {
+        !catalogIdentityLoaded && regionIDs.contains { !isInstalled($0) }
+    }
+
+    func prepareRoutingCatalog(for regionIDs: [String]) async throws {
+        try Task.checkCancellation()
+        guard requiresRoutingCatalogReadiness(for: regionIDs) else { return }
+        // Share startup refresh; cancellation stops this request's wait without
+        // cancelling another user's catalog read. Never use the NS seed as proof
+        // that a different region is unpublished.
+        let readinessDeadline = ProcessInfo.processInfo.systemUptime + 20
+        _ = startCatalogRefresh()
+        while !catalogIdentityLoaded {
+            try Task.checkCancellation()
+            if ProcessInfo.processInfo.systemUptime >= readinessDeadline {
+                throw PackAcquisitionError.catalogNotReady
+            }
+            // Failure leaves the identity unresolved; permit an explicit retry.
+            if catalogRefreshTask == nil {
+                throw PackAcquisitionError.catalogNotReady
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        try Task.checkCancellation()
     }
 
     /// Regions suggested from GPS and/or active route geometry.
@@ -437,6 +483,10 @@ final class GraphPackStore {
         return verifiedInstalledRegionIds.contains(id) ? .current : .stale
     }
 
+    func routingPackDownloadBytes(_ regionID: String) -> Int64? {
+        regions.first { $0.id == regionID.lowercased() }?.exactBytes
+    }
+
     func isRoutingPackPublished(_ regionID: String) -> Bool {
         isPublished(regionID)
     }
@@ -484,7 +534,10 @@ final class GraphPackStore {
                     quiet: false,
                     replaceInstalled: replaceInstalled
                 )
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
+                if Task.isCancelled { throw CancellationError() }
                 throw PackAcquisitionError.downloadFailed(
                     regionID: id,
                     message: error.localizedDescription
@@ -824,6 +877,7 @@ final class GraphPackStore {
         avoidEdgeIds: [String] = [],
         priorEdgeIds: Set<String> = [],
         arrivalEdgeId: String? = nil,
+        arrivalContinuation: NativeRoutingContinuation? = nil,
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil,
@@ -839,6 +893,7 @@ final class GraphPackStore {
             avoidEdgeIds: avoidEdgeIds,
             priorEdgeIds: priorEdgeIds,
             arrivalEdgeId: arrivalEdgeId,
+            arrivalContinuation: arrivalContinuation,
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters,
@@ -859,6 +914,7 @@ final class GraphPackStore {
         avoidEdgeIds: [String] = [],
         priorEdgeIds: Set<String> = [],
         arrivalEdgeId: String? = nil,
+        arrivalContinuation: NativeRoutingContinuation? = nil,
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil,
@@ -891,6 +947,7 @@ final class GraphPackStore {
                 avoidEdgeIds: avoidEdgeIds,
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
+                arrivalContinuation: arrivalContinuation,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters,
@@ -914,6 +971,7 @@ final class GraphPackStore {
             avoidEdgeIds: avoidEdgeIds,
             priorEdgeIds: priorEdgeIds,
             arrivalEdgeId: arrivalEdgeId,
+            arrivalContinuation: arrivalContinuation,
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters,
@@ -940,6 +998,7 @@ final class GraphPackStore {
         avoidEdgeIds: [String],
         priorEdgeIds: Set<String>,
         arrivalEdgeId: String?,
+        arrivalContinuation: NativeRoutingContinuation? = nil,
         backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double?,
@@ -966,6 +1025,7 @@ final class GraphPackStore {
             hops: [OnDeviceRouter.Result],
             usedEdges: Set<String>,
             incomingEdgeId: String?,
+            incomingContinuation: NativeRoutingContinuation?,
             canonicalHistory: Set<String>,
             canonicalArrival: String?,
             completedMeters: Double
@@ -985,6 +1045,7 @@ final class GraphPackStore {
                     from: current, to: to, regionId: regionId,
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
                     priorEdgeIds: localHistory, arrivalEdgeId: localArrival,
+                    arrivalContinuation: incomingContinuation,
                     backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
                     maxRouteMeters: Self.reservedChainHopCap(
                         totalCapMeters: maxRouteMeters,
@@ -1052,6 +1113,7 @@ final class GraphPackStore {
                     from: current, to: seam, regionId: regionId,
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
                     priorEdgeIds: localHistory, arrivalEdgeId: localArrival,
+                    arrivalContinuation: incomingContinuation,
                     backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
                     maxRouteMeters: Self.reservedChainHopCap(
                         totalCapMeters: maxRouteMeters,
@@ -1081,6 +1143,7 @@ final class GraphPackStore {
                     hops: hops + [routed],
                     usedEdges: usedEdges.union(routed.edgeIds),
                     incomingEdgeId: routed.edgeIds.last ?? incomingEdgeId,
+                    incomingContinuation: routed.terminalContinuation,
                     canonicalHistory: knownHistory.union(routed.edgeIds.compactMap { historyPack.canonicalRoadID($0) }),
                     canonicalArrival: routed.edgeIds.reversed().compactMap { historyPack.canonicalRoadID($0) }.first ?? canonicalArrival,
                     completedMeters: completedMeters + routed.distanceMeters
@@ -1098,6 +1161,7 @@ final class GraphPackStore {
             hops: [],
             usedEdges: priorEdgeIds,
             incomingEdgeId: arrivalEdgeId,
+            incomingContinuation: arrivalContinuation,
             canonicalHistory: [],
             canonicalArrival: nil,
             completedMeters: 0
@@ -1138,6 +1202,7 @@ final class GraphPackStore {
         avoidEdgeIds: [String],
         priorEdgeIds: Set<String>,
         arrivalEdgeId: String?,
+        arrivalContinuation: NativeRoutingContinuation? = nil,
         backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double? = nil,
@@ -1170,7 +1235,7 @@ final class GraphPackStore {
             from: RouteCoordinate(longitude: from.longitude, latitude: from.latitude),
             to: RouteCoordinate(longitude: to.longitude, latitude: to.latitude),
             profile: profile, allowUnknown: allowUnknown, avoid: avoid, prior: priorEdgeIds,
-            arrival: arrivalEdgeId, backtrackFactor: backtrackFactor, seed: sessionSeed,
+            arrival: arrivalEdgeId, arrivalContinuation: arrivalContinuation, backtrackFactor: backtrackFactor, seed: sessionSeed,
             cap: maxRouteMeters, metro: cleanMetroMultiplier, avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads, zoom: mapZoom, matchLimit: matchLimitMeters,
             startKind: startEndpointKind, endKind: endEndpointKind, initialFuelApproach: initialFuelApproach,
@@ -1211,6 +1276,7 @@ final class GraphPackStore {
                 avoidEdgeIds: avoid,
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
+                arrivalContinuation: arrivalContinuation,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: seed,
                 maxRouteMeters: maxRouteMeters,
@@ -1760,8 +1826,12 @@ final class GraphPackStore {
     }
 
     nonisolated private static func decodeFuelFile(_ url: URL) -> [POIFeature] {
-        guard FileManager.default.fileExists(atPath: url.path),
-              let data = try? Data(contentsOf: url) else { return [] }
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        let measurement = RoutingWorkContext.measurement
+        let phase = measurement?.begin(.graphAccess)
+        defer { measurement?.end(phase) }
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        measurement?.increment(.fileBytesAccessed, by: UInt64(data.count))
         return PackedFuel.decode(data)
     }
 
@@ -1772,19 +1842,23 @@ final class GraphPackStore {
         geometryURL: URL,
         seamsURL: URL
     ) -> GraphV2Pack? {
-        guard let data = try? Data(contentsOf: graphURL, options: [.mappedIfSafe]),
-              let pack = try? GraphV2Pack(data: data) else { return nil }
+        let measurement = RoutingWorkContext.measurement
+        let phase = measurement?.begin(.graphAccess)
+        defer { measurement?.end(phase) }
+        guard let data = try? Data(contentsOf: graphURL, options: [.mappedIfSafe]) else { return nil }
+        measurement?.increment(.fileBytesAccessed, by: UInt64(data.count))
+        guard let pack = try? GraphV2Pack(data: data) else { return nil }
         if pack.regionId == nil { pack.regionId = regionId }
         if FileManager.default.fileExists(atPath: geometryURL.path),
-           let geomData = try? Data(contentsOf: geometryURL, options: [.mappedIfSafe]),
-           let geom = try? GeometryV1Pack(data: geomData) {
-            pack.geometry = geom
+           let geomData = try? Data(contentsOf: geometryURL, options: [.mappedIfSafe]) {
+            measurement?.increment(.fileBytesAccessed, by: UInt64(geomData.count))
+            if let geom = try? GeometryV1Pack(data: geomData) { pack.geometry = geom }
         }
         if pack.version >= 4,
            FileManager.default.fileExists(atPath: seamsURL.path),
-           let seamData = try? Data(contentsOf: seamsURL),
-           (try? pack.applyCrossPackSeams(data: seamData)) == nil {
-            return nil
+           let seamData = try? Data(contentsOf: seamsURL) {
+            measurement?.increment(.fileBytesAccessed, by: UInt64(seamData.count))
+            if (try? pack.applyCrossPackSeams(data: seamData)) == nil { return nil }
         }
         return pack
     }
@@ -1836,9 +1910,12 @@ final class GraphPackStore {
             RoutingDebugLog.shared.event("decoded pack cache hit region=\(preferred)")
         } else {
             if bytes > decodedPacks.totalCostLimit { decodedPacks.removeAllObjects() }
+            let measurement = RoutingWorkContext.measurement
             pack = await Task.detached(priority: .userInitiated) {
-                Self.decodePack(regionId: preferred, graphURL: graphURL,
-                    geometryURL: geometryURL, seamsURL: seamsURL)
+                RoutingWorkContext.$measurement.withValue(measurement) {
+                    Self.decodePack(regionId: preferred, graphURL: graphURL,
+                        geometryURL: geometryURL, seamsURL: seamsURL)
+                }
             }.value
             if let pack, bytes <= decodedPacks.totalCostLimit {
                 decodedPacks.setObject(pack, forKey: key, cost: bytes)
@@ -1977,6 +2054,13 @@ final class GraphPackStore {
         quiet: Bool = false,
         replaceInstalled: Bool = false
     ) async throws {
+        let operationID = UUID()
+        downloadOperationIDs[regionId] = operationID
+        defer {
+            if downloadOperationIDs[regionId] == operationID {
+                downloadOperationIDs.removeValue(forKey: regionId)
+            }
+        }
         do {
             try Task.checkCancellation()
             if asNavigationPrep {
@@ -2053,18 +2137,19 @@ final class GraphPackStore {
             try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dest) }
             let files = region.files.filter { Self.phonePackFileNames.contains($0.name) }
-            let total = max(files.count, 1)
+            let expectedBytes = max(Int64(1), files.reduce(Int64(0)) { $0 + Int64($1.bytes ?? 0) })
             for (index, file) in files.enumerated() {
                 try Task.checkCancellation()
+                let completedBytes = files.prefix(index).reduce(Int64(0)) { $0 + Int64($1.bytes ?? 0) }
                 let fileURL = dest.appendingPathComponent(file.name)
                 if Self.fileMatchesIdentity(
                     at: fileURL,
                     expectedBytes: file.bytes,
                     expectedSHA256: file.sha256
                 ) {
-                    let frac = Double(index + 1) / Double(total)
-                    setInstall(regionId, .downloading(0.15 + 0.8 * frac))
-                    if asNavigationPrep { progress = 0.15 + 0.8 * frac }
+                    let frac = Double(completedBytes + Int64(file.bytes ?? 0)) / Double(expectedBytes)
+                    setInstall(regionId, .downloading(0.1 + 0.8 * frac))
+                    if asNavigationPrep { progress = 0.1 + 0.8 * frac }
                     continue
                 }
                 let remote = AppConfig.packFileURL(
@@ -2072,10 +2157,20 @@ final class GraphPackStore {
                     regionId: region.id,
                     fileName: file.name
                 )
-                let frac = Double(index) / Double(total)
+                let frac = Double(completedBytes) / Double(expectedBytes)
                 setInstall(regionId, .downloading(0.1 + 0.8 * frac))
                 if asNavigationPrep { progress = 0.1 + 0.8 * frac }
-                let (tmp, fileResponse) = try await session.download(from: remote)
+                let reporter = RoutingPackDownloadProgress { [weak self] written in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.downloadOperationIDs[regionId] == operationID else { return }
+                        let fraction = min(1, Double(completedBytes + written) / Double(expectedBytes))
+                        if case .downloading = self.regions.first(where: { $0.id == regionId })?.install {
+                            self.setInstall(regionId, .downloading(0.1 + 0.8 * fraction))
+                            if asNavigationPrep { self.progress = 0.1 + 0.8 * fraction }
+                        }
+                    }
+                }
+                let (tmp, fileResponse) = try await session.download(from: remote, delegate: reporter)
                 try Task.checkCancellation()
                 if let http = fileResponse as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                     throw URLError(.badServerResponse)
@@ -2124,10 +2219,17 @@ final class GraphPackStore {
                 onQuietPackReady?("\(title) pack ready")
             }
         } catch is CancellationError {
+            guard downloadOperationIDs[regionId] == operationID else { throw CancellationError() }
             setInstall(regionId, isInstalled(regionId) ? .installed : .available)
             if asNavigationPrep { phase = .idle }
             throw CancellationError()
         } catch {
+            guard downloadOperationIDs[regionId] == operationID else { throw CancellationError() }
+            if Task.isCancelled {
+                setInstall(regionId, isInstalled(regionId) ? .installed : .available)
+                if asNavigationPrep { phase = .idle }
+                throw CancellationError()
+            }
             let detail = error as NSError
             RoutingDebugLog.shared.event(
                 "pack download failed region=\(regionId) domain=\(detail.domain) code=\(detail.code) message=\(detail.localizedDescription)"
@@ -2526,9 +2628,14 @@ final class GraphPackStore {
               let expectedSHA256,
               expectedSHA256.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil,
               let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
-              values.fileSize == expectedBytes,
-              let data = try? Data(contentsOf: url, options: [.mappedIfSafe]) else { return false }
+              values.fileSize == expectedBytes else { return false }
+        let measurement = RoutingWorkContext.measurement
+        let phase = measurement?.begin(.verification)
+        defer { measurement?.end(phase) }
+        guard let data = try? Data(contentsOf: url, options: [.mappedIfSafe]) else { return false }
+        measurement?.increment(.fileBytesAccessed, by: UInt64(data.count))
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        measurement?.increment(.fileBytesHashed, by: UInt64(data.count))
         return digest.caseInsensitiveCompare(expectedSHA256) == .orderedSame
     }
 
@@ -2557,7 +2664,9 @@ final class GraphPackStore {
         manifest: PackManifest,
         cacheRoot: URL
     ) async -> Set<String> {
-        await Task.detached(priority: .utility) {
+        let measurement = RoutingWorkContext.measurement
+        return await Task.detached(priority: .utility) {
+            RoutingWorkContext.$measurement.withValue(measurement) {
             let fm = FileManager.default
             var verified = Set<String>()
             let versionRoot = cacheRoot.appendingPathComponent(manifest.version, isDirectory: true)
@@ -2580,6 +2689,7 @@ final class GraphPackStore {
                 }
             }
             return verified
+            }
         }.value
     }
 }

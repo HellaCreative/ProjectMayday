@@ -14,6 +14,9 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
     private let useFloat64: Bool
 
     init(data: Data) throws {
+        let measurement = RoutingWorkContext.measurement
+        let decodePhase = measurement?.begin(.decode)
+        defer { measurement?.end(decodePhase) }
         self.data = data
         guard data.count >= 16 else { throw PackError.truncated }
         let magic: UInt32 = data.readUInt32LE(0)

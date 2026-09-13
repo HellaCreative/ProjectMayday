@@ -24,6 +24,7 @@ final class RouteResponseCache {
         let avoidEdgeIDs: [String]
         let priorEdgeIDs: [String]
         let arrivalEdgeID: String?
+        var arrivalContinuation: NativeRoutingContinuation? = nil
         let backtrackFactor: Double
         let sessionSeed: UInt64?
         let directExtraBudgetMeters: Double?
@@ -44,6 +45,7 @@ final class RouteResponseCache {
                 "|avoid=\(avoidEdgeIDs.joined(separator: ","))" +
                 "|prior=\(priorEdgeIDs.count)[\(recentPrior)]" +
                 "|arrival=\(arrivalEdgeID ?? "nil")" +
+                "|legalArrival=\(String(describing: arrivalContinuation))" +
                 "|backtrack=\(backtrackFactor)" +
                 "|seed=\(sessionSeed.map { String($0) } ?? "-")" +
                 "|extra=\(directExtraBudgetMeters.map { String($0) } ?? "-")" +
@@ -184,6 +186,7 @@ final class LiveRoutingSource: RoutingSource {
             + "|usable=\(Int(request.fuel.usableRangeMeters.rounded()))"
             + "|first=\(Int(request.fuel.firstLegMaxMeters.rounded()))"
             + "|avoid=\(avoid)"
+            + "|legalArrival=\(String(describing: request.options?.arrivalContinuation))"
     }
 }
 
@@ -196,6 +199,15 @@ final class PackRoutingSource: RoutingSource {
     init(packs: GraphPackStore, cache: RouteResponseCache) {
         self.packs = packs
         self.cache = cache
+    }
+
+    /// Arrival allowance is total fuel spent since the last refill, not an
+    /// extra allowance granted at each rider point or planning window.
+    static func destinationApproachCap(usableRangeMeters: Double, remainingMeters: Double,
+                                       arrivalUsedLimitMeters: Double?) -> Double {
+        guard let arrivalUsedLimitMeters else { return max(0, remainingMeters) }
+        let alreadyUsed = max(0, usableRangeMeters - remainingMeters)
+        return max(0, min(remainingMeters, arrivalUsedLimitMeters - alreadyUsed))
     }
 
     private func requireInstalledPacks(_ locations: [RouteLocation]) throws {
@@ -220,6 +232,7 @@ final class PackRoutingSource: RoutingSource {
             avoidEdgeIDs: normalizedEdgeIDs(req.options?.avoidEdgeIds),
             priorEdgeIDs: normalizedEdgeIDs(req.options?.priorEdgeIds),
             arrivalEdgeID: req.options?.arrivalEdgeId,
+            arrivalContinuation: req.options?.arrivalContinuation,
             backtrackFactor: req.options?.backtrackFactor ?? 4,
             sessionSeed: req.options?.sessionSeed,
             directExtraBudgetMeters: req.options?.directExtraBudgetMeters,
@@ -245,6 +258,7 @@ final class PackRoutingSource: RoutingSource {
             avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
             priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
             arrivalEdgeId: req.options?.arrivalEdgeId,
+            arrivalContinuation: req.options?.arrivalContinuation,
             backtrackFactor: req.options?.backtrackFactor ?? 4,
             sessionSeed: req.options?.sessionSeed ?? 0,
             maxRouteMeters: req.options?.maxPathMeters,
@@ -374,6 +388,7 @@ final class PackRoutingSource: RoutingSource {
         let maximumStops = returnedStopLimit
         var carriedHistory = Set(req.options?.priorEdgeIds ?? [])
         var carriedArrival = req.options?.arrivalEdgeId
+        var carriedContinuation = req.options?.arrivalContinuation
         var roadProgress: FuelItinerary.RoadProgress?
         let fuelBegan = ProcessInfo.processInfo.systemUptime
         func trace(_ phase: String) {
@@ -420,12 +435,15 @@ final class PackRoutingSource: RoutingSource {
             )
             let mustPump = stops.count < req.fuel.minimumFuelStops
                 || (stops.isEmpty && (req.fuel.requireFuelStopBeforeEnd || req.fuel.requiredFirstStationId != nil))
-            let destinationLimit = req.fuel.destinationFuelUsedLimitMeters
+            let destinationLimit = Self.destinationApproachCap(
+                usableRangeMeters: req.fuel.usableRangeMeters,
+                remainingMeters: firstCap,
+                arrivalUsedLimitMeters: req.fuel.destinationFuelUsedLimitMeters)
             var incompleteSearchReason: String?
             var directFallback: Double?
             var directRoute: RouteResponse?
             if let direct,
-               destinationLimit == nil || direct <= (destinationLimit ?? .infinity) + 1 {
+               direct <= destinationLimit + 1 {
                 let routed = await packs.routeOnDeviceDetailed(
                     from: current.locationCoordinate,
                     to: end.locationCoordinate,
@@ -434,9 +452,10 @@ final class PackRoutingSource: RoutingSource {
                     avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
                     priorEdgeIds: carriedHistory,
                     arrivalEdgeId: carriedArrival,
+                    arrivalContinuation: carriedContinuation,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
                     sessionSeed: req.options?.sessionSeed ?? 0,
-                    maxRouteMeters: firstCap,
+                    maxRouteMeters: destinationLimit,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
@@ -445,7 +464,7 @@ final class PackRoutingSource: RoutingSource {
                     endEndpointKind: nil
                 )
                 if case .failure(.searchLimit(let reason)) = routed { incompleteSearchReason = reason }
-                if case .success(let route) = routed, route.distanceMeters <= firstCap + 1,
+                if case .success(let route) = routed, route.distanceMeters <= destinationLimit + 1,
                    (carriedHistory.isEmpty || retraceMeters(route, history: carriedHistory) <= 1_000) {
                     directFallback = route.distanceMeters
                     directRoute = RouteResponse(onDevice: route, priorEdgeIDs: carriedHistory)
@@ -554,6 +573,7 @@ final class PackRoutingSource: RoutingSource {
                     avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
                     priorEdgeIds: carriedHistory,
                     arrivalEdgeId: carriedArrival,
+                    arrivalContinuation: carriedContinuation,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
                     sessionSeed: req.options?.sessionSeed ?? 0,
                     maxRouteMeters: firstCap,
@@ -615,6 +635,7 @@ final class PackRoutingSource: RoutingSource {
                         avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
                         priorEdgeIds: carriedHistory.union(firstRoute.edgeIds),
                         arrivalEdgeId: firstRoute.edgeIds.last ?? carriedArrival,
+                        arrivalContinuation: firstRoute.terminalContinuation,
                         backtrackFactor: req.options?.backtrackFactor ?? 4,
                         sessionSeed: req.options?.sessionSeed ?? 0,
                         maxRouteMeters: destinationCap,
@@ -796,6 +817,7 @@ final class PackRoutingSource: RoutingSource {
                 plannedRoutes.append(RouteResponse(onDevice: route, priorEdgeIDs: carriedHistory))
                 carriedHistory.formUnion(route.edgeIds)
                 carriedArrival = route.edgeIds.last ?? carriedArrival
+                carriedContinuation = route.terminalContinuation
             }
         }
         let routedPrefix = graphMeters.reduce(0, +)
@@ -852,6 +874,7 @@ final class PackRoutingSource: RoutingSource {
                 profile: req.profile, allowUnknown: req.accessPolicy.motorizedUnknown,
                 avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
                 priorEdgeIds: Set(req.options?.priorEdgeIds ?? []), arrivalEdgeId: req.options?.arrivalEdgeId,
+                arrivalContinuation: req.options?.arrivalContinuation,
                 backtrackFactor: req.options?.backtrackFactor ?? 4, sessionSeed: req.options?.sessionSeed ?? 0,
                 maxRouteMeters: req.fuel.usableRangeMeters,
                 cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -1037,6 +1060,7 @@ private func cacheKey(
         avoidEdgeIDs: normalizedEdgeIDs(request.options?.avoidEdgeIds),
         priorEdgeIDs: normalizedEdgeIDs(request.options?.priorEdgeIds),
         arrivalEdgeID: request.options?.arrivalEdgeId,
+        arrivalContinuation: request.options?.arrivalContinuation,
         backtrackFactor: request.options?.backtrackFactor ?? 4,
         sessionSeed: request.options?.sessionSeed,
         directExtraBudgetMeters: request.options?.directExtraBudgetMeters,
@@ -1103,7 +1127,8 @@ private extension RouteResponse {
             backtrackPct: repeatedPct,
             backtrackReason: repeatedMeters > 0 ? "dead_end_or_only_connector" : nil,
             restrictedMeters: 0,
-            restrictedReason: nil
+            restrictedReason: nil,
+            terminalContinuation: local.terminalContinuation
         )
     }
 }

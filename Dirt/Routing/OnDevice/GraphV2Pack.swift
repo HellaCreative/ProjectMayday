@@ -60,6 +60,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         }
 
         private struct Pattern: Sendable {
+            let relationID: Int64
             let fromEdge: Int
             let toEdge: Int
             let viaEdges: [Int]
@@ -119,6 +120,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                 if !restriction.viaEdges.isEmpty {
                     let id = patterns.count
                     patterns.append(Pattern(
+                        relationID: restriction.osmRelationId,
                         fromEdge: restriction.fromEdge,
                         toEdge: restriction.toEdge,
                         viaEdges: restriction.viaEdges,
@@ -248,6 +250,166 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             if state < baseNodeCount || state == startNode || state == endNode { return state }
             let index = state - (baseNodeCount + 2)
             return records.indices.contains(index) ? records[index].node : -1
+        }
+
+        struct ImportedContinuation: Sendable {
+            /// For an edge fraction this is the state at the directed parent's
+            /// end. A caller must traverse the remaining parent segment first;
+            /// it must not place a fractional location directly at this node.
+            let stateAtParentEnd: Int
+            let incomingEdge: Int
+            let fromNode: Int
+            let toNode: Int
+            let location: NativeRoutingContinuation.Location
+        }
+
+        func exportContinuation(
+            state: Int, incomingEdge: Int, arrivedFromNode: Int,
+            pack: GraphV2Pack,
+            location: NativeRoutingContinuation.Location? = nil
+        ) throws -> NativeRoutingContinuation {
+            guard pack.version >= 4, pack.legalTopology,
+                  let epoch = pack.sourceEpoch, !epoch.isEmpty else {
+                throw NativeRoutingContinuationError.unavailableSourceEpoch
+            }
+            let node = graphNode(of: state)
+            let road = try Self.directedRoad(edge: incomingEdge, from: arrivedFromNode, to: node, pack: pack)
+            let active: [Progress]
+            if state >= baseNodeCount + 2 {
+                let index = state - (baseNodeCount + 2)
+                guard records.indices.contains(index), records[index].incomingEdge == incomingEdge else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                active = records[index].active
+            } else {
+                guard node >= 0, node < baseNodeCount, !statefulEdges.contains(incomingEdge) else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                active = []
+            }
+            let progress = try active.map { row -> NativeRoutingContinuation.RestrictionProgress in
+                guard patterns.indices.contains(row.id) else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                return .init(relationID: patterns[row.id].relationID, memberIndex: row.progress)
+            }.sorted { $0.relationID < $1.relationID }
+            let resolvedLocation = location ?? .node(road.toNodeID)
+            try Self.validateLocation(resolvedLocation, road: road)
+            return NativeRoutingContinuation(version: 1, sourceEpoch: epoch,
+                incoming: road, location: resolvedLocation,
+                restrictionContext: try Self.context(pack: pack, incomingEdge: incomingEdge,
+                    activeRelations: Set(progress.map(\.relationID))),
+                activeRestrictions: progress)
+        }
+
+        func importContinuation(_ token: NativeRoutingContinuation, pack: GraphV2Pack) throws -> ImportedContinuation {
+            guard token.version == 1 else { throw NativeRoutingContinuationError.unsupportedVersion }
+            guard pack.version >= 4, pack.legalTopology, let epoch = pack.sourceEpoch, !epoch.isEmpty else {
+                throw NativeRoutingContinuationError.unavailableSourceEpoch
+            }
+            guard token.sourceEpoch == epoch else { throw NativeRoutingContinuationError.incompatibleSourceEpoch }
+            try Self.validateLocation(token.location, road: token.incoming)
+            guard let from = pack.osmNodeIds.firstIndex(of: token.incoming.fromNodeID),
+                  let to = pack.osmNodeIds.firstIndex(of: token.incoming.toNodeID),
+                  let edgeFrom = pack.edgeFrom, let edgeTo = pack.edgeTo else {
+                throw NativeRoutingContinuationError.unavailableRoad
+            }
+            let matches = pack.osmWayIds.indices.filter {
+                pack.osmWayIds[$0] == token.incoming.wayID
+                    && ((Int(edgeFrom[$0]) == from && Int(edgeTo[$0]) == to)
+                        || (Int(edgeFrom[$0]) == to && Int(edgeTo[$0]) == from))
+            }
+            guard let edge = matches.first else { throw NativeRoutingContinuationError.unavailableRoad }
+            guard matches.count == 1 else { throw NativeRoutingContinuationError.ambiguousRoad }
+            _ = try Self.directedRoad(edge: edge, from: from, to: to, pack: pack)
+            let activeIDs = token.activeRestrictions.map(\.relationID)
+            guard Set(activeIDs).count == activeIDs.count else {
+                throw NativeRoutingContinuationError.incompatibleRestrictionContext
+            }
+            let expected = try Self.context(pack: pack, incomingEdge: edge, activeRelations: Set(activeIDs))
+            guard Set(expected) == Set(token.restrictionContext),
+                  expected.count == token.restrictionContext.count else {
+                throw NativeRoutingContinuationError.incompatibleRestrictionContext
+            }
+            var active: [Progress] = []
+            for row in token.activeRestrictions {
+                let matches = patterns.indices.filter { patterns[$0].relationID == row.relationID }
+                guard matches.count == 1, let id = matches.first,
+                      row.memberIndex > 0, row.memberIndex <= patterns[id].viaEdges.count,
+                      patterns[id].viaEdges[row.memberIndex - 1] == edge else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                active.append(Progress(id: id, progress: row.memberIndex))
+            }
+            active.sort { lhs, rhs in
+                if lhs.id == rhs.id { return lhs.progress < rhs.progress }
+                return lhs.id < rhs.id
+            }
+            let state: Int
+            if let exact = stateByArrival[ArrivalKey(node: to, incomingEdge: edge, active: active)] {
+                state = exact
+            } else {
+                guard active.isEmpty, !statefulEdges.contains(edge) else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                state = to
+            }
+            return ImportedContinuation(stateAtParentEnd: state, incomingEdge: edge,
+                fromNode: from, toNode: to, location: token.location)
+        }
+
+        private static func validateLocation(_ location: NativeRoutingContinuation.Location,
+                                             road: NativeRoutingContinuation.Road) throws {
+            switch location {
+            case .node(let node):
+                guard node != 0, node == road.toNodeID else { throw NativeRoutingContinuationError.invalidLocation }
+            case .edge(let fraction):
+                guard fraction.isFinite, fraction >= 0, fraction <= 1 else {
+                    throw NativeRoutingContinuationError.invalidLocation
+                }
+            }
+        }
+
+        private static func directedRoad(edge: Int, from: Int, to: Int, pack: GraphV2Pack) throws -> NativeRoutingContinuation.Road {
+            guard pack.osmWayIds.indices.contains(edge), pack.osmNodeIds.indices.contains(from),
+                  pack.osmNodeIds.indices.contains(to), from != to,
+                  pack.osmNodeIds[from] != 0, pack.osmNodeIds[to] != 0 else {
+                throw NativeRoutingContinuationError.unavailableRoad
+            }
+            guard pack.hasDirectedArc(from: from, to: to, edge: edge) else {
+                throw NativeRoutingContinuationError.illegalDirection
+            }
+            return .init(wayID: pack.osmWayIds[edge], fromNodeID: pack.osmNodeIds[from], toNodeID: pack.osmNodeIds[to])
+        }
+
+        private static func context(pack: GraphV2Pack, incomingEdge: Int, activeRelations: Set<Int64>) throws -> [NativeRoutingContinuation.RestrictionSignature] {
+            let relevant = pack.restrictions.filter {
+                ($0.vehicleMask & 1) != 0 && ($0.fromEdge == incomingEdge || activeRelations.contains($0.osmRelationId))
+            }
+            guard activeRelations.isSubset(of: Set(relevant.map(\.osmRelationId))),
+                  let from = pack.edgeFrom, let to = pack.edgeTo else {
+                throw NativeRoutingContinuationError.incompatibleRestrictionContext
+            }
+            return try relevant.map { restriction in
+                let members = try ([restriction.fromEdge] + restriction.viaEdges + [restriction.toEdge]).map { edge -> NativeRoutingContinuation.Road in
+                    guard pack.osmWayIds.indices.contains(edge),
+                          pack.osmNodeIds.indices.contains(Int(from[edge])), pack.osmNodeIds.indices.contains(Int(to[edge])) else {
+                        throw NativeRoutingContinuationError.incompatibleRestrictionContext
+                    }
+                    let a = pack.osmNodeIds[Int(from[edge])], b = pack.osmNodeIds[Int(to[edge])]
+                    return .init(wayID: pack.osmWayIds[edge], fromNodeID: min(a,b), toNodeID: max(a,b))
+                }
+                let via: Int64?
+                if restriction.viaNode >= 0 {
+                    guard pack.osmNodeIds.indices.contains(restriction.viaNode) else {
+                        throw NativeRoutingContinuationError.incompatibleRestrictionContext
+                    }
+                    via = pack.osmNodeIds[restriction.viaNode]
+                } else { via = nil }
+                return NativeRoutingContinuation.RestrictionSignature(relationID: restriction.osmRelationId,
+                    kind: restriction.kind, only: restriction.only, vehicleMask: restriction.vehicleMask,
+                    viaNodeID: via, members: members)
+            }.sorted { $0.relationID < $1.relationID }
         }
 
         func stateForArrival(node: Int, incomingEdge: Int) -> Int {
@@ -411,6 +573,9 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     var geometry: GeometryV1Pack?
 
     init(data: Data) throws {
+        let measurement = RoutingWorkContext.measurement
+        let decodePhase = measurement?.begin(.decode)
+        defer { measurement?.end(decodePhase) }
         guard data.count >= Self.headerSizeV2 else { throw PackError.truncated }
         let magic: UInt32 = data.readUInt32LE(0)
         let isV4 = magic == Self.magicV4
@@ -705,6 +870,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             blockedViaWayExits = [:]
             onlyViaWayEntries = [:]
         }
+        measurement?.increment(.decodedEdges, by: UInt64(undirectedEdgeCount))
     }
 
     /// Install the independently hash-verified V4 border proof downloaded with
@@ -910,7 +1076,10 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     }
 
     func makeV4TurnStateSpace(startNode: Int, endNode: Int) -> V4TurnStateSpace {
-        V4TurnStateSpace.build(pack: self, startNode: startNode, endNode: endNode)
+        let measurement = RoutingWorkContext.measurement
+        let phase = measurement?.begin(.turnPreparation)
+        defer { measurement?.end(phase) }
+        return V4TurnStateSpace.build(pack: self, startNode: startNode, endNode: endNode)
     }
 
     func v4AccessAllowed(

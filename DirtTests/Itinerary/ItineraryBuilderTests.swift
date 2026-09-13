@@ -37,6 +37,257 @@ struct FuelPlanningProgressWatchdogTests {
 
 @MainActor
 struct ItineraryBuilderTests {
+    @Test(arguments: [false, true])
+    func moreThanSixteenSuccessfulFuelContinuationsReachDestination(combined: Bool) async throws {
+        let start = point(0), destination = point(21)
+        let source = FakeRoutingSource(name: "pack")
+        source.supportsCombinedFuelPlanning = combined
+        source.waypointFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
+        let pumps = (1...20).map { fuelStop("pump-\($0)", at: point(Double($0))) }
+        source.fuelStopResponses = pumps.map { [$0] } + [[]]
+        source.fuelWindowCompleteResponses = Array(repeating: false, count: pumps.count) + [true]
+        for index in 0...20 {
+            let stage = key(point(Double(index)), point(Double(index + 1)))
+            source.distances[stage] = 100_000
+            source.terminalContinuations[stage] = transportToken(Int64(index + 100))
+        }
+
+        let result = await build([start, destination], source: source, usable: 180_000)
+
+        #expect(source.fuelChainPlanCount == 21)
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == pumps.map(\.id))
+        #expect(result.legs.count == 21)
+        #expect(result.legs.last?.toCoordinate == destination)
+        #expect(result.legs.last?.fuelUsedOnArrivalMeters == 100_000)
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+        let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
+        #expect(plans.allSatisfy { $0.fuel.firstLegMaxMeters == 180_000 })
+        for (index, request) in plans.enumerated() where index > 0 {
+            #expect(request.options?.arrivalContinuation == transportToken(Int64(index + 99)))
+        }
+    }
+
+    @Test func failedFuelContinuationsRemainBoundedAndPreserveRoadDestination() async throws {
+        let start = point(0), destination = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.waypointFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
+        source.distances[key(start, destination)] = 250_000
+        // Every proposed pump has an unrouteable incoming stage. The fake
+        // supplies more than the budget so only the planner can stop repetition.
+        source.fuelStopResponses = (1...20).map {
+            [fuelStop("unreachable-\($0)", at: point(Double($0) / 100))]
+        }
+        source.fuelWindowCompleteResponses = Array(repeating: false, count: 20)
+
+        let result = await build([start, destination], source: source, usable: 180_000)
+
+        #expect(source.fuelChainPlanCount == 16)
+        #expect(result.legs.compactMap(\.endsAtFuelStop).isEmpty)
+        #expect(result.legs.last?.toCoordinate == destination)
+        #expect(result.riderLegStatus.values.allSatisfy {
+            if case .fuelUnknown = $0 { return true }
+            return false
+        })
+    }
+
+    @Test(arguments: [false, true])
+    func stationaryFuelContinuationsDoNotRenewTheRetryBudget(combined: Bool) async throws {
+        let start = point(0), pump = point(0.5), destination = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.supportsCombinedFuelPlanning = combined
+        source.waypointFuelStations[key(start, start)] = fuelStop("origin-pump", at: start)
+        source.distances[key(start, pump)] = 100_000
+        source.distances[key(pump, pump)] = 0
+        source.distances[key(pump, destination)] = 250_000
+        // A malformed repeated response must not buy more time by declaring
+        // another refill at the same stationary anchor.
+        source.fuelStopResponses = Array(repeating: [fuelStop("same-pump", at: pump)], count: 25)
+        source.fuelWindowCompleteResponses = Array(repeating: false, count: 25)
+
+        let result = await build([start, destination], source: source, usable: 180_000)
+
+        #expect(source.fuelChainPlanCount == 17) // One advance, then 16 stationary attempts.
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["same-pump"])
+        #expect(result.legs.filter { $0.endsAtFuelStop != nil }.allSatisfy {
+            ($0.response.distanceMeters ?? 0) > 0
+        })
+        #expect(result.legs.count == 2)
+        #expect(result.legs.first?.toCoordinate == pump)
+        #expect(result.legs.last?.toCoordinate == destination)
+        #expect(result.riderLegStatus.values.allSatisfy {
+            if case .fuelUnknown = $0 { return true }
+            return false
+        })
+    }
+
+    @Test func sameLegDeadEndPumpRewindsToAlternativeAndPreservesInitialFill() async throws {
+        let start = point(0), initial = point(0.01), bad = point(0.5), good = point(1), end = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.includeEdgeSegments = true
+        source.fuelStops = [fuelStop("initial", at: initial), fuelStop("bad", at: bad), fuelStop("good", at: good)]
+        source.terminalContinuations[key(start, initial)] = transportToken(1)
+        source.terminalContinuations[key(initial, bad)] = transportToken(2)
+        source.terminalContinuations[key(initial, good)] = transportToken(3)
+        source.distances[key(start, initial)] = 500
+        source.distances[key(initial, end)] = 400_000
+        source.distances[key(initial, bad)] = 100_000
+        source.distances[key(initial, good)] = 120_000
+        source.distances[key(bad, end)] = 400_000
+        source.distances[key(good, end)] = 50_000
+        source.gapWhenFirstLegMaxBelow[key(bad, end)] = 180_001
+
+        let result = await build([start, end], source: source, usable: 180_000)
+
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["initial", "good"])
+        #expect(result.legs.first?.response.distanceMeters == 500)
+        #expect(result.legs.first?.endsAtFuelStop?.isInitialFillUp == true)
+        #expect(result.legs.last?.toCoordinate == end)
+        #expect(result.legs.last?.fuelUsedOnArrivalMeters == 50_000)
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+        let restored = try #require(source.fuelChainRequests.first {
+            $0.fuel.excludedStationIds?.contains("bad") == true
+                && $0.locations.first?.longitude == initial.longitude
+        })
+        #expect(restored.fuel.firstLegMaxMeters == 180_000)
+        #expect(restored.options?.arrivalEdgeId == key(start, initial))
+        #expect(restored.options?.arrivalContinuation == transportToken(1))
+        #expect(restored.options?.priorEdgeIds?.isEmpty != false)
+        #expect(restored.locations.first?.longitude == initial.longitude)
+    }
+
+    @Test func failedAlternativePumpChoicesRemainBoundedAcrossSuccessfulApproaches() async throws {
+        let start = point(0), end = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+        source.distances[key(start, end)] = 400_000
+        source.fuelStops = (1...20).map { fuelStop("dead-end-\($0)", at: point(Double($0) / 100)) }
+        for pump in source.fuelStops {
+            source.distances[key(start, pump.coordinate)] = 100_000
+            source.distances[key(pump.coordinate, end)] = 400_000
+            source.gapWhenFirstLegMaxBelow[key(pump.coordinate, end)] = 180_001
+        }
+
+        let result = await build([start, end], source: source, usable: 180_000)
+
+        #expect(source.fuelChainPlanCount == 34) // 17 approaches; only 16 failed-choice rewinds.
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["dead-end-17"])
+        #expect(result.legs.last?.toCoordinate == end)
+        #expect(result.riderLegStatus.values.allSatisfy {
+            if case .fuelUnknown = $0 { return true }
+            return false
+        })
+        let retry = try #require(source.fuelChainRequests.last {
+            $0.locations.first?.longitude == start.longitude && $0.fuel.probeFirstReachableStation != true
+        })
+        #expect(Set(retry.fuel.excludedStationIds ?? []).isSuperset(of:
+            Set((1...16).map { "dead-end-\($0)" })))
+    }
+
+    @Test(arguments: [false, true])
+    func initialAndRequiredPumpsAreProtectedFromAutomaticRewind(required: Bool) async throws {
+        let start = point(0), selected = point(0.5), alternate = point(1), end = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.fuelStops = [fuelStop("selected", at: selected), fuelStop("alternate", at: alternate)]
+        source.distances[key(start, selected)] = 100_000
+        source.distances[key(selected, end)] = 400_000
+        source.distances[key(start, alternate)] = 100_000
+        source.distances[key(alternate, end)] = 50_000
+        source.gapWhenFirstLegMaxBelow[key(selected, end)] = 180_001
+        var itinerary = makeItinerary([start, end])
+        if required {
+            source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+            let leg = try #require(itinerary.legs.first)
+            itinerary = reduce(itinerary, .setFuelStopOverride(legID: leg.id,
+                departureAnchorID: leg.from.uuidString, stationID: "selected")).itinerary
+        }
+        let result = await ItineraryBuilder().build(itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(tankMeters: 180_000, usableMeters: 180_000, reservePercent: 0),
+            source: .fixed(source), onProgress: { _ in })
+
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["selected"])
+        #expect(result.legs.last?.toCoordinate == end)
+        #expect(source.fuelChainPlanCount == 2)
+        #expect(!source.fuelChainRequests.contains { $0.fuel.excludedStationIds?.contains("selected") == true
+            && $0.locations.first?.longitude == start.longitude })
+    }
+
+    @Test func combinedRewindDoesNotRequireAnAlreadySatisfiedPump() async throws {
+        let start = point(0), a = point(0.5), b = point(1), end = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.supportsCombinedFuelPlanning = true
+        source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+        source.distances[key(start, end)] = 400_000
+        source.distances[key(start, a)] = 100_000
+        source.distances[key(a, b)] = 100_000
+        source.distances[key(a, end)] = 50_000
+        source.distances[key(b, end)] = 400_000
+        source.fuelStopResponses = [[], [fuelStop("a", at: a), fuelStop("b", at: b)], []]
+        source.fuelWindowCompleteResponses = [true, false, true]
+        source.gapWhenFirstLegMaxBelow[key(b, end)] = 180_001
+
+        let result = await build([start, end], source: source, usable: 180_000)
+
+        let retried = try #require(source.fuelChainRequests.last {
+            $0.locations.first?.longitude == a.longitude
+        })
+        #expect(!retried.fuel.requireFuelStopBeforeEnd)
+        #expect(retried.fuel.firstLegMaxMeters == 180_000)
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["a"])
+        #expect(result.legs.last?.toCoordinate == end)
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+    }
+
+    @Test(arguments: [false, true])
+    func staleFuelSuccessOrGapCannotEmitProgress(gap: Bool) async throws {
+        let start = point(0), end = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+        source.distances[key(start, end)] = 50_000
+        if gap { source.gapWhenFirstLegMaxBelow[key(start, end)] = 180_001 }
+        let itinerary = makeItinerary([start, end])
+        let builder = ItineraryBuilder()
+        source.onFuelPlanReply = { builder.setCurrentGeneration(itinerary.generation + 1) }
+        var updates: [BuiltItinerary] = []
+        _ = await builder.build(itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(tankMeters: 180_000, usableMeters: 180_000, reservePercent: 0),
+            source: .fixed(source), onProgress: { updates.append($0) })
+        #expect(updates.isEmpty)
+        #expect(source.routeRequests.isEmpty)
+    }
+
+    @Test func combinedProgressCancellationStopsRemainingWindow() async throws {
+        let start = point(0), pump = point(1), end = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.supportsCombinedFuelPlanning = true
+        source.waypointFuelStations[key(start, start)] = fuelStop("origin", at: start)
+        source.fuelStopResponses = [[fuelStop("pump", at: pump)]]
+        source.distances[key(start, pump)] = 100_000
+        source.distances[key(pump, end)] = 50_000
+        let itinerary = makeItinerary([start, end])
+        let builder = ItineraryBuilder()
+        var updates: [BuiltItinerary] = []
+        _ = await builder.build(itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(tankMeters: 180_000, usableMeters: 180_000, reservePercent: 0),
+            source: .fixed(source), onProgress: {
+                updates.append($0)
+                builder.setCurrentGeneration(itinerary.generation + 1)
+            })
+        #expect(updates.count == 1)
+        #expect(updates.first?.legs.count == 1)
+        #expect(updates.first?.legs.last?.toCoordinate == pump)
+    }
+
+    @Test func destinationAllowanceChargesFuelAlreadyUsedBeforeThisWindow() {
+        #expect(PackRoutingSource.destinationApproachCap(usableRangeMeters: 180_000,
+            remainingMeters: 130_000, arrivalUsedLimitMeters: 140_000) == 90_000)
+        #expect(PackRoutingSource.destinationApproachCap(usableRangeMeters: 180_000,
+            remainingMeters: 180_000, arrivalUsedLimitMeters: 140_000) == 140_000)
+        #expect(PackRoutingSource.destinationApproachCap(usableRangeMeters: 180_000,
+            remainingMeters: 130_000, arrivalUsedLimitMeters: nil) == 130_000)
+        #expect(PackRoutingSource.destinationApproachCap(usableRangeMeters: 180_000,
+            remainingMeters: 20_000, arrivalUsedLimitMeters: 140_000) == 0)
+    }
+
     @Test func fuelEnabledVisitsHalfKilometrePumpBeforeAShortRide() async throws {
         let start = point(0), destination = point(1), pump = point(0.005)
         let source = FakeRoutingSource(name: "pack")
@@ -45,6 +296,7 @@ struct ItineraryBuilderTests {
         source.distances[key(pump, destination)] = 9_500
         source.fuelStops = [fuelStop("starting-fill", at: pump)]
         source.includeEdgeSegments = true
+        source.terminalContinuations[key(start, pump)] = transportToken(10)
         let result = await build([start, destination], source: source, usable: 200_000)
         #expect(result.legs.count == 2)
         #expect(result.legs.first?.endsAtFuelStop?.stationID == "starting-fill")
@@ -53,6 +305,7 @@ struct ItineraryBuilderTests {
         #expect(result.legs.first?.endsAtFuelStop?.isInitialFillUp == true)
         #expect(source.routeRequests.last?.options?.priorEdgeIds?.isEmpty != false)
         #expect(source.routeRequests.last?.options?.arrivalEdgeId == key(start, pump))
+        #expect(source.routeRequests.last?.options?.arrivalContinuation == transportToken(10))
         #expect(result.legs.last?.toCoordinate == destination)
         let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
         #expect(plans.first?.fuel.initialFillUp == true)
@@ -1191,6 +1444,25 @@ struct ItineraryBuilderTests {
         #expect(pack.routeRequests.count == 1)
     }
 
+    @Test func fuelOffRiderStagesCarryLegalArrivalAndCodablePreservesIt() async throws {
+        let a = point(0), b = point(1), c = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.distances[key(a, b)] = 1_000
+        source.distances[key(b, c)] = 2_000
+        source.terminalContinuations[key(a, b)] = transportToken(20)
+        source.terminalContinuations[key(b, c)] = transportToken(21)
+        let result = await build([a, b, c], source: source, usable: nil)
+        #expect(result.legs.count == 2)
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+        let later = try #require(source.routeRequests.first { $0.locations.first?.longitude == b.longitude })
+        #expect(later.options?.arrivalContinuation == transportToken(20))
+        let decodedRequest = try JSONDecoder().decode(RouteRequest.self, from: JSONEncoder().encode(later))
+        #expect(decodedRequest.options?.arrivalContinuation == transportToken(20))
+        let response = try #require(result.legs.last?.response)
+        let decodedResponse = try JSONDecoder().decode(RouteResponse.self, from: JSONEncoder().encode(response))
+        #expect(decodedResponse.terminalContinuation == transportToken(21))
+    }
+
     @Test func routeCacheIsLRUAndNeverExceeds64Entries() {
         let cache = RouteResponseCache(capacity: 100)
         var firstKey: RouteResponseCache.Key?
@@ -1231,6 +1503,14 @@ struct ItineraryBuilderTests {
         }
         #expect(cacheKey(avoid: [], seed: 1) != cacheKey(avoid: ["blocked-edge"], seed: 1))
         #expect(cacheKey(avoid: [], seed: 1) != cacheKey(avoid: [], seed: 2))
+        var arrivalA = cacheKey(avoid: [], seed: 1)
+        arrivalA.arrivalContinuation = transportToken(30)
+        var arrivalB = arrivalA
+        arrivalB.arrivalContinuation = transportToken(31)
+        #expect(arrivalA != arrivalB)
+        let cache = RouteResponseCache()
+        cache.insert(response(from: point(0), to: point(1), meters: 1_000), for: arrivalA)
+        #expect(cache.value(for: arrivalB) == nil)
     }
 }
 
@@ -1380,6 +1660,7 @@ private final class FakeRoutingSource: RoutingSource {
     let name: String
     var supportsCombinedFuelPlanning = false
     var includeEdgeSegments = false
+    var terminalContinuations: [String: NativeRoutingContinuation] = [:]
     var distances: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []
     var fuelStopResponses: [[FuelChainStop]] = []
@@ -1396,6 +1677,7 @@ private final class FakeRoutingSource: RoutingSource {
     var fuelChainError: Error?
     var fuelChainErrorAfterPlanCount: Int?
     var fuelChainPlanCount = 0
+    var onFuelPlanReply: (() -> Void)?
     var suspendNextRoute = false
     var pendingRouteContinuation: CheckedContinuation<Void, Never>?
 
@@ -1413,7 +1695,9 @@ private final class FakeRoutingSource: RoutingSource {
         guard let meters = distances[routeKey] else {
             throw RoutingError.server("missing scripted route \(routeKey)")
         }
-        return response(from: pair.0, to: pair.1, meters: meters, edgeID: includeEdgeSegments ? routeKey : nil)
+        var result = response(from: pair.0, to: pair.1, meters: meters, edgeID: includeEdgeSegments ? routeKey : nil)
+        result.terminalContinuation = terminalContinuations[routeKey]
+        return result
     }
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
@@ -1441,6 +1725,7 @@ private final class FakeRoutingSource: RoutingSource {
                 diagnostics: nil, foundationRoute: fuelFailureFoundation, windowComplete: false)
         }
         fuelChainPlanCount += 1
+        onFuelPlanReply?()
         if let limit = fuelChainErrorAfterPlanCount,
            fuelChainPlanCount > limit,
            let fuelChainError {
@@ -1505,7 +1790,9 @@ private final class FakeRoutingSource: RoutingSource {
         let plannedRoutes: [RouteResponse]? = supportsCombinedFuelPlanning
             ? zip(routePoints, routePoints.dropFirst()).compactMap { endpoints in
                 distances[key(endpoints.0, endpoints.1)].map {
-                    response(from: endpoints.0, to: endpoints.1, meters: $0)
+                    var result = response(from: endpoints.0, to: endpoints.1, meters: $0)
+                    result.terminalContinuation = terminalContinuations[key(endpoints.0, endpoints.1)]
+                    return result
                 }
             }
             : nil
@@ -1618,4 +1905,11 @@ struct FuelPlanningWindowPolicyTests {
         #expect(!watchdog.isExpired(at: start.addingTimeInterval(100)))
         #expect(watchdog.isExpired(at: start.addingTimeInterval(105)))
     }
+}
+
+// Opaque transport tokens, not fixture claims about the road topology.
+private func transportToken(_ id: Int64) -> NativeRoutingContinuation {
+    NativeRoutingContinuation(version: 1, sourceEpoch: "transport-test",
+        incoming: .init(wayID: id, fromNodeID: id * 10, toNodeID: id * 10 + 1),
+        location: .node(id * 10 + 1), restrictionContext: [], activeRestrictions: [])
 }

@@ -4,6 +4,7 @@ import Foundation
 /// native worker tasks; it does not define route costs or a new search budget.
 nonisolated enum RoutingWorkContext {
     @TaskLocal static var deadline: Double?
+    @TaskLocal static var measurement: RoutingMeasurement?
 
     static var stopReason: String? {
         if Task.isCancelled { return "cancelled" }
@@ -30,8 +31,11 @@ nonisolated enum RoutingWorkContext {
         _ operation: @escaping @Sendable () -> Value
     ) async -> Value {
         let deadline = deadline
+        let measurement = measurement
         let worker = Task.detached(priority: .userInitiated) {
-            Self.$deadline.withValue(deadline) { operation() }
+            Self.$deadline.withValue(deadline) {
+                Self.$measurement.withValue(measurement) { operation() }
+            }
         }
         return await withTaskCancellationHandler {
             await worker.value

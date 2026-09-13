@@ -18,6 +18,9 @@ final class AppEnvironment {
     let cueSettings = NavigationCueSettings()
     let subscription = SubscriptionService()
     let trial = TrialGateModel()
+    #if DEBUG
+    let acquisitionPresentationFixture: DebugPackAcquisitionFixture?
+    #endif
     let planner: RoutePlannerModel
     let groups: GroupsViewModel
     let incidents: IncidentRecoveryModel
@@ -92,6 +95,14 @@ final class AppEnvironment {
             UserDefaults.standard.removeObject(forKey: TesterKey.bypassSubscription)
         }
 
+        #if DEBUG
+        let fixture = DebugPackAcquisitionFixture.isEnabled ? DebugPackAcquisitionFixture() : nil
+        acquisitionPresentationFixture = fixture
+        let acquisition = fixture.map { PackAcquisitionCoordinator(inspect: $0, installer: $0) }
+        #else
+        let acquisition: PackAcquisitionCoordinator? = nil
+        #endif
+
         planner = RoutePlannerModel(
             routing: routing,
             locationService: location,
@@ -100,7 +111,9 @@ final class AppEnvironment {
             offline: offline,
             graphPacks: graphPacks,
             network: network,
-            poiManager: nil
+            poiManager: nil,
+            packAcquisition: acquisition,
+            requiresInstalledRoutingPacks: acquisition == nil ? nil : true
         )
         groups = GroupsViewModel(supabase: supabase, location: location, mapState: mapState)
         rideIntelligence = RideIntelligenceService(supabase: supabase)
@@ -269,3 +282,46 @@ final class AppEnvironment {
         cueSettings.audioEnabled = enabled
     }
 }
+
+#if DEBUG
+/// Presentation-only acquisition harness. The app's coordinator, consent alert,
+/// progress view and cancellation remain real; no CDN or graph proof is implied.
+@Observable
+@MainActor
+final class DebugPackAcquisitionFixture: PackCoverageInspecting, PackInstalling {
+    static var isEnabled: Bool {
+        ProcessInfo.processInfo.environment["DIRT_UI_TEST_PROFILE"] == "1"
+            && ProcessInfo.processInfo.environment["DIRT_UI_TEST_PACK_ACQUISITION"] == "1"
+    }
+
+    private(set) var attempts = 0
+    private var started = false
+    let routingManifestVersion = "presentation-fixture"
+
+    func start(planner: RoutePlannerModel) {
+        guard !started else { return }
+        started = true
+        planner.apply(.replaceAll(waypoints: [
+            RouteCoordinate(longitude: -63.5752, latitude: 44.6488),
+            RouteCoordinate(longitude: -60.1942, latitude: 46.1368)
+        ], profile: .dirt, allowUnknown: false, avoidMotorways: false,
+           preferBackRoads: false), source: "ui-acquisition-fixture")
+    }
+
+    func isRoutingPackInstalled(_ regionID: String) -> Bool { false }
+    func installedRoutingGraphPath(regionID: String) -> String? { nil }
+    func isRoutingPackPublished(_ regionID: String) -> Bool { regionID == "ns" }
+    func packRevisionState(_ regionID: String) -> PackRevisionState { .missing }
+    func displayTitle(forRegionId id: String) -> String { id == "ns" ? "Nova Scotia" : id.uppercased() }
+    func routingPackDownloadBytes(_ regionID: String) -> Int64? { 40_000_000 }
+
+    func installVerifiedPacks(_ regionIDs: [String], replaceInstalled: Bool) async throws {
+        attempts += 1
+        // Hold the existing verification progress presentation until the test
+        // cancels. No fixture bytes can be mistaken for verified planning data.
+        try await Task.sleep(nanoseconds: 300_000_000_000)
+        throw PackAcquisitionError.downloadFailed(regionID: regionIDs.first ?? "ns",
+            message: "Presentation fixture did not complete an installation.")
+    }
+}
+#endif

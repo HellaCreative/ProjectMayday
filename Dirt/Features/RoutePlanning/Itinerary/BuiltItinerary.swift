@@ -91,6 +91,7 @@ struct BuiltLeg: Equatable, Sendable {
             && lhs.routeProfile == rhs.routeProfile
             && lhs.validFuelTargets.map(\.id) == rhs.validFuelTargets.map(\.id)
             && lhs.response.itineraryValueSignature == rhs.response.itineraryValueSignature
+            && lhs.response.terminalContinuation == rhs.response.terminalContinuation
     }
 }
 
@@ -126,6 +127,8 @@ struct BuiltItinerary: Equatable, Sendable {
             && lhs.waypointFuelStops == rhs.waypointFuelStops
             && lhs.riderRoutes.mapValues(\.itineraryValueSignature)
                 == rhs.riderRoutes.mapValues(\.itineraryValueSignature)
+            && lhs.riderRoutes.mapValues(\.terminalContinuation)
+                == rhs.riderRoutes.mapValues(\.terminalContinuation)
     }
 
     static func empty(for itinerary: RiderItinerary) -> BuiltItinerary {

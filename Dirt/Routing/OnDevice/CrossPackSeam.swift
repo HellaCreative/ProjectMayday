@@ -132,7 +132,7 @@ extension OnDeviceRouter.Result {
                 unknownSurfacePercent: 0
             )
         }
-        return OnDeviceRouter.Result(
+        var combined = OnDeviceRouter.Result(
             coordinates: coords,
             distanceMeters: meters,
             edgeIds: edgeIds,
@@ -161,5 +161,7 @@ extension OnDeviceRouter.Result {
                 }
             )
         )
+        combined.terminalContinuation = hops.last?.terminalContinuation
+        return combined
     }
 }

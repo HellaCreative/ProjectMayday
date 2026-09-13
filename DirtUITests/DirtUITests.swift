@@ -255,6 +255,44 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testRoutingPackAcquisitionPromptCancelAndRetryRetainsPins() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_PROFILE"] = "1"
+        app.launchEnvironment["DIRT_UI_TEST_PACK_ACQUISITION"] = "1"
+        app.launch()
+
+        let prompt = app.alerts["Install routing pack"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 8))
+        XCTAssertTrue(prompt.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Nova Scotia")).firstMatch.exists)
+        let pins = app.staticTexts["acquisition-fixture-pins"]
+        let expectedPins = "44.6488,-63.5752;46.1368,-60.1942"
+        // Alert presentation may temporarily hide background accessibility.
+        prompt.buttons["Download"].tap()
+        let cancel = app.buttons["Cancel download"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Verifying routing data"].exists)
+        XCTAssertEqual(pins.label, expectedPins)
+        XCTAssertEqual(app.staticTexts["acquisition-fixture-attempts"].label, "Attempts: 1")
+        cancel.tap()
+
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5), "Cancellation must retain the same download for retry")
+        prompt.buttons["Download"].tap()
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        XCTAssertEqual(pins.label, expectedPins)
+        XCTAssertEqual(app.staticTexts["acquisition-fixture-attempts"].label, "Attempts: 2")
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Routing pack retry — preserved rider pins"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        cancel.tap()
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.buttons["Not now"].tap()
+        XCTAssertTrue(pins.waitForExistence(timeout: 3))
+        XCTAssertEqual(pins.label, expectedPins)
+        XCTAssertFalse(cancel.exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

@@ -31,11 +31,11 @@ struct OnDevicePackBenchmarkTests {
     }
 
     @MainActor
-    private func fixtureStore(packRoot: URL? = nil, version: String = "fabric-v4-20260908-02") throws -> (GraphPackStore, URL) {
+    private func fixtureStore(packRoot: URL? = nil, version: String = "fabric-v4-20260908-02", regions: [String] = ["ns", "nb"]) throws -> (GraphPackStore, URL) {
         let fm = FileManager.default
         let temp = fm.temporaryDirectory.appendingPathComponent("recovery-packs-\(UUID())")
         do {
-            for region in ["ns", "nb"] {
+            for region in regions {
                 try verifyPack(region, packRoot: packRoot, version: version)
                 let destination = temp.appendingPathComponent("\(version)/\(region)")
                 try fm.createDirectory(at: destination, withIntermediateDirectories: true)
@@ -243,9 +243,59 @@ struct OnDevicePackBenchmarkTests {
         }
     }
 
+    @Test("Fresh planning acquisition downloads and verifies the current public NS pack")
+    @MainActor
+    func currentCatalogAcquisition() async throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent("routing-acquisition-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let measurement = RoutingMeasurement(metadata: ["workload": "fresh NS public acquisition", "execution": "GraphPackStore URLSession verified installation"])
+        let store = GraphPackStore(cacheRoot: temp, refreshCatalogOnInit: false)
+        #expect(!store.isRoutingPackInstalled("ns"))
+        let model = RoutePlannerModel(routing: RoutingClient(), locationService: LocationService(),
+            mapState: MapState(), navigation: NavigationSession(), offline: OfflineTileManager(),
+            graphPacks: store, network: NetworkPathMonitor(), requiresInstalledRoutingPacks: true)
+        let origin = RiderWaypoint(coordinate: RouteCoordinate(longitude: -63.34024797349485, latitude: 44.764804567541226))
+        let destination = RiderWaypoint(coordinate: RouteCoordinate(longitude: -62.233921261078635, latitude: 45.56808192814221))
+        model.selectMode(.plan)
+        model.apply(.replaceAll(waypoints: [origin.coordinate, destination.coordinate], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "plan")
+        await model.waitForCanonicalBuildForTesting()
+        let prompt = try #require(model.packConsent)
+        #expect(prompt.regionIDs == ["ns"])
+        #expect((prompt.downloadBytes ?? 0) > 0)
+        #expect(model.activeResponses.isEmpty)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [origin.coordinate, destination.coordinate])
+        let phase = measurement.begin(.acquisition)
+        await RoutingWorkContext.$measurement.withValue(measurement) {
+            await model.acceptPackConsent()
+            measurement.end(phase)
+            await model.waitForCanonicalBuildForTesting()
+        }
+        #expect(store.packRevisionState("ns") == .current)
+        #expect(model.packConsent == nil)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [origin.coordinate, destination.coordinate])
+        #expect(!model.activeResponses.isEmpty)
+        #expect(model.built?.riderLegStatus.values.allSatisfy { $0 == .built } == true)
+        #expect(model.built?.legs.last?.toCoordinate == destination.coordinate)
+        #expect(model.errorMessage == nil)
+        try saveEvidence(["measurement": try object(measurement.finish(outcome: "acquired")),
+            "identity": store.installedPackIdentity(regionId: "ns") ?? [:]], name: "fresh-public-acquisition")
+    }
+
     @Test("Owner phone 42 requests replay with its exact catalog and fuel settings")
     @MainActor
     func ownerPhone42Requests() async throws {
+        try await runOwnerPhone42Requests(repeatFirst: false)
+    }
+
+    @Test("Exact first owner request measures first-use and repeated preparation")
+    @MainActor
+    func ownerPhone42ColdWarm() async throws {
+        try await runOwnerPhone42Requests(repeatFirst: true)
+    }
+
+    @MainActor
+    private func runOwnerPhone42Requests(repeatFirst: Bool) async throws {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
@@ -257,7 +307,10 @@ struct OnDevicePackBenchmarkTests {
             ("531BC48C-868A-5545-AB93-1FD01CEBABFF", 46.885033126489716, -60.49502889835437, 11.2, 5797475437955788),
             ("EB86574E-9CF2-5EC8-AF91-664BABDD8718", 45.56808192814221, -62.233921261078635, 7.9, 6709655860308004)
         ]
-        for (id, lat, lon, zoom, seed) in cases {
+        let selected = repeatFirst ? [cases[0], cases[0]] : cases
+        for (runIndex, request) in selected.enumerated() {
+            let (id, lat, lon, zoom, seed) = request
+            let evidenceID = id + (repeatFirst ? (runIndex == 0 ? "-first-use" : "-repeated") : "")
             let a = RiderWaypoint(coordinate: RouteCoordinate(longitude: -63.34024797349485, latitude: 44.764804567541226))
             let b = RiderWaypoint(coordinate: RouteCoordinate(longitude: lon, latitude: lat))
             let template = RiderLeg(from: a.id, to: b.id, profile: .dirt, allowUnknown: false, avoidMotorways: false)
@@ -268,18 +321,77 @@ struct OnDevicePackBenchmarkTests {
             let itinerary = RiderItinerary(waypoints: [a, b], legs: [leg], generation: 1, impassableEdgeIDs: [])
             let builder = ItineraryBuilder()
             builder.mapZoom = zoom
-            let result = await builder.build(itinerary, from: 0, reuse: nil,
+            let measurement = RoutingMeasurement(metadata: [
+                "workload": "owner-phone42-" + id, "packRelease": version,
+                "hardware": "MacBookPro17,1 Apple M1 16 GiB; iPhone17 iOS26.5 simulator",
+                "execution": "native PackRoutingSource / ItineraryBuilder",
+                "preparation": runIndex == 0 ? "first request in store" : "reused store",
+                "maxLabelPayloadBytes": "134217728",
+                "seed": String(seed), "profile": "dirt", "allowUnknown": "false",
+                "tankMeters": "200000", "reservePercent": "10"
+            ])
+            let result = await RoutingWorkContext.$measurement.withValue(measurement) {
+                await builder.build(itinerary, from: 0, reuse: nil,
                 fuel: FuelRangePrefs.Snapshot(tankMeters: 200_000, usableMeters: 180_000, reservePercent: 10, automaticPlanningEnabled: true),
                 source: .fixed(PackRoutingSource(packs: store, cache: RouteResponseCache())),
                 onFuelStatus: { _ in }, onProgress: { _ in })
+            }
+            let report = measurement.finish(outcome: String(describing: result.riderLegStatus))
+            try saveEvidence(["measurement": try object(report)], name: "measurement-phone42-" + evidenceID)
             try saveEvidence(["pack": version, "itinerary": try object(itinerary), "mapZoom": zoom,
                 "tankMeters": 200_000, "usableMeters": 180_000,
                 "routes": try result.legs.map { try object($0.response) },
                 "status": String(describing: result.riderLegStatus),
-                "stops": result.legs.compactMap { $0.endsAtFuelStop?.stationID }], name: "phone42-" + id)
+                "stops": result.legs.compactMap { $0.endsAtFuelStop?.stationID }], name: "phone42-" + evidenceID)
             #expect(result.legs.first?.endsAtFuelStop?.stationID != nil)
             #expect(result.legs.last?.toCoordinate == b.coordinate)
             #expect(result.riderLegStatus[leg.id] == .built)
+        }
+    }
+
+    @Test("Current Ontario pack completes the existing southern Ontario endpoints without fuel")
+    @MainActor
+    func southernOntarioFuelOffColdWarm() async throws {
+        let version = "fabric-v4-20260909-02"
+        let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(version).appendingPathComponent("packs")
+        let (store, temp) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let from = CLLocationCoordinate2D(latitude: 44.632662, longitude: -75.651839)
+        let to = CLLocationCoordinate2D(latitude: 44.601681, longitude: -79.308263)
+        for profile in [RouteProfile.dirt, .balanced, .cleanest] {
+            for repetition in 0..<2 {
+                let name = "ontario-" + profile.rawValue + "-" + String(repetition)
+                let measurement = RoutingMeasurement(metadata: ["workload": "device-on-kingston-to-orillia",
+                    "packRelease": version, "profile": profile.rawValue, "fuel": "off",
+                    "allowUnknown": "false", "seed": String(0xD1470008),
+                    "preparation": repetition == 0 ? "first profile request" : "same request repeated",
+                    "hardware": "MacBookPro17,1 M1 16GiB iPhone17 iOS26.5 simulator"])
+                let result = await RoutingWorkContext.$measurement.withValue(measurement) {
+                    await store.routeOnDeviceDetailed(from: from, to: to, profile: profile,
+                        allowUnknown: false, sessionSeed: 0xD1470008)
+                }
+                let outcome: String
+                switch result {
+                case .success: outcome = "complete"
+                case .failure(let failure): outcome = String(describing: failure)
+                }
+                var output: [String: Any] = ["from": [from.longitude, from.latitude], "to": [to.longitude, to.latitude],
+                    "measurement": try object(measurement.finish(outcome: outcome))]
+                switch result {
+                case .success(let route):
+                    output["route"] = ["distanceMeters": route.distanceMeters,
+                        "dirtPercent": route.reportedDirtPercent, "repeatedMeters": route.backtrackMeters,
+                        "geometry": route.coordinates.map { [$0.longitude, $0.latitude] },
+                        "legs": route.legs.map { leg in ["edgeID": leg.edgeId, "meters": leg.distanceMeters,
+                            "geometry": leg.coordinates.map { [$0.longitude, $0.latitude] }] as [String: Any] }]
+
+                    #expect(route.coordinates.count > 1)
+                    #expect(route.searchMeta.timedOut == false)
+                case .failure(let failure): Issue.record("Ontario \(profile) did not complete: \(failure)")
+                }
+                try saveEvidence(output, name: name)
+            }
         }
     }
 

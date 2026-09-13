@@ -277,6 +277,18 @@ before accepting an implementation. Targets are measured engineering decisions,
 not arbitrary inherited constants. A candidate must materially improve memory
 and/or latency while preserving legality, fuel correctness, and riding character.
 No claim of consumer scale follows from one successful route or a warmed cache.
+The current engineering targets for the existing iPhone17 / iOS26.5 simulator
+on MacBookPro17,1 (Apple M1, 16 GiB) are: the exact first owner build-42 request
+with 200 km / 10% reserve within 8 seconds on first use and 5 seconds on repeat;
+the existing southern Ontario Kingston–Orillia endpoints with fuel off within
+15 seconds on first use and 10 seconds on repeat for each profile. Target peak
+process footprint is 256 MiB for NS and 384 MiB for southern Ontario, with RSS
+reported alongside it rather than substituted for footprint. Show initial
+progress within 250 ms and acknowledge cancellation within one second. These are
+qualification targets, not new routing cutoffs or claims of achieved performance.
+They require isolated cold/repeated runs and separate physical-device targets
+before phone acceptance; no whole-journey deadline follows from them.
+
 For any retained server computation, test concurrent requests, bounded admission,
 per-request memory, cancellations, and cold behavior on the actual service class.
 
@@ -326,13 +338,16 @@ implemented. Update it as results change instead of adding another status file.
 | Item, as reviewed 2026-09-13 | State |
 | --- | --- |
 | Main product checkout | `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, app checkpoint `91cc3cc`; preserve the accepted app rather than restoring an older shell. |
-| Existing native candidate | `.build/engine-architecture`, branch `audit/baseline-recovery-20260913`, HEAD `b4c2393` plus uncommitted repairs. Verify status before editing. |
+| Existing native candidate | `.build/engine-architecture`, branch `audit/baseline-recovery-20260913`, Recovery checkpoint `c0ce562` plus active native repairs. Verify status before editing. |
 | Device checkpoint | Owner task reports build 42 remains installed; build 43 was not installed. Compilation or install does not prove routing-data readiness. |
 | Candidate data | Phone catalog `fabric-v4-20260909-02`; some historical fixtures use `fabric-v4-20260908-02`. Results against one do not automatically qualify the other. |
-| Verified acquisition repair | DEV planning now waits for the existing pack prompt and verified installation, then resumes the same pins; missing data is not reported as disconnected roads. Model-level consent/resume/decline tests pass; actual download progress/cancellation and app presentation still need integrated verification. |
+| Verified acquisition repair | DEV planning now waits for the existing pack prompt and verified installation, then resumes the same pins; missing data is not reported as disconnected roads. The real planning model now completes empty-directory → current public catalog → consent → verified NS download → native ride. Delayed catalog, cancel, stale reply, and retry model tests pass. The real notification presentation test also passes: consent, progress, cancel and retry preserve pins (`/tmp/Dirt-Pack-Acquisition-UI-20260913.xcresult`, one UI test). The UI fixture suspends installation; real network qualification is the separate planning-model test. |
 | Owner-log replay | All four build-42 requests complete with initial refuelling in the real native simulator path using catalog `fabric-v4-20260909-02`, exact logged coordinates/seeds and 200 km range / 10% reserve. Zoom is available only to the logged decimal precision. The 33-test focused result is `/tmp/Dirt-Phone42-Exact-Requests-R2-20260913.xcresult`; raw geometry is in `.build/recovery-evidence/phone42-exact-requests`. This is not phone acceptance. |
 | Latest integrated evidence | `/tmp/Dirt-DEV43-Readiness-Full-Serial-20260913.xcresult`: 345/350 tests pass; failures include two full fuel aggregates, a now-removed duplicate focused aggregate, and two UI checks. Historical and initial-fill fuel replays each complete 17/21. All 19 direct comparisons preserve geometry and reported dirt; two completed Clean cross-region fuel shapes differ by exact border-node matching. |
-| Known qualification gaps | Whole-region decoding/indexing/search allocation is still present. Successful fuel continuations currently consume a sixteen-attempt cutoff; same-leg pump reconsideration, legal-state continuity, Wander and full riding-character qualification remain open. Unknown-access reporting in the owner replay also needs checking against V4 directed permissions. No real resident/allocation peak has yet been measured; device capacity and cache limits are not such measurements. |
+| Known qualification gaps | Whole-region decoding/indexing/search allocation is still present. Successful fuel continuations no longer consume the failed-attempt quota; same-leg pump reconsideration and actual destination-arrival distance caps have focused coverage. Explicit legal-arrival tokens now preserve node-turn/via-way state in focused split-route tests across Dirt, Balanced and Clean; real regional and fuel replay remains unqualified. Mid-edge reversal and sub-metre omitted traversal require further coverage. Wander and full riding-character qualification remain open. Directed V4 access reporting was corrected without changing the four owner route geometries or fuel stops. Single-objective and Balanced labels now allocate bounded pages on demand. Whole-graph decoding, indexes and guidance still require selective loading; this does not yet bound whole-journey residency. |
+| Current focused evidence | `/tmp/Dirt-Demand-Labels-R2-20260913.xcresult`: 99 tests pass, including real current-catalog acquisition, four exact owner requests, >16 successful fuel stages, bounded unsuccessful/stationary retries, same-leg pump recovery, stale responses, directed access, and label-memory exhaustion classification. The subsequent legal-continuation run `/tmp/Dirt-Legal-Continuation-R4-20260913.xcresult` passes 92 focused tests, including token export/import, split restrictions, fuel carry and both label stores. Broad regional, riding-character, cold/warm and phone qualification remain separate. |
+| Measured preparation baseline | M1 MacBookPro17,1 / 16 GiB, existing iPhone17 iOS26.5 simulator: four owner requests took 8.725–11.486 seconds before demand labels; sampled process RSS peaks 658–667 MiB, footprint 261–284 MiB. These are request samples after fixture setup, not a qualified cold application startup. Inclusive phases overlap; allocation and lifetime peaks are reported separately in `.build/recovery-evidence/measured-dense-labels`. |
+| Current isolated owner replay | `/tmp/Dirt-Legal-ColdWarm-20260913.xcresult` passes the exact first owner request twice: first use 20.949 s, repeat 4.650 s, identical repeated geometry/stops. First-use sampled footprint 170.3 MiB / heap 124.1 MiB / RSS 511.5 MiB; repeat 130.0 / 89.1 / 482.1 MiB. First-use latency misses the 8 s target. The legal-arrival correction changes some intermediate geometry; pack bytes remain unchanged. Raw phases, tokens and geometry are in `.build/recovery-evidence/legal-cold-warm`. |
 | Legacy hosted services | DEV was last audited at `139a173`; production at `af96ca97`. These are observations, not desired architecture or current deployment proof. Recheck only when relevant. |
 | Release | No deployment, archive, device replacement, or App Review submission is part of documentation consolidation. |
 

@@ -84,6 +84,7 @@ struct RootView: View {
 
     @State private var activeSheet: ActiveSheet? = {
         #if DEBUG
+        if DebugPackAcquisitionFixture.isEnabled { return nil }
         if ProcessInfo.processInfo.environment["DIRT_UI_TEST_PROFILE"] == "1" {
             return .profile
         }
@@ -99,7 +100,12 @@ struct RootView: View {
     @State private var mapFuelRangeKm = FuelRangePrefs.kilometers
     @State private var mapFuelReservePercent = FuelRangePrefs.reservePercent
     @State private var mapAutomaticFuelPlanning = FuelRangePrefs.automaticPlanningEnabled
-    @State private var coachStep: CoachStep? = OnboardingPrefs.coachComplete ? nil : .openRoute
+    @State private var coachStep: CoachStep? = {
+        #if DEBUG
+        if DebugPackAcquisitionFixture.isEnabled { return nil }
+        #endif
+        return OnboardingPrefs.coachComplete ? nil : .openRoute
+    }()
     /// Left↔right landscape keeps the same size; this ticket forces chrome to re-read
     /// island-side safe-area insets when the device flips.
     @State private var landscapeEdgeTicket: String = ""
@@ -228,6 +234,30 @@ struct RootView: View {
                 .presentationBackground(DirtTheme.sheetMaterial)
             }
             .background { rootLifecycleHooks }
+            .task {
+                #if DEBUG
+                app.acquisitionPresentationFixture?.start(planner: app.planner)
+                #endif
+            }
+            .overlay(alignment: .bottomTrailing) {
+                #if DEBUG
+                if let fixture = app.acquisitionPresentationFixture {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(app.planner.itinerary.waypoints.map {
+                            String(format: "%.4f,%.4f", $0.coordinate.latitude, $0.coordinate.longitude)
+                        }.joined(separator: ";"))
+                        .accessibilityIdentifier("acquisition-fixture-pins")
+                        Text("Attempts: \(fixture.attempts)")
+                            .accessibilityIdentifier("acquisition-fixture-attempts")
+                    }
+                    .font(.caption2)
+                    .padding(4)
+                    .background(.regularMaterial)
+                    .padding(.bottom, 100)
+                    .allowsHitTesting(false)
+                }
+                #endif
+            }
     }
 
     /// Map + chrome only — kept separate so the type checker can digest the overlays.
@@ -1001,7 +1031,9 @@ struct RootView: View {
             graphBrandButton
 
             if let progress = app.planner.activeRouteProgressMessage {
-                ToastView(text: progress, isBuildingRoute: true)
+                ToastView(text: progress, isBuildingRoute: true,
+                    detail: app.planner.isInstallingRoutingPacks ? "Saving verified data for on-device routing" : nil,
+                    onCancel: app.planner.isInstallingRoutingPacks ? { app.planner.cancelPackDownload() } : nil)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
@@ -1690,12 +1722,14 @@ private struct KeepAwakeLifecycle: ViewModifier {
 struct ToastView: View {
     let text: String
     var isBuildingRoute = false
+    var detail: String? = nil
+    var onCancel: (() -> Void)? = nil
 
     private var progress: RoutePlannerModel.ProgressToastContent? {
         RoutePlannerModel.progressToastContent(for: text)
             ?? (isBuildingRoute ? RoutePlannerModel.ProgressToastContent(
                 title: text,
-                detail: "Finding roads and checking your route"
+                detail: detail ?? "Finding roads and checking your route"
             ) : nil)
     }
 
@@ -1716,9 +1750,16 @@ struct ToastView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     RouteBuildPistonIndicator()
                         .accessibilityHidden(true)
+                    if let onCancel {
+                        Button("Cancel download", action: onCancel)
+                            .font(DirtType.helper)
+                            .foregroundStyle(.white)
+                            .frame(minHeight: DirtHit.min)
+                            .accessibilityIdentifier("cancel-routing-pack-download")
+                    }
                 }
                 .frame(minWidth: 200, maxWidth: 240, alignment: .leading)
-                .accessibilityElement(children: .ignore)
+                .accessibilityElement(children: onCancel == nil ? .ignore : .contain)
                 .accessibilityIdentifier("route-progress-toast")
                 .accessibilityLabel(progress.title)
                 .accessibilityValue("\(progress.detail). In progress.")

@@ -47,9 +47,63 @@ struct GraphV4PackTests {
                         if let way = Int(id.split(separator: ":")[0].dropFirst()), ways.last != way { ways.append(way) }
                     }
                     #expect(ways == expected)
+                    for leg in result.legs where !leg.edgeId.hasPrefix("soft-stitch") {
+                        let way = Int(leg.edgeId.split(separator: ":")[0].dropFirst())
+                        let expectedAccess = [20, 21, 22].contains(way ?? -1)
+                            ? "motorized_destination" : "motorized_verified"
+                        #expect(leg.accessName == expectedAccess)
+                    }
                 case .failure(let error): Issue.record("forecourt \(profile) failed: \(error)")
                 }
             }
+        }
+    }
+
+    @Test("V4 reporting uses traversed direction rather than legacy access attributes")
+    func directedAccessReporting() throws {
+        // A test-only variant of existing topology reproduces the owner pack's
+        // stale coarse unknown classification without changing road geometry.
+        var graph = try Data(contentsOf: fixtureURL("legal-topology-forecourt.graph.v4.bin"))
+        func uint32(_ offset: Int) -> Int {
+            (0..<4).reduce(0) { $0 | (Int(graph[offset + $1]) << ($1 * 8)) }
+        }
+        let attributes = uint32(36)
+        let access = uint32(112)
+        for edge in 0..<uint32(12) {
+            let at = attributes + edge * 2
+            graph[at] = (graph[at] & ~UInt8(0x38)) | UInt8(2 << 3)
+        }
+        // Main western road: known allowed eastbound, uncertain westbound.
+        graph[access] = 0
+        graph[access + 1] = 1
+        let pack = try GraphV2Pack(data: graph)
+        pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.geometry.v1.bin")))
+        var router = OnDeviceRouter(pack: pack)
+        router.matchLimitMeters = 20
+        router.initialFuelApproach = true
+        let west = CLLocationCoordinate2D(latitude: 45, longitude: -64.004)
+        let middle = CLLocationCoordinate2D(latitude: 45, longitude: -64.002)
+        let east = CLLocationCoordinate2D(latitude: 45, longitude: -63.996)
+        for cap: Double? in [nil, 2_000] {
+            // Same-edge shortcut and both virtual/full-edge reconstruction paths.
+            for end in [middle, east] {
+                guard case .success(let result) = router.routeDetailed(from: west, to: end,
+                    profile: .balanced, allowUnknown: false, sessionSeed: 0, maxRouteMeters: cap) else {
+                    Issue.record("Known allowed eastbound route must remain reachable"); continue
+                }
+                let roads = result.legs.filter { !$0.edgeId.hasPrefix("soft-stitch") }
+                #expect(!roads.isEmpty)
+                #expect(roads.allSatisfy { $0.accessName == "motorized_verified" })
+                #expect(result.unknownAccessPercent == 0)
+            }
+            guard case .success(let reverse) = router.routeDetailed(from: middle, to: west,
+                profile: .balanced, allowUnknown: true, sessionSeed: 0, maxRouteMeters: cap) else {
+                Issue.record("Explicitly enabled uncertain direction must remain reachable"); continue
+            }
+            let roads = reverse.legs.filter { !$0.edgeId.hasPrefix("soft-stitch") }
+            #expect(!roads.isEmpty)
+            #expect(roads.allSatisfy { $0.accessName == "motorized_unknown" })
+            #expect(reverse.unknownAccessPercent > 95)
         }
     }
 

@@ -82,6 +82,93 @@ struct PackFirstRoutingTests {
         #expect(live.routeRequests.isEmpty)
     }
 
+    @Test func coldCatalogWaitsBeforeDeclaringNewBrunswickUnavailable() async throws {
+        let live = NamedFakeRoutingSource(name: "live")
+        let pack = NamedFakeRoutingSource(name: "pack")
+        let coverage = FakePackCoverage(installed: ["ns"], published: ["ns"])
+        coverage.catalogReady = false
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let model = makePackFirstModel(live: live, pack: pack,
+            policy: RoutingSourcePolicy(isOnline: { true }, installedPacks: coverage,
+                live: live, pack: pack, onDeviceOnly: true), acquisition: coordinator,
+            requiresInstalledRoutingPacks: true)
+        model.apply(.replaceAll(waypoints: [halifax, fredericton], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+        for _ in 0..<1_000 where coverage.catalogContinuation == nil { await Task.yield() }
+        let continuation = try #require(coverage.catalogContinuation)
+        let requested = model.itinerary
+        #expect(model.packConsent == nil)
+        #expect(model.errorMessage == nil)
+        #expect(pack.routeRequests.isEmpty && live.routeRequests.isEmpty)
+        coverage.published.insert("nb")
+        coverage.catalogReady = true
+        coverage.catalogContinuation = nil
+        continuation.resume()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.packConsent?.regionIDs == ["nb"])
+        #expect(model.itinerary.waypoints == requested.waypoints)
+        #expect(model.itinerary.legs == requested.legs)
+        #expect(pack.routeRequests.isEmpty && live.routeRequests.isEmpty)
+    }
+
+    @Test func staleCatalogReplyCannotReplaceEditedRide() async throws {
+        let live = NamedFakeRoutingSource(name: "live")
+        let pack = NamedFakeRoutingSource(name: "pack")
+        let coverage = FakePackCoverage(installed: ["ns"], published: ["ns"])
+        coverage.catalogReady = false
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let model = makePackFirstModel(live: live, pack: pack,
+            policy: RoutingSourcePolicy(isOnline: { true }, installedPacks: coverage,
+                live: live, pack: pack, onDeviceOnly: true), acquisition: coordinator,
+            requiresInstalledRoutingPacks: true)
+        model.apply(.replaceAll(waypoints: [halifax, fredericton], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+        for _ in 0..<1_000 where coverage.catalogContinuation == nil { await Task.yield() }
+        let continuation = try #require(coverage.catalogContinuation)
+        model.apply(.replaceAll(waypoints: [halifax, sydney], profile: .balanced,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+        coverage.published.insert("nb")
+        coverage.catalogReady = true
+        coverage.catalogContinuation = nil
+        continuation.resume()
+        await model.waitForCanonicalBuildForTesting()
+        for _ in 0..<20 { await Task.yield() }
+        #expect(model.packConsent == nil)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [halifax, sydney])
+        #expect(model.itinerary.legs.allSatisfy { $0.profile == .balanced })
+        #expect(coverage.catalogWaits == 1)
+        #expect(!pack.routeRequests.isEmpty && live.routeRequests.isEmpty)
+    }
+
+    @Test func installedPacksDoNotDependOnColdPublicationCatalog() async throws {
+        let coverage = FakePackCoverage(installed: ["ns", "nb"], published: ["ns"])
+        coverage.catalogReady = false
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let coordinates = [halifax.locationCoordinate, fredericton.locationCoordinate]
+        #expect(!coordinator.requiresCatalogReadiness(for: coordinates))
+        try await coordinator.prepareCatalog(for: coordinates)
+        #expect(coordinator.evaluate(coordinates: coordinates, protectInstalledRevisions: false) == .useInstalledPacks)
+        #expect(coverage.catalogWaits == 0)
+    }
+
+    @Test func cancelledCatalogWaitDoesNotPublishConsent() async throws {
+        let coverage = FakePackCoverage(installed: [], published: ["ns"])
+        coverage.catalogReady = false
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let pending = Task { try await coordinator.prepareCatalog(for: [halifax.locationCoordinate]) }
+        for _ in 0..<1_000 where coverage.catalogContinuation == nil { await Task.yield() }
+        let continuation = try #require(coverage.catalogContinuation)
+        pending.cancel()
+        coverage.catalogReady = true
+        coverage.catalogContinuation = nil
+        continuation.resume()
+        do {
+            try await pending.value
+            Issue.record("Cancelled catalog wait must not succeed")
+        } catch is CancellationError {} catch { Issue.record("Unexpected error: \(error)") }
+        #expect(coordinator.consent == nil && coordinator.warnings.isEmpty)
+    }
+
     @Test func decliningRequiredLocalPackPreservesPinsWithoutRouting() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
@@ -144,8 +231,8 @@ struct PackFirstRoutingTests {
         }
         #expect(prompt.kind == .download)
         #expect(prompt.regionIDs == ["ns"])
-        #expect(prompt.message.contains("improves routing speed"))
-        #expect(prompt.message.contains("offline rerouting"))
+        #expect(prompt.message.contains("calculate this ride on your phone"))
+        #expect(prompt.message.contains("routing data available offline"))
     }
 
     @Test func onlinePlanningUsesLiveWithoutWaitingForPackInstall() async {
@@ -174,6 +261,33 @@ struct PackFirstRoutingTests {
         #expect(live.routeRequests.isEmpty == false)
         #expect(pack.routeRequests.isEmpty)
         #expect(coverage.installCalls.isEmpty)
+    }
+
+    @Test func cancelledAcquisitionCannotResumeOrReplaceNewConsent() async throws {
+        let coverage = FakePackCoverage(installed: [], published: ["ns", "nb"])
+        let installer = SuspendedPackInstaller()
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: installer)
+        _ = coordinator.evaluate(coordinates: [halifax.locationCoordinate, sydney.locationCoordinate], protectInstalledRevisions: false)
+        let pending = Task { try await coordinator.acceptConsent() }
+        while installer.continuation == nil { await Task.yield() }
+        #expect(coordinator.isInstalling)
+        #expect(coordinator.installationPrompt?.regionIDs == ["ns"])
+        coordinator.cancelInstallation()
+        #expect(!coordinator.isInstalling)
+        #expect(coordinator.consent?.regionIDs == ["ns"])
+        coordinator.resetSession()
+        _ = coordinator.evaluate(coordinates: [CLLocationCoordinate2D(latitude: 45.96, longitude: -66.64)], protectInstalledRevisions: false)
+        #expect(coordinator.consent?.regionIDs == ["nb"])
+        // Simulate a transport finishing after cancellation: it must not resume
+        // the abandoned ride or overwrite the newer download request.
+        installer.continuation?.resume()
+        installer.continuation = nil
+        do {
+            try await pending.value
+            Issue.record("Cancelled installation must not report success")
+        } catch is CancellationError {} catch { Issue.record("Unexpected error: \(error)") }
+        #expect(coordinator.consent?.regionIDs == ["nb"])
+        #expect(!coordinator.isInstalling)
     }
 
     @Test func failedPackInstallKeepsConsentAvailableForRetry() async {
@@ -490,6 +604,20 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
     var installCalls: [[String]] = []
     var replacedInstalled: [Bool] = []
     var installError: Error?
+    var catalogReady = true
+    var catalogWaits = 0
+    var catalogContinuation: CheckedContinuation<Void, Never>?
+
+    func requiresRoutingCatalogReadiness(for regionIDs: [String]) -> Bool {
+        !catalogReady && regionIDs.contains { !installed.contains($0) }
+    }
+
+    func prepareRoutingCatalog(for regionIDs: [String]) async throws {
+        guard requiresRoutingCatalogReadiness(for: regionIDs) else { return }
+        catalogWaits += 1
+        await withCheckedContinuation { catalogContinuation = $0 }
+        try Task.checkCancellation()
+    }
     let routingManifestVersion = "test-manifest"
 
     init(installed: Set<String>, published: Set<String>, stale: Set<String> = []) {
@@ -577,5 +705,13 @@ private final class NamedFakeRoutingSource: RoutingSource {
 
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
         nil
+    }
+}
+
+@MainActor
+private final class SuspendedPackInstaller: PackInstalling {
+    var continuation: CheckedContinuation<Void, Never>?
+    func installVerifiedPacks(_ regionIDs: [String], replaceInstalled: Bool) async throws {
+        await withCheckedContinuation { continuation = $0 }
     }
 }

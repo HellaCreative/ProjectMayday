@@ -482,7 +482,7 @@ struct CrossPackSeamTests {
     }
 
     @Test func concatenatingAddsDirtAndPavedMeters() throws {
-        let hop1 = OnDeviceRouter.Result(
+        var hop1 = OnDeviceRouter.Result(
             coordinates: [
                 CLLocationCoordinate2D(latitude: 49.0, longitude: -116.5),
                 CLLocationCoordinate2D(latitude: 49.1, longitude: -116.4)
@@ -507,7 +507,7 @@ struct CrossPackSeamTests {
             reportedPavedPercent: 0,
             unknownSurfacePercent: 0
         )
-        let hop2 = OnDeviceRouter.Result(
+        var hop2 = OnDeviceRouter.Result(
             coordinates: [
                 CLLocationCoordinate2D(latitude: 49.1, longitude: -116.4),
                 CLLocationCoordinate2D(latitude: 49.2, longitude: -116.3)
@@ -532,7 +532,15 @@ struct CrossPackSeamTests {
             reportedPavedPercent: 100,
             unknownSurfacePercent: 0
         )
+        hop1.terminalContinuation = NativeRoutingContinuation(version: 1, sourceEpoch: "transport-test",
+            incoming: .init(wayID: 1, fromNodeID: 10, toNodeID: 11), location: .node(11),
+            restrictionContext: [], activeRestrictions: [])
+        #expect(OnDeviceRouter.Result.concatenating([hop1, hop2])?.terminalContinuation == nil)
+        hop2.terminalContinuation = NativeRoutingContinuation(version: 1, sourceEpoch: "transport-test",
+            incoming: .init(wayID: 2, fromNodeID: 11, toNodeID: 12), location: .node(12),
+            restrictionContext: [], activeRestrictions: [])
         let merged = try #require(OnDeviceRouter.Result.concatenating([hop1, hop2]))
+        #expect(merged.terminalContinuation == hop2.terminalContinuation)
         #expect(merged.dirtPercent == 50)
         #expect(merged.pavedPercent == 50)
         #expect(merged.distanceMeters == 2000)

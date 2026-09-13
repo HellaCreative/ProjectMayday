@@ -825,15 +825,39 @@ final class RoutePlannerModel {
     var packRoutingWarnings: [PackRoutingWarning] { packAcquisition.warnings }
 
     func acceptPackConsent() async {
+        guard !packAcquisition.isInstalling, packAcquisition.consent != nil else { return }
         do {
             try await packAcquisition.acceptConsent()
             resumePendingPackBuild()
+        } catch is CancellationError {
+            // The cancelled acquisition must not resume or overwrite newer intent.
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             isRouting = false
             isAssemblingRoute = false
             if toast == Self.calculatingRouteToast { toast = nil }
         }
+    }
+
+    var isInstallingRoutingPacks: Bool { packAcquisition.isInstalling }
+
+    var packDownloadProgressMessage: String? {
+        guard let prompt = packAcquisition.installationPrompt else { return nil }
+        for id in prompt.regionIDs {
+            guard let region = graphPacks.regions.first(where: { $0.id == id }) else { continue }
+            if case .downloading(let progress) = region.install {
+                return "Downloading \(region.title) · \(Int(progress * 100))%"
+            }
+        }
+        return "Verifying routing data"
+    }
+
+    func cancelPackDownload() {
+        packAcquisition.cancelInstallation()
+        isRouting = false
+        isAssemblingRoute = false
+        fuelPlanningStatus = nil
+        toast = nil
     }
 
     func declinePackConsent() {
@@ -861,6 +885,30 @@ final class RoutePlannerModel {
         let requested = itinerary
         if requiresInstalledRoutingPacks {
             let coordinates = requested.waypoints.map { $0.coordinate.locationCoordinate }
+            if packAcquisition.requiresCatalogReadiness(for: coordinates) {
+                isRouting = true
+                isAssemblingRoute = true
+                toast = "Checking routing pack availability…"
+                buildTask = Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    do {
+                        try await self.packAcquisition.prepareCatalog(for: coordinates)
+                        guard !Task.isCancelled, self.itinerary.generation == requested.generation else { return }
+                        self.buildTask = nil
+                        self.startCanonicalBuild(from: legIndex, through: throughLegIndex,
+                            reuse: reuse, replanFromStationID: replanFromStationID)
+                        await self.buildTask?.value
+                    } catch {
+                        guard !Task.isCancelled, self.itinerary.generation == requested.generation else { return }
+                        self.isRouting = false
+                        self.isAssemblingRoute = false
+                        self.fuelPlanningStatus = nil
+                        self.toast = nil
+                        self.errorMessage = error.localizedDescription
+                    }
+                }
+                return
+            }
             switch packAcquisition.evaluate(coordinates: coordinates,
                 protectInstalledRevisions: graphPacks.protectInstalledRevisions) {
             case .requestConsent:
@@ -1161,7 +1209,8 @@ final class RoutePlannerModel {
     /// Route-build progress is independent from transient tap feedback. A map
     /// interaction may replace `toast`, but it must never hide the active job.
     var activeRouteProgressMessage: String? {
-        Self.activeRouteProgressMessage(
+        if let download = packDownloadProgressMessage { return download }
+        return Self.activeRouteProgressMessage(
             fuelPlanningStatus: fuelPlanningStatus,
             isRouting: isRouting,
             toast: toast
@@ -1763,6 +1812,7 @@ final class RoutePlannerModel {
         moveDebounceTask?.cancel()
         pendingMove = nil
         itineraryBuilder.cancelCurrentBuild()
+        packAcquisition.cancelInstallation(offerRetry: false)
         isRouting = false
     }
 
@@ -2883,7 +2933,8 @@ final class RoutePlannerModel {
         unknownSurfacePercent: Int = 0,
         surfaceFamilyMode: String? = nil,
         maneuvers: [RouteManeuver]? = nil,
-        warnings: [RouteWarning]? = nil
+        warnings: [RouteWarning]? = nil,
+        terminalContinuation: NativeRoutingContinuation? = nil
     ) -> RouteResponse {
         let segments: [RouteSegment]?
         if let networkSegments, !networkSegments.isEmpty {
@@ -2921,7 +2972,8 @@ final class RoutePlannerModel {
             maneuvers: maneuvers,
             warnings: warnings,
             dirtPercentValue: nil,
-            pavedPercentValue: nil
+            pavedPercentValue: nil,
+            terminalContinuation: terminalContinuation
         )
     }
 
@@ -2980,7 +3032,8 @@ final class RoutePlannerModel {
                     ))
                 }
                 return warnings.isEmpty ? nil : warnings
-            }()
+            }(),
+            terminalContinuation: local.terminalContinuation
         )
     }
 

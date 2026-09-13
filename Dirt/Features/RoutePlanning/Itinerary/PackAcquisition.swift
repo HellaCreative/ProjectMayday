@@ -12,6 +12,7 @@ enum PackAcquisitionError: LocalizedError, Equatable {
     case checksumMismatch(regionID: String)
     case downloadFailed(regionID: String, message: String)
     case unavailable(regionID: String)
+    case catalogNotReady
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +20,8 @@ enum PackAcquisitionError: LocalizedError, Equatable {
             return "Downloaded \(regionID) did not match the approved catalog identity."
         case .downloadFailed(let regionID, let message):
             return "Could not install \(regionID): \(message)"
+        case .catalogNotReady:
+            return "Routing pack information is not ready. Check your connection and try again; your pins have been kept."
         case .unavailable(let regionID):
             return "No approved pack is available for \(regionID)."
         }
@@ -34,6 +37,7 @@ struct PackConsentPrompt: Equatable, Sendable {
     let kind: Kind
     let regionIDs: [String]
     let regionTitles: [String]
+    var downloadBytes: Int64? = nil
 
     var title: String {
         switch kind {
@@ -48,7 +52,8 @@ struct PackConsentPrompt: Equatable, Sendable {
         let names = PackAcquisitionEvaluator.joinedTitles(regionTitles)
         switch kind {
         case .download:
-            return "Installing \(names) improves routing speed and enables offline rerouting."
+            let size = downloadBytes.map { " Download size: " + ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) + "." } ?? ""
+            return "Download \(names) to calculate this ride on your phone and keep the routing data available offline." + size
         case .update:
             return "A newer approved \(names) pack is available. Updating is recommended. You can keep using the installed revision."
         }
@@ -94,9 +99,18 @@ enum PackAcquisitionDecision: Equatable, Sendable {
 
 @MainActor
 protocol PackCoverageInspecting: RoutingInstalledPackRegistry {
+    func requiresRoutingCatalogReadiness(for regionIDs: [String]) -> Bool
+    func prepareRoutingCatalog(for regionIDs: [String]) async throws
     func isRoutingPackPublished(_ regionID: String) -> Bool
     func packRevisionState(_ regionID: String) -> PackRevisionState
     func displayTitle(forRegionId: String) -> String
+    func routingPackDownloadBytes(_ regionID: String) -> Int64?
+}
+
+extension PackCoverageInspecting {
+    func requiresRoutingCatalogReadiness(for regionIDs: [String]) -> Bool { false }
+    func prepareRoutingCatalog(for regionIDs: [String]) async throws { try Task.checkCancellation() }
+    func routingPackDownloadBytes(_ regionID: String) -> Int64? { nil }
 }
 
 @MainActor
@@ -139,7 +153,7 @@ enum PackAcquisitionEvaluator {
             ))
         }
 
-        let unpublished = needed.filter { !registry.isRoutingPackPublished($0) }
+        let unpublished = needed.filter { !registry.isRoutingPackInstalled($0) && !registry.isRoutingPackPublished($0) }
         let missingApproved = needed.filter {
             registry.isRoutingPackPublished($0)
                 && registry.packRevisionState($0) == .missing
@@ -154,7 +168,9 @@ enum PackAcquisitionEvaluator {
             return .requestConsent(PackConsentPrompt(
                 kind: .download,
                 regionIDs: pendingDownload,
-                regionTitles: titles(pendingDownload)
+                regionTitles: titles(pendingDownload),
+                downloadBytes: pendingDownload.compactMap { registry.routingPackDownloadBytes($0) }.count == pendingDownload.count
+                    ? pendingDownload.compactMap { registry.routingPackDownloadBytes($0) }.reduce(0, +) : nil
             ))
         }
 
@@ -200,6 +216,11 @@ final class PackAcquisitionCoordinator {
     private(set) var declinedDownloads: Set<String> = []
     private(set) var declinedUpdates: Set<String> = []
 
+    private(set) var installationPrompt: PackConsentPrompt?
+    @ObservationIgnored private var installationTask: Task<Void, Error>?
+    @ObservationIgnored private var installationID: UUID?
+    var isInstalling: Bool { installationPrompt != nil }
+
     private let inspect: any PackCoverageInspecting
     private let installer: any PackInstalling
 
@@ -210,6 +231,15 @@ final class PackAcquisitionCoordinator {
 
     convenience init(store: GraphPackStore) {
         self.init(inspect: store, installer: store)
+    }
+
+    func requiresCatalogReadiness(for coordinates: [CLLocationCoordinate2D]) -> Bool {
+        inspect.requiresRoutingCatalogReadiness(for: PackAcquisitionEvaluator.requiredRegionIDs(for: coordinates))
+    }
+
+    func prepareCatalog(for coordinates: [CLLocationCoordinate2D]) async throws {
+        try await inspect.prepareRoutingCatalog(for: PackAcquisitionEvaluator.requiredRegionIDs(for: coordinates))
+        try Task.checkCancellation()
     }
 
     func decision(
@@ -245,30 +275,46 @@ final class PackAcquisitionCoordinator {
     }
 
     func acceptConsent() async throws {
-        guard let prompt = consent else { return }
+        guard installationTask == nil, let prompt = consent else { return }
+        let id = UUID()
         consent = nil
-        RoutingDebugLog.shared.event(
-            "pack install accepted regions=\(prompt.regionIDs.joined(separator: ",")) " +
-                "kind=\(prompt.kind == .update ? "update" : "download")"
-        )
+        installationID = id
+        installationPrompt = prompt
+        let task = Task { @MainActor [installer] in
+            try Task.checkCancellation()
+            try await installer.installVerifiedPacks(prompt.regionIDs, replaceInstalled: prompt.kind == .update)
+            try Task.checkCancellation()
+        }
+        installationTask = task
+        RoutingDebugLog.shared.event("pack install accepted regions=\(prompt.regionIDs.joined(separator: ","))")
         do {
-            try await installer.installVerifiedPacks(
-                prompt.regionIDs,
-                replaceInstalled: prompt.kind == .update
-            )
+            try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: { task.cancel() }
+            guard installationID == id else { throw CancellationError() }
+            installationTask = nil
+            installationPrompt = nil
+            installationID = nil
+            RoutingDebugLog.shared.event("pack install complete regions=\(prompt.regionIDs.joined(separator: ","))")
         } catch {
-            // A failed transfer is not a declined decision. Restore the exact
-            // prompt so the rider can retry and the pending route is preserved.
+            guard installationID == id else { throw CancellationError() }
+            installationTask = nil
+            installationPrompt = nil
+            installationID = nil
+            // Cancellation and failed verification preserve the request for retry.
             consent = prompt
-            RoutingDebugLog.shared.event(
-                "pack install failed regions=\(prompt.regionIDs.joined(separator: ",")) " +
-                    "message=\(error.localizedDescription)"
-            )
+            RoutingDebugLog.shared.event("pack install incomplete regions=\(prompt.regionIDs.joined(separator: ",")) message=\(error.localizedDescription)")
             throw error
         }
-        RoutingDebugLog.shared.event(
-            "pack install complete regions=\(prompt.regionIDs.joined(separator: ","))"
-        )
+    }
+
+    func cancelInstallation(offerRetry: Bool = true) {
+        let prompt = installationPrompt
+        installationTask?.cancel()
+        installationTask = nil
+        installationID = nil
+        installationPrompt = nil
+        if offerRetry, let prompt { consent = prompt }
     }
 
     func declineConsent() {
@@ -288,6 +334,7 @@ final class PackAcquisitionCoordinator {
     }
 
     func resetSession() {
+        cancelInstallation(offerRetry: false)
         consent = nil
         warnings = []
         declinedDownloads = []

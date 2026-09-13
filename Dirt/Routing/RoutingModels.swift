@@ -96,6 +96,7 @@ struct RouteRequestOptions: Codable, Sendable {
     var avoidEdgeIds: [String]?
     var priorEdgeIds: [String]?
     var arrivalEdgeId: String?
+    var arrivalContinuation: NativeRoutingContinuation?
     var backtrackFactor: Double?
     var sessionSeed: UInt64?
     var maxPathMeters: Double?
@@ -122,6 +123,7 @@ struct RouteRequestOptions: Codable, Sendable {
         avoidEdgeIds: [String] = [],
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
+        arrivalContinuation: NativeRoutingContinuation? = nil,
         backtrackFactor: Double? = nil,
         sessionSeed: UInt64? = nil,
         maxPathMeters: Double? = nil,
@@ -139,6 +141,7 @@ struct RouteRequestOptions: Codable, Sendable {
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
         self.arrivalEdgeId = arrivalEdgeId
+        self.arrivalContinuation = arrivalContinuation
         self.backtrackFactor = backtrackFactor
         self.sessionSeed = sessionSeed
         self.maxPathMeters = maxPathMeters
@@ -173,6 +176,7 @@ struct RouteRequest: Codable, Sendable {
         avoidEdgeIds: [String] = [],
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
+        arrivalContinuation: NativeRoutingContinuation? = nil,
         backtrackFactor: Double? = nil,
         sessionSeed: UInt64 = 0,
         maxPathMeters: Double? = nil,
@@ -199,7 +203,7 @@ struct RouteRequest: Codable, Sendable {
         let scopedPrefer = false
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
         let matchLimit = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
-        if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
+        if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil, arrivalContinuation == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
            !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil,
@@ -210,6 +214,7 @@ struct RouteRequest: Codable, Sendable {
                 avoidEdgeIds: avoidEdgeIds,
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
+                arrivalContinuation: arrivalContinuation,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: seed,
                 maxPathMeters: maxPathMeters,
@@ -288,6 +293,7 @@ struct FuelChainRequest: Codable, Sendable {
         avoidMotorways: Bool = false,
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
+        arrivalContinuation: NativeRoutingContinuation? = nil,
         backtrackFactor: Double? = nil,
         probeFirstReachableStation: Bool = false,
         excludedStationIds: [String] = [],
@@ -315,13 +321,14 @@ struct FuelChainRequest: Codable, Sendable {
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
-        options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
+        options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil && arrivalContinuation == nil
             && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil && RidePreferenceContext.current == nil && startEndpointKind == nil && sessionSeed == 0
             ? nil
             : RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
+                arrivalContinuation: arrivalContinuation,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed == 0 ? nil : sessionSeed,
                 cleanMetroMultiplier: metro,
@@ -990,10 +997,11 @@ struct RouteResponse: Codable, Sendable {
     var debug: RouteResponseDebug? = nil
     var serviceContract: String? = nil
     var serviceBuild: String? = nil
+    var terminalContinuation: NativeRoutingContinuation? = nil
 
     enum CodingKeys: String, CodingKey {
         case status, error, message, distanceMeters, geometry, segments, stats, maneuvers, warnings, debug
-        case serviceContract, serviceBuild
+        case serviceContract, serviceBuild, terminalContinuation
         case backtrackMeters, backtrackPct, backtrackReason
         case restrictedMeters, restrictedReason
         case estimatedMovingSeconds, estimatedElapsedSeconds
