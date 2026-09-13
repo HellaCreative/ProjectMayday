@@ -24,7 +24,7 @@ struct NavCueCard: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(mainLabel)
                         .font(.dirtUI(cueTitleSize, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink)
+                        .foregroundStyle(DirtTheme.panelText)
                         .tracking(0.3)
                         .lineLimit(2)
                         .minimumScaleFactor(0.55)
@@ -39,20 +39,20 @@ struct NavCueCard: View {
                 if let meters = nav.currentCueMeters {
                     Text(Self.formatDistance(meters))
                         .font(.dirtUI(cueDistanceSize, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink)
+                        .foregroundStyle(DirtTheme.panelText)
                         .tracking(0.4)
                         .monospacedDigit()
                 } else if nav.offRoute {
                     Text("Back on the line")
                         .font(.dirtUI(14, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.7))
+                        .foregroundStyle(DirtTheme.panelText.opacity(0.7))
                 }
                 if !nav.offRoute,
                    app.cueSettings.mode == .rally,
                    let following = nav.followingManeuver {
                     Text("Next \(following.displayLabel(cueMode: .rally)) · \(Self.formatDistance(nav.followingManeuverMeters ?? 0))")
                         .font(.dirtUI(11, weight: .semibold))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.72))
+                        .foregroundStyle(DirtTheme.panelText.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
@@ -65,8 +65,8 @@ struct NavCueCard: View {
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
         .background {
             ZStack {
-                Rectangle().fill(DirtTheme.sheetMaterial)
-                Rectangle().fill(Color.white.opacity(0.22))
+                Rectangle().fill(DirtTheme.chromeMaterial)
+                Rectangle().fill(DirtTheme.chromeScrim)
             }
         }
         .overlay(cueUrgencyWash)
@@ -205,7 +205,7 @@ struct NavSpeedReadout: View {
                 .tracking(0.8)
             Text("\(speedKMH)")
                 .font(.dirtUI(compact ? 28 : 44, weight: .heavy))
-                .foregroundStyle(DirtTheme.ink)
+                .foregroundStyle(DirtTheme.panelValue)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
@@ -217,7 +217,7 @@ struct NavSpeedReadout: View {
             height: compact ? 68 : 80,
             alignment: .leading
         )
-        .dirtSheetSurface(radius: compact ? 12 : 16)
+        .dirtChromeSurface(radius: compact ? 12 : 16)
         .dirtDenseChrome()
         .accessibilityLabel("Current speed \(speedKMH) kilometers per hour")
     }
@@ -284,7 +284,7 @@ struct NavStatBox: View {
             Text(value)
                 // Values only — labels stay put. +50% over prior 16 / 20.
                 .font(.dirtMono(compact ? 24 : 30, weight: .semibold))
-                .foregroundStyle(DirtTheme.ink)
+                .foregroundStyle(DirtTheme.panelValue)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -347,7 +347,7 @@ struct NavEndButton: View {
             .padding(.horizontal, 12)
             .frame(maxWidth: fillWidth ? .infinity : nil)
             .frame(minHeight: 48)
-            .background(DirtTheme.sheetMaterial)
+            .background(DirtTheme.chrome)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -431,8 +431,8 @@ struct NavBottomPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 ZStack {
-                    Rectangle().fill(DirtTheme.sheetMaterial)
-                    Rectangle().fill(Color.white.opacity(0.22))
+                    Rectangle().fill(DirtTheme.chromeMaterial)
+                    Rectangle().fill(DirtTheme.chromeScrim)
                 }
             }
             .clipShape(panelShape)
@@ -452,24 +452,24 @@ struct NavBottomPanel: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(nav.currentStage?.title ?? "Destination")
                     .font(.dirtUI(18, weight: .heavy))
-                    .foregroundStyle(DirtTheme.ink)
+                    .foregroundStyle(DirtTheme.panelText)
                     .lineLimit(1)
                 if let detail = nav.currentStage?.detail, !detail.isEmpty {
                     Text(detail)
                         .font(.dirtUI(12, weight: .semibold))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.72))
+                        .foregroundStyle(DirtTheme.panelText.opacity(0.72))
                         .lineLimit(1)
                 }
                 Text("\(NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds)) to waypoint · Ride \(NavTripFormat.elapsed(nav.elapsedSeconds))")
                     .font(.dirtUI(11, weight: .semibold))
-                    .foregroundStyle(DirtTheme.ink.opacity(0.82))
+                    .foregroundStyle(DirtTheme.panelText.opacity(0.82))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
             Spacer(minLength: 6)
             Text(Self.waypointDistance(nav.remainingInCurrentStageMeters))
                 .font(.dirtMono(22, weight: .bold))
-                .foregroundStyle(DirtTheme.ink)
+                .foregroundStyle(DirtTheme.panelValue)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -495,12 +495,12 @@ struct NavBottomPanel: View {
             withAnimation(.easeInOut(duration: 0.18)) { statsExpanded.toggle() }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: surfaceIsAlert ? "exclamationmark.triangle.fill" : DirtSurfaceIcon.symbol(for: surfaceLine))
+                Image(systemName: surfaceIsAlert ? "exclamationmark.triangle.fill" : "road.lanes")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(DirtTheme.orange)
                 Text(surfaceLine)
                     .font(.dirtUI(surfaceIsAlert ? 15 : 14, weight: .bold))
-                    .foregroundStyle(DirtTheme.ink)
+                    .foregroundStyle(DirtTheme.panelText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
@@ -508,7 +508,7 @@ struct NavBottomPanel: View {
 
                 Text(summary)
                     .font(.dirtMono(11, weight: .semibold))
-                    .foregroundStyle(DirtTheme.ink.opacity(0.85))
+                    .foregroundStyle(DirtTheme.panelText.opacity(0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Image(systemName: "chevron.down")
@@ -557,13 +557,13 @@ struct NavBottomPanel: View {
                 .foregroundStyle(DirtTheme.orange)
             Text("Saving maps for the trail")
                 .font(.dirtUI(15, weight: .bold))
-                .foregroundStyle(DirtTheme.ink)
+                .foregroundStyle(DirtTheme.panelText)
             ProgressView(value: app.offline.progress)
                 .tint(DirtTheme.orange)
             HStack {
                 Text("\(Int(app.offline.progress * 100))%")
                     .font(.dirtMono(12, weight: .bold))
-                    .foregroundStyle(DirtTheme.ink)
+                    .foregroundStyle(DirtTheme.panelText)
                 Spacer()
                 Button("Cancel") { app.planner.skipPrefetch() }
                     .font(.dirtUI(12, weight: .bold))
@@ -572,7 +572,7 @@ struct NavBottomPanel: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(DirtTheme.chrome)
         .clipShape(panelShape)
         .overlay(panelShape.stroke(DirtTheme.chromeBorder, lineWidth: 1))
         .accessibilityElement(children: .combine)
@@ -634,33 +634,33 @@ struct NavLandscapeRail: View {
                         .foregroundStyle(DirtTheme.orange)
                     Text(nav.currentStage?.title ?? "Destination")
                         .font(.dirtUI(13, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink)
+                        .foregroundStyle(DirtTheme.panelText)
                         .lineLimit(1)
                 }
                 if let detail = nav.currentStage?.detail, !detail.isEmpty {
                     Text(detail)
                         .font(.dirtUI(9, weight: .semibold))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.72))
+                        .foregroundStyle(DirtTheme.panelText.opacity(0.72))
                         .lineLimit(1)
                 }
                 Text(Self.waypointDistance(nav.remainingInCurrentStageMeters))
                     .font(.dirtMono(19, weight: .bold))
-                    .foregroundStyle(DirtTheme.ink)
+                    .foregroundStyle(DirtTheme.panelValue)
                     .monospacedDigit()
                 Text("\(NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds)) · Ride \(NavTripFormat.elapsed(nav.elapsedSeconds))")
                     .font(.dirtUI(9, weight: .semibold))
-                    .foregroundStyle(DirtTheme.ink.opacity(0.82))
+                    .foregroundStyle(DirtTheme.panelText.opacity(0.82))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
 
             HStack(spacing: 6) {
-                Image(systemName: surfaceIsAlert ? "exclamationmark.triangle.fill" : DirtSurfaceIcon.symbol(for: landscapeSurfaceLine))
+                Image(systemName: surfaceIsAlert ? "exclamationmark.triangle.fill" : "road.lanes")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(DirtTheme.orange)
                 Text(landscapeSurfaceLine)
                     .font(.dirtUI(12, weight: .bold))
-                    .foregroundStyle(DirtTheme.ink)
+                    .foregroundStyle(DirtTheme.panelText)
                     .lineLimit(2)
                     .minimumScaleFactor(0.75)
             }
@@ -682,7 +682,7 @@ struct NavLandscapeRail: View {
                 HStack(spacing: 4) {
                     Text(statsExpanded ? "Hide" : summary)
                         .font(.dirtUI(11, weight: .semibold))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.9))
+                        .foregroundStyle(DirtTheme.panelText.opacity(0.9))
                         .lineLimit(2)
                         .minimumScaleFactor(0.65)
                     Spacer(minLength: 0)
@@ -715,7 +715,7 @@ struct NavLandscapeRail: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(DirtTheme.chrome)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -737,19 +737,19 @@ struct NavLandscapeRail: View {
                 .foregroundStyle(DirtTheme.orange)
             Text("Saving maps…")
                 .font(.dirtUI(11, weight: .bold))
-                .foregroundStyle(DirtTheme.ink)
+                .foregroundStyle(DirtTheme.panelText)
             ProgressView(value: app.offline.progress)
                 .tint(DirtTheme.orange)
             Text("\(Int(app.offline.progress * 100))%")
                 .font(.dirtMono(11, weight: .bold))
-                .foregroundStyle(DirtTheme.ink)
+                .foregroundStyle(DirtTheme.panelText)
             Button("Cancel") { app.planner.skipPrefetch() }
                 .font(.dirtUI(11, weight: .bold))
                 .foregroundStyle(DirtTheme.orange)
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(DirtTheme.chrome)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)

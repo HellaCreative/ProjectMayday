@@ -1,0 +1,463 @@
+{
+  "source": "9c15324e6ace23df668c6061e2d4ba2a04b99bc8",
+  "cases": {
+    "schemaVersion": 1,
+    "sessionSeed": 3511091208,
+    "tankRangeKm": 230,
+    "reservePercent": 10,
+    "profiles": [
+      "cleanest",
+      "balanced",
+      "dirt"
+    ],
+    "scenarios": [
+      {
+        "id": "short-intra-metro",
+        "label": "Porters Lake short local",
+        "from": {
+          "lat": 44.764919,
+          "lon": -63.34035
+        },
+        "to": {
+          "lat": 44.755736,
+          "lon": -63.301255
+        }
+      },
+      {
+        "id": "rural-pair",
+        "label": "Musquodoboit to Sherbrooke",
+        "from": {
+          "lat": 44.911062,
+          "lon": -62.386656
+        },
+        "to": {
+          "lat": 45.261359,
+          "lon": -62.621027
+        }
+      },
+      {
+        "id": "cross-province",
+        "label": "Porters Lake to Moncton",
+        "from": {
+          "lat": 44.764919,
+          "lon": -63.34035
+        },
+        "to": {
+          "lat": 46.0878,
+          "lon": -64.7782
+        }
+      },
+      {
+        "id": "one-fuel-stop",
+        "label": "Porters Lake to Antigonish",
+        "from": {
+          "lat": 44.764919,
+          "lon": -63.34035
+        },
+        "to": {
+          "lat": 45.60272,
+          "lon": -61.93025
+        }
+      },
+      {
+        "id": "multi-fuel-stop",
+        "label": "Yarmouth to Sydney",
+        "from": {
+          "lat": 43.8375,
+          "lon": -66.1174
+        },
+        "to": {
+          "lat": 46.1368,
+          "lon": -60.1942
+        }
+      },
+      {
+        "id": "canso-causeway",
+        "label": "Antigonish side to Sydney across Canso",
+        "from": {
+          "lat": 45.667087,
+          "lon": -62.34412
+        },
+        "to": {
+          "lat": 46.10471,
+          "lon": -60.2074
+        }
+      }
+    ]
+  },
+  "identity": [
+    {
+      "regionId": "ns",
+      "releaseId": "fabric-v4-20260908-02",
+      "graphSha256": "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d",
+      "geometrySha256": "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac",
+      "fuelSha256": "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
+    },
+    {
+      "regionId": "nb",
+      "releaseId": "fabric-v4-20260908-02",
+      "graphSha256": "f6cc714df44eec0413ef99f1aad535720cddba8610e907719b8c5da99837c3a8",
+      "geometrySha256": "012f31952faf5edddb7eb6d362282e7d9f78516cc2077ee9ac16b916e0d0ad75",
+      "fuelSha256": "3af5710d2f49b79cfd52824a85b43c491137fda0cbd58afd7facd21883a630d5"
+    }
+  ],
+  "summary": [
+    {
+      "id": "short-intra-metro-cleanest-route",
+      "ms": 1017,
+      "status": "complete",
+      "meters": 7444.984264119401,
+      "dirtPercent": 6,
+      "stops": [],
+      "shapeSHA256": "30127ee4d3681865a0333d9ba290238a848c8345f13976e1ba23da2000963fcf"
+    },
+    {
+      "id": "short-intra-metro-cleanest-fuel",
+      "ms": 333,
+      "status": "complete",
+      "meters": 7444.984264119401,
+      "dirtPercent": 6,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "30127ee4d3681865a0333d9ba290238a848c8345f13976e1ba23da2000963fcf"
+    },
+    {
+      "id": "short-intra-metro-balanced-route",
+      "ms": 299,
+      "status": "complete",
+      "meters": 7444.984264119401,
+      "dirtPercent": 6,
+      "stops": [],
+      "shapeSHA256": "30127ee4d3681865a0333d9ba290238a848c8345f13976e1ba23da2000963fcf"
+    },
+    {
+      "id": "short-intra-metro-balanced-fuel",
+      "ms": 305,
+      "status": "complete",
+      "meters": 7444.984264119401,
+      "dirtPercent": 6,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "30127ee4d3681865a0333d9ba290238a848c8345f13976e1ba23da2000963fcf"
+    },
+    {
+      "id": "short-intra-metro-dirt-route",
+      "ms": 296,
+      "status": "complete",
+      "meters": 7444.984264119401,
+      "dirtPercent": 6,
+      "stops": [],
+      "shapeSHA256": "30127ee4d3681865a0333d9ba290238a848c8345f13976e1ba23da2000963fcf"
+    },
+    {
+      "id": "short-intra-metro-dirt-fuel",
+      "ms": 298,
+      "status": "complete",
+      "meters": 7444.984264119401,
+      "dirtPercent": 6,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "30127ee4d3681865a0333d9ba290238a848c8345f13976e1ba23da2000963fcf"
+    },
+    {
+      "id": "rural-pair-cleanest-route",
+      "ms": 325,
+      "status": "complete",
+      "meters": 56747.58285712585,
+      "dirtPercent": 0,
+      "stops": [],
+      "shapeSHA256": "7fba5aa35f145d0c01382b310d62f88f2ee46ef1e332c22e613b5aa049166edd"
+    },
+    {
+      "id": "rural-pair-cleanest-fuel",
+      "ms": 358,
+      "status": "complete",
+      "meters": 56747.58285712585,
+      "dirtPercent": 0,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "7fba5aa35f145d0c01382b310d62f88f2ee46ef1e332c22e613b5aa049166edd"
+    },
+    {
+      "id": "rural-pair-balanced-route",
+      "ms": 331,
+      "status": "complete",
+      "meters": 95230.52648462827,
+      "dirtPercent": 71,
+      "stops": [],
+      "shapeSHA256": "edd3122da15ebc0714d883320d0b1f6fea6e341b7882824357c8636838cda43d"
+    },
+    {
+      "id": "rural-pair-balanced-fuel",
+      "ms": 366,
+      "status": "complete",
+      "meters": 95230.52648462827,
+      "dirtPercent": 71,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "edd3122da15ebc0714d883320d0b1f6fea6e341b7882824357c8636838cda43d"
+    },
+    {
+      "id": "rural-pair-dirt-route",
+      "ms": 337,
+      "status": "complete",
+      "meters": 95230.52648462827,
+      "dirtPercent": 71,
+      "stops": [],
+      "shapeSHA256": "edd3122da15ebc0714d883320d0b1f6fea6e341b7882824357c8636838cda43d"
+    },
+    {
+      "id": "rural-pair-dirt-fuel",
+      "ms": 352,
+      "status": "complete",
+      "meters": 95230.52648462827,
+      "dirtPercent": 71,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "edd3122da15ebc0714d883320d0b1f6fea6e341b7882824357c8636838cda43d"
+    },
+    {
+      "id": "cross-province-cleanest-route",
+      "ms": 14139,
+      "status": "complete",
+      "meters": 384465.5011037283,
+      "dirtPercent": 0,
+      "stops": [],
+      "shapeSHA256": "d94a22ddcc8fd9bfe584b8abbc92ab30f182abad3bc028e15b47952b317a54f8"
+    },
+    {
+      "id": "cross-province-cleanest-fuel",
+      "ms": 19272,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 384465.5011037283,
+      "dirtPercent": 0,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "d94a22ddcc8fd9bfe584b8abbc92ab30f182abad3bc028e15b47952b317a54f8"
+    },
+    {
+      "id": "cross-province-balanced-route",
+      "ms": 11176,
+      "status": "complete",
+      "meters": 450554.5011037283,
+      "dirtPercent": 46,
+      "stops": [],
+      "shapeSHA256": "6f49eafc14043bb4a1a2ebf1e0ca1cc8f5ff6c3b6a324c6772beeda398322975"
+    },
+    {
+      "id": "cross-province-balanced-fuel",
+      "ms": 20012,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 450554.5011037283,
+      "dirtPercent": 46,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "6f49eafc14043bb4a1a2ebf1e0ca1cc8f5ff6c3b6a324c6772beeda398322975"
+    },
+    {
+      "id": "cross-province-dirt-route",
+      "ms": 12197,
+      "status": "complete",
+      "meters": 450554.5011037283,
+      "dirtPercent": 46,
+      "stops": [],
+      "shapeSHA256": "6f49eafc14043bb4a1a2ebf1e0ca1cc8f5ff6c3b6a324c6772beeda398322975"
+    },
+    {
+      "id": "cross-province-dirt-fuel",
+      "ms": 20010,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 450554.5011037283,
+      "dirtPercent": 46,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "6f49eafc14043bb4a1a2ebf1e0ca1cc8f5ff6c3b6a324c6772beeda398322975"
+    },
+    {
+      "id": "one-fuel-stop-cleanest-route",
+      "ms": 3306,
+      "status": "complete",
+      "meters": 225722.59550655,
+      "dirtPercent": 0,
+      "stops": [],
+      "shapeSHA256": "0b8531bc437b021ebb3e17eaf4cdeb55c4d360d6628eebf72a4a573258c1861c"
+    },
+    {
+      "id": "one-fuel-stop-cleanest-fuel",
+      "ms": 7978,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 225722.59550655,
+      "dirtPercent": 0,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "0b8531bc437b021ebb3e17eaf4cdeb55c4d360d6628eebf72a4a573258c1861c"
+    },
+    {
+      "id": "one-fuel-stop-balanced-route",
+      "ms": 498,
+      "status": "complete",
+      "meters": 283187.59550655,
+      "dirtPercent": 73,
+      "stops": [],
+      "shapeSHA256": "00691ea9170691bc934377393e6b7d0099d27fbe3502931d8ddd17a40884810e"
+    },
+    {
+      "id": "one-fuel-stop-balanced-fuel",
+      "ms": 564,
+      "status": "complete",
+      "meters": 276501.59550655,
+      "dirtPercent": 72.78715858847298,
+      "stops": [
+        "osm:n11306260881"
+      ],
+      "windowComplete": true,
+      "shapeSHA256": "ac8d1ffd6b9a45051a1f9896bc839ad98be007d9cf81f132f051dfe2b693b665"
+    },
+    {
+      "id": "one-fuel-stop-dirt-route",
+      "ms": 606,
+      "status": "complete",
+      "meters": 309502.59550655,
+      "dirtPercent": 76,
+      "stops": [],
+      "shapeSHA256": "fe06f6541154ad45337240a8a868fef79decaa8a00f1e4a3c6f0195954a0d350"
+    },
+    {
+      "id": "one-fuel-stop-dirt-fuel",
+      "ms": 483,
+      "status": "complete",
+      "meters": 276501.59550655,
+      "dirtPercent": 72.78715858847298,
+      "stops": [
+        "osm:n11306260881"
+      ],
+      "windowComplete": true,
+      "shapeSHA256": "ac8d1ffd6b9a45051a1f9896bc839ad98be007d9cf81f132f051dfe2b693b665"
+    },
+    {
+      "id": "multi-fuel-stop-cleanest-route",
+      "ms": 3223,
+      "status": "complete",
+      "meters": 912897.0699713406,
+      "dirtPercent": 0,
+      "stops": [],
+      "shapeSHA256": "849ff27c75a9af908892133c5844cce4876455c88116d1374b8b9ce177251a43"
+    },
+    {
+      "id": "multi-fuel-stop-cleanest-fuel",
+      "ms": 8467,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 912897.0699713406,
+      "dirtPercent": 0,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "849ff27c75a9af908892133c5844cce4876455c88116d1374b8b9ce177251a43"
+    },
+    {
+      "id": "multi-fuel-stop-balanced-route",
+      "ms": 3789,
+      "status": "complete",
+      "meters": 957845.0699713406,
+      "dirtPercent": 71,
+      "stops": [],
+      "shapeSHA256": "2be8720d83bb079dcce98e7def89014fc3bb0e9425e9e00e9850dbde73cdfadf"
+    },
+    {
+      "id": "multi-fuel-stop-balanced-fuel",
+      "ms": 8122,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 957845.0699713406,
+      "dirtPercent": 71,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "2be8720d83bb079dcce98e7def89014fc3bb0e9425e9e00e9850dbde73cdfadf"
+    },
+    {
+      "id": "multi-fuel-stop-dirt-route",
+      "ms": 2984,
+      "status": "complete",
+      "meters": 1013259.0699713406,
+      "dirtPercent": 73,
+      "stops": [],
+      "shapeSHA256": "44629a5af870d7a8c8653eceaf624cd8d433ee275b670d11554599e2d5759f06"
+    },
+    {
+      "id": "multi-fuel-stop-dirt-fuel",
+      "ms": 7258,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 1013259.0699713406,
+      "dirtPercent": 73,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "44629a5af870d7a8c8653eceaf624cd8d433ee275b670d11554599e2d5759f06"
+    },
+    {
+      "id": "canso-causeway-cleanest-route",
+      "ms": 2608,
+      "status": "complete",
+      "meters": 442765.41917436797,
+      "dirtPercent": 0,
+      "stops": [],
+      "shapeSHA256": "3aed5547887889ab3d2fc90cd584d17ee144a687280acc93fb528265ff8239ea"
+    },
+    {
+      "id": "canso-causeway-cleanest-fuel",
+      "ms": 6257,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 442765.41917436797,
+      "dirtPercent": 0,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "3aed5547887889ab3d2fc90cd584d17ee144a687280acc93fb528265ff8239ea"
+    },
+    {
+      "id": "canso-causeway-balanced-route",
+      "ms": 2512,
+      "status": "complete",
+      "meters": 346841.311945124,
+      "dirtPercent": 73,
+      "stops": [],
+      "shapeSHA256": "5166d856f9e3b3136688d7f90f6c1fdbeea36a3e57690622505f5a310d8a36c4"
+    },
+    {
+      "id": "canso-causeway-balanced-fuel",
+      "ms": 6182,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 346841.311945124,
+      "dirtPercent": 73,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "5166d856f9e3b3136688d7f90f6c1fdbeea36a3e57690622505f5a310d8a36c4"
+    },
+    {
+      "id": "canso-causeway-dirt-route",
+      "ms": 2350,
+      "status": "complete",
+      "meters": 346841.311945124,
+      "dirtPercent": 73,
+      "stops": [],
+      "shapeSHA256": "5166d856f9e3b3136688d7f90f6c1fdbeea36a3e57690622505f5a310d8a36c4"
+    },
+    {
+      "id": "canso-causeway-dirt-fuel",
+      "ms": 6687,
+      "status": "unknown",
+      "error": "label_limit",
+      "meters": 346841.311945124,
+      "dirtPercent": 73,
+      "stops": [],
+      "windowComplete": true,
+      "shapeSHA256": "5166d856f9e3b3136688d7f90f6c1fdbeea36a3e57690622505f5a310d8a36c4"
+    }
+  ],
+  "method": "Historical 9c15324 canary; paired road-only and integrated fuel requests; 230km/10%; this differs from historical one-stop forward oracle protocol. Raw bodies/results retained separately."
+}

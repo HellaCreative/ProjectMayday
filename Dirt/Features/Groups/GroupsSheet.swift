@@ -1,11 +1,8 @@
 import SwiftUI
-import CoreLocation
 
 struct GroupsSheet: View {
     let onClose: () -> Void
-    var onRoute: () -> Void = {}
     @Environment(AppEnvironment.self) private var app
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var newGroupName = ""
     @State private var joinCode = ""
     @State private var showCreateDialog = false
@@ -26,7 +23,7 @@ struct GroupsSheet: View {
                 if !app.supabase.isSignedIn {
                     signInPrompt
                 } else if let selected = groups.selectedGroup {
-                    GroupDetailView(group: selected, onClose: onClose, onRoute: onRoute)
+                    GroupDetailView(group: selected, onClose: onClose)
                 } else {
                     groupList
                 }
@@ -151,9 +148,7 @@ struct GroupsSheet: View {
                     }
                 }
 
-                (dynamicTypeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(spacing: DirtSpace.inner))
-                    : AnyLayout(HStackLayout(spacing: DirtSpace.inner))) {
+                HStack(spacing: DirtSpace.inner) {
                     Button {
                         showCreateDialog = true
                     } label: {
@@ -166,7 +161,7 @@ struct GroupsSheet: View {
                     } label: {
                         Label("Join", systemImage: "arrow.right.square.fill")
                     }
-                    .buttonStyle(DirtSecondaryButtonStyle())
+                    .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
                 }
                 .disabled(groups.isMutatingGroup)
                 .padding(.top, DirtSpace.tight)
@@ -281,153 +276,144 @@ struct GroupsSheet: View {
 struct GroupDetailView: View {
     let group: GroupSummary
     let onClose: () -> Void
-    var onRoute: () -> Void = {}
     @Environment(AppEnvironment.self) private var app
-    @State private var expandedRider: String?
-    @State private var locations: [String: String] = [:]
-    @State private var locationKeys: [String: String] = [:]
+
     private var groups: GroupsViewModel { app.groups }
+    private let statuses = GroupsViewModel.selectableStatuses
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("\(group.memberCount) riders · \(group.liveCount) sharing")
-                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-                Spacer()
-            }
+        @Bindable var groups = app.groups
+        List {
             if let invite = group.inviteCode {
-                Button {
-                    UIPasteboard.general.string = invite.lowercased()
-                    app.planner.toast = "Invite code copied"
-                } label: {
-                    HStack {
-                        Label("Invite a rider", systemImage: "person.badge.plus")
-                        Spacer()
-                        Text(invite.lowercased()).monospaced()
-                        Image(systemName: "doc.on.doc")
-                    }.font(DirtType.rowTitle).frame(minHeight: 44)
-                }
-                .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
-            }
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(groups.members) { member in riderRow(member) }
-                    if groups.members.isEmpty {
-                        Text("No riders yet").font(DirtType.helper).padding(.vertical, 20)
-                    }
-                    if let error = groups.errorMessage {
-                        Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
-                    }
-                    Button(group.role == "owner" ? "Delete group" : "Leave group", role: .destructive) {
-                        Task {
-                            if group.role == "owner" { await groups.deleteGroup(group) }
-                            else { await groups.leaveGroup(group) }
+                Section("Invite code") {
+                    HStack(spacing: DirtSpace.inner) {
+                        Text(invite.lowercased())
+                            .font(DirtType.metric)
+                            .tracking(3)
+                            .foregroundStyle(DirtTheme.ink)
+                        Spacer(minLength: 0)
+                        Button {
+                            UIPasteboard.general.string = invite.lowercased()
+                            app.planner.toast = "Invite code copied"
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(DirtTheme.orange)
+                                .frame(width: DirtHit.min, height: DirtHit.min)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Copy invite code")
+                    }
+                }
+                .listRowBackground(DirtTheme.rowFill)
+            }
+
+            Section("Live sharing") {
+                if groups.isSharing {
+                    if groups.isWaitingForLocation {
+                        Label("Waiting for a current GPS position", systemImage: "location.magnifyingglass")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                    }
+                    Picker("Status", selection: Binding(
+                        get: { groups.status },
+                        set: { groups.setStatus($0) }
+                    )) {
+                        ForEach(statuses, id: \.self) { Text(GroupsViewModel.statusLabel($0)).tag($0) }
+                    }
+                    .font(DirtType.rowTitle)
+                    Button("Stop sharing") { groups.stopSharing() }
+                        .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
+                        .listRowBackground(Color.clear)
+                } else {
+                    Button("Start sharing") { groups.startSharing() }
+                        .buttonStyle(DirtCTAStyle.brand())
+                        .listRowBackground(Color.clear)
+                }
+            }
+            .listRowBackground(DirtTheme.rowFill)
+
+            Section("Riders") {
+                if groups.members.isEmpty {
+                    Text("No riders yet")
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.muted)
+                } else {
+                    ForEach(groups.members) { member in
+                        riderRow(member)
+                    }
+                }
+            }
+            .listRowBackground(DirtTheme.rowFill)
+
+            Section {
+                if group.role == "owner" {
+                    Button("Delete group", role: .destructive) {
+                        Task { await groups.deleteGroup(group) }
                     }
                     .disabled(groups.isMutatingGroup)
-                    .font(DirtType.helper).frame(minHeight: 44).padding(.top, 10)
-                }
-                .background(GeometryReader { geo in
-                    Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height + 88)
-                })
-            }
-        }
-        .padding(.horizontal, DirtSpace.group)
-        .task(id: groups.members.map { "\($0.id):\(locationKey($0)):\($0.isLive)" }.joined()) {
-            // Resolve actual live locations serially. Offline rows never masquerade as current.
-            for member in groups.members where member.isLive && locationKeys[member.id] != locationKey(member) {
-                guard !Task.isCancelled, let lat = member.latitude, let lon = member.longitude else { continue }
-                locations[member.id] = nil
-                let key = locationKey(member)
-                let marks = try? await CLGeocoder().reverseGeocodeLocation(CLLocation(latitude: lat, longitude: lon))
-                guard !Task.isCancelled else { return }
-                locationKeys[member.id] = key
-                if let mark = marks?.first {
-                    locations[member.id] = mark.locality ?? mark.subAdministrativeArea ?? mark.name
+                } else {
+                    Button("Leave group", role: .destructive) {
+                        Task { await groups.leaveGroup(group) }
+                    }
+                    .disabled(groups.isMutatingGroup)
                 }
             }
+            .listRowBackground(DirtTheme.rowFill)
         }
-    }
-
-    private func locationKey(_ member: GroupMemberRow) -> String {
-        String(format: "%.3f,%.3f", member.latitude ?? 0, member.longitude ?? 0)
-    }
-
-    private func coordinateLabel(_ member: GroupMemberRow) -> String {
-        guard let lat = member.latitude, let lon = member.longitude else { return "Unavailable" }
-        return String(format: "%.3f, %.3f", lat, lon)
+        // Detail needs the full sheet — report a large height so adaptive panel opens to max.
+        .preference(key: DockSheetContentHeightKey.self, value: 10_000)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 
     private func riderRow(_ member: GroupMemberRow) -> some View {
-        let expanded = expandedRider == member.id
-        let own = member.userID == app.supabase.userID
-        let status = member.isLive ? (member.status ?? "riding") : "offline"
-        let color: Color = !member.isLive ? DirtTheme.muted : (status == "riding" ? DirtTheme.navGreen : (status == "injured" || status == "unrepairable" ? DirtTheme.danger : DirtTheme.action))
-        return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { expandedRider = expanded ? nil : member.id }
-            } label: {
-                HStack(spacing: 8) {
-                    Circle().fill(member.isLive ? DirtTheme.navGreen : DirtTheme.muted.opacity(0.4))
-                        .frame(width: 7, height: 7)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(member.displayName).font(DirtType.rowTitle).fontWeight(.bold)
-                        if own { Text("You").font(.caption2).foregroundStyle(DirtTheme.muted) }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Current location").font(.caption2).foregroundStyle(DirtTheme.muted)
-                        Text(member.isLive ? (locationKeys[member.id] == locationKey(member) ? (locations[member.id] ?? coordinateLabel(member)) : coordinateLabel(member)) : "Unavailable")
-                            .font(.caption).lineLimit(2)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                    Text(member.isLive ? GroupsViewModel.statusLabel(status) : "Offline")
-                        .font(.caption.weight(.semibold)).foregroundStyle(color)
-                        .padding(.horizontal, 8).padding(.vertical, 6)
-                        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+        HStack(spacing: DirtSpace.inner) {
+            Circle()
+                .fill(member.isLive ? DirtTheme.navGreen : DirtTheme.muted.opacity(0.4))
+                .frame(width: 9, height: 9)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                Text(member.displayName)
+                    .font(DirtType.rowTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.ink)
+                Text(memberDetail(member))
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: DirtSpace.tight)
+            if member.isLive, let lat = member.latitude, let lon = member.longitude,
+               member.userID != app.supabase.userID {
+                Button("Details") {
+                    groups.selectPeer(member)
                 }
-                .foregroundStyle(DirtTheme.ink)
-                .padding(.horizontal, 8).frame(minHeight: 62)
-                .contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityValue(expanded ? "Expanded" : "Collapsed")
-            if expanded {
-                HStack(spacing: 8) {
-                    if own {
-                        Menu {
-                            ForEach(GroupsViewModel.selectableStatuses, id: \.self) { status in
-                                Button(GroupsViewModel.statusLabel(status)) { groups.setStatus(status) }
-                            }
-                        } label: { Label("Status", systemImage: "slider.horizontal.3") }
-                        .disabled(!groups.isSharing)
-                        Spacer()
-                        Button(groups.isSharing ? "Stop sharing" : "Start sharing") {
-                            if groups.isSharing { groups.stopSharing() } else { groups.startSharing() }
-                        }
-                        .padding(.horizontal, 10).frame(minHeight: 44)
-                        .foregroundStyle(.white)
-                        .background(groups.isSharing ? DirtTheme.chrome : DirtTheme.orange, in: RoundedRectangle(cornerRadius: 8))
-                    } else {
-                        Button {
-                            if let lat = member.latitude, let lon = member.longitude {
-                                app.mapState.fly(to: RouteCoordinate(longitude: lon, latitude: lat), zoom: 13)
-                                onClose()
-                            }
-                        } label: { Label("View on map", systemImage: "map") }
-                        Spacer()
-                        Button {
-                            guard let lat = member.latitude, let lon = member.longitude, let seen = member.lastSeenAt else { return }
-                            app.planner.routeToMember(GroupMemberRouteTarget(groupID: group.id, userID: member.userID, displayName: member.displayName, coordinate: RouteCoordinate(longitude: lon, latitude: lat), lastSeenAt: seen, accuracyMeters: member.accuracyMeters, isLive: member.isLive))
-                            onRoute()
-                        } label: { Label("Route to rider", systemImage: "arrow.triangle.turn.up.right.diamond") }
-                    }
+                .buttonStyle(DirtChipStyle(isActive: true))
+
+                Button {
+                    app.mapState.fly(to: RouteCoordinate(longitude: lon, latitude: lat), zoom: 13)
+                    onClose()
+                } label: {
+                    Image(systemName: "scope")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(DirtTheme.ink)
+                        .frame(width: DirtHit.min, height: DirtHit.min)
+                        .contentShape(Rectangle())
                 }
-                .font(.caption.weight(.semibold)).buttonStyle(.plain).tint(DirtTheme.action)
-                .frame(minHeight: 44).padding(.horizontal, 10).padding(.bottom, 6)
-                .disabled(!own && (!member.isLive || member.latitude == nil || member.longitude == nil))
-                if own && groups.isWaitingForLocation {
-                    Text("Waiting for GPS").font(DirtType.helper).padding(8)
-                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show on map")
             }
         }
-        .background(expanded ? DirtTheme.rowFill : .clear, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(alignment: .bottom) { Divider() }
+        .frame(minHeight: DirtHit.min)
+    }
+
+    private func memberDetail(_ member: GroupMemberRow) -> String {
+        if member.isLive {
+            return "\(member.role.capitalized) · \(GroupsViewModel.statusLabel(member.status ?? "riding"))"
+        }
+        let seen = GroupsViewModel.lastSeenLabel(member.lastSeenAt)
+        return "\(member.role.capitalized) · Offline · Seen \(seen)"
     }
 }

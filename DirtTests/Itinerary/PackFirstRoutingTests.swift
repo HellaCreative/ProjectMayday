@@ -25,34 +25,6 @@ struct PackFirstRoutingTests {
         #expect(pack.routeRequests.isEmpty)
     }
 
-    @Test func installedPacksCanBePreferredWhileOnline() {
-        let live = NamedFakeRoutingSource(name: "live")
-        let pack = NamedFakeRoutingSource(name: "pack")
-        let policy = RoutingSourcePolicy(
-            isOnline: { true },
-            installedPacks: FakePackCoverage(installed: ["ns"], published: ["ns"]),
-            live: live,
-            pack: pack,
-            preferInstalledPacks: true
-        )
-        #expect(policy.select(for: nsRequest()).name == "pack")
-    }
-
-    @Test func onDeviceOnlyNeverFallsBackToLiveWhenPackCoverageIsMissing() {
-        let live = NamedFakeRoutingSource(name: "live")
-        let pack = NamedFakeRoutingSource(name: "pack")
-        let policy = RoutingSourcePolicy(
-            isOnline: { true },
-            installedPacks: FakePackCoverage(installed: [], published: ["ns"]),
-            live: live,
-            pack: pack,
-            preferInstalledPacks: true,
-            onDeviceOnly: true
-        )
-        #expect(policy.select(for: nsRequest()).name == "pack")
-        #expect(live.routeRequests.isEmpty)
-    }
-
     @Test func installedNSIsSelectedWhileOffline() {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
@@ -84,7 +56,7 @@ struct PackFirstRoutingTests {
         #expect(prompt.message.contains("offline rerouting"))
     }
 
-    @Test func onlinePlanningRequestsPackBeforeUsingLive() async {
+    @Test func onlinePlanningUsesLiveWithoutWaitingForPackInstall() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
         let coverage = FakePackCoverage(installed: [], published: ["ns"])
@@ -103,43 +75,13 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
-        #expect(model.packConsent?.regionIDs == ["ns"])
-        #expect(model.itinerary.waypoints.count == 2)
-        #expect(live.routeRequests.isEmpty)
-        #expect(pack.routeRequests.isEmpty)
-        #expect(coverage.installCalls.isEmpty)
-    }
-
-    @Test func acceptingRoutePackConsentResumesWithInstalledPack() async {
-        let live = NamedFakeRoutingSource(name: "live")
-        let pack = NamedFakeRoutingSource(name: "pack")
-        let coverage = FakePackCoverage(installed: [], published: ["ns"])
-        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
-        let policy = RoutingSourcePolicy(
-            isOnline: { true },
-            installedPacks: coverage,
-            live: live,
-            pack: pack,
-            preferInstalledPacks: true
-        )
-        let model = makePackFirstModel(
-            live: live, pack: pack, policy: policy, acquisition: coordinator
-        )
-        model.selectMode(.plan)
-        model.apply(
-            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
-            source: "plan"
-        )
-        #expect(model.packConsent?.regionIDs == ["ns"])
-
-        await model.acceptPackConsent()
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.packConsent == nil)
-        #expect(coverage.installed == ["ns"])
-        #expect(coverage.installCalls == [["ns"]])
-        #expect(live.routeRequests.isEmpty)
-        #expect(pack.routeRequests.isEmpty == false)
+        #expect(model.itinerary.waypoints.count == 2)
+        #expect(live.routeRequests.isEmpty == false)
+        #expect(pack.routeRequests.isEmpty)
+        #expect(coverage.installCalls.isEmpty)
     }
 
     @Test func failedPackInstallKeepsConsentAvailableForRetry() async {
@@ -182,7 +124,6 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
-        model.declinePackConsent()
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.packConsent == nil)
@@ -256,7 +197,6 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
-        model.declinePackConsent()
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.packConsent == nil)
@@ -287,47 +227,6 @@ struct PackFirstRoutingTests {
         }
         #expect(prompt.regionIDs == ["ns", "nb"])
         #expect(Set(prompt.regionIDs).count == prompt.regionIDs.count)
-    }
-
-    @Test func packConsentReportsCombinedDownloadSize() {
-        let coverage = FakePackCoverage(installed: [], published: ["ns", "nb"])
-        let decision = PackAcquisitionEvaluator.decide(
-            coordinates: [halifax.locationCoordinate, fredericton.locationCoordinate],
-            registry: coverage,
-            declinedDownloads: [],
-            declinedUpdates: [],
-            protectInstalledRevisions: false
-        )
-        guard case .requestConsent(let prompt) = decision else {
-            Issue.record("expected download consent, got \(decision)")
-            return
-        }
-        #expect(prompt.downloadBytes == 139_000_000)
-        #expect(prompt.message.contains("139 MB"))
-    }
-
-    @Test func multiRegionConsentSetsLongRouteExpectation() {
-        let prompt = PackConsentPrompt(
-            kind: .download,
-            regionIDs: ["ns", "nb", "qc"],
-            regionTitles: ["Nova Scotia", "New Brunswick", "Quebec"],
-            downloadBytes: 1_000_000_000
-        )
-        #expect(prompt.message.contains("110 seconds to 3 minutes"))
-        #expect(prompt.message.contains("3 routing packs"))
-    }
-
-    @Test func homePackOfferIsOneTimeAndIncludesSize() {
-        let coverage = FakePackCoverage(installed: [], published: ["ns"])
-        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
-        coordinator.offerHomePack(at: halifax.locationCoordinate)
-        #expect(coordinator.consent?.kind == .home)
-        #expect(coordinator.consent?.regionIDs == ["ns"])
-        #expect(coordinator.consent?.downloadBytes == 101_000_000)
-        #expect(coordinator.consent?.message.contains("Nova Scotia") == true)
-        coordinator.declineConsent()
-        coordinator.offerHomePack(at: halifax.locationCoordinate)
-        #expect(coordinator.consent == nil)
     }
 
     @Test func packsInterfacePermitsDeletionWithoutManualDownload() {
@@ -428,8 +327,6 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "fromHere"
         )
-        planModel.declinePackConsent()
-        fromModel.declinePackConsent()
         await planModel.waitForCanonicalBuildForTesting()
         await fromModel.waitForCanonicalBuildForTesting()
 
@@ -517,14 +414,6 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
         case "nb": return "New Brunswick"
         case "pe": return "Prince Edward Island"
         default: return id.uppercased()
-        }
-    }
-
-    func packDownloadBytes(forRegionId id: String) -> Int64? {
-        switch id.lowercased() {
-        case "ns": return 101_000_000
-        case "nb": return 38_000_000
-        default: return nil
         }
     }
 

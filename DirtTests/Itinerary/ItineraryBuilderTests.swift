@@ -113,45 +113,6 @@ struct ItineraryBuilderTests {
         #expect(fuelMilestones.isEmpty)
     }
 
-    @Test func packShortLegBypassesFuelChainWhenItFitsTheUsableRange() async throws {
-        // Roughly 64 km as a straight-line span, matching the short phone
-        // repro that previously spent the entire fuel window first.
-        let points = [point(0), point(0.8)]
-        let source = FakeRoutingSource(name: "pack")
-        source.supportsDirectFuelCarry = true
-        source.distances[key(points[0], points[1])] = 67_000
-
-        let result = await build(points, source: source, usable: 180_000)
-
-        #expect(result.legs.count == 1)
-        #expect(result.legs.first?.endsAtFuelStop == nil)
-        #expect(result.legs.first?.fuelUsedOnArrivalMeters == 67_000)
-        #expect(source.routeRequests.count == 1)
-        #expect(source.fuelChainRequests.isEmpty)
-        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
-    }
-
-    @Test func packDoesNotProbeDestinationBeforeThePumpSequence() async throws {
-        // The on-device source follows a next-pump sequence. It must not spend
-        // a separate destination-escape search before building the leg.
-        let points = [point(0), point(2.0)]
-        let source = FakeRoutingSource(name: "pack")
-        source.supportsDirectFuelCarry = true
-        source.distances[key(points[0], points[1])] = 67_000
-
-        let result = await build(points, source: source, usable: 180_000)
-
-        #expect(result.legs.count == 1)
-        #expect(result.legs.first?.endsAtFuelStop == nil)
-        #expect(result.legs.first?.fuelUsedOnArrivalMeters == 67_000)
-        #expect(source.routeRequests.count == 1)
-        #expect(source.fuelChainRequests.count == 1)
-        #expect(source.fuelChainRequests.allSatisfy {
-            $0.fuel.riderLegId != "destination-escape"
-        })
-        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
-    }
-
     @Test func combinedLivePlanConsumesItsDirectRouteWithoutASecondRouteRequest() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
@@ -165,63 +126,6 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests.count == 1)
         #expect(source.fuelChainRequests[0].fuel.routeFirstPlan == true)
         #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
-    }
-
-    @Test func identicalNewPinBuildsReceiveDifferentRouteSeeds() async throws {
-        let points = [point(0), point(1)]
-        let source = FakeRoutingSource(name: "pack")
-        source.distances[key(points[0], points[1])] = 100_000
-
-        _ = await build(points, source: source, usable: nil)
-        let firstSeed = source.routeRequests.first?.options?.sessionSeed
-        source.routeRequests.removeAll()
-
-        _ = await build(points, source: source, usable: nil)
-        let secondSeed = source.routeRequests.first?.options?.sessionSeed
-
-        #expect(firstSeed != nil)
-        #expect(secondSeed != nil)
-        #expect(firstSeed != secondSeed)
-    }
-
-    @Test func packFuelWindowConsumesProvenRoutesWithoutSecondRouteSearch() async throws {
-        let start = point(0)
-        let pump = point(0.45)
-        let destination = point(1)
-        let source = FakeRoutingSource(name: "pack")
-        source.providePlannedRoutes = true
-        source.distances[key(start, destination)] = 250_000
-        source.distances[key(start, pump)] = 100_000
-        source.distances[key(pump, destination)] = 120_000
-        source.fuelStops = [fuelStop("pack-pump", at: pump)]
-        source.fuelStopResponses = [[fuelStop("pack-pump", at: pump)]]
-        source.fuelWindowCompleteResponses = [true]
-
-        let result = await build([start, destination], source: source, usable: 220_000)
-
-        #expect(result.legs.count == 2)
-        #expect(result.legs.first?.endsAtFuelStop?.stationID == "pack-pump")
-        let planningRequests = source.fuelChainRequests.filter {
-            $0.fuel.probeFirstReachableStation != true
-        }
-        #expect(planningRequests.count == 1)
-        #expect(source.routeRequests.isEmpty)
-    }
-
-    @Test func atlanticDevRequestsCombinedFuelGeometry() async throws {
-        #if DIRT_DEVELOPMENT
-        let start = RouteCoordinate(longitude: -63.340241, latitude: 44.764845)
-        let destination = RouteCoordinate(longitude: -65.856301, latitude: 47.762610)
-        let source = FakeRoutingSource(name: "live")
-        source.supportsCombinedFuelPlanning = true
-        source.distances[key(start, destination)] = 250_000
-        let result = await build([start, destination], source: source, usable: 333_000)
-        #expect(result.legs.count == 1)
-        #expect(source.routeRequests.isEmpty)
-        #expect(source.fuelChainRequests.count == 1)
-        #expect(source.fuelChainRequests[0].fuel.windowMaxStops == 12)
-        #expect(source.fuelChainRequests[0].fuel.forwardFeeler != true)
-        #endif
     }
 
     @Test func crossProvinceFuelPlanAdvancesOnePumpPerFreshWindow() async throws {
@@ -1400,8 +1304,6 @@ struct IncrementalItineraryRebuildTests {
 private final class FakeRoutingSource: RoutingSource {
     let name: String
     var supportsCombinedFuelPlanning = false
-    var supportsDirectFuelCarry = false
-    var providePlannedRoutes = false
     var distances: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []
     var fuelStopResponses: [[FuelChainStop]] = []
@@ -1517,7 +1419,7 @@ private final class FakeRoutingSource: RoutingSource {
             : fuelGraphMeterResponses.removeFirst()
         let routePoints = [pair.0] + selectedStops.map(\.coordinate)
             + (windowComplete ? [pair.1] : [])
-        let plannedRoutes: [RouteResponse]? = (supportsCombinedFuelPlanning || providePlannedRoutes)
+        let plannedRoutes: [RouteResponse]? = supportsCombinedFuelPlanning
             ? zip(routePoints, routePoints.dropFirst()).compactMap { endpoints in
                 distances[key(endpoints.0, endpoints.1)].map {
                     response(from: endpoints.0, to: endpoints.1, meters: $0)

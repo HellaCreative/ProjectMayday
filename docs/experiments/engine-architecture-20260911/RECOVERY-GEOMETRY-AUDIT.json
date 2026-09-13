@@ -1,0 +1,464 @@
+{
+  "method": "Haversine geometry lengths; undirected identical coordinate-segment repeats rounded to six decimals. This is a repeat lower bound, not proof against nearby or differently split repeated roads. Join gaps are reported without inventing an acceptance cutoff.",
+  "records": [
+    {
+      "file": "road-20260913-43.807616-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 484757.25,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 1,
+      "reachedEndpoint": [
+        -66.01610710890654,
+        43.807616155835106
+      ],
+      "distanceMeters": 484362.9153923878,
+      "dirtPercent": 37,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -66.016108,
+        43.807616
+      ]
+    },
+    {
+      "file": "road-20260913-43.807616-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 382175.08,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.01610710890654,
+        43.807616155835106
+      ],
+      "distanceMeters": 382151.96793695807,
+      "dirtPercent": 1,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -66.016108,
+        43.807616
+      ]
+    },
+    {
+      "file": "road-20260913-45.091108-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 109599.93,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 1,
+      "reachedEndpoint": [
+        -63.05762723536022,
+        45.09114460003708
+      ],
+      "distanceMeters": 109078.75986167886,
+      "dirtPercent": 47,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -63.057616,
+        45.091108
+      ]
+    },
+    {
+      "file": "road-20260913-45.091108-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 68101.57,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 4.164,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.05762723536022,
+        45.09114460003708
+      ],
+      "distanceMeters": 68095.11239295076,
+      "dirtPercent": 0,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -63.057616,
+        45.091108
+      ]
+    },
+    {
+      "file": "road-20260913-45.091108-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 90769.37,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.05762723536022,
+        45.09114460003708
+      ],
+      "distanceMeters": 90241.44173759376,
+      "dirtPercent": 43,
+      "repeatedMeters": 0,
+      "timedOut": true,
+      "pass2": "popCap",
+      "profile": "dirt",
+      "requestedDestination": [
+        -63.057616,
+        45.091108
+      ]
+    },
+    {
+      "file": "road-20260913-46.845234-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 465037.69,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 18.174,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -60.40837097167969,
+        46.84507751464844
+      ],
+      "distanceMeters": 465038.5567201733,
+      "dirtPercent": 0,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -60.408302,
+        46.845234
+      ]
+    },
+    {
+      "file": "road-20260913-46.845234-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 595552.05,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -60.40837097167969,
+        46.84507751464844
+      ],
+      "distanceMeters": 595160.534991219,
+      "dirtPercent": 66,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "dirt",
+      "requestedDestination": [
+        -60.408302,
+        46.845234
+      ]
+    },
+    {
+      "file": "road-3511091208-44.755736-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 7442.36,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 1,
+      "reachedEndpoint": [
+        -63.30113983154297,
+        44.75571060180664
+      ],
+      "distanceMeters": 6938.854369841606,
+      "dirtPercent": 17,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ]
+    },
+    {
+      "file": "road-3511091208-44.755736-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 7524.7,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ],
+      "distanceMeters": 7523.971040269682,
+      "dirtPercent": 11,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ]
+    },
+    {
+      "file": "road-3511091208-44.755736-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 7451.66,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ],
+      "distanceMeters": 6973.34901499818,
+      "dirtPercent": 17,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "dirt",
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ]
+    },
+    {
+      "file": "road-3511091208-45.261359-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 93312.07,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ],
+      "distanceMeters": 92965.88017581216,
+      "dirtPercent": 66,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ]
+    },
+    {
+      "file": "road-3511091208-45.261359-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 57177.55,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 117.432,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ],
+      "distanceMeters": 57179.319907423356,
+      "dirtPercent": 0,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ]
+    },
+    {
+      "file": "road-3511091208-45.261359-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 95353.37,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ],
+      "distanceMeters": 95217.51740279657,
+      "dirtPercent": 71,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "dirt",
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ]
+    },
+    {
+      "file": "one-fuel-stop-balanced-2.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 102321,
+      "dirtPercent": 52,
+      "geometryMeters": 102329.0,
+      "exactSegmentRepeatMeters": 1257.79,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 5,
+      "reachedEndpoint": [
+        -62.99082872206573,
+        45.2241275676578
+      ]
+    },
+    {
+      "file": "one-fuel-stop-balanced-4.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 136487,
+      "dirtPercent": 65,
+      "geometryMeters": 136482.99,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -61.93025023377299,
+        45.602720714773525
+      ]
+    },
+    {
+      "file": "one-fuel-stop-dirt-2.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 102324,
+      "dirtPercent": 51,
+      "geometryMeters": 102333.64,
+      "exactSegmentRepeatMeters": 1257.79,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 5,
+      "reachedEndpoint": [
+        -62.99082872206573,
+        45.2241275676578
+      ]
+    },
+    {
+      "file": "one-fuel-stop-dirt-4.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 201438,
+      "dirtPercent": 92,
+      "geometryMeters": 201439.47,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -61.93025023377299,
+        45.602720714773525
+      ]
+    },
+    {
+      "file": "rural-pair-balanced-2.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 68686,
+      "dirtPercent": 43,
+      "geometryMeters": 68689.4,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ]
+    },
+    {
+      "file": "rural-pair-cleanest-2.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 56916,
+      "dirtPercent": 0,
+      "geometryMeters": 56914.58,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ]
+    },
+    {
+      "file": "rural-pair-dirt-2.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 95231,
+      "dirtPercent": 71,
+      "geometryMeters": 95233.88,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ]
+    },
+    {
+      "file": "short-intra-metro-balanced-2.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 23152,
+      "dirtPercent": 33,
+      "geometryMeters": 23158.58,
+      "exactSegmentRepeatMeters": 9134.44,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 52,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ]
+    },
+    {
+      "file": "short-intra-metro-cleanest-2.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 7561,
+      "dirtPercent": 11,
+      "geometryMeters": 7561.76,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ]
+    },
+    {
+      "file": "short-intra-metro-dirt-2.json",
+      "runtime": "js-exact-oracle",
+      "status": "complete",
+      "distanceMeters": 21132,
+      "dirtPercent": 40,
+      "geometryMeters": 21139.36,
+      "exactSegmentRepeatMeters": 9003.21,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 54,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ]
+    }
+  ]
+}

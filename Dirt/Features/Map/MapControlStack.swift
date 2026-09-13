@@ -85,11 +85,6 @@ struct MapControlStack: View {
 
     @ViewBuilder
     private var controlButtons: some View {
-        Group {
-            zoomButton(increase: true)
-            zoomButton(increase: false)
-                .padding(horizontal ? .trailing : .bottom, 10)
-        }
         if app.navigation.phase == .active {
             if showsNavigationOverviewButton {
                 navigationOverviewButton
@@ -99,7 +94,9 @@ struct MapControlStack: View {
             compassButton
             riderStatusButton
             recenterButton
-
+        } else if groupOnly {
+            // Group browsing owns its map actions; retain only orientation.
+            compassButton
         } else {
             // Primary map: view mode and rider status remain available before
             // navigation. Cues are ride-only.
@@ -124,23 +121,6 @@ struct MapControlStack: View {
     }
 
     // MARK: - Buttons
-
-    private func zoomButton(increase: Bool) -> some View {
-        Button {
-            closePopovers()
-            app.mapState.zoomBy(increase ? 1 : -1)
-        } label: {
-            Image(systemName: increase ? "plus" : "minus")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.black)
-                .frame(width: 50, height: 50)
-                .background(.white, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(.black, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(increase ? "Zoom in" : "Zoom out")
-        .accessibilityIdentifier(increase ? "map-zoom-in" : "map-zoom-out")
-    }
 
     private var navigationOverviewButton: some View {
         Button {

@@ -1005,8 +1005,6 @@ struct MapLibreMapView: UIViewRepresentable {
                 mapView.userTrackingMode = .none
             }
             switch camera.command {
-            case let .zoom(level):
-                mapView.setZoomLevel(level, animated: !UIAccessibility.isReduceMotionEnabled)
             case let .center(latitude, longitude, zoom):
                 // Instant snap — never animate center while (re)engaging follow.
                 // An animated setCenter raced follow and produced zoom-then-scroll.

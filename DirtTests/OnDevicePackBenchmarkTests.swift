@@ -1,524 +1,271 @@
 import CoreLocation
+import CryptoKit
 import Foundation
 import Testing
 @testable import Dirt
 
-@Suite("Real V4 on-device benchmark")
+/// Development-only replay of the accepted pack contract. This deliberately
+/// calls the same unbounded on-device route entry point used by the restored
+/// planner; it does not exercise the later fast-search candidate.
+@Suite("Accepted V4 on-device replay", .serialized)
 struct OnDevicePackBenchmarkTests {
     private var root: URL {
         if let value = ProcessInfo.processInfo.environment["DIRT_PACK_ROOT"] {
             return URL(fileURLWithPath: value, isDirectory: true)
         }
-        return URL(fileURLWithPath: "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/.build/restriction-release-copy/partial-staging/packs", isDirectory: true)
+        return URL(fileURLWithPath: "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/scripts/pack-fabric/routing/candidates/fabric-v4-20260908-02/packs", isDirectory: true)
     }
 
-    private func requireCurrentCandidate(_ regionID: String) throws {
-        let url = root.appendingPathComponent("\(regionID)/pack-manifest.v2.json")
-        guard let data = try? Data(contentsOf: url),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let release = object["fabricReleaseId"] as? String else {
-            Issue.record("Missing local pack manifest for \(regionID)")
-            return
-        }
-        #if DIRT_DEVELOPMENT
-        #expect(release == AppConfig.v4CandidateReleaseId)
-        #endif
-    }
 
-    @Test("NS Dirt seam envelope records bounded cancellations")
-    func nsDirtSeamEnvelope() throws {
-        let graphURL = root.appendingPathComponent("ns/graph.v4.bin")
-        let geomURL = root.appendingPathComponent("ns/geometry.v1.bin")
-        guard FileManager.default.fileExists(atPath: graphURL.path),
-              FileManager.default.fileExists(atPath: geomURL.path) else {
-            print("[RealV4] skipped: \(root.path)")
-            return
-        }
-        try requireCurrentCandidate("ns")
-        let pack = try GraphV2Pack(data: Data(contentsOf: graphURL))
-        pack.geometry = try GeometryV1Pack(data: Data(contentsOf: geomURL))
-        let seamsURL = root.appendingPathComponent("ns/cross-pack-seams.v2.json")
-        if FileManager.default.fileExists(atPath: seamsURL.path) {
-            try pack.applyCrossPackSeams(data: Data(contentsOf: seamsURL))
-        }
-        let start = CLLocationCoordinate2D(latitude: 44.764804, longitude: -63.340199)
-        let end = CLLocationCoordinate2D(latitude: 47.013162, longitude: -65.244265)
-        let candidates = CrossPackSeam.operationalCandidates(
-            from: start, to: end,
-            anchors: pack.crossPackSeams["nb"] ?? [],
-            urbanCores: pack.urbanCores,
-            pack: pack
-        )
-        guard let seam = candidates.first else {
-            Issue.record("NS pack has no NB seams")
-            return
-        }
-        print("[RealV4] seam anchor lat=\(seam.latitude) lon=\(seam.longitude) way=\(seam.osmWayId) gap=\(seam.gapMeters)")
-        let snapProbe = OnDeviceRouter(pack: pack)
-        let seamPoint = CLLocationCoordinate2D(latitude: seam.latitude, longitude: seam.longitude)
-        let startSnapText = snapProbe.distanceToNearestRoad(from: start, allowUnknown: false, profile: .dirt).map { String(format: "%.1f", $0) } ?? "nil"
-        let seamSnapText = snapProbe.distanceToNearestRoad(from: seamPoint, allowUnknown: false, profile: .dirt).map { String(format: "%.1f", $0) } ?? "nil"
-        print("[RealV4] snap start=\(startSnapText)m seam=\(seamSnapText)m")
-        // The production path currently supplies a 1.8 s deadline, while the
-        // Dirt search itself is allowed a larger bounded envelope. Measure
-        // both so a cancellation is not mistaken for a disconnected graph.
-        for seconds in [0.4, 0.8, 1.2, 1.8, 3.0, 5.0, 7.0] {
-            var router = OnDeviceRouter(pack: pack)
-            router.fastSearch = true
-            let began = ProcessInfo.processInfo.systemUptime
-            router.executionCancelled = {
-                ProcessInfo.processInfo.systemUptime - began >= seconds
-            }
-            let result = router.routeDetailed(
-                from: start, to: CLLocationCoordinate2D(latitude: seam.latitude, longitude: seam.longitude),
-                profile: .dirt, allowUnknown: false, sessionSeed: 1
-            )
-            let elapsed = ProcessInfo.processInfo.systemUptime - began
-            let elapsedText = String(format: "%.3f", elapsed)
-            switch result {
-            case .success(let route):
-                print("[RealV4] dirt-seam budget=\(seconds) result=success elapsed=\(elapsedText) meters=\(Int(route.distanceMeters)) dirt=\(route.reportedDirtPercent)")
-            case .failure(let failure):
-                print("[RealV4] dirt-seam budget=\(seconds) result=failure elapsed=\(elapsedText) reason=\(failure)")
-            }
-        }
-        for profile in [RouteProfile.cleanest, .balanced, .dirt] {
-            var router = OnDeviceRouter(pack: pack)
-            router.fastSearch = true
-            let began = ProcessInfo.processInfo.systemUptime
-            router.executionCancelled = {
-                ProcessInfo.processInfo.systemUptime - began >= 7.0
-            }
-            let result = router.routeDetailed(
-                from: start,
-                to: CLLocationCoordinate2D(latitude: seam.latitude, longitude: seam.longitude),
-                profile: profile,
-                allowUnknown: false,
-                sessionSeed: 1
-            )
-            let elapsed = ProcessInfo.processInfo.systemUptime - began
-            let elapsedText = String(format: "%.3f", elapsed)
-            switch result {
-            case .success(let route):
-                print("[RealV4] profile=\(profile.rawValue) seam7 result=success elapsed=\(elapsedText) meters=\(Int(route.distanceMeters)) dirt=\(route.reportedDirtPercent)")
-            case .failure(let failure):
-                print("[RealV4] profile=\(profile.rawValue) seam7 result=failure elapsed=\(elapsedText) reason=\(failure)")
-            }
+    private func verifyPack(_ region: String) throws {
+        let dir = root.appendingPathComponent(region)
+        let manifest = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("pack-manifest.v2.json"))) as? [String: Any])
+        #expect(manifest["fabricReleaseId"] as? String == "fabric-v4-20260908-02")
+        for key in ["graph", "geometry", "fuel", "seams"] {
+            let file = try #require(manifest[key] as? [String: Any])
+            let name = try #require(file["name"] as? String)
+            let data = try Data(contentsOf: dir.appendingPathComponent(name))
+            #expect(data.count == file["bytes"] as? Int)
+            #expect(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() == file["sha256"] as? String)
         }
     }
 
-    @Test("NS seam candidates expose a legal on-device hop")
-    func nsSeamCandidateProbe() throws {
-        let graphURL = root.appendingPathComponent("ns/graph.v4.bin")
-        let geomURL = root.appendingPathComponent("ns/geometry.v1.bin")
-        guard FileManager.default.fileExists(atPath: graphURL.path),
-              FileManager.default.fileExists(atPath: geomURL.path) else { return }
-        try requireCurrentCandidate("ns")
-        let pack = try GraphV2Pack(data: Data(contentsOf: graphURL))
-        pack.geometry = try GeometryV1Pack(data: Data(contentsOf: geomURL))
-        let seamsURL = root.appendingPathComponent("ns/cross-pack-seams.v2.json")
-        if FileManager.default.fileExists(atPath: seamsURL.path) {
-            try pack.applyCrossPackSeams(data: Data(contentsOf: seamsURL))
-        }
-        let start = CLLocationCoordinate2D(latitude: 44.764804, longitude: -63.340199)
-        let end = CLLocationCoordinate2D(latitude: 47.013162, longitude: -65.244265)
-        let candidates = CrossPackSeam.operationalCandidates(
-            from: start, to: end,
-            anchors: pack.crossPackSeams["nb"] ?? [],
-            urbanCores: pack.urbanCores,
-            pack: pack
-        )
-        let probe = OnDeviceRouter(pack: pack)
-        for (index, anchor) in candidates.prefix(4).enumerated() {
-            let point = CLLocationCoordinate2D(latitude: anchor.latitude, longitude: anchor.longitude)
-            let snap = probe.distanceToNearestRoad(from: point, allowUnknown: false, profile: .cleanest)
-                .map { String(format: "%.1f", $0) } ?? "nil"
-            let way = Int64(anchor.osmWayId) ?? -1
-            let edgeIndices = pack.osmWayIds.indices.filter { pack.osmWayIds[$0] == way }
-            let edgeSummary = edgeIndices.prefix(3).map { ei in
-                let a = Int(pack.edgeFrom?[ei] ?? 0)
-                let b = Int(pack.edgeTo?[ei] ?? 0)
-                let degreeA = a + 1 < pack.nodeOffsets.count ? Int(pack.nodeOffsets[a + 1] - pack.nodeOffsets[a]) : -1
-                let degreeB = b + 1 < pack.nodeOffsets.count ? Int(pack.nodeOffsets[b + 1] - pack.nodeOffsets[b]) : -1
-                let roadClass = pack.roadClassLeaf(ei) ?? "?"
-                return "ei=\(ei) cls=\(roadClass) deg=\(degreeA)/\(degreeB)"
-            }.joined(separator: ",")
-            print("[RealV4] candidate=\(index) lat=\(anchor.latitude) lon=\(anchor.longitude) way=\(anchor.osmWayId) edges=[\(edgeSummary)]")
-            for profile in [RouteProfile.cleanest, .dirt] {
-                var router = OnDeviceRouter(pack: pack)
-                router.fastSearch = true
-                let began = ProcessInfo.processInfo.systemUptime
-                router.executionCancelled = {
-                    ProcessInfo.processInfo.systemUptime - began >= 1.8
-                }
-                let result = router.routeDetailed(
-                    from: start, to: point, profile: profile, allowUnknown: false, sessionSeed: 1
-                )
-                let elapsed = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
-                switch result {
-                case .success(let route):
-                    print("[RealV4] candidate=\(index) profile=\(profile.rawValue) snap=\(snap)m success=\(elapsed)s meters=\(Int(route.distanceMeters))")
-                case .failure(let failure):
-                    print("[RealV4] candidate=\(index) profile=\(profile.rawValue) snap=\(snap)m failure=\(elapsed)s reason=\(failure)")
-                }
-            }
-        }
-    }
-
-    @Test("NS Yarmouth endpoint envelope records profile behavior")
-    func nsYarmouthEndpointEnvelope() throws {
-        let graphURL = root.appendingPathComponent("ns/graph.v4.bin")
-        let geomURL = root.appendingPathComponent("ns/geometry.v1.bin")
-        guard FileManager.default.fileExists(atPath: graphURL.path),
-              FileManager.default.fileExists(atPath: geomURL.path) else { return }
-        try requireCurrentCandidate("ns")
-        let pack = try GraphV2Pack(data: Data(contentsOf: graphURL))
-        pack.geometry = try GeometryV1Pack(data: Data(contentsOf: geomURL))
-        let start = CLLocationCoordinate2D(latitude: 44.764794, longitude: -63.340257)
-        let end = CLLocationCoordinate2D(latitude: 43.807616, longitude: -66.016108)
-        for profile in [RouteProfile.cleanest, .balanced, .dirt] {
-            for seconds in [1.8, 3.0, 7.0] {
-                var router = OnDeviceRouter(pack: pack)
-                router.fastSearch = true
-                let began = ProcessInfo.processInfo.systemUptime
-                router.executionCancelled = {
-                    ProcessInfo.processInfo.systemUptime - began >= seconds
-                }
-                let result = router.routeDetailed(
-                    from: start, to: end, profile: profile, allowUnknown: false, sessionSeed: 7
-                )
-                let elapsed = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
-                switch result {
-                case .success(let route):
-                    let objective = route.searchMeta.rideObjective ?? "-"
-                    let corridor = route.searchMeta.corridorMeters.map { Int($0) } ?? -1
-                    print("[RealV4] yarmouth profile=\(profile.rawValue) budget=\(seconds) success=\(elapsed)s meters=\(Int(route.distanceMeters)) dirt=\(route.reportedDirtPercent) pops=\(route.searchMeta.pops) objective=\(objective) corridor=\(corridor)")
-                case .failure(let failure):
-                    print("[RealV4] yarmouth profile=\(profile.rawValue) budget=\(seconds) failure=\(elapsed)s reason=\(failure)")
-                }
-            }
-        }
-
-        // Sweep the bounded Dirt envelope once. This is the diagnostic that
-        // distinguishes a disconnected corridor from a corridor that is
-        // simply too narrow; production remains pinned to the selected policy
-        // value after the sweep.
-        for width in [30_000.0, 40_000.0, 50_000.0, 60_000.0] {
-            var router = OnDeviceRouter(pack: pack)
-            router.fastSearch = true
-            router.fastDirtCorridorMetersOverride = width
-            let began = ProcessInfo.processInfo.systemUptime
-            router.executionCancelled = {
-                ProcessInfo.processInfo.systemUptime - began >= 7.0
-            }
-            let result = router.routeDetailed(
-                from: start, to: end, profile: .dirt, allowUnknown: false, sessionSeed: 7
-            )
-            let elapsed = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - began)
-            switch result {
-            case .success(let route):
-                print("[RealV4] yarmouth corridor=\(Int(width / 1000))km success=\(elapsed)s meters=\(Int(route.distanceMeters)) dirt=\(route.reportedDirtPercent) pops=\(route.searchMeta.pops)")
-            case .failure(let failure):
-                print("[RealV4] yarmouth corridor=\(Int(width / 1000))km failure=\(elapsed)s reason=\(failure)")
-            }
-        }
-    }
-
-    @Test("NS to NB cross-region route loads a bounded seam proof")
     @MainActor
-    func nsToNBCrossRegionUsesCanonicalSeamBeforeDeadline() async throws {
+    private func fixtureStore() throws -> (GraphPackStore, URL) {
         let fm = FileManager.default
-        let tempRoot = fm.temporaryDirectory
-            .appendingPathComponent("dirt-cross-region-\(UUID().uuidString)", isDirectory: true)
-        defer { try? fm.removeItem(at: tempRoot) }
-        let versionRoot = tempRoot.appendingPathComponent(
-            AppConfig.v4CandidateReleaseId,
-            isDirectory: true
-        )
-        for region in ["ns", "nb"] {
-            let destination = versionRoot.appendingPathComponent(region, isDirectory: true)
-            try fm.createDirectory(at: destination, withIntermediateDirectories: true)
-            for name in ["graph.v4.bin", "geometry.v1.bin", "cross-pack-seams.v2.json"] {
-                let source = root.appendingPathComponent("\(region)/\(name)")
-                guard fm.fileExists(atPath: source.path) else {
-                    Issue.record("Missing \(region) \(name) fixture")
-                    continue
+        let temp = fm.temporaryDirectory.appendingPathComponent("recovery-packs-\(UUID())")
+        do {
+            for region in ["ns", "nb"] {
+                try verifyPack(region)
+                let destination = temp.appendingPathComponent("fabric-v4-20260908-02/\(region)")
+                try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+                for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json", "pack-manifest.v2.json"] {
+                    try fm.copyItem(at: root.appendingPathComponent("\(region)/\(name)"), to: destination.appendingPathComponent(name))
                 }
-                try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
             }
-        }
+            return (GraphPackStore(cacheRoot: temp, refreshCatalogOnInit: false), temp)
+        } catch { try? fm.removeItem(at: temp); throw error }
+    }
 
-        let store = GraphPackStore(cacheRoot: tempRoot)
-        let from = CLLocationCoordinate2D(latitude: 44.764830, longitude: -63.340243)
-        let to = CLLocationCoordinate2D(latitude: 47.903181, longitude: -66.074515)
+    private func saveEvidence(_ value: [String: Any], name: String) throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("baseline-recovery-20260913")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]).write(to: dir.appendingPathComponent(name + ".json"))
+        print("[accepted-replay] evidence=\(dir.path)/\(name).json")
+    }
+
+    private func object<T: Encodable>(_ value: T) throws -> Any {
+        try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
+    }
+
+    private func loadPack(_ region: String) throws -> GraphV2Pack {
+        try verifyPack(region)
+        let dir = root.appendingPathComponent(region, isDirectory: true)
+        let pack = try GraphV2Pack(data: Data(contentsOf: dir.appendingPathComponent("graph.v4.bin")))
+        pack.geometry = try GeometryV1Pack(data: Data(contentsOf: dir.appendingPathComponent("geometry.v1.bin")))
+        let leafCount = (0..<pack.undirectedEdgeCount).reduce(into: 0) { count, edge in
+            if pack.surfaceLeaf(edge) != nil { count += 1 }
+        }
+        print("[accepted-replay] pack region=\(region) version=\(pack.version) leaves=\(pack.hasLeaves) surfaces=\(pack.surfaceLeafNames.count) mappedFamilies=\(pack.surfaceFamilyMap.count) taggedEdges=\(leafCount) edges=\(pack.undirectedEdgeCount)")
+        let ids = (0..<pack.undirectedEdgeCount).map { pack.edgeId($0) }
+        #expect(ids.allSatisfy { !$0.isEmpty })
+        // Whole-table digests from the accepted pack's JavaScript decoder.
+        let expectedIDs = ["ns": "30c36016caf95c3179861f59b1c63b153bad35e8aba2128b209ef02901c1682e",
+                           "nb": "1b2bc06fae0c84311609f4ea98afb5985a881f1a1f9466bc31c76fbaeb809256"]
+        #expect(SHA256.hash(data: Data(ids.joined(separator: "\n").utf8)).map { String(format: "%02x", $0) }.joined() == expectedIDs[region])
+        return pack
+    }
+
+    private func replay(
+        _ router: OnDeviceRouter,
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        profile: RouteProfile,
+        seed: UInt64,
+        avoidMotorways: Bool = false
+    ) -> Swift.Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let began = ProcessInfo.processInfo.systemUptime
-        let result = await store.routeOnDeviceDetailed(
-            from: from,
-            to: to,
-            profile: .dirt,
-            allowUnknown: false,
-            fastSearch: true,
-            deadline: Date().addingTimeInterval(20)
-        )
+        let result = router.routeDetailed(from: from, to: to, profile: profile, allowUnknown: false, sessionSeed: seed, avoidMotorways: avoidMotorways)
         let elapsed = ProcessInfo.processInfo.systemUptime - began
         switch result {
         case .success(let route):
-            print("[RealV4] NS→NB chained success=\(String(format: "%.3f", elapsed))s meters=\(Int(route.distanceMeters)) dirt=\(route.reportedDirtPercent)")
-            #expect(route.distanceMeters > 0)
+            try? saveEvidence([
+                "from": [from.longitude, from.latitude], "to": [to.longitude, to.latitude],
+                "profile": profile.rawValue, "seed": seed, "avoidMotorways": avoidMotorways, "distanceMeters": route.distanceMeters,
+                "dirtPercent": route.reportedDirtPercent, "repeatedMeters": route.backtrackMeters,
+                "timedOut": route.searchMeta.timedOut, "pass2": route.searchMeta.pass2Outcome,
+                "legs": route.legs.map { ["edgeId": $0.edgeId, "surfaceLeaf": $0.surfaceLeaf as Any? ?? NSNull(), "meters": $0.distanceMeters, "geometry": $0.coordinates.map { [$0.longitude, $0.latitude] }] as [String: Any] }
+            ], name: "road-\(seed)-\(to.latitude)-\(profile.rawValue)")
+            let leafSamples = route.legs.compactMap { leg in
+                leg.surfaceLeaf.map { "\($0):\(router.pack.surfaceFamilyMap[$0]?.rawValue ?? "nil")" }
+            }
+            let sample = Array(leafSamples.prefix(8)).joined(separator: ",")
+            let families = Dictionary(grouping: route.legs.compactMap { leg in
+                leg.surfaceLeaf.flatMap { router.pack.surfaceFamilyMap[$0]?.rawValue }
+            }, by: { $0 }).mapValues { $0.count }
+            print("[accepted-replay] profile=\(profile.rawValue) seconds=\(String(format: "%.3f", elapsed)) meters=\(Int(route.distanceMeters)) dirt=\(route.reportedDirtPercent) coarseDirt=\(route.dirtPercent) repeated=\(Int(route.backtrackMeters)) pops=\(route.searchMeta.pops) timedOut=\(route.searchMeta.timedOut) pass2=\(route.searchMeta.pass2Outcome) objective=\(route.searchMeta.rideObjective ?? "-") families=\(families) leaves=\(sample) note=\(route.debugNote)")
+        case .failure(let failure):
+            print("[accepted-replay] profile=\(profile.rawValue) seconds=\(String(format: "%.3f", elapsed)) failure=\(failure)")
+        }
+        return result
+    }
+
+    @Test("Routing oracle short and rural cases replay on accepted pack")
+    func routingOracleShortAndRural() throws {
+        let pack = try loadPack("ns")
+        let router = OnDeviceRouter(pack: pack)
+        let cases: [(String, CLLocationCoordinate2D, CLLocationCoordinate2D)] = [
+            ("short-intra-metro", .init(latitude: 44.764919, longitude: -63.340350), .init(latitude: 44.755736, longitude: -63.301255)),
+            ("rural-pair", .init(latitude: 44.911062, longitude: -62.386656), .init(latitude: 45.261359, longitude: -62.621027))
+        ]
+        for (name, from, to) in cases {
+            for profile in [RouteProfile.cleanest, .balanced, .dirt] {
+                print("[accepted-replay] oracle=\(name)")
+                let result = replay(router, from: from, to: to, profile: profile, seed: 3511091208, avoidMotorways: profile == .cleanest)
+                if case .failure(let failure) = result {
+                    Issue.record("Accepted-pack replay failed case=\(name) profile=\(profile.rawValue): \(failure)")
+                }
+            }
+        }
+    }
+
+    @Test("September 13 Nova Scotia routes replay on the accepted pack")
+    func september13NovaScotiaRoutes() throws {
+        let pack = try loadPack("ns")
+        let router = OnDeviceRouter(pack: pack)
+        let start = CLLocationCoordinate2D(latitude: 44.764830, longitude: -63.340243)
+        let allEndpoints: [(String, CLLocationCoordinate2D)] = [
+            ("short", CLLocationCoordinate2D(latitude: 45.091108, longitude: -63.057616)),
+            ("cape-breton", CLLocationCoordinate2D(latitude: 46.845234, longitude: -60.408302)),
+            ("yarmouth", CLLocationCoordinate2D(latitude: 43.807616, longitude: -66.016108)),
+            ("south-shore", CLLocationCoordinate2D(latitude: 43.849315, longitude: -66.057385))
+        ]
+        let endpoints = allEndpoints
+        let profiles: [RouteProfile] = [.cleanest, .balanced, .dirt]
+        for (name, endpoint) in endpoints {
+            print("[accepted-replay] case=\(name)")
+            for profile in profiles {
+                let result = replay(router, from: start, to: endpoint, profile: profile, seed: 20260913)
+                if case .failure(let failure) = result {
+                    Issue.record("Accepted-pack replay failed case=\(name) profile=\(profile.rawValue): \(failure)")
+                }
+            }
+        }
+    }
+
+    @Test("Accepted NS and NB packs cross the canonical seam")
+    @MainActor
+    func september13NovaScotiaToNewBrunswick() async throws {
+        let (store, temp) = try fixtureStore()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let from = CLLocationCoordinate2D(latitude: 44.764830, longitude: -63.340243)
+        let to = CLLocationCoordinate2D(latitude: 47.903181, longitude: -66.074515)
+        let began = ProcessInfo.processInfo.systemUptime
+        let result = await store.routeOnDeviceDetailed(from: from, to: to, profile: RouteProfile.dirt, allowUnknown: false, sessionSeed: 20260913)
+        let elapsed = ProcessInfo.processInfo.systemUptime - began
+        switch result {
+        case .success(let route):
+            print("[accepted-replay] case=ns-nb profile=dirt seconds=\(String(format: "%.3f", elapsed)) meters=\(Int(route.distanceMeters)) dirt=\(route.reportedDirtPercent) repeated=\(Int(route.backtrackMeters))")
             #expect(route.coordinates.count > 2)
         case .failure(let failure):
-            Issue.record("NS→NB chained route failed after \(String(format: "%.3f", elapsed))s: \(failure)")
+            Issue.record("Accepted NS/NB seam replay failed: \(failure)")
         }
     }
 
-    @Test("NS fuel fast path returns a proven first pump")
+    @Test("Accepted short itinerary stays a single rider leg")
     @MainActor
-    func nsFuelFastPathReturnsFirstPump() async throws {
-        let fm = FileManager.default
-        let tempRoot = fm.temporaryDirectory
-            .appendingPathComponent("dirt-fuel-fast-\(UUID().uuidString)", isDirectory: true)
-        defer { try? fm.removeItem(at: tempRoot) }
-        let versionRoot = tempRoot.appendingPathComponent(
-            AppConfig.v4CandidateReleaseId,
-            isDirectory: true
-        )
-        let destination = versionRoot.appendingPathComponent("ns", isDirectory: true)
-        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
-        for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"] {
-            let source = root.appendingPathComponent("ns/\(name)")
-            guard fm.fileExists(atPath: source.path) else {
-                Issue.record("Missing ns \(name) fixture")
-                return
-            }
-            try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
-        }
-
-        let store = GraphPackStore(cacheRoot: tempRoot)
+    func shortItineraryDoesNotInventFuelStops() async throws {
+        let (store, temp) = try fixtureStore()
+        defer { try? FileManager.default.removeItem(at: temp) }
         let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
-        let start = RouteCoordinate(longitude: -63.340343, latitude: 44.764811)
-        let end = RouteCoordinate(longitude: -60.416804, latitude: 46.298675)
-        let began = ProcessInfo.processInfo.systemUptime
-        let response = try await source.fuelChain(FuelChainRequest(
-            profile: .dirt,
-            from: start,
-            to: end,
-            allowUnknown: false,
-            usableRangeMeters: 180_000,
-            firstLegMaxMeters: 180_000,
-            requireFuelStopBeforeEnd: false,
-            minimumFuelStops: 0,
-            profileMeters: GeoMath.meters(start, end),
-            riderLegId: "real-pack-fuel-fast-path",
-            windowMaxStops: 1,
-            allowPartialWindow: true,
-            windowTimeBudgetMs: 20_000,
-            mapZoom: 8
-        ))
-        let elapsed = ProcessInfo.processInfo.systemUptime - began
-        print("[RealV4] fuel-fast status=\(response.status) seconds=\(String(format: "%.3f", elapsed)) stops=\(response.stops?.count ?? 0) meters=\(response.graphMeters ?? []) strategy=\(response.diagnostics?.strategy ?? "-")")
-        #expect(response.isComplete)
-        #expect(response.stops?.isEmpty == false)
-        #expect((response.graphMeters?.first ?? .infinity) <= 180_001)
-        #expect(elapsed < 3.0)
-    }
-
-    @Test("NS short pack leg bypasses fuel planning")
-    @MainActor
-    func nsOnDeviceShortLegBypassesFuelPlanner() async throws {
-        let fm = FileManager.default
-        let tempRoot = fm.temporaryDirectory
-            .appendingPathComponent("dirt-short-fuel-\(UUID().uuidString)", isDirectory: true)
-        defer { try? fm.removeItem(at: tempRoot) }
-        let versionRoot = tempRoot.appendingPathComponent(
-            AppConfig.v4CandidateReleaseId,
-            isDirectory: true
-        )
-        let destination = versionRoot.appendingPathComponent("ns", isDirectory: true)
-        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
-        for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"] {
-            let source = root.appendingPathComponent("ns/\(name)")
-            guard fm.fileExists(atPath: source.path) else {
-                Issue.record("Missing ns \(name) fixture")
-                return
-            }
-            try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
-        }
-
-        let store = GraphPackStore(cacheRoot: tempRoot)
-        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
-        let start = RouteCoordinate(longitude: -63.340343, latitude: 44.764811)
-        let end = RouteCoordinate(longitude: -63.057616, latitude: 45.091108)
-        let first = RiderWaypoint(coordinate: start)
-        let last = RiderWaypoint(coordinate: end)
-        let itinerary = RiderItinerary(
-            waypoints: [first, last],
-            legs: [RiderLeg(
-                from: first.id,
-                to: last.id,
-                profile: .dirt,
-                allowUnknown: false,
-                avoidMotorways: false
-            )],
-            generation: 1,
-            impassableEdgeIDs: []
-        )
-        var statuses: [String] = []
-        let began = ProcessInfo.processInfo.systemUptime
+        let a = RiderWaypoint(coordinate: RouteCoordinate(longitude: -63.340243, latitude: 44.764830))
+        let b = RiderWaypoint(coordinate: RouteCoordinate(longitude: -63.057616, latitude: 45.091108))
+        let itinerary = RiderItinerary(waypoints: [a, b], legs: [RiderLeg(from: a.id, to: b.id, profile: .dirt, allowUnknown: false, avoidMotorways: false)], generation: 1, impassableEdgeIDs: [])
         let result = await ItineraryBuilder().build(
-            itinerary,
-            from: 0,
-            reuse: nil,
-            fuel: FuelRangePrefs.Snapshot(
-                tankMeters: 200_000,
-                usableMeters: 180_000,
-                reservePercent: 10,
-                automaticPlanningEnabled: true
-            ),
-            source: .fixed(source),
-            onFuelStatus: { statuses.append($0) },
-            onProgress: { _ in }
+            itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(tankMeters: 200_000, usableMeters: 180_000, reservePercent: 10, automaticPlanningEnabled: true),
+            source: .fixed(source), onFuelStatus: { _ in }, onProgress: { _ in }
         )
-        let elapsed = ProcessInfo.processInfo.systemUptime - began
-        let stops = result.legs.compactMap { $0.endsAtFuelStop?.stationID }
-        print("[RealV4] NS short fuel seconds=\(String(format: "%.3f", elapsed)) legs=\(result.legs.count) stops=\(stops) statuses=\(statuses)")
         #expect(result.legs.count == 1)
-        #expect(stops.isEmpty)
-        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
-        #expect(!statuses.contains { $0.contains("Fuel stop") })
-        #expect(elapsed < 2.0)
+        #expect(result.legs.first?.endsAtFuelStop == nil)
+        #expect(result.riderLegStatus.values.allSatisfy {
+            if case .built = $0 { return true }
+            return false
+        })
     }
-
-    @Test("NS on-device itinerary commits fuel stops instead of advisory fallback")
+    @Test("All historical oracle requests replay through the real pack source")
     @MainActor
-    func nsOnDeviceItineraryCommitsFuelStops() async throws {
-        let fm = FileManager.default
-        let tempRoot = fm.temporaryDirectory
-            .appendingPathComponent("dirt-fuel-itinerary-\(UUID().uuidString)", isDirectory: true)
-        defer { try? fm.removeItem(at: tempRoot) }
-        let versionRoot = tempRoot.appendingPathComponent(
-            AppConfig.v4CandidateReleaseId,
-            isDirectory: true
-        )
-        let destination = versionRoot.appendingPathComponent("ns", isDirectory: true)
-        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
-        for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"] {
-            let source = root.appendingPathComponent("ns/\(name)")
-            guard fm.fileExists(atPath: source.path) else {
-                Issue.record("Missing ns \(name) fixture")
-                return
-            }
-            try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
-        }
-
-        let store = GraphPackStore(cacheRoot: tempRoot)
-        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
-        let start = RouteCoordinate(longitude: -63.340343, latitude: 44.764811)
-        let end = RouteCoordinate(longitude: -60.416804, latitude: 46.298675)
-        let first = RiderWaypoint(coordinate: start)
-        let last = RiderWaypoint(coordinate: end)
-        let itinerary = RiderItinerary(
-            waypoints: [first, last],
-            legs: [RiderLeg(
-                from: first.id,
-                to: last.id,
-                profile: .dirt,
-                allowUnknown: false,
-                avoidMotorways: false
-            )],
-            generation: 1,
-            impassableEdgeIDs: []
-        )
-        var statuses: [String] = []
-        let began = ProcessInfo.processInfo.systemUptime
-        let result = await ItineraryBuilder().build(
-            itinerary,
-            from: 0,
-            reuse: nil,
-            fuel: FuelRangePrefs.Snapshot(
-                tankMeters: 200_000,
-                usableMeters: 180_000,
-                reservePercent: 10,
-                automaticPlanningEnabled: true
-            ),
-            source: .fixed(source),
-            onFuelStatus: { statuses.append($0) },
-            onProgress: { _ in }
-        )
-        let elapsed = ProcessInfo.processInfo.systemUptime - began
-        let stops = result.legs.compactMap { $0.endsAtFuelStop?.stationID }
-        print("[RealV4] fuel-itinerary seconds=\(String(format: "%.3f", elapsed)) legs=\(result.legs.count) stops=\(stops) statuses=\(statuses)")
-        #expect(result.legs.count >= 2)
-        #expect(!stops.isEmpty)
-        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
-        #expect(statuses.contains { $0.contains("Fuel stop") })
-        #expect(elapsed < 12.0)
-    }
-
-    @Test("NS to NB on-device itinerary commits fuel stops across the seam")
-    @MainActor
-    func nsToNBOnDeviceItineraryCommitsFuelStops() async throws {
-        let fm = FileManager.default
-        let tempRoot = fm.temporaryDirectory
-            .appendingPathComponent("dirt-fuel-cross-region-\(UUID().uuidString)", isDirectory: true)
-        defer { try? fm.removeItem(at: tempRoot) }
-        let versionRoot = tempRoot.appendingPathComponent(
-            AppConfig.v4CandidateReleaseId,
-            isDirectory: true
-        )
-        for region in ["ns", "nb"] {
-            let destination = versionRoot.appendingPathComponent(region, isDirectory: true)
-            try fm.createDirectory(at: destination, withIntermediateDirectories: true)
-            for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"] {
-                let source = root.appendingPathComponent("\(region)/\(name)")
-                guard fm.fileExists(atPath: source.path) else {
-                    Issue.record("Missing \(region) \(name) fixture")
-                    continue
+    func allOracleFuelWorkflows() async throws {
+        let casesURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("scripts/pack-fabric/bench/routing-oracle-cases.json")
+        let fixture = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: casesURL)) as? [String: Any])
+        let cases = try #require(fixture["scenarios"] as? [[String: Any]])
+        let seed = UInt64(try #require(fixture["sessionSeed"] as? Int))
+        let tank = Double(try #require(fixture["tankRangeKm"] as? Int)) * 1000
+        let usable = tank * (1 - Double(try #require(fixture["reservePercent"] as? Int)) / 100)
+        let (store, temp) = try fixtureStore()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        for scenario in cases {
+            let id = try #require(scenario["id"] as? String)
+            let a = try #require(scenario["from"] as? [String: Double])
+            let b = try #require(scenario["to"] as? [String: Double])
+            let from = RouteCoordinate(longitude: try #require(a["lon"]), latitude: try #require(a["lat"]))
+            let to = RouteCoordinate(longitude: try #require(b["lon"]), latitude: try #require(b["lat"]))
+            for profile in [RouteProfile.cleanest, .balanced, .dirt] {
+                let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+                var current = from, prior: [String] = [], arrival: String?
+                var excluded: [String] = [], force = false, reached = false
+                var routes: [RouteResponse] = [], stops: [FuelChainStop] = [], windows: [Any] = []
+                var failure: String?
+                let began = ProcessInfo.processInfo.systemUptime
+                for attempt in 1...16 {
+                    var request = FuelChainRequest(profile: profile, from: current, to: to, allowUnknown: false,
+                        usableRangeMeters: usable, firstLegMaxMeters: usable, requireFuelStopBeforeEnd: force,
+                        minimumFuelStops: force ? 1 : 0, profileMeters: 0, riderLegId: "\(id):\(profile.rawValue)",
+                        avoidMotorways: profile == .cleanest, priorEdgeIds: prior, arrivalEdgeId: arrival,
+                        backtrackFactor: 4, excludedStationIds: excluded, windowMaxStops: 1,
+                        allowPartialWindow: true, windowTimeBudgetMs: 15000, forwardFeeler: false)
+                    var options = request.options ?? RouteRequestOptions()
+                    options.sessionSeed = seed; request.options = options
+                    do {
+                        let chain = try await source.fuelChain(request)
+                        windows.append(["request": try object(request), "response": try object(chain)])
+                        guard chain.isComplete else { failure = "fuel-\(chain.status):\(chain.error ?? chain.message ?? "unknown")"; break }
+                        let stop = chain.stops?.first
+                        if stop == nil && chain.windowComplete == false { failure = "partial-without-forward-stop"; break }
+                        let target = stop?.coordinate ?? to
+                        let routeRequest = RouteRequest(profile: profile,
+                            locations: [RouteLocation(latitude: current.latitude, longitude: current.longitude, label: "from"), RouteLocation(latitude: target.latitude, longitude: target.longitude, label: "to")],
+                            allowUnknown: false, priorEdgeIds: prior, arrivalEdgeId: arrival, backtrackFactor: 4,
+                            sessionSeed: seed, maxPathMeters: usable, regionalHopMinimumMeters: chain.graphMeters ?? [], avoidMotorways: profile == .cleanest)
+                        let route: RouteResponse
+                        do { route = try await source.route(routeRequest) }
+                        catch {
+                            windows.append(["routeRequest": try object(routeRequest), "error": error.localizedDescription])
+                            if let stop { excluded.append(stop.id); continue }
+                            if !force { force = true; continue }
+                            throw error
+                        }
+                        routes.append(route)
+                        for segment in route.segments ?? [] {
+                            if let edge = segment.edgeId, !edge.isEmpty {
+                                if !prior.contains(edge) { prior.append(edge) }; arrival = edge
+                            }
+                        }
+                        guard let stop else { reached = true; break }
+                        stops.append(stop); current = target; excluded.append(stop.id); force = false
+                        if attempt == 16 { failure = "forward-attempt-limit" }
+                    } catch { failure = error.localizedDescription; break }
                 }
-                try fm.copyItem(at: source, to: destination.appendingPathComponent(name))
+                let evidence: [String: Any] = ["scenario": scenario, "profile": profile.rawValue,
+                    "seed": seed, "tankMeters": tank, "usableMeters": usable,
+                    "reachedDestination": reached, "requestedDestination": try object(to), "reachedEndpoint": try object(routes.last?.coordinates.last ?? from),
+                    "failure": failure as Any? ?? NSNull(), "routes": try object(routes), "stops": try object(stops), "windows": windows]
+                try saveEvidence(evidence, name: "oracle-\(id)-\(profile.rawValue)")
+                print("[accepted-oracle] case=\(id) profile=\(profile.rawValue) reached=\(reached) seconds=\(ProcessInfo.processInfo.systemUptime-began) meters=\(routes.reduce(0) { $0 + ($1.distanceMeters ?? 0) }) stops=\(stops.map(\.id)) failure=\(failure ?? "none")")
+                #expect(reached, "Oracle did not reach requested destination: \(id)/\(profile.rawValue): \(failure ?? "unknown")")
             }
         }
-
-        let store = GraphPackStore(cacheRoot: tempRoot)
-        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
-        let start = RouteCoordinate(longitude: -63.340243, latitude: 44.764830)
-        let end = RouteCoordinate(longitude: -66.074515, latitude: 47.903181)
-        let first = RiderWaypoint(coordinate: start)
-        let last = RiderWaypoint(coordinate: end)
-        let itinerary = RiderItinerary(
-            waypoints: [first, last],
-            legs: [RiderLeg(
-                from: first.id,
-                to: last.id,
-                profile: .dirt,
-                allowUnknown: false,
-                avoidMotorways: false
-            )],
-            generation: 1,
-            impassableEdgeIDs: []
-        )
-        var statuses: [String] = []
-        let began = ProcessInfo.processInfo.systemUptime
-        let result = await ItineraryBuilder().build(
-            itinerary,
-            from: 0,
-            reuse: nil,
-            fuel: FuelRangePrefs.Snapshot(
-                tankMeters: 200_000,
-                usableMeters: 180_000,
-                reservePercent: 10,
-                automaticPlanningEnabled: true
-            ),
-            source: .fixed(source),
-            onFuelStatus: { statuses.append($0) },
-            onProgress: { _ in }
-        )
-        let elapsed = ProcessInfo.processInfo.systemUptime - began
-        let stops = result.legs.compactMap { $0.endsAtFuelStop?.stationID }
-        print("[RealV4] NS→NB fuel-itinerary seconds=\(String(format: "%.3f", elapsed)) legs=\(result.legs.count) stops=\(stops) statuses=\(statuses)")
-        #expect(result.legs.count >= 2)
-        #expect(!stops.isEmpty)
-        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
-        #expect(statuses.contains { $0.contains("Fuel stop") })
-        #expect(elapsed < 20.0)
     }
+
 }

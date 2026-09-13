@@ -15,6 +15,22 @@ struct GraphV4PackTests {
         throw GraphV2Pack.PackError.truncated
     }
 
+    @Test("V4 compact edge IDs preserve the same road and surface identities")
+    func derivedEdgeIDsMatchLegacyTable() throws {
+        let original = try Data(contentsOf: fixtureURL("legal-topology-canary.graph.v4.bin"))
+        let legacy = try GraphV2Pack(data: original)
+        var compact = original
+        // The V4 flag makes the old table irrelevant; its sentinel and bytes
+        // may remain. Identity comes from the canonical way/from/to fields.
+        compact[6] |= 16
+        let derived = try GraphV2Pack(data: compact)
+        for edge in 0..<legacy.undirectedEdgeCount {
+            #expect(!derived.edgeId(edge).isEmpty)
+            #expect(derived.edgeId(edge) == legacy.edgeId(edge))
+            #expect(derived.surfaceLeaf(edge) == legacy.surfaceLeaf(edge))
+        }
+    }
+
     @Test("truncated V4 header is rejected")
     func truncatedV4Rejected() throws {
         var bytes = [UInt8](repeating: 0, count: 140)

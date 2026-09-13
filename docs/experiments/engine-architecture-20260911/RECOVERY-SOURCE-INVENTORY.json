@@ -1,0 +1,224 @@
+[
+  {
+    "file": "Dirt.xcodeproj/xcshareddata/xcschemes/DIRT Dev.xcscheme",
+    "currentBlob": "1975f13865e2b318a7238221e11772e62b98e1c3",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/App/AppEnvironment.swift",
+    "currentBlob": "0695d0bbed1527bffcdd0e64ff9b5cc4bec89b78",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/App/RootView.swift",
+    "currentBlob": "418abb57e013767014df03d0cfd4057cfc7e6c48",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/DesignSystem/DirtTheme.swift",
+    "currentBlob": "1fde72b76d3b7f79e339906910437b3cdfe08c3c",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/DirtApp.swift",
+    "currentBlob": "849c944adfc36ed381f5c5c8bb645b6757dcf434",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/Groups/GroupsSheet.swift",
+    "currentBlob": "d0db43edca37349f9405b5c70403c3a689beb612",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/Layers/LayersSheet.swift",
+    "currentBlob": "18acb5400fb5e0af7230333a9d834a1c9744a079",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/Map/DockSheetPanel.swift",
+    "currentBlob": "1285c1d5a2bf77c3a9012f962996cdbb3abdfde2",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/Map/MapControlStack.swift",
+    "currentBlob": "1e29eac2b51d8ad17de54eb0746eb8789ebe3e1d",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/Navigation/NavigationHUD.swift",
+    "currentBlob": "589db5d036c17054d0db5f23280a4717cbf8e735",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/Profile/ProfileSheet.swift",
+    "currentBlob": "362e2ed9cfd6a37348f0bc4bd22b97b6c7bc876a",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/RoutePlanning/Itinerary/ItineraryBuilder.swift",
+    "currentBlob": "0b9d11bf3f6e26b26375f6cbb18c0b2d86c25e21",
+    "equals71aa7fd": true,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Features/RoutePlanning/Itinerary/RoutingSource.swift",
+    "currentBlob": "4a29bf0772135009e63be96f92fa15726b668325",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Features/RoutePlanning/OfflinePacksSheet.swift",
+    "currentBlob": "f3155817b44643e60ba1c5d7095fc5954d2423cc",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/RoutePlanning/RoutePlannerCard.swift",
+    "currentBlob": "85775044195a6f9dd4c08f340ed5710e6ec76293",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Features/RoutePlanning/RoutePlannerModel.swift",
+    "currentBlob": "d8776a226050795849d1934897d248eab76944cb",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Map/MapLibreMapView.swift",
+    "currentBlob": "012bf6cf164f4eca649456ad716fd83ba5897912",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Map/MapState.swift",
+    "currentBlob": "638de9fd8702169773121ff369aa0d9779f279a5",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Networking/AppConfig.swift",
+    "currentBlob": "d0cbb4227d3d09357d08672dd0c3e703d4a4c584",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Routing/FuelItinerary.swift",
+    "currentBlob": "daae26e8966a0d2527d22d268ccbcfb29e3b4c32",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Routing/HopSearchPolicy.swift",
+    "currentBlob": "dc24a1eefbb063195396e9321c15f59a2d04c7ac",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Routing/OnDevice/CrossPackSeam.swift",
+    "currentBlob": "582b5a85bc33fb49f30328883b2155f37bfef976",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Routing/OnDevice/GeometryV1Pack.swift",
+    "currentBlob": "9b812fa4d238c9899edc0316b31ebeef0f31f90a",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Routing/OnDevice/GraphPackStore.swift",
+    "currentBlob": "80173f20f0020ae49f4b134d9e30820798ebcf04",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Routing/OnDevice/GraphV2Pack.swift",
+    "currentBlob": "683939a238536e3dda040f6a6709acfd09ada90a",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Routing/OnDevice/GraphV4Pack.swift",
+    "currentBlob": "708f4bcae05966f2d84d1a47332b22205bee197d",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Routing/OnDevice/OnDeviceRouter.swift",
+    "currentBlob": "da0a5f17af0625db5787d5eadc7c1b92e4ff8e93",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Routing/OnDevice/RegionPolygons.json",
+    "currentBlob": "5b4a136ad87b12197bf57561fe42afb8f6dc294f",
+    "equals71aa7fd": true,
+    "equals9c15324": false
+  },
+  {
+    "file": "Dirt/Routing/RoutingDebugLog.swift",
+    "currentBlob": "3a3bd593d363521a15433fc24044d02c13b75f70",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Routing/UrbanCore.swift",
+    "currentBlob": "79ad6e555b58cc2663a4b02187c10294e45098fd",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "Dirt/Routing/UrbanSettlements.json",
+    "currentBlob": "6ea2aeffb7ee9e9a9e73fbc594d8fbb563029156",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "DirtTests/FuelAssistTests.swift",
+    "currentBlob": "e8d649c0ce85052c332b466b0d71b336cbf01bd9",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "DirtTests/GraphV4PackTests.swift",
+    "currentBlob": "f26cd6dbdde901faa03e7d400614ba9a7f943bc2",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  },
+  {
+    "file": "DirtTests/Itinerary/ItineraryBuilderTests.swift",
+    "currentBlob": "2e36f00bd23bacb5d3f6a38c378d134ed5f29c65",
+    "equals71aa7fd": true,
+    "equals9c15324": false
+  },
+  {
+    "file": "DirtTests/Itinerary/PackFirstRoutingTests.swift",
+    "currentBlob": "325bc61a42e21a4ba6196626ba0dcb01018fd2f0",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "DirtTests/ItineraryRebuildTests.swift",
+    "currentBlob": "accbf2325eec7939d43d1a78d909a6505331e892",
+    "equals71aa7fd": true,
+    "equals9c15324": true
+  },
+  {
+    "file": "DirtTests/OnDevicePackBenchmarkTests.swift",
+    "currentBlob": "e5eb5ad75e3db0167ae30a3a0b8b9e1956caa917",
+    "equals71aa7fd": false,
+    "equals9c15324": false
+  }
+]

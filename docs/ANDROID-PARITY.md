@@ -1144,3 +1144,20 @@ Hosted six-region requests still exceed the 90-second deadline. Accepted live
 DEV remains 139a173; no native parity, production promotion, or new pack bytes
 are implied. Future paging must preserve exact road identities, turn restrictions,
 profile selection, and fuel proof; an unloaded area is not evidence of no route.
+
+## September 13 — baseline recovery, not new routing rules
+
+The private `audit/baseline-recovery-20260913` candidate restores native routing
+and fuel behavior from `71aa7fd`, retaining the documented `3da6de4` spatial-index
+identity safeguard and compact V4 edge-ID decoding. DEV execution may prefer an
+installed accepted pack; production source selection is unchanged. Android must
+preserve the same profile/access intent, useful forward fuel progress, requested
+destination on partial output, and honest search-limit/cancellation classification.
+Compact edge IDs derive from canonical way/from/to values, not an absent string
+blob. A cache entry must belong to the current live pack instance.
+
+Build-23 live V4 acceptance is not offline parity evidence. The September 13
+replay records all oracle cases, original settings, geometry and fuel outputs;
+remaining differences are not authorization to invent new costs or thresholds.
+No Android implementation or physical acceptance is claimed. See
+[the recovery report](experiments/engine-architecture-20260911/BASELINE-RECOVERY-20260913.md).

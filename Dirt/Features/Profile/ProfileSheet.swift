@@ -157,7 +157,9 @@ struct ProfileSheet: View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
             Text(signedInLine)
                 .font(.system(.subheadline, design: .default, weight: .bold))
-                                .foregroundStyle(DirtTheme.muted)
+                .tracking(0.8)
+                .foregroundStyle(DirtTheme.muted)
+                .textCase(.uppercase)
                 .frame(maxWidth: .infinity)
 
             if supabase.isSignedIn {
@@ -565,6 +567,7 @@ struct ProfileSheet: View {
                 .font(DirtType.sectionLabel)
                 .tracking(1.1)
                 .foregroundStyle(DirtTheme.muted)
+                .textCase(.uppercase)
 
             Text("Share the current app session: network changes, map loading, fuel controls, routing, navigation, and other field-test failures.")
                 .font(DirtType.helper)

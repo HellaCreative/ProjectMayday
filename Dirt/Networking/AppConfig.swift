@@ -112,29 +112,41 @@ enum AppConfig {
     nonisolated static func packFileURL(version: String, regionId: String, fileName: String) -> URL {
         _ = version
         #if DIRT_DEVELOPMENT
-        return v4CandidateBaseURL
-            .appendingPathComponent(regionId.lowercased())
-            .appendingPathComponent(fileName)
-        #else
+        if Self.nsV4CandidateFileNames.contains(fileName) {
+            return v4CandidateBaseURL
+                .appendingPathComponent(regionId.lowercased())
+                .appendingPathComponent(fileName)
+        }
+        #endif
         return packCDNBaseURL
             .appendingPathComponent(regionId)
             .appendingPathComponent(fileName)
-        #endif
     }
 
     #if DIRT_DEVELOPMENT
-    /// Atlantic DEV canary: roads, services and connections share one release.
-    // The device build must follow the sealed 63-region candidate. Keeping
-    // this pinned to the four-region predecessor made the phone silently
-    // route on stale NB seams and graph bytes while local tests used the
-    // current fabric.
-    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260909-01"
+    /// DEV-only accepted physical-routing pack pair. Never used by production.
+    /// This is the pack identity used by the September 8 physical qualification,
+    /// rather than the later unqualified hybrid candidate.
+    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260908-02"
     nonisolated static var v4CandidateBaseURL: URL {
         packCDNBaseURL
             .appendingPathComponent("v4")
             .appendingPathComponent("candidates")
             .appendingPathComponent(v4CandidateReleaseId)
     }
+    nonisolated static let nsV4CandidateFileNames: Set<String> = [
+        "graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "pack-manifest.v2.json",
+        "cross-pack-seams.v2.json"
+    ]
+    nonisolated static let nsV4GraphBytes = 15_012_189
+    nonisolated static let nsV4GraphSHA256 =
+        "91a10b490918531de330b9bcd2209de1708a4beb50625bfab4969e59e23d551d"
+    nonisolated static let nsV4GeometryBytes = 23_954_228
+    nonisolated static let nsV4GeometrySHA256 =
+        "b4ee898537829666f3825ff50e3bff2a73f9b423a558ffde814a1abdd75649ac"
+    nonisolated static let nsV4FuelBytes = 143_951
+    nonisolated static let nsV4FuelSHA256 =
+        "62b9baf355740619f48f64938bfdfee4d447ed8ba4d2a4d65d3d2ecb513ee549"
     #endif
 
     /// Absolute last-resort map center only when GPS has never delivered a fix

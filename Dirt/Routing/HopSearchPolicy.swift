@@ -31,36 +31,12 @@ nonisolated enum HopSearchPolicy {
     /// Lockstep: fuel-chain.js MIN_FORWARD_PROGRESS_M / MIN_DESTINATION_FUEL_CLEARANCE_M.
     static let fuelMinimumForwardMeters: Double = 8_000
     static let fuelDestinationClearanceMeters: Double = 5_000
-
-    // A fuel pump's authored coordinate is commonly at the forecourt, while
-    // the route endpoint is the customer driveway. The graph path can add a
-    // few hundred metres between those two points. Keep the hard range rule,
-    // but allow a small proof epsilon so a station just beyond the rounded
-    // usable-range boundary is not rejected as an unverified tail.
-    static let fuelRangeProofToleranceMeters: Double = 2_000
-    /// Keep a proven pump on a practical approach instead of accepting a
-    /// large out-and-back detour that makes the route zigzag.
-    static let fuelMaxApproachDetourRatio: Double = 1.55
-    static let fuelMaxApproachExcessMeters: Double = 45_000
-    /// Dirt is a product choice. A selected Dirt route below this honest
-    /// surface percentage is not a valid Dirt result.
-    static let minimumReportedDirtPercent: Int = 50
     /// Too-early below this. Dijkstra reachability still uses fuelMaxTank = 1.0.
     static let fuelMinTank: Double = 0.75
     /// Preferred refuelling zone begins with the final quarter of usable range.
     static let fuelPreferTank: Double = 0.75
     /// The rider-entered range is already the safety limit; do not silently shave 5%.
     static let fuelMaxTank: Double = 1.0
-    /// Straight-line distance is only a lower bound. A Dirt detour can exceed
-    /// the cap before the tank edge, but the conservative fraction must scale
-    /// with the rider's configured range. A 180 km reserve-adjusted tank uses
-    /// the 0.50 trigger that protects the phone from repeated doomed probes;
-    /// a 405 km tank may safely prove a destination at 0.90 of the air bound
-    /// before manufacturing a fuel stop.
-    static func fuelAirLowerBoundFraction(firstLegMeters: Double) -> Double {
-        guard firstLegMeters.isFinite, firstLegMeters > 0 else { return 0.50 }
-        return min(0.90, max(0.50, firstLegMeters / 450_000))
-    }
 
     /// 0 = selection zone (75%+ consumed), 1 is retained for compatibility,
     /// 2 = early sparse-corridor fallback.
@@ -96,17 +72,6 @@ nonisolated enum HopSearchPolicy {
     static let minimumEarnedDirtExcursionMeters: Double = 1_000
     /// Bound the retry cost when successive tiny alternatives are discovered.
     static let maximumShortDirtRepairPasses: Int = 3
-
-    static func fuelApproachIsAcceptable(
-        routeMeters: Double,
-        airMeters: Double
-    ) -> Bool {
-        guard routeMeters.isFinite, airMeters.isFinite,
-              routeMeters >= 0, airMeters > 0 else { return false }
-        let excess = max(0, routeMeters - airMeters)
-        return routeMeters / airMeters <= fuelMaxApproachDetourRatio
-            && excess <= fuelMaxApproachExcessMeters
-    }
 
     enum CostMode: Sendable {
         /// Existing profile weight tables (Clean and legacy/fallback searches).
@@ -330,9 +295,6 @@ nonisolated struct HopSearchContext: Sendable {
     var settlementFallback: Bool
     var noBacktrack: Bool
     var variety: Bool
-    /// Fast bounded fuel-hop search may use a lighter finalization path after
-    /// the forward graph proof has already enforced its cap.
-    var fastSearch: Bool
     var corridorMeters: Double?
     var hardCorridor: Bool
     var boundedSearch: Bool
@@ -366,7 +328,6 @@ nonisolated struct HopSearchContext: Sendable {
             settlementFallback: true,
             noBacktrack: true,
             variety: profile != .cleanest,
-            fastSearch: false,
             corridorMeters: HopSearchPolicy.corridorMeters(for: profile),
             hardCorridor: false,
             boundedSearch: false,

@@ -2,20 +2,20 @@ import SwiftUI
 
 /// Shared spring for Route / Layers / Group panels behind the dock.
 enum DockSheetMotion {
-    static let spring = Animation.easeOut(duration: 0.32)
+    static let spring = Animation.spring(response: 0.46, dampingFraction: 0.74)
 
     /// Portrait: rise from bottom. Landscape: slide in from the dock edge.
     static func transition(dockLeading: Bool?) -> AnyTransition {
         guard let dockLeading else {
             return .asymmetric(
-                insertion: .move(edge: .bottom),
-                removal: .move(edge: .bottom)
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .move(edge: .bottom).combined(with: .opacity)
             )
         }
         let edge: Edge = dockLeading ? .leading : .trailing
         return .asymmetric(
-            insertion: .move(edge: edge),
-            removal: .move(edge: edge)
+            insertion: .move(edge: edge).combined(with: .opacity),
+            removal: .move(edge: edge).combined(with: .opacity)
         )
     }
 
@@ -24,7 +24,7 @@ enum DockSheetMotion {
     /// Clears interactive content from under the sticky portrait dock. Measured from
     /// the safe-area bottom, and the dock now hangs lower into the home-indicator
     /// strip, so this is smaller than when the dock floated 40pt off the edge.
-    static let dockClearance: CGFloat = 78
+    static let dockClearance: CGFloat = 66
 
     /// Gap between the dock's outer edge and the physical bottom of the screen. The
     /// dock deliberately hangs into the home-indicator strip so the sheet behind it
@@ -96,7 +96,7 @@ struct DockSheetPanel<Content: View>: View {
     // MARK: - Portrait
 
     private func portraitBottom(geo: GeometryProxy) -> some View {
-        let maxPanel = min(geo.size.height * heightFraction, geo.size.height - (heightFraction < 1 ? 380 : 0))
+        let maxPanel = min(geo.size.height * heightFraction, geo.size.height - 48)
         let panelHeight: CGFloat
         if fitsContent {
             let minPanel = min(
@@ -119,7 +119,6 @@ struct DockSheetPanel<Content: View>: View {
         }
         .padding(.bottom, DockSheetMotion.dockClearance)
         .frame(width: geo.size.width, height: panelHeight, alignment: .top)
-        .preference(key: PlannerSheetHeightKey.self, value: panelHeight)
         .clipShape(portraitShape)
         // Surface only — content keeps its safe-area layout while the material runs
         // past the home indicator, so no map shows under an open sheet.

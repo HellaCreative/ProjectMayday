@@ -106,7 +106,6 @@ final class MapState {
         case fit([RouteCoordinate])
         case applyViewMode
         case resetNorth
-        case zoom(Double)
     }
 
     enum RouteBuildCameraStep {
@@ -431,14 +430,6 @@ final class MapState {
         groupMarkers = new.filter(\.kind.isGroupOverlay)
         groupMarkerGeneration += 1
         markerGeneration += 1
-    }
-
-    /// Button zoom keeps the current map centre, bearing, and follow intent.
-    func zoomBy(_ delta: Double) {
-        let target = min(20, max(2, mapZoom + delta))
-        mapZoom = target
-        if followMode != .off { followZoom = target }
-        camera = (UUID(), .zoom(target))
     }
 
     func fly(to coordinate: RouteCoordinate, zoom: Double = 13) {

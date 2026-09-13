@@ -1,19 +1,6 @@
 import CoreLocation
 import Foundation
 
-/// Active private hybrid fuel preparation for this isolated Dev candidate.
-/// The legacy matcher remains in the method as a rollback path, while this
-/// branch exercises bounded caching and cooperative fuel matching directly.
-/// This cache stores only completed fuel snap metadata and never road topology.
-nonisolated enum NativeFuelPreparation {
-    static let enabled = true
-    /// A fuel window can contain hundreds of stations. Keep all snap metadata
-    /// for a regional pack so Clean/Dirt/Balanced and the next hop do not
-    /// repeat geometry projection, while still bounding the cache when a
-    /// device visits many packs in one process.
-    static let cacheLimit = 4096
-}
-
 /// Zoom-aware tap radius. Screen distance, not a second road network.
 ///
 /// metersPerPoint ≈ 156543.03392 * cos(lat) / 2^zoom  (Web Mercator, 1 CSS point)
@@ -69,15 +56,6 @@ nonisolated enum TapRadius {
 /// Opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` so search can run on
 /// `Task.detached` without freezing toast paint / map gestures.
 nonisolated struct OnDeviceRouter {
-    /// Cooperative stop used by bounded on-device fuel windows. The regular
-    /// road planner leaves this false; pack fuel planning supplies a deadline
-    /// so a target-aware flood cannot run past the rider-facing budget.
-    var executionCancelled: @Sendable () -> Bool = { false }
-    /// Diagnostic tuning hook for pack-only benchmarks. Production keeps the
-    /// policy value; tests can sweep the bounded envelope without changing
-    /// the graph or route-selection rules.
-    var fastDirtCorridorMetersOverride: Double?
-
     struct Leg: Sendable {
         var coordinates: [CLLocationCoordinate2D]
         var distanceMeters: Double
@@ -210,17 +188,6 @@ nonisolated struct OnDeviceRouter {
     var mapZoom: Double? = nil
     /// Optional explicit snap radius, still capped by graph version.
     var matchLimitMeters: Double? = nil
-    /// Bounded first response used by the on-device fuel planner. It keeps one
-    /// dirt corridor search and skips the expensive comparison ladder; the
-    /// returned route still goes through the same legal snap and turn checks.
-    var fastSearch: Bool = false
-
-    /// Build the pack's edge index during the location/pack warmup task so a
-    /// rider's first fuel hop does not pay the full spatial-index construction
-    /// cost on the routing critical path.
-    static func prewarmSpatialIndex(for pack: GraphV2Pack) {
-        _ = PackEdgeSpatialIndex.shared.grid(for: pack)
-    }
 
     /// New packs carry OSM-derived local cores. Static boxes remain a temporary
     /// compatibility fallback for older installed packs.
@@ -360,15 +327,6 @@ nonisolated struct OnDeviceRouter {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
     ) -> Swift.Result<Result, Failure> {
-        guard !executionCancelled() else { return .failure(.searchLimit("cancelled")) }
-        // Every rider route gets a first pass with the mapped town boundary.
-        // Clean, Balanced, and Dirt therefore all avoid a town when the pack
-        // has a practical rural alternative. If that wall makes the graph
-        // genuinely disconnected, the profile-specific fallback below admits
-        // the shortest necessary through-road. Bounded fuel qualification is
-        // deliberately exempt: a pump driveway inside a town is an explicit
-        // customer destination and must remain reachable.
-        let useSettlementWall = maxRouteMeters == nil
         let pavedWall = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -380,7 +338,7 @@ nonisolated struct OnDeviceRouter {
             cityWall: true,
             pavedOnly: profile == .cleanest,
             urbanCoreFallback: false,
-            settlementWall: useSettlementWall,
+            settlementWall: false,
             settlementFallback: true,
             cleanMetroMultiplier: cleanMetroMultiplier,
             avoidMotorways: avoidMotorways,
@@ -431,7 +389,7 @@ nonisolated struct OnDeviceRouter {
             cityWall: true,
             pavedOnly: false,
             urbanCoreFallback: false,
-            settlementWall: useSettlementWall,
+            settlementWall: false,
             settlementFallback: true,
             cleanMetroMultiplier: cleanMetroMultiplier,
             avoidMotorways: avoidMotorways,
@@ -512,32 +470,7 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool,
         cityWall: Bool
     ) -> [Double]? {
-        exploreNodeMeters(
-            from: from,
-            toward: toward,
-            maxMeters: maxMeters,
-            profile: profile,
-            allowUnknown: allowUnknown,
-            cityWall: cityWall,
-            targetSnaps: nil
-        )
-    }
-
-    /// Target-aware form used by fuel reachability. It preserves the distances
-    /// this routine would produce with a complete flood, but stops once every
-    /// legal pump projection has been settled. A pump with no legal projection
-    /// is already proven unreachable and does not keep the flood alive.
-    private func exploreNodeMeters(
-        from: CLLocationCoordinate2D,
-        toward: CLLocationCoordinate2D,
-        maxMeters: Double,
-        profile: RouteProfile,
-        allowUnknown: Bool,
-        cityWall: Bool,
-        targetSnaps: [[EdgeSnap]]?
-    ) -> [Double]? {
         _ = cityWall
-        _ = toward
         let snaps = nearestEdgeSnaps(
             to: from, allowUnknown: allowUnknown, profile: profile,
             maxMeters: Self.preferredMatchMeters
@@ -550,37 +483,10 @@ nonisolated struct OnDeviceRouter {
         var dist = [Double](repeating: .infinity, count: n)
         var prevEdge = [Int](repeating: -1, count: n)
         var heap = MinHeap()
-
-        // Each option is an endpoint of a snapped pump edge. Once that node is
-        // popped, its shortest distance is final and the corresponding pump
-        // projection has an exact best-path candidate. We wait for every
-        // option, rather than the first one, so the returned pump distance is
-        // still the same minimum that a complete flood would produce here.
-        var targetOptionsByNode: [Int: Int] = [:]
-        if let targetSnaps {
-            for pumpSnaps in targetSnaps {
-                for snap in pumpSnaps {
-                    guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
-                    if pack.hasDirectedArc(from: snap.nodeA, to: snap.nodeB, edge: snap.edgeIndex),
-                       snap.nodeA >= 0, snap.nodeA < n {
-                        targetOptionsByNode[snap.nodeA, default: 0] += 1
-                    }
-                    if pack.hasDirectedArc(from: snap.nodeB, to: snap.nodeA, edge: snap.edgeIndex),
-                       snap.nodeB >= 0, snap.nodeB < n {
-                        targetOptionsByNode[snap.nodeB, default: 0] += 1
-                    }
-                }
-            }
-        }
-        var pendingTargetOptions = targetOptionsByNode.values.reduce(0, +)
-        if targetSnaps != nil, pendingTargetOptions == 0 {
-            return dist
-        }
         // Seed every nearby eligible edge, not only the geometric nearest.
         // Fuel forecourts and GPS fixes often sit beside a disconnected service
         // spur while a through-road is only a few metres farther away.
         for snap in snaps {
-            if executionCancelled() { return nil }
             guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
             let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
             let access = max(0, snap.distanceMeters)
@@ -599,15 +505,8 @@ nonisolated struct OnDeviceRouter {
         }
         let policyUnknown = allowUnknown && profile != .cleanest
         while let cur = heap.pop() {
-            if Task.isCancelled || executionCancelled() { return nil }
             if cur.cost != dist[cur.node] { continue }
             if cur.cost > maxMeters { break }
-            if let settled = targetOptionsByNode[cur.node] {
-                pendingTargetOptions -= settled
-                if pendingTargetOptions == 0, targetSnaps != nil {
-                    break
-                }
-            }
             let arcStart = Int(pack.nodeOffsets[cur.node])
             let arcEnd = Int(pack.nodeOffsets[cur.node + 1])
             guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
@@ -620,7 +519,9 @@ nonisolated struct OnDeviceRouter {
                     ei: ei, from: cur.node, to: toNode,
                     startEi: -1, endEi: -1, incomingEi: prevEdge[cur.node]
                 ) { continue }
-                if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
+                let attr = pack.edgeAttrs[ei]
+                let access = GraphV2Pack.unpackAccess(attr)
+                if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
                 let newCost = cur.cost + Double(pack.edgeMeters[ei])
                 if newCost > maxMeters { continue }
                 if newCost < dist[toNode] {
@@ -640,9 +541,11 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool
     ) -> Double? {
         var best = Double.infinity
-        let snaps = fuelSnaps(to: point, allowUnknown: allowUnknown, profile: profile)
+        let snaps = nearestEdgeSnaps(
+            to: point, allowUnknown: allowUnknown, profile: profile,
+            maxMeters: Self.preferredMatchMeters
+        )
         for snap in snaps {
-            if executionCancelled() { return nil }
             guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
             let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
             let access = max(0, snap.distanceMeters)
@@ -667,41 +570,17 @@ nonisolated struct OnDeviceRouter {
         profile: RouteProfile,
         allowUnknown: Bool
     ) -> [String: Double] {
-        guard !pumps.isEmpty else { return [:] }
-        let targetSnaps = pumps.map { pump -> [EdgeSnap] in
-            if executionCancelled() { return [] }
-            let point = CLLocationCoordinate2D(latitude: pump.latitude, longitude: pump.longitude)
-            // Road distance cannot be shorter than the straight-line distance;
-            // skip impossible pumps before doing any geometry projection.
-            guard meters(from, point) <= maxMeters else { return [] }
-            return fuelSnaps(to: point, allowUnknown: allowUnknown, profile: profile)
-        }
         let wall = true
         guard let dist = exploreNodeMeters(
             from: from, toward: toward, maxMeters: maxMeters, profile: profile,
-            allowUnknown: allowUnknown, cityWall: wall, targetSnaps: targetSnaps
+            allowUnknown: allowUnknown, cityWall: wall
         ) else { return [:] }
         var out: [String: Double] = [:]
-        for (pump, snaps) in zip(pumps, targetSnaps) {
-            if Task.isCancelled || executionCancelled() { return [:] }
-            var best = Double.infinity
-            for snap in snaps {
-                if executionCancelled() { return [:] }
-                guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
-                let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
-                let access = max(0, snap.distanceMeters)
-                if pack.hasDirectedArc(from: snap.nodeA, to: snap.nodeB, edge: snap.edgeIndex),
-                   snap.nodeA >= 0, snap.nodeA < dist.count, dist[snap.nodeA].isFinite {
-                    best = min(best, dist[snap.nodeA] + access + max(0, snap.distanceAlongM))
-                }
-                if pack.hasDirectedArc(from: snap.nodeB, to: snap.nodeA, edge: snap.edgeIndex),
-                   snap.nodeB >= 0, snap.nodeB < dist.count, dist[snap.nodeB].isFinite {
-                    best = min(best, dist[snap.nodeB] + access + max(0, edgeM - snap.distanceAlongM))
-                }
-            }
-            if best.isFinite,
-               best <= maxMeters {
-                out[pump.id] = best
+        for pump in pumps {
+            let ll = CLLocationCoordinate2D(latitude: pump.latitude, longitude: pump.longitude)
+            if let m = graphMeters(to: ll, dist: dist, profile: profile, allowUnknown: allowUnknown),
+               m <= maxMeters {
+                out[pump.id] = m
             }
         }
         return out
@@ -715,23 +594,9 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool
     ) -> Double? {
         let wall = true
-        // The old form flooded every eligible node inside the range and only
-        // snapped the destination after the flood completed. Fuel planning
-        // calls this as a feasibility probe, so a 180 km cap could spend the
-        // entire window exploring roads that cannot improve the destination
-        // answer. Make the destination a settled target: the flood still
-        // returns the exact minimum for every legal destination snap, but it
-        // stops as soon as those snaps are finalized.
-        let destinationSnaps = fuelSnaps(
-            to: to,
-            allowUnknown: allowUnknown,
-            profile: profile
-        )
-        guard !destinationSnaps.isEmpty else { return nil }
         guard let dist = exploreNodeMeters(
             from: from, toward: to, maxMeters: maxMeters, profile: profile,
-            allowUnknown: allowUnknown, cityWall: wall,
-            targetSnaps: [destinationSnaps]
+            allowUnknown: allowUnknown, cityWall: wall
         ) else { return nil }
         return graphMeters(to: to, dist: dist, profile: profile, allowUnknown: allowUnknown)
     }
@@ -802,11 +667,7 @@ nonisolated struct OnDeviceRouter {
                 ends: endRaw,
                 allowUnknown: allowUnknown
             )
-            // The fast phone path gets a small, deterministic snap-pair set.
-            // Full planning retains every legal pair; fast fuel qualification
-            // must not spend its whole response budget retrying equivalent
-            // endpoint projections.
-            v4Pairs = fastSearch ? Array(connected.pairs.prefix(1)) : connected.pairs
+            v4Pairs = connected.pairs
             startRejects.append(contentsOf: connected.rejectionReasons)
             endRejects.append(contentsOf: connected.rejectionReasons)
             guard let first = v4Pairs.first else { return .failure(.cannotSnapEnd) }
@@ -872,15 +733,6 @@ nonisolated struct OnDeviceRouter {
                     coincidentSiblings: coincidentSiblings
                 ) {
                 case .success(let result):
-                    if profile == .dirt,
-                       result.reportedDirtPercent < HopSearchPolicy.minimumReportedDirtPercent {
-                        lastFailure = .noPath
-                        RoutingDebugLog.shared.event(
-                            "on-device dirt rejected reported=\(result.reportedDirtPercent) "
-                                + "minimum=\(HopSearchPolicy.minimumReportedDirtPercent)"
-                        )
-                        continue
-                    }
                     return .success(attachSnap(result, startSnap: startSnap, endSnap: endSnap))
                 case .failure(let reason):
                     lastFailure = reason
@@ -919,16 +771,8 @@ nonisolated struct OnDeviceRouter {
         ctx.urbanCoreFallback = urbanCoreFallback
         // Major urban cores are walls. Ordinary mapped towns are a finite
         // avoidance cost so they do not sever otherwise valid rural routes.
-        ctx.settlementWall = settlementWall
-        // A bounded fuel proof is already selecting an explicit forecourt.
-        // Keep town avoidance on rider routes, but do not add the settlement
-        // multiplier while proving the short approach to that forecourt. The
-        // finite cost can make a valid pump look unreachable under the hard
-        // fuel cap; candidate ordering still prefers rural stations first.
-        ctx.settlementFallback = maxRouteMeters == nil
-            ? (profile != .cleanest ? true : settlementFallback)
-            : false
-        ctx.fastSearch = fastSearch
+        ctx.settlementWall = false
+        ctx.settlementFallback = profile != .cleanest ? true : settlementFallback
         ctx.cleanMetroMultiplier = cleanMetroMultiplier
         let e4 = RoadTierStats.e4Flags(
             for: profile,
@@ -939,24 +783,9 @@ nonisolated struct OnDeviceRouter {
         ctx.preferBackRoads = e4.preferBackRoads
 
         if profile == .dirt {
-            // Fuel windows route to the next nearby pump, not the final
-            // waypoint. A compact fast corridor prevents a 30 km hop from
-            // exploring the whole 60 km adventure fan while retaining the
-            // wider corridor for ordinary route planning.
-            // The first fast Dirt envelope must be wide enough to retain a
-            // genuine off-pavement detour. A 20–30 km line corridor routinely
-            // discarded the only connected path to Yarmouth and then paid for
-            // an unbounded retry. The measured 40 km envelope completes in
-            // about half the time of the 60 km envelope with the same route
-            // character; ordinary planning keeps its wider 60 km policy.
-            let policyBase = fastSearch
-                ? min(HopSearchPolicy.dirtCorridorMeters, 40_000)
-                : HopSearchPolicy.dirtCorridorMeters
-            let base = fastDirtCorridorMetersOverride ?? policyBase
-            let comparisonWidths = fastSearch
-                ? [base, min(HopSearchPolicy.dirtCorridorMeters, base * 1.5)]
-                : [base * 2, base]
-            let connectivityWidths: [Double?] = fastSearch ? [nil] : [base * 3, base * 4, nil]
+            let base = HopSearchPolicy.dirtCorridorMeters
+            let comparisonWidths = [base * 2, base]
+            let connectivityWidths: [Double?] = [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double, objective: String)] = []
             var lastBoundedFailure: Failure = .noPath
 
@@ -966,12 +795,7 @@ nonisolated struct OnDeviceRouter {
             ) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
                 hunt.costMode = costMode
-                // A fresh request seed is an intentional route variation for
-                // ordinary planning. A fuel hop is a single bounded legal-leg
-                // proof; keeping one label per node prevents the resource
-                // fan from consuming the whole station-hop budget. The next
-                // route window still receives a fresh seed.
-                hunt.variety = !fastSearch && sessionSeed != 0
+                hunt.variety = false
                 hunt.corridorMeters = width
                 hunt.hardCorridor = width != nil
                 hunt.boundedSearch = true
@@ -987,7 +811,7 @@ nonisolated struct OnDeviceRouter {
                 var route = initial
                 var penaltyEdgeIds = hunt.shortDirtPenaltyEdgeIds
                 var repairPasses = 0
-                for _ in 0..<(fastSearch ? 0 : HopSearchPolicy.maximumShortDirtRepairPasses) {
+                for _ in 0..<HopSearchPolicy.maximumShortDirtRepairPasses {
                     let found = Self.shortDirtExcursionEdgeIDs(in: route.legs)
                     let additions = found.subtracting(penaltyEdgeIds)
                     if additions.isEmpty { break }
@@ -1004,21 +828,10 @@ nonisolated struct OnDeviceRouter {
                 return .success(route)
             }
 
-            comparisonLoop: for width in comparisonWidths {
+            for width in comparisonWidths {
                 switch searchDirt(width: width) {
-                case .success(let route):
-                    candidates.append((route, width, "pavement"))
-                    // The first fast corridor is preferred when it already
-                    // earns the product's Dirt threshold. Widen only a weak
-                    // result; this keeps the normal phone path in the 1–2 s
-                    // lane while still giving Yarmouth-style routes one
-                    // bounded opportunity to find real dirt.
-                    if fastSearch,
-                       route.reportedDirtPercent >= HopSearchPolicy.minimumReportedDirtPercent {
-                        break comparisonLoop
-                    }
-                case .failure(let failure):
-                    lastBoundedFailure = failure
+                case .success(let route): candidates.append((route, width, "pavement"))
+                case .failure(let failure): lastBoundedFailure = failure
                 }
             }
             if candidates.isEmpty {
@@ -1038,8 +851,8 @@ nonisolated struct OnDeviceRouter {
             // weak result, compare one bounded resource-labelled route so a
             // shorter route with less dirt cannot beat a genuinely dirtier
             // ride merely because it contains fewer paved kilometres.
-            let primaryBestDirt = candidates.map(\.route.reportedDirtPercent).max() ?? 0
-            if !fastSearch && primaryBestDirt < 70 {
+            let primaryBestDirt = candidates.map(\.route.dirtPercent).max() ?? 0
+            if primaryBestDirt < 70 {
                 switch searchDirt(width: base, costMode: .balancedResource) {
                 case .success(let route):
                     candidates.append((route, base, "resource"))
@@ -1066,26 +879,18 @@ nonisolated struct OnDeviceRouter {
         }
 
         if profile == .balanced {
-            let base = fastSearch
-                ? min(HopSearchPolicy.balancedCorridorMeters, 12_000)
-                : HopSearchPolicy.balancedCorridorMeters
-            let multipliers: [Double] = fastSearch ? [1] : [1, 2, 3, 4, 6, 8]
+            let base = HopSearchPolicy.balancedCorridorMeters
+            let multipliers: [Double] = [1, 2, 3, 4, 6, 8]
             var lastEnvelopeFailure: Failure = .noPath
             for width in multipliers.map({ base * $0 }) + [0] {
                 var envelope = ctx
-                // The first fuel hop is a local legal-leg proof. Resource
-                // labels are valuable for a full Balanced itinerary but add
-                // a large state space to this bounded phone search; the
-                // profile cost still preserves Balanced surface weighting.
-                envelope.costMode = fastSearch ? .profile : .balancedResource
+                envelope.costMode = .balancedResource
                 envelope.variety = false
                 envelope.corridorMeters = width > 0 ? width : nil
                 envelope.hardCorridor = width > 0
                 envelope.boundedSearch = true
-                envelope.timeCapSeconds = fastSearch ? 2.0 : HopSearchPolicy.pass2TimeCapSeconds
-                envelope.popCap = fastSearch
-                    ? HopSearchPolicy.pass2PopCap
-                    : HopSearchPolicy.pass2PopCap * 10
+                envelope.timeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
+                envelope.popCap = HopSearchPolicy.pass2PopCap * 10
                 envelope.maxPathMeters = maxRouteMeters
                 lastFailure = .noPath
                 switch runProfile(envelope) {
@@ -1115,11 +920,9 @@ nonisolated struct OnDeviceRouter {
             envelope.corridorMeters = nil
             envelope.hardCorridor = false
             envelope.boundedSearch = true
-            envelope.settlementWall = ctx.settlementWall
-            envelope.settlementFallback = ctx.settlementFallback
-            envelope.timeCapSeconds = fastSearch
-                ? 2.0
-                : (ctx.pavedOnly ? 12.0 : HopSearchPolicy.pass2TimeCapSeconds)
+            envelope.settlementWall = false
+            envelope.settlementFallback = false
+            envelope.timeCapSeconds = ctx.pavedOnly ? 12.0 : HopSearchPolicy.pass2TimeCapSeconds
             envelope.popCap = HopSearchPolicy.pass2PopCap
             envelope.maxPathMeters = maxRouteMeters
             switch runProfile(envelope) {
@@ -1270,18 +1073,18 @@ nonisolated struct OnDeviceRouter {
         let coherent = summaries.filter {
             $0.shape.backwardMeters <= max(5_000, $0.shape.routeMeters * 0.08)
         }
-        let bestDirt = summaries.map(\.candidate.route.reportedDirtPercent).max() ?? 0
-        let bestCoherentDirt = coherent.map(\.candidate.route.reportedDirtPercent).max() ?? Int.min
+        let bestDirt = summaries.map(\.candidate.route.dirtPercent).max() ?? 0
+        let bestCoherentDirt = coherent.map(\.candidate.route.dirtPercent).max() ?? Int.min
         let pool = !coherent.isEmpty && bestDirt - bestCoherentDirt < 10
             ? coherent
             : summaries
         return pool.min { lhs, rhs in
             let a = lhs.candidate
             let b = rhs.candidate
-            let dirtDelta = a.route.reportedDirtPercent - b.route.reportedDirtPercent
+            let dirtDelta = a.route.dirtPercent - b.route.dirtPercent
             if abs(dirtDelta) > 2 { return dirtDelta > 0 }
-            let pavedA = a.route.distanceMeters * Double(100 - a.route.reportedDirtPercent) / 100
-            let pavedB = b.route.distanceMeters * Double(100 - b.route.reportedDirtPercent) / 100
+            let pavedA = a.route.distanceMeters * Double(100 - a.route.dirtPercent) / 100
+            let pavedB = b.route.distanceMeters * Double(100 - b.route.dirtPercent) / 100
             if abs(pavedA - pavedB) > 2_000 { return pavedA < pavedB }
             func crossTrack(_ route: Result) -> Double {
                 guard let start = route.coordinates.first,
@@ -1293,8 +1096,8 @@ nonisolated struct OnDeviceRouter {
             let crossA = crossTrack(a.route)
             let crossB = crossTrack(b.route)
             if abs(crossA - crossB) > 1_000 { return crossA < crossB }
-            if a.route.reportedDirtPercent != b.route.reportedDirtPercent {
-                return a.route.reportedDirtPercent > b.route.reportedDirtPercent
+            if a.route.dirtPercent != b.route.dirtPercent {
+                return a.route.dirtPercent > b.route.dirtPercent
             }
             return a.width < b.width
         }?.candidate
@@ -1805,11 +1608,7 @@ nonisolated struct OnDeviceRouter {
         }
 
         var slackToDest: [Double]? = nil
-        // Fast fuel hops already enforce the candidate-specific cap in the
-        // forward search. The reverse flood is a valuable pruning bound for
-        // full route planning, but duplicating that graph walk on every phone
-        // station hop adds latency without changing the legal result.
-        if !fastSearch, let cap = ctx.maxPathMeters, cap.isFinite, cap < .greatestFiniteMagnitude / 4 {
+        if let cap = ctx.maxPathMeters, cap.isFinite, cap < .greatestFiniteMagnitude / 4 {
             slackToDest = fillShortestMeters(
                 from: endVirt,
                 capMeters: cap,
@@ -1895,7 +1694,6 @@ nonisolated struct OnDeviceRouter {
             : nil
 
         while let cur = heap.pop() {
-            if Task.isCancelled || executionCancelled() { return .failure(.searchLimit("cancelled")) }
             if cur.cost != dist[cur.node] { continue }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
@@ -1911,9 +1709,6 @@ nonisolated struct OnDeviceRouter {
                 guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
 
                 for i in arcStart..<arcEnd {
-                    if (i & 63) == 0, Task.isCancelled || executionCancelled() {
-                        return .failure(.searchLimit("cancelled"))
-                    }
                     let toNode = Int(pack.edgeTargets[i])
                     let ei = Int(pack.edgeUndirectedIndex[i])
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
@@ -1941,7 +1736,7 @@ nonisolated struct OnDeviceRouter {
                     ) { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -2299,8 +2094,7 @@ nonisolated struct OnDeviceRouter {
                 legs: legs,
                 nodeFallback: fallback,
                 profile: profile,
-                allowUnknown: policyUnknown,
-                fastFuelPrune: ctx.fastSearch
+                allowUnknown: policyUnknown
             ),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
@@ -2360,7 +2154,6 @@ nonisolated struct OnDeviceRouter {
             : nil
 
         while let cur = heap.pop() {
-            if Task.isCancelled || executionCancelled() { return .failure(.searchLimit("cancelled")) }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
             if let deadline, (pops & 255) == 0, CFAbsoluteTimeGetCurrent() > deadline {
@@ -2378,9 +2171,6 @@ nonisolated struct OnDeviceRouter {
                 let arcEnd = Int(pack.nodeOffsets[node + 1])
                 guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
                 for i in arcStart..<arcEnd {
-                    if (i & 63) == 0, Task.isCancelled || executionCancelled() {
-                        return .failure(.searchLimit("cancelled"))
-                    }
                     let toNode = Int(pack.edgeTargets[i])
                     let ei = Int(pack.edgeUndirectedIndex[i])
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
@@ -2399,7 +2189,7 @@ nonisolated struct OnDeviceRouter {
                     ) { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -2716,8 +2506,7 @@ nonisolated struct OnDeviceRouter {
                 legs: legs,
                 nodeFallback: [startSnap.projected, endSnap.projected],
                 profile: profile,
-                allowUnknown: policyUnknown,
-                fastFuelPrune: ctx.fastSearch
+                allowUnknown: policyUnknown
             ),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
@@ -2773,7 +2562,6 @@ nonisolated struct OnDeviceRouter {
         dist[origin] = 0
         heap.push(node: origin, cost: 0)
         while let cur = heap.pop() {
-            if Task.isCancelled { return [] }
             if cur.cost != dist[cur.node] { continue }
             if cur.cost > capMeters { continue }
             if cur.node < n {
@@ -2785,7 +2573,7 @@ nonisolated struct OnDeviceRouter {
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !traversalAccessAllowed(ei: ei, from: toNode, to: cur.node, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -3165,7 +2953,7 @@ nonisolated struct OnDeviceRouter {
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -3364,8 +3152,7 @@ nonisolated struct OnDeviceRouter {
             legs: legs,
             nodeFallback: [startSnap.projected, endSnap.projected],
             profile: profile,
-            allowUnknown: allowUnknown && profile != .cleanest,
-            fastFuelPrune: ctx.fastSearch
+            allowUnknown: allowUnknown && profile != .cleanest
         ))
     }
 
@@ -3375,8 +3162,7 @@ nonisolated struct OnDeviceRouter {
         legs: [Leg],
         nodeFallback: [CLLocationCoordinate2D],
         profile: RouteProfile = .balanced,
-        allowUnknown: Bool = false,
-        fastFuelPrune: Bool = false
+        allowUnknown: Bool = false
     ) -> Result {
         var worked = legs
 
@@ -3384,10 +3170,7 @@ nonisolated struct OnDeviceRouter {
         // Clean+leaves lockstep: JS `pruneGeographicLoops` is a no-op on the NS
         // fixture routes; Swift's proximity-grid variant can drop short stubs and
         // break edge-id identity. Skip prune so both engines keep the Dijkstra list.
-        // Clean+leaves keeps the exact lockstep path for ordinary planning.
-        // Fast fuel hops are independently bounded and still need the same
-        // meaningful-loop guard as Dirt/Balanced before a pump is committed.
-        let skipGeoPrune = profile == .cleanest && pack.hasLeaves && !fastFuelPrune
+        let skipGeoPrune = profile == .cleanest && pack.hasLeaves
         let hasGeometry = worked.contains { $0.coordinates.count >= 3 }
             || pack.geometry != nil
         if hasGeometry, !worked.isEmpty, !skipGeoPrune {
@@ -3399,16 +3182,13 @@ nonisolated struct OnDeviceRouter {
                     surfaceName: $0.surfaceName
                 )
             }
-            // Fast fuel hops still need loop erasure. They use a coarser
-            // meaningful-loop threshold to avoid spending the full route
-            // budget on dozens of tiny geometry revisits while preserving
-            // the rider-visible detours and out-and-backs.
-            let pruningOptions = fastFuelPrune
-                ? OnDevicePathPruning.Options(cellMeters: 40, matchMeters: 60, minLoopMeters: 100)
-                : OnDevicePathPruning.Options(cellMeters: 20, matchMeters: 30, minLoopMeters: 20)
             let pruned = OnDevicePathPruning.pruneGeographicLoops(
                 pieces,
-                options: pruningOptions
+                options: OnDevicePathPruning.Options(
+                    cellMeters: 20,
+                    matchMeters: 30,
+                    minLoopMeters: 20
+                )
             )
             worked = pruned.edges.map { edge in
                 let prior = worked.first(where: { $0.edgeId == edge.edgeId })
@@ -3808,64 +3588,6 @@ nonisolated struct OnDeviceRouter {
 
     // MARK: - Snap
 
-    private final class FuelSnapCache: @unchecked Sendable {
-        static let shared = FuelSnapCache()
-        private let lock = NSLock()
-        private weak var owner: GraphV2Pack?
-        private weak var geometry: GeometryV1Pack?
-        private struct Entry { let snaps: [EdgeSnap]; var used: UInt64 }
-        private var entries: [String: Entry] = [:]
-        private var tick: UInt64 = 0
-
-        func get(_ key: String, pack: GraphV2Pack) -> [EdgeSnap]? {
-            lock.lock(); defer { lock.unlock() }
-            if owner !== pack || geometry !== pack.geometry {
-                entries.removeAll(keepingCapacity: false)
-                owner = pack; geometry = pack.geometry
-            }
-            guard var entry = entries[key] else { return nil }
-            tick &+= 1; entry.used = tick; entries[key] = entry
-            return entry.snaps
-        }
-
-        func put(_ snaps: [EdgeSnap], key: String, pack: GraphV2Pack) {
-            lock.lock(); defer { lock.unlock() }
-            if owner !== pack || geometry !== pack.geometry {
-                entries.removeAll(keepingCapacity: false)
-                owner = pack; geometry = pack.geometry
-            }
-            if entries[key] == nil, entries.count >= NativeFuelPreparation.cacheLimit,
-               let oldest = entries.min(by: { $0.value.used < $1.value.used })?.key {
-                entries.removeValue(forKey: oldest)
-            }
-            tick &+= 1; entries[key] = Entry(snaps: snaps, used: tick)
-        }
-    }
-
-    private func fuelSnaps(
-        to point: CLLocationCoordinate2D,
-        allowUnknown: Bool,
-        profile: RouteProfile
-    ) -> [EdgeSnap] {
-        guard !executionCancelled() else { return [] }
-        guard NativeFuelPreparation.enabled else {
-            return nearestEdgeSnaps(
-                to: point, allowUnknown: allowUnknown, profile: profile,
-                maxMeters: Self.preferredMatchMeters
-            )
-        }
-        let key = "\(point.longitude.bitPattern):\(point.latitude.bitPattern):\(profile.rawValue):\(allowUnknown)"
-        if let cached = FuelSnapCache.shared.get(key, pack: pack) { return cached }
-        guard !Task.isCancelled, !executionCancelled() else { return [] }
-        let snaps = nearestEdgeSnaps(
-            to: point, allowUnknown: allowUnknown, profile: profile,
-            maxMeters: Self.preferredMatchMeters
-        )
-        guard !Task.isCancelled, !executionCancelled() else { return [] }
-        FuelSnapCache.shared.put(snaps, key: key, pack: pack)
-        return snaps
-    }
-
     private struct EdgeSnap {
         var edgeIndex: Int
         var nodeA: Int
@@ -3979,9 +3701,7 @@ nonisolated struct OnDeviceRouter {
 
         var checked = Set<Int>()
         for radius in 0...maxRadius {
-            if executionCancelled() { return [] }
             for ei in grid.edgeIndices(nearLat: lat, lon: lon, radiusCells: radius) {
-                if executionCancelled() { return [] }
                 if checked.contains(ei) { continue }
                 checked.insert(ei)
                 if pack.version < 4 || !pack.legalTopology {
@@ -4015,7 +3735,6 @@ nonisolated struct OnDeviceRouter {
 
                 var along = 0.0
                 for i in 1..<poly.count {
-                    if executionCancelled() { return [] }
                     let segA = poly[i - 1]
                     let segB = poly[i]
                     let segM = meters(segA, segB)
@@ -4546,22 +4265,7 @@ nonisolated struct OnDeviceRouter {
             return true
         }
         if ctx.settlementWall,
-           UrbanCore.blocks(
-               point: point,
-               start: from,
-               end: to,
-               boxes: settlementBoxes(for: ctx.profile)
-           ) {
-            return true
-        }
-        if ctx.settlementWall, let edgeFrom,
-           UrbanCore.blocks(
-               segmentFrom: edgeFrom,
-               segmentTo: point,
-               start: from,
-               end: to,
-               boxes: settlementBoxes(for: ctx.profile)
-           ) {
+           UrbanCore.blocks(point: point, start: from, end: to, boxes: packSettlements) {
             return true
         }
         if ctx.hardCorridor, let corridor = ctx.corridorMeters,
@@ -4711,15 +4415,6 @@ nonisolated struct OnDeviceRouter {
             }
             return step
         }
-    }
-
-    private func traversalAccessAllowed(ei: Int, from: Int, to: Int, allowUnknown: Bool, profile: RouteProfile) -> Bool {
-        if pack.version >= 4, pack.legalTopology {
-            let code = pack.v4AccessCode(ei: ei, from: from, to: to)
-            // Endpoint-only access is separately scoped by v4HopIllegal.
-            return code == 0 || (code == 1 && allowUnknown && profile != .cleanest) || code == 3 || code == 4
-        }
-        return accessAllowed(GraphV2Pack.unpackAccess(pack.edgeAttrs[ei]), allowUnknown: allowUnknown, profile: profile)
     }
 
     private func accessAllowed(_ code: Int, allowUnknown: Bool, profile: RouteProfile) -> Bool {
