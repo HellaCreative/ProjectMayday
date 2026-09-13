@@ -214,7 +214,7 @@ final class PackRoutingSource: RoutingSource {
             directExtraBudgetMeters: req.options?.directExtraBudgetMeters,
             regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
             sourceName: name,
-            packRevision: packs.lastManifestVersion,
+            packRevision: packs.routingCacheIdentity(),
             cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
             avoidMotorways: req.options?.avoidMotorways == true,
             preferBackRoads: req.options?.preferBackRoads == true,
@@ -246,8 +246,16 @@ final class PackRoutingSource: RoutingSource {
             startEndpointKind: req.options?.startEndpointKind,
             endEndpointKind: req.options?.endEndpointKind
         )
+        try Task.checkCancellation()
         guard case .success(let local) = result, local.coordinates.count > 1 else {
-            throw RoutingError.server("No route is available on the installed pack.")
+            let failure: OnDeviceRouter.Failure? = {
+                if case .failure(let reason) = result { return reason }
+                return nil
+            }()
+            throw RoutingError.server(packs.onDeviceRouteFailureMessage(
+                for: [endpoints.0.locationCoordinate, endpoints.1.locationCoordinate],
+                reason: failure
+            ))
         }
         var response = RouteResponse(
             onDevice: local,
@@ -294,12 +302,21 @@ final class PackRoutingSource: RoutingSource {
     /// Offline equivalent of the existing forward fuel-chain path: the pack's
     /// own reachability search proves each pump before it is committed.
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
+        let deadline = RoutingWorkContext.limitedDeadline(milliseconds: req.fuel.windowTimeBudgetMs)
+        return try await RoutingWorkContext.$deadline.withValue(deadline) {
+            try await fuelChainUsingPack(req)
+        }
+    }
+
+    private func fuelChainUsingPack(_ req: FuelChainRequest) async throws -> FuelChainResponse {
+        try RoutingWorkContext.check()
         guard req.options?.ridePreferences == nil else { throw RoutingError.server("Custom ride settings require online planning.") }
         guard req.locations.count == 2 else { throw RoutingError.invalidEndpoints }
         let start = coordinate(req.locations[0])
         let end = coordinate(req.locations[1])
         let stations = packs.fuelStations(from: start, to: end)
         guard !stations.isEmpty else {
+            try RoutingWorkContext.check()
             return FuelChainResponse(
                 status: "unknown",
                 error: "fuel_data_unavailable",
@@ -320,6 +337,7 @@ final class PackRoutingSource: RoutingSource {
                 allowUnknown: req.accessPolicy.motorizedUnknown
             )
             let first = reachable.values.min()
+            try RoutingWorkContext.check()
             return FuelChainResponse(
                 status: "complete", error: nil, message: nil,
                 regionIds: GraphPackStore.regionIds(containingAny: [
@@ -346,7 +364,7 @@ final class PackRoutingSource: RoutingSource {
         var carriedArrival = req.options?.arrivalEdgeId
 
         while stops.count <= maximumStops {
-            try Task.checkCancellation()
+            try RoutingWorkContext.check()
             let firstCap = stops.isEmpty
                 ? req.fuel.firstLegMaxMeters
                 : req.fuel.usableRangeMeters
@@ -391,6 +409,7 @@ final class PackRoutingSource: RoutingSource {
                 let visibleMeters = windowComplete
                     ? graphMeters + [directFallback]
                     : Array(graphMeters.prefix(visibleStops.count))
+                try RoutingWorkContext.check()
                 return FuelChainResponse(
                     status: "complete", error: nil, message: nil,
                     regionIds: GraphPackStore.regionIds(containingAny: [
@@ -408,6 +427,7 @@ final class PackRoutingSource: RoutingSource {
 
             if stops.count >= maximumStops, req.fuel.allowPartialWindow == true {
                 let visibleStops = Array(stops.prefix(returnedStopLimit))
+                try RoutingWorkContext.check()
                 return FuelChainResponse(
                     status: "complete", error: nil, message: nil,
                     regionIds: GraphPackStore.regionIds(containingAny: [
@@ -452,7 +472,9 @@ final class PackRoutingSource: RoutingSource {
             // Match live: route-score every geographically bounded candidate.
             // Reachability keeps the rider safe; profile quality decides which
             // safe pump is worth riding to.
+            var incompleteSearchReason: String?
             for (rank, candidate) in ranked.prefix(6).enumerated() {
+                try RoutingWorkContext.check()
                 let urbanEntry = FuelItinerary.fuelStopRequiresUrbanEntry(
                     candidate,
                     start: current,
@@ -481,6 +503,14 @@ final class PackRoutingSource: RoutingSource {
                     startEndpointKind: stops.isEmpty ? nil : "customers",
                     endEndpointKind: "customers"
                 )
+                try RoutingWorkContext.check()
+                let firstUnverified: Bool
+                if case .failure(.searchLimit(let reason)) = firstResult {
+                    incompleteSearchReason = reason
+                    firstUnverified = true
+                } else {
+                    firstUnverified = false
+                }
                 guard case .success(let firstRoute) = firstResult,
                       firstRoute.distanceMeters <= firstCap + 1
                 else {
@@ -492,7 +522,7 @@ final class PackRoutingSource: RoutingSource {
                         latitude: candidate.latitude,
                         longitude: candidate.longitude,
                         name: candidate.name ?? candidate.brand,
-                        validForward: false,
+                        validForward: firstUnverified ? nil : false,
                         urbanEntry: urbanEntry
                     ))
                     continue
@@ -518,6 +548,10 @@ final class PackRoutingSource: RoutingSource {
                     startEndpointKind: "customers",
                     endEndpointKind: nil
                 )
+                try RoutingWorkContext.check()
+                if case .failure(.searchLimit(let reason)) = continuationResult {
+                    incompleteSearchReason = reason
+                }
                 let continuationRoute: OnDeviceRouter.Result?
                 if case .success(let route) = continuationResult,
                    route.distanceMeters <= destinationCap + 1 {
@@ -638,6 +672,7 @@ final class PackRoutingSource: RoutingSource {
                     let visibleMeters = windowComplete
                         ? graphMeters + [directFallback]
                         : Array(graphMeters.prefix(visibleStops.count))
+                    try RoutingWorkContext.check()
                     return FuelChainResponse(
                         status: "complete", error: nil, message: nil,
                         regionIds: GraphPackStore.regionIds(containingAny: [
@@ -653,12 +688,27 @@ final class PackRoutingSource: RoutingSource {
                         windowComplete: windowComplete
                     )
                 }
+                try RoutingWorkContext.check()
+                if let incompleteSearchReason {
+                    try RoutingWorkContext.check()
+                    return FuelChainResponse(
+                        status: "unknown", error: "on_device_search_incomplete",
+                        message: "Fuel planning reached a search limit. A fuel gap has not been proved.",
+                        regionIds: GraphPackStore.regionIds(containingAny: [start.locationCoordinate, end.locationCoordinate]),
+                        stops: stops, graphMeters: graphMeters,
+                        diagnostics: FuelChainDiagnostics(
+                            strategy: "pack-forward-incomplete-\(incompleteSearchReason)",
+                            states: stops.count + 1, dijkstraPops: nil,
+                            matchedFuel: stations.count, elapsedMs: nil),
+                        stationCandidates: stationCandidates, windowComplete: false)
+                }
                 let routedPrefix = graphMeters.reduce(0, +)
                 let gap = max(0, req.fuel.profileMeters - routedPrefix)
                 let remaining = stops.isEmpty ? req.fuel.firstLegMaxMeters : req.fuel.usableRangeMeters
                 let forcedMessage = required.map {
                     "The selected fuel stop \($0) is not reachable without stranding the next section."
                 }
+                try RoutingWorkContext.check()
                 return FuelChainResponse(
                     status: "gap",
                     error: "no_route_connected_fuel_chain",
@@ -700,6 +750,7 @@ final class PackRoutingSource: RoutingSource {
         }
         let routedPrefix = graphMeters.reduce(0, +)
         let gap = max(0, req.fuel.profileMeters - routedPrefix)
+        try RoutingWorkContext.check()
         return FuelChainResponse(
             status: "gap",
             error: "no_route_connected_fuel_chain",
@@ -717,6 +768,23 @@ final class PackRoutingSource: RoutingSource {
             gapMeters: gap,
             overByMeters: max(0, gap - req.fuel.usableRangeMeters)
         )
+    }
+
+    /// The production fuel-data query, evaluated over installed station sidecars.
+    /// Candidate reachability/ranking remains the itinerary builder's job.
+    func fuelStations(near point: RouteCoordinate, within meters: Double) -> [FuelChainStop] {
+        let pad = max(0.002, meters / 111_000)
+        let longitudePad = pad / max(0.01, cos(point.latitude * .pi / 180))
+        let candidates = packs.fuelStations(
+            minLat: point.latitude - pad, maxLat: point.latitude + pad,
+            minLon: point.longitude - longitudePad, maxLon: point.longitude + longitudePad)
+        let origin = CLLocation(latitude: point.latitude, longitude: point.longitude)
+        return candidates.compactMap { station -> (FuelChainStop, Double)? in
+            let distance = origin.distance(from: CLLocation(latitude: station.latitude, longitude: station.longitude))
+            guard distance <= meters else { return nil }
+            return (FuelChainStop(id: station.id, latitude: station.latitude, longitude: station.longitude,
+                name: station.name, brand: station.brand, address: station.address, graphMeters: 0), distance)
+        }.sorted { $0.1 < $1.1 }.map { $0.0 }
     }
 
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
@@ -772,13 +840,15 @@ struct RoutingSourcePolicy {
         network: NetworkPathMonitor,
         packs: GraphPackStore,
         live: any RoutingSource,
-        pack: any RoutingSource
+        pack: any RoutingSource,
+        onDeviceOnly: Bool = false
     ) {
         self.init(
             isOnline: { network.isOnline },
             installedPacks: packs,
             live: live,
-            pack: pack
+            pack: pack,
+            onDeviceOnly: onDeviceOnly
         )
     }
 
@@ -787,6 +857,7 @@ struct RoutingSourcePolicy {
         installedPacks: any RoutingInstalledPackRegistry,
         live: any RoutingSource,
         pack: any RoutingSource,
+        onDeviceOnly: Bool = false,
         report: @escaping @MainActor (String) -> Void = { RoutingDebugLog.shared.event($0) }
     ) {
         selector = { request in
@@ -798,7 +869,7 @@ struct RoutingSourcePolicy {
             let installed = needed.filter { installedPacks.isRoutingPackInstalled($0) }
             let packsCover = installedPacksCover(locations, registry: installedPacks)
             let singleRegion = provinces.count <= 1
-            let chosen = isOnline() ? live : pack
+            let chosen = onDeviceOnly ? pack : (isOnline() ? live : pack)
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
                     "provinces=[\(provinces.joined(separator: ","))] " +

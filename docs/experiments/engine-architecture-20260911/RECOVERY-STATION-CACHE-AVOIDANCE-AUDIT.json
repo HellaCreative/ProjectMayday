@@ -1,0 +1,425 @@
+{
+  "source": "station-cache replay before restoration of settlement multiplier 5",
+  "method": "Polyline segments clipped to exact pack rectangles; fractional Haversine segment length. No endpoint exemption or infeasibility inference is applied. Overlap is an observation, not a routing-policy failure. NB accepted pack contains no city/town rectangles.",
+  "packRelease": "fabric-v4-20260908-02",
+  "rows": [
+    {
+      "file": "oracle-canso-causeway-balanced.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "urbanCores",
+          "name": "Sydney",
+          "meters": 1474.91
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Antigonish",
+          "meters": 3762.74
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Eskasoni First Nation",
+          "meters": 4366.27
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Sydney River",
+          "meters": 329.64
+        }
+      ]
+    },
+    {
+      "file": "oracle-canso-causeway-cleanest.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "urbanCores",
+          "name": "Sydney",
+          "meters": 5840.23
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Cantley Village",
+          "meters": 3787.76
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Antigonish",
+          "meters": 4407.67
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Eskasoni First Nation",
+          "meters": 4473.15
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Sydney Forks",
+          "meters": 5940.65
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Sydney River",
+          "meters": 5431.38
+        }
+      ]
+    },
+    {
+      "file": "oracle-one-fuel-stop-balanced.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Antigonish",
+          "meters": 3841.81
+        }
+      ]
+    },
+    {
+      "file": "oracle-one-fuel-stop-cleanest.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Antigonish",
+          "meters": 6625.96
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "New Glasgow",
+          "meters": 639.59
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Stellarton",
+          "meters": 4975.72
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Westville",
+          "meters": 4310.56
+        }
+      ]
+    },
+    {
+      "file": "oracle-one-fuel-stop-dirt.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Antigonish",
+          "meters": 3841.81
+        }
+      ]
+    },
+    {
+      "file": "oracle-rural-pair-balanced.json",
+      "overlaps": []
+    },
+    {
+      "file": "oracle-rural-pair-cleanest.json",
+      "overlaps": []
+    },
+    {
+      "file": "oracle-rural-pair-dirt.json",
+      "overlaps": []
+    },
+    {
+      "file": "oracle-short-intra-metro-balanced.json",
+      "overlaps": []
+    },
+    {
+      "file": "oracle-short-intra-metro-cleanest.json",
+      "overlaps": []
+    },
+    {
+      "file": "oracle-short-intra-metro-dirt.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-20260913-43.807616-balanced.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Mahone Bay",
+          "meters": 1157.08
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Fall River",
+          "meters": 885.12
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Lower Sackville",
+          "meters": 3750.37
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Shelburne",
+          "meters": 424.84
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Town of Shelburne",
+          "meters": 2427.93
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Windsor Junction",
+          "meters": 328.39
+        }
+      ]
+    },
+    {
+      "file": "road-20260913-43.807616-cleanest.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Mahone Bay",
+          "meters": 1157.08
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Bridgewater",
+          "meters": 4697.78
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Fall River",
+          "meters": 885.12
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Liverpool",
+          "meters": 4010.12
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Lower Sackville",
+          "meters": 5008.93
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Shelburne",
+          "meters": 656.91
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Town of Shelburne",
+          "meters": 2886.59
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Windsor Junction",
+          "meters": 328.39
+        }
+      ]
+    },
+    {
+      "file": "road-20260913-43.807616-dirt.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-20260913-43.849315-balanced.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Mahone Bay",
+          "meters": 1157.08
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Fall River",
+          "meters": 885.12
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Lower Sackville",
+          "meters": 3750.37
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Shelburne",
+          "meters": 424.84
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Town of Shelburne",
+          "meters": 2427.93
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Windsor Junction",
+          "meters": 328.39
+        }
+      ]
+    },
+    {
+      "file": "road-20260913-43.849315-cleanest.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Mahone Bay",
+          "meters": 1157.08
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Bridgewater",
+          "meters": 4697.78
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Fall River",
+          "meters": 885.12
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Liverpool",
+          "meters": 4010.12
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Lower Sackville",
+          "meters": 5008.93
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Shelburne",
+          "meters": 656.91
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Town of Shelburne",
+          "meters": 2886.59
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Windsor Junction",
+          "meters": 328.39
+        }
+      ]
+    },
+    {
+      "file": "road-20260913-43.849315-dirt.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-20260913-45.091108-balanced.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-20260913-45.091108-cleanest.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-20260913-45.091108-dirt.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-20260913-46.845234-balanced.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-20260913-46.845234-cleanest.json",
+      "overlaps": [
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Antigonish",
+          "meters": 3841.81
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "New Glasgow",
+          "meters": 1187.76
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Stellarton",
+          "meters": 2673.91
+        },
+        {
+          "region": "ns",
+          "kind": "settlements",
+          "name": "Westville",
+          "meters": 5147.43
+        }
+      ]
+    },
+    {
+      "file": "road-20260913-46.845234-dirt.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-20260913-ns-nb-dirt.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-3511091208-44.755736-balanced.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-3511091208-44.755736-cleanest.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-3511091208-44.755736-dirt.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-3511091208-45.261359-balanced.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-3511091208-45.261359-cleanest.json",
+      "overlaps": []
+    },
+    {
+      "file": "road-3511091208-45.261359-dirt.json",
+      "overlaps": []
+    }
+  ]
+}

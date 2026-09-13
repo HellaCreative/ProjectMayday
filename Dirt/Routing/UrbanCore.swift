@@ -231,7 +231,7 @@ nonisolated enum UrbanCore {
     }
 
     /// Pack-derived towns share Clean's bounded city control. Adventure profiles
-    /// use the maximum finite preference so towns stay routable only when needed.
+    /// retain the existing finite ×5 settlement preference.
     static func resolveSettlementPenalty(
         profile: RouteProfile,
         override: Double?,
@@ -243,7 +243,7 @@ nonisolated enum UrbanCore {
                 override: override,
                 avoidMajorHighways: avoidMajorHighways
             )
-            : 20
+            : 5
     }
 
     /// Smaller OSM cities/towns are strongly penalized so a practical wilderness

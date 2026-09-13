@@ -1,0 +1,413 @@
+{
+  "status": "Unqualified DEV computation candidate; inventory is not routing equivalence proof",
+  "appFoundation": "91cc3ccdd9f51fa6ff503f3f06e7cab59b00393e",
+  "nativeRestorationReference": "71aa7fd6d396bbf215bc1637ba1e3959f6fcdd6a",
+  "files": [
+    {
+      "file": "Dirt/Features/RoutePlanning/Itinerary/RoutingSource.swift",
+      "candidateSHA256": "f5105fa6f7fe09fa1cab16faf52a9aa47869f00de3deea6197e32d0f895accd3",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "3b5c86e3200d446962220ba760690755d204ebd2fbde7429d845dcf3b5cf5c68"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": false,
+        "sha256": "3dce01e9e8363510631114d834c6bfd2a0b0711f94ec6111e6a6be4b071bacf9"
+      }
+    },
+    {
+      "file": "Dirt/Features/RoutePlanning/RoutePlannerModel.swift",
+      "candidateSHA256": "a23efbf569cd3cfa3cb2f37f1f106bf7063eff62f7df48f92f552e794c9e3ea9",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "1f2ed17a7b78dffcea1213f33ba71b9d4baa7501bcf0cb5e02461c49e80d9fac"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": false,
+        "sha256": "497908b0a965c0f0178ce4a320f75524b51b2549f52961af1eadbab84137a493"
+      }
+    },
+    {
+      "file": "Dirt/Networking/AppConfig.swift",
+      "candidateSHA256": "98f76899ff031366ac91fe322565d0e923a65493eb3f6c938407a75edc3c6208",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "f4f536f47cd81c280d970ac88885cfbea585e0c6f2e5e2f503639c25658d34e1"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": false,
+        "sha256": "dc6652469f07745004bd3280a3ca543f701203f33716749269df4e190934c296"
+      }
+    },
+    {
+      "file": "Dirt/Routing/FuelItinerary.swift",
+      "candidateSHA256": "475ed0d0f1461adeba413b405788bf25a5d8af60128fd7d8a106f117e74922b7",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "475ed0d0f1461adeba413b405788bf25a5d8af60128fd7d8a106f117e74922b7"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "475ed0d0f1461adeba413b405788bf25a5d8af60128fd7d8a106f117e74922b7"
+      }
+    },
+    {
+      "file": "Dirt/Routing/GeoMath.swift",
+      "candidateSHA256": "6ae079d5ce42eff87a52f8e6ee14bb8250325fc8dc8f9d49d72892a3aecc2427",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "6ae079d5ce42eff87a52f8e6ee14bb8250325fc8dc8f9d49d72892a3aecc2427"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "6ae079d5ce42eff87a52f8e6ee14bb8250325fc8dc8f9d49d72892a3aecc2427"
+      }
+    },
+    {
+      "file": "Dirt/Routing/HopSearchPolicy.swift",
+      "candidateSHA256": "3a851d8615238e0ed15d4f564c0eaa37443159c4736fbd27fc54c25c7df08b97",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "7d8c146b8cef161894a806c53fcc4c21f0853d5c740146028bc6a29e898d512b"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "3a851d8615238e0ed15d4f564c0eaa37443159c4736fbd27fc54c25c7df08b97"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/CrossPackSeam.swift",
+      "candidateSHA256": "08207b87368a5d585e8625fefa5aba2485242bc870a9f70f106f999f0a7b12f3",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "dfb85b82d6cc88d7a99f6dc5af4c6485ac2eab28d3c9003ab238dd8bdf265864"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "08207b87368a5d585e8625fefa5aba2485242bc870a9f70f106f999f0a7b12f3"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/CustomerEndpointAccess.swift",
+      "candidateSHA256": "2cf85af44f7145cd9a6a0ccbe9dae3717b384c4395e8929e4e8e0ced80aef696",
+      "71aa7fd": {
+        "exists": false,
+        "same": false,
+        "sha256": null
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "2cf85af44f7145cd9a6a0ccbe9dae3717b384c4395e8929e4e8e0ced80aef696"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/GeometryV1Pack.swift",
+      "candidateSHA256": "9704d905c68fc52e9860785b2d93f46d51ab27972df9edc7303681fbc0161864",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "3af69c2c3fceda0987b74b21b59cf9690f7cb57979f2051da3789e6b4c093ee4"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": false,
+        "sha256": "5a72bd73c18272aef8d9f777bc431cfc6afe78677502a5faf319fde8182fd03a"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/GraphPackStore.swift",
+      "candidateSHA256": "3a0cacc160f17ce7497992d49b7a7cfe2507c2a294d0e50c03176996c51117ef",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "baad342a90fe4b53a18e033fec5301c47cc6a934a66524dc33e777ad7ea39f78"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": false,
+        "sha256": "41ea8a27fe26d288eac39bec8696790e3bc4bbb70dd331e10fade15f15cf7a51"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/GraphV2Pack.swift",
+      "candidateSHA256": "c93f8c1a3c22f7d729f5b03b6f82e2ee80f4018c0748a68a4c2ea02a486b4b1b",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "b296f66881c10acb1ba7901c8fb21ca37bc5246a55cd234b5fd9d74c4b69121e"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "c93f8c1a3c22f7d729f5b03b6f82e2ee80f4018c0748a68a4c2ea02a486b4b1b"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/GraphV4Pack.swift",
+      "candidateSHA256": "83a0e4de2c2441be1fe4e1e77df4a7a9801f222c335ac0320c7e6e7ad2f5c333",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "25b282fc4205d1486578f1b6ef34fd002d259c5c8754f370fa8b8e195d01411f"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "83a0e4de2c2441be1fe4e1e77df4a7a9801f222c335ac0320c7e6e7ad2f5c333"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/OnDevicePathPruning.swift",
+      "candidateSHA256": "3ff28c7d6a56cc4ad11e5df02e869aa00222049c01ad4f7518e1ee1a6e7547c6",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "3ff28c7d6a56cc4ad11e5df02e869aa00222049c01ad4f7518e1ee1a6e7547c6"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "3ff28c7d6a56cc4ad11e5df02e869aa00222049c01ad4f7518e1ee1a6e7547c6"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/OnDeviceProfileCosts.swift",
+      "candidateSHA256": "c9e86d249e1062ccb18d51a4cfc8ea794cbb5df42f35daa417b36a51e5b938b6",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "c9e86d249e1062ccb18d51a4cfc8ea794cbb5df42f35daa417b36a51e5b938b6"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "c9e86d249e1062ccb18d51a4cfc8ea794cbb5df42f35daa417b36a51e5b938b6"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/OnDeviceRouter.swift",
+      "candidateSHA256": "c282252374957253cdcbadef2c46cc025ae2103a325b5c93fcee1e5e8ac468ec",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "64a918b95635c1351bd4a9cb02e35ba471702f7bb8cea1206c9401983883ccbb"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": false,
+        "sha256": "f259155a8c0b74e3fb9d6df93e22eb5c5c932308027adaf98fbc5accfe010864"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/PathRetrace.swift",
+      "candidateSHA256": "20efb656ffc402cf6fed269bcaeafb1a4b0916a70064a6d8a56367b9c4270734",
+      "71aa7fd": {
+        "exists": false,
+        "same": false,
+        "sha256": null
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": false,
+        "sha256": "f9d319a8720a61627431255e02d5a103bf670ed9abdb8ed0768692ef4bbcde95"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/README.md",
+      "candidateSHA256": "e181c6d743aa7988680e359049bf5fb9ff6d99b9a6866f45bc2a21b169066aee",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "45e2e28d63de4484a162e56249de7a6c5f8eb7224276c3278244170b725182ee"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "e181c6d743aa7988680e359049bf5fb9ff6d99b9a6866f45bc2a21b169066aee"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/RegionPolygons.json",
+      "candidateSHA256": "84fa51a81300bf9dd48d7663551637b841ad9b0ca7e716069b9729e9fbfdac2d",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "6b1f9d23590db6f2a09efdd059a68412bd41eafbe77a315c9a4577f2fef210f2"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "84fa51a81300bf9dd48d7663551637b841ad9b0ca7e716069b9729e9fbfdac2d"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/RegionPolygons.swift",
+      "candidateSHA256": "fe72d0fa47836d0a21a04da752e03a54264215a9624d32fef8c005c767f259b7",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "fe72d0fa47836d0a21a04da752e03a54264215a9624d32fef8c005c767f259b7"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "fe72d0fa47836d0a21a04da752e03a54264215a9624d32fef8c005c767f259b7"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/RoadCompass.swift",
+      "candidateSHA256": "ce00deaad90988c46a4e94e0aa97af2e9bd33e51f61a0596b19acef5bad79479",
+      "71aa7fd": {
+        "exists": false,
+        "same": false,
+        "sha256": null
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "ce00deaad90988c46a4e94e0aa97af2e9bd33e51f61a0596b19acef5bad79479"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/RoadTier.swift",
+      "candidateSHA256": "089e58f97f9d82039d21b037943097f8335a8e618392df74be958164a2cc34a3",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "089e58f97f9d82039d21b037943097f8335a8e618392df74be958164a2cc34a3"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "089e58f97f9d82039d21b037943097f8335a8e618392df74be958164a2cc34a3"
+      }
+    },
+    {
+      "file": "Dirt/Routing/OnDevice/SurfaceFamily.swift",
+      "candidateSHA256": "cabd5cca8bd8794dff53fde2057bfc345919abbe1726c1ac5a6137d0f46b907e",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "cabd5cca8bd8794dff53fde2057bfc345919abbe1726c1ac5a6137d0f46b907e"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "cabd5cca8bd8794dff53fde2057bfc345919abbe1726c1ac5a6137d0f46b907e"
+      }
+    },
+    {
+      "file": "Dirt/Routing/PackedFuel.swift",
+      "candidateSHA256": "82c9145f290053ace62baac4ddcd618895769a7b4027035db49ba352f3a9768c",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "82c9145f290053ace62baac4ddcd618895769a7b4027035db49ba352f3a9768c"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "82c9145f290053ace62baac4ddcd618895769a7b4027035db49ba352f3a9768c"
+      }
+    },
+    {
+      "file": "Dirt/Routing/RoutingClient.swift",
+      "candidateSHA256": "bc60a4408074a9a737c5401787f0286f5ab35d5a5b1aa972868efafeee195fb6",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "e3fa715605bd27737da02d244c8069d3d5cf9d5b724fff4dd51b9adba96db1a8"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "bc60a4408074a9a737c5401787f0286f5ab35d5a5b1aa972868efafeee195fb6"
+      }
+    },
+    {
+      "file": "Dirt/Routing/RoutingDebugLog.swift",
+      "candidateSHA256": "abcdb4fdf3a9d9d48629fe5606f8df57f9bb19dab95db9e8c73eae3c71954fc8",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "abcdb4fdf3a9d9d48629fe5606f8df57f9bb19dab95db9e8c73eae3c71954fc8"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "abcdb4fdf3a9d9d48629fe5606f8df57f9bb19dab95db9e8c73eae3c71954fc8"
+      }
+    },
+    {
+      "file": "Dirt/Routing/RoutingModels.swift",
+      "candidateSHA256": "43200d493d2a8661c247a04b18ea7178f016fc4662732a5bd695b8ef84e54c90",
+      "71aa7fd": {
+        "exists": true,
+        "same": false,
+        "sha256": "52a69e7c66893d02249459b76cf6bbd343e001e96ce91358ac241fa06f08c052"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "43200d493d2a8661c247a04b18ea7178f016fc4662732a5bd695b8ef84e54c90"
+      }
+    },
+    {
+      "file": "Dirt/Routing/RoutingWorkContext.swift",
+      "candidateSHA256": "a332e0c3af157d552e0faa1fc4aecf2e29503fe5f57e7521f8140aeb0bc16a43",
+      "71aa7fd": {
+        "exists": false,
+        "same": false,
+        "sha256": null
+      },
+      "91cc3cc": {
+        "exists": false,
+        "same": false,
+        "sha256": null
+      }
+    },
+    {
+      "file": "Dirt/Routing/UrbanCore.swift",
+      "candidateSHA256": "d6e8fa3ded4c5615bbf45d59db022a9d111e99f55ddfc805e3d7f9d80115fbf7",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "d6e8fa3ded4c5615bbf45d59db022a9d111e99f55ddfc805e3d7f9d80115fbf7"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": false,
+        "sha256": "68f06506175de2106c91fbe4be3a8cf49a21f15e64dd04a2cd911f688c2fd9ec"
+      }
+    },
+    {
+      "file": "Dirt/Routing/UrbanSettlements.json",
+      "candidateSHA256": "ebb0383d62dbe22e985bbd3b2c3193d25bfc97f26dbd761b269cc6182bc19831",
+      "71aa7fd": {
+        "exists": true,
+        "same": true,
+        "sha256": "ebb0383d62dbe22e985bbd3b2c3193d25bfc97f26dbd761b269cc6182bc19831"
+      },
+      "91cc3cc": {
+        "exists": true,
+        "same": true,
+        "sha256": "ebb0383d62dbe22e985bbd3b2c3193d25bfc97f26dbd761b269cc6182bc19831"
+      }
+    }
+  ]
+}

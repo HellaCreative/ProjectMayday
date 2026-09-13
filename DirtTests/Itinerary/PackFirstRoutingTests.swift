@@ -25,6 +25,27 @@ struct PackFirstRoutingTests {
         #expect(pack.routeRequests.isEmpty)
     }
 
+    @Test func localComputationNeverSelectsLiveForMissingOrCrossProvincePacks() async throws {
+        for online in [false, true] {
+            for installed in [[], ["ns"], ["ns", "nb"]] {
+                let live = NamedFakeRoutingSource(name: "live")
+                let pack = NamedFakeRoutingSource(name: "pack")
+                let policy = RoutingSourcePolicy(
+                    isOnline: { online },
+                    installedPacks: FakePackCoverage(installed: Set(installed), published: ["ns", "nb"]),
+                    live: live, pack: pack, onDeviceOnly: true)
+                let request = RouteRequest(profile: .dirt,
+                    locations: [RouteLocation(latitude: halifax.latitude, longitude: halifax.longitude, label: "A"),
+                                RouteLocation(latitude: fredericton.latitude, longitude: fredericton.longitude, label: "B")],
+                    allowUnknown: false)
+                _ = try await policy.select(for: request).route(request)
+                #expect(live.routeRequests.isEmpty)
+                #expect(pack.routeRequests.count == 1)
+                #expect(pack.routeRequests.first?.profile == .dirt)
+            }
+        }
+    }
+
     @Test func installedNSIsSelectedWhileOffline() {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")

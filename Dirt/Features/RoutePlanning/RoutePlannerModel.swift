@@ -516,7 +516,8 @@ final class RoutePlannerModel {
             )
             let pack = PackRoutingSource(packs: graphPacks, cache: cache)
             self.routingSourcePolicy = RoutingSourcePolicy(
-                network: network, packs: graphPacks, live: live, pack: pack
+                network: network, packs: graphPacks, live: live, pack: pack,
+                onDeviceOnly: AppConfig.computesRoutesOnDevice
             )
         }
         self.packAcquisition = packAcquisition ?? PackAcquisitionCoordinator(store: graphPacks)
@@ -1937,8 +1938,14 @@ final class RoutePlannerModel {
         fuelReplacementTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let stations = try await self.routing.fuelStations(near: stop.coordinate, within: 25_000)
-                    .filter { $0.id != stop.stationID }.prefix(6)
+                let nearby: [FuelChainStop]
+                if AppConfig.computesRoutesOnDevice {
+                    nearby = PackRoutingSource(packs: self.graphPacks, cache: RouteResponseCache())
+                        .fuelStations(near: stop.coordinate, within: 25_000)
+                } else {
+                    nearby = try await self.routing.fuelStations(near: stop.coordinate, within: 25_000)
+                }
+                let stations = nearby.filter { $0.id != stop.stationID }.prefix(6)
                 for station in stations {
                     guard !Task.isCancelled, self.fuelReplacementRunID == runID,
                           self.itinerary == requested, self.navigation.phase == .idle else { return }
@@ -3576,6 +3583,20 @@ final class RoutePlannerModel {
         let online = networkOnline ?? network.isOnline
         let fromCL = CLLocationCoordinate2D(latitude: from.latitude, longitude: from.longitude)
         let toCL = CLLocationCoordinate2D(latitude: to.latitude, longitude: to.longitude)
+
+        if AppConfig.computesRoutesOnDevice {
+            let request = RidePreferenceContext.$current.withValue(ridePreferences) {
+                RouteRequest(profile: useProfile,
+                    locations: [
+                        RouteLocation(latitude: from.latitude, longitude: from.longitude, label: "A"),
+                        RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "B")
+                    ],
+                    allowUnknown: useAllow, avoidEdgeIds: avoidEdgeIds,
+                    sessionSeed: planningSessionSeed, cleanMetroMultiplier: nil,
+                    avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads)
+            }
+            return try await PackRoutingSource(packs: graphPacks, cache: RouteResponseCache()).route(request)
+        }
 
         await graphPacks.ensureRoadShapes(for: [fromCL, toCL])
         if let local = await graphPacks.routeOnDevice(

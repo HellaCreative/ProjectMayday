@@ -108,6 +108,16 @@ final class GraphPackStore {
     private(set) var managementInFlight: Set<String> = []
     /// Fuel stations loaded from installed `fuel.v1.json` sidecars.
     private var packedFuelByRegion: [String: [POIFeature]] = [:]
+    /// Execution cache only. Installed files remain authoritative; memory
+    /// pressure may evict entries without changing coverage or route policy.
+    private let decodedPacks: NSCache<NSString, GraphV2Pack> = {
+        let cache = NSCache<NSString, GraphV2Pack>()
+        cache.countLimit = 2
+        cache.totalCostLimit = 128 * 1024 * 1024
+        return cache
+    }()
+    private var decodedPackKeys: [String: NSString] = [:]
+
 
     /// When true, a checksum-valid installed revision is not replaced in place.
     var protectInstalledRevisions = false
@@ -133,7 +143,10 @@ final class GraphPackStore {
         return URLSession(configuration: cfg)
     }()
 
+    private let explicitCacheRoot: URL?
+
     private var cacheRoot: URL {
+        if let explicitCacheRoot { return explicitCacheRoot }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         let url = base.appendingPathComponent("dirt-graph-packs", isDirectory: true)
@@ -144,10 +157,11 @@ final class GraphPackStore {
     /// True while any quiet auto-download is in flight (one region at a time).
     var isQuietDownloadInFlight: Bool { !quietDownloadIds.isEmpty }
 
-    init() {
-        seedLocalV3PacksFromDocumentsIfPresent()
+    init(cacheRoot: URL? = nil, refreshCatalogOnInit: Bool = true) {
+        self.explicitCacheRoot = cacheRoot
+        if cacheRoot == nil { seedLocalV3PacksFromDocumentsIfPresent() }
         refreshInstalledFromDisk()
-        Task { await refreshCatalog() }
+        if refreshCatalogOnInit { Task { await refreshCatalog() } }
     }
 
     /// Phase E1 ride-test: drop `graph.v3.bin` + `geometry.v1.bin` into
@@ -245,6 +259,19 @@ final class GraphPackStore {
             revision: packRevisionLabel(regionId: pack.regionId ?? region),
             hasLeaves: pack.hasLeaves
         )
+    }
+
+    /// Route responses must follow the files actually installed, including a
+    /// retained older release, rather than the latest downloadable catalog.
+    func routingCacheIdentity() -> String {
+        loadedRegionIds.sorted().map { region in
+            let graph = graphFileURL(regionId: region)
+            let files = [graph, geometryFileURL(regionId: region), seamsFileURL(regionId: region)]
+            return region + "=" + files.map { url in
+                let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+                return "\(url.path):\(values?.fileSize ?? -1):\(values?.contentModificationDate?.timeIntervalSinceReferenceDate ?? 0)"
+            }.joined(separator: ",")
+        }.joined(separator: "|")
     }
 
     /// Short revision for the badge: catalog sha8, else `local`, else manifest version.
@@ -569,6 +596,7 @@ final class GraphPackStore {
         }
         downloadTasks[id] = nil
         quietDownloadIds.remove(id)
+        if let key = decodedPackKeys.removeValue(forKey: id) { decodedPacks.removeObject(forKey: key) }
         try Self.removeInstalledRevisions(regionID: id, cacheRoot: cacheRoot)
         verifiedInstalledRegionIds.remove(id)
         packedFuelByRegion.removeValue(forKey: id)
@@ -1062,7 +1090,7 @@ final class GraphPackStore {
         let matchLimit = matchLimitMeters
         let startKind = startEndpointKind
         let endKind = endEndpointKind
-        return await Task.detached(priority: .userInitiated) {
+        return await RoutingWorkContext.detachedSearch {
             var router = OnDeviceRouter(pack: packRef)
             router.sessionSeed = seed
             router.mapZoom = zoom
@@ -1084,7 +1112,7 @@ final class GraphPackStore {
                 avoidMotorways: avoidMotorways,
                 preferBackRoads: preferBackRoads
             )
-        }.value
+        }
     }
 
     func shortestGraphMeters(
@@ -1097,12 +1125,12 @@ final class GraphPackStore {
         await ensureActivePackAsync(for: [from, to])
         guard let pack = activePack else { return nil }
         let packRef = pack
-        return await Task.detached(priority: .userInitiated) {
+        return await RoutingWorkContext.detachedSearch {
             OnDeviceRouter(pack: packRef).shortestGraphMeters(
                 from: from, to: to, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
-        }.value
+        }
     }
 
     func reachableFuelMeters(
@@ -1116,12 +1144,12 @@ final class GraphPackStore {
         await ensureActivePackAsync(for: [from, toward])
         guard let pack = activePack else { return [:] }
         let packRef = pack
-        return await Task.detached(priority: .userInitiated) {
+        return await RoutingWorkContext.detachedSearch {
             OnDeviceRouter(pack: packRef).reachableGraphMeters(
                 from: from, toward: toward, pumps: pumps, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
-        }.value
+        }
     }
 
     /// Immutable metadata view used only to rank already-reachable fuel stops.
@@ -1256,13 +1284,13 @@ final class GraphPackStore {
         let allow = allowUnknown
         let routeProfile = profile
         let point = coordinate
-        return await Task.detached(priority: .userInitiated) {
+        return await RoutingWorkContext.detachedSearch {
             OnDeviceRouter(pack: packRef).distanceToNearestRoad(
                 from: point,
                 allowUnknown: allow,
                 profile: routeProfile
             )
-        }.value
+        }
     }
 
     /// Prefetch the installed pack covering this coordinate so the first pin
@@ -1609,14 +1637,30 @@ final class GraphPackStore {
         let seamsURL = seamsFileURL(regionId: preferred)
         // Let SwiftUI paint “Calculating route” before we touch disk.
         await Task.yield()
-        let pack = await Task.detached(priority: .userInitiated) {
-            Self.decodePack(
-                regionId: preferred,
-                graphURL: graphURL,
-                geometryURL: geometryURL,
-                seamsURL: seamsURL
-            )
-        }.value
+        let files = [graphURL, geometryURL, seamsURL]
+        var bytes = 0
+        let stamp = files.map { url -> String in
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            bytes += values?.fileSize ?? 0
+            return "\(url.path):\(values?.fileSize ?? -1):\(values?.contentModificationDate?.timeIntervalSinceReferenceDate ?? 0)"
+        }.joined(separator: "|")
+        let key = NSString(string: stamp)
+        if let prior = decodedPackKeys[preferred], prior != key { decodedPacks.removeObject(forKey: prior) }
+        let pack: GraphV2Pack?
+        if let cached = decodedPacks.object(forKey: key) {
+            pack = cached
+            RoutingDebugLog.shared.event("decoded pack cache hit region=\(preferred)")
+        } else {
+            if bytes > decodedPacks.totalCostLimit { decodedPacks.removeAllObjects() }
+            pack = await Task.detached(priority: .userInitiated) {
+                Self.decodePack(regionId: preferred, graphURL: graphURL,
+                    geometryURL: geometryURL, seamsURL: seamsURL)
+            }.value
+            if let pack, bytes <= decodedPacks.totalCostLimit {
+                decodedPacks.setObject(pack, forKey: key, cost: bytes)
+                decodedPackKeys[preferred] = key
+            }
+        }
         guard let pack else { return }
         activePack = pack
         loadedRegionIds = Array(Set(loadedRegionIds + [preferred]))

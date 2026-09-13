@@ -1,0 +1,138 @@
+diff --git a/Dirt/Routing/OnDevice/OnDeviceRouter.swift b/Dirt/Routing/OnDevice/OnDeviceRouter.swift
+index bf2e2aa..cb8ca9e 100644
+--- a/Dirt/Routing/OnDevice/OnDeviceRouter.swift
++++ b/Dirt/Routing/OnDevice/OnDeviceRouter.swift
+@@ -1756,6 +1756,7 @@ nonisolated struct OnDeviceRouter {
+         var prevData = [Int](repeating: -1, count: total)
+         var prevForward = [Bool](repeating: true, count: total)
+         var pathMeters = [Double](repeating: .infinity, count: total)
++        let retraceIndex = PathRetrace.HistoryIndex()
+         func pathRecord(_ label: Int) -> PathRetrace.Span? {
+             if prev[label] < 0 { return nil }
+             if prevKind[label] == 0 {
+@@ -1766,7 +1767,7 @@ nonisolated struct OnDeviceRouter {
+         }
+         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
+             guard pack.version >= 4, let span else { return false }
+-            return PathRetrace.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
++            return retraceIndex.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
+         }
+         var slots = [UInt8](repeating: 0, count: total)
+         var heap = MinHeap()
+@@ -1966,6 +1967,7 @@ nonisolated struct OnDeviceRouter {
+                         action = .reject
+                     }
+                     if HopSearchPolicy.apply(action, slots: &slots, at: toState) {
++                        retraceIndex.predecessorChanged(toState)
+                         prev[toState] = cur.node
+                         prevKind[toState] = 0
+                         prevData[toState] = ei
+@@ -2003,6 +2005,7 @@ nonisolated struct OnDeviceRouter {
+                         action = .reject
+                     }
+                     if HopSearchPolicy.apply(action, slots: &slots, at: toNode) {
++                        retraceIndex.predecessorChanged(toNode)
+                         prev[toNode] = cur.node
+                         prevKind[toNode] = 2
+                         prevData[toNode] = -1
+@@ -2145,6 +2148,7 @@ nonisolated struct OnDeviceRouter {
+                         action = .reject
+                     }
+                     if HopSearchPolicy.apply(action, slots: &slots, at: toState) {
++                        retraceIndex.predecessorChanged(toState)
+                         prev[toState] = cur.node
+                         prevKind[toState] = 1
+                         prevData[toState] = item.id
+@@ -2314,6 +2318,7 @@ nonisolated struct OnDeviceRouter {
+         var prevKind = [UInt8](repeating: 0, count: labels)
+         var prevData = [Int](repeating: -1, count: labels)
+         var prevForward = [Bool](repeating: true, count: labels)
++        let retraceIndex = PathRetrace.HistoryIndex()
+         func pathRecord(_ label: Int) -> PathRetrace.Span? {
+             if prev[label] < 0 { return nil }
+             if prevKind[label] == 0 {
+@@ -2324,7 +2329,7 @@ nonisolated struct OnDeviceRouter {
+         }
+         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
+             guard pack.version >= 4, let span else { return false }
+-            return PathRetrace.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
++            return retraceIndex.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
+         }
+         var slots = [UInt8](repeating: 0, count: labels)
+         var heap = MinHeap()
+@@ -2475,6 +2480,7 @@ nonisolated struct OnDeviceRouter {
+                         action = .reject
+                     }
+                     if HopSearchPolicy.apply(action, slots: &slots, at: toLab) {
++                        retraceIndex.predecessorChanged(toLab)
+                         prev[toLab] = cur.node
+                         prevKind[toLab] = 0
+                         prevData[toLab] = ei
+@@ -2498,6 +2504,7 @@ nonisolated struct OnDeviceRouter {
+                             dist[toLab] = cur.cost
+                             pathMeters[toLab] = metersSoFar
+                             dirtAt[toLab] = dirtSoFar
++                            retraceIndex.predecessorChanged(toLab)
+                             prev[toLab] = cur.node
+                             prevKind[toLab] = 2
+                             prevData[toLab] = -1
+@@ -2603,6 +2610,7 @@ nonisolated struct OnDeviceRouter {
+                         dist[toLab] = newScore
+                         pathMeters[toLab] = newMeters
+                         dirtAt[toLab] = dirtSoFar
++                        retraceIndex.predecessorChanged(toLab)
+                         prev[toLab] = cur.node
+                         prevKind[toLab] = 1
+                         prevData[toLab] = item.id
+diff --git a/Dirt/Routing/OnDevice/PathRetrace.swift b/Dirt/Routing/OnDevice/PathRetrace.swift
+index 5caeab3..5c71db1 100644
+--- a/Dirt/Routing/OnDevice/PathRetrace.swift
++++ b/Dirt/Routing/OnDevice/PathRetrace.swift
+@@ -23,6 +23,47 @@ nonisolated enum PathRetrace {
+         }
+         return false
+     }
++    /// Reuses one current predecessor chain across outgoing-edge checks. Every
++    /// predecessor write must invalidate this index if it touches that chain.
++    /// The indexed overlap predicate is exactly Span.overlaps; no road is added
++    /// or removed and no distance/cost threshold changes.
++    final class HistoryIndex {
++        private var start: Int?
++        private var ancestors = Set<Int>()
++        private var byEdge: [Int: [Span]] = [:]
++        private var cyclic = false
++
++        func predecessorChanged(_ node: Int) {
++            if ancestors.contains(node) { start = nil }
++        }
++
++        func contains(node initial: Int, span: Span,
++                      previous: (Int) -> Int, record: (Int) -> Span?) -> Bool {
++            if start != initial {
++                ancestors.removeAll(keepingCapacity: true)
++                byEdge.removeAll(keepingCapacity: true)
++                cyclic = false
++                var node = initial, steps = 0
++                while node >= 0 {
++                    guard ancestors.insert(node).inserted else {
++                        cyclic = true
++                        break
++                    }
++                    if let row = record(node) { byEdge[row.edge, default: []].append(row) }
++                    let next = previous(node)
++                    steps += 1
++                    if next == node || steps > 10_000_000 {
++                        cyclic = true
++                        break
++                    }
++                    node = next
++                }
++                start = initial
++            }
++            return cyclic || (byEdge[span.edge] ?? []).contains { $0.overlaps(span) }
++        }
++    }
++
+     static func repeats(_ rows: [Span]) -> Bool {
+         var byEdge: [Int: [Span]] = [:]
+         for row in rows {

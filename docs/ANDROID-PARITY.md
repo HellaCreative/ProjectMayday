@@ -1174,3 +1174,23 @@ configuration changes. It retains the source's existing routing execution policy
 and is not an offline routing qualification. No new Android behavior is introduced;
 Android must retain product parity while moving equivalent route/fuel computation
 to local packs. See the baseline recovery report for source and acceptance status.
+
+
+### Local computation recovery implementation, September 13
+
+Following owner acceptance of production-derived DEV build 40, compatibility
+work preserves cancellation/search-limit classification and safe binary reads.
+The proposed history index was rejected after worse real-pack performance and
+reverted. Cycle detection now preserves the existing cyclic-chain rejection;
+request deadlines propagate into native workers. Geographic progress restoration
+is a separate behavior restoration against `71aa7fd`, not an optimization.
+The complete real-pack replay harness is restored.
+No new profile/fuel rules, UI, production deployment, or Android qualification
+is introduced. Actual local routing parity remains under investigation.
+
+The final DEV 41 checkpoint restores the non-Clean settlement multiplier of 5
+from `71aa7fd` and corrects only the final endpoint connector's direction.
+All 325 serial tests ran; eight assertions remain failed. Eleven oracle fuel
+workflows reached the destination, but geometric repeats still disqualify some
+completed routes. Custom preferences, matched production-pack replay and physical
+route acceptance remain open. This checkpoint is not Android or iOS qualification.

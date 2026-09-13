@@ -38,7 +38,7 @@ struct UrbanCoreTests {
         #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: nil, avoidMajorHighways: true) == 10)
         #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: nil, avoidMajorHighways: false) == 2)
         #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: 99, avoidMajorHighways: true) == 20)
-        #expect(UrbanCore.resolveSettlementPenalty(profile: .balanced, override: 20, avoidMajorHighways: true) == 20)
+        #expect(UrbanCore.resolveSettlementPenalty(profile: .balanced, override: 20, avoidMajorHighways: true) == 5)
     }
 
     @Test func packTownPenaltyIsFiniteAndKeepsEndpointExemption() {

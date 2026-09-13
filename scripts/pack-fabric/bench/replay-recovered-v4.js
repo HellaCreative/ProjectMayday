@@ -11,12 +11,19 @@ const {adventureCanaryRequest} = require(path.join(code, 'routing/lib/adventure/
 const {joinV4} = require(path.join(code, 'routing/lib/adventure/join-v4'));
 const {createBudget} = require(path.join(code, 'routing/lib/adventure/budget'));
 const cases = require('./routing-oracle-cases.json');
+const expectedRelease = process.env.RECOVERY_PACK_RELEASE || 'fabric-v4-20260908-02';
 const cache = new Map(), joins = new Map();
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 function loadRegion(id) {
   if (cache.has(id)) return cache.get(id);
   const dir = path.join(root,id), manifest = JSON.parse(fs.readFileSync(path.join(dir,'pack-manifest.v2.json')));
-  if (manifest.fabricReleaseId !== 'fabric-v4-20260908-02') throw Error('Unexpected pack identity '+id);
+  if (manifest.fabricReleaseId !== expectedRelease) throw Error('Unexpected pack identity '+id);
+  for (const key of ['graph','geometry','fuel','seams']) {
+    const file = manifest[key];
+    if (!file) throw Error('Missing manifest identity '+key);
+    const bytes = fs.readFileSync(path.join(dir,file.name));
+    if(bytes.length !== file.bytes || sha(bytes) !== file.sha256) throw Error('Pack checksum mismatch '+id+'/'+file.name);
+  }
   const graph = fs.readFileSync(path.join(dir,'graph.v4.bin')), geometry = fs.readFileSync(path.join(dir,'geometry.v1.bin')), fuel = fs.readFileSync(path.join(dir,'fuel.v1.json'));
   const data = {pack:decodeGraphV4(graph,geometry),geom:decodeGeometryV1(geometry),stations:JSON.parse(fuel).stations,identity:[{regionId:id,releaseId:manifest.fabricReleaseId,graphSha256:sha(graph),geometrySha256:sha(geometry),fuelSha256:sha(fuel)}]};
   cache.set(id,data); return data;

@@ -1,6 +1,6 @@
 # Baseline recovery — September 13, 2026
 
-Status: **production-derived DEV build 40 installed and owner-accepted as the app foundation; on-device routing migration remains unqualified**.
+Status: **DEV 40 remains the owner-accepted production app foundation. DEV 41 local computation checkpoint is unqualified: final serial replay has eight failed assertions. No new phone installation.**
  
 ## Superseding owner direction: production app foundation
 
@@ -88,6 +88,209 @@ preferences. Comparisons must explicitly identify the service revision; testing
 against whichever JavaScript happens to be checked out would repeat the earlier
 baseline mistake. No preference formula has been ported or changed yet.
 
+
+## Local computation work after foundation acceptance
+
+DEV 41 recovery checkpoint; **not installed or qualified**. Build 40 remains
+the accepted phone foundation and rollback. Its signed app is preserved at
+`.build/accepted-foundation-40/Dirt.app` with an identity record.
+
+### Execution/performance changes
+
+- DEV-only `DIRT_LOCAL_ROUTING` selects installed-pack computation regardless of
+  connectivity, including navigation recovery and replacement fuel lookup. This
+  does not authorize live fallback when a pack is missing. Release configuration
+  is unchanged. The local replacement lookup preserves the existing radius and
+  distance ordering. Custom ride preferences remain an explicit migration gap.
+- App-target compiler optimization is enabled for this DEV candidate. The first
+  optimized replay reduced short Clean from 39.609 to 6.974 seconds with the same
+  7,639.971 m distance and 11% dirt. Short Balanced retained 7,520.972 m/17% dirt
+  and completed refinement in 3.560 seconds instead of timing out at 19.850.
+  Deadline-limited routes can change when more of the existing search completes;
+  this is not proof of route parity.
+- Remaining geometry reads use unaligned-safe access. Pack bytes are unchanged.
+- A small evictable decoded-pack cache reuses graphs when switching regions;
+  file path, byte count and modification time identify entries. It is an
+  execution cache, not a coverage or border policy. The 128 MiB cost limit counts
+  serialized inputs, not actual resident memory. Real NS/NB reuse and invalidation
+  checks are included in the next simulator run.
+- Range-query station matches are cached by exact coordinate, effective access
+  policy, live pack object and geometry object. Legal V4 matching has no profile
+  distinction beyond unknown access; legacy packs retain profile in the key. Only matches are reused; range
+  distances are recomputed for every request. The cache retains at most 8,192
+  matches for one pack. The station loop checks cancellation/deadlines.
+- Route-response cache identity now reflects actual installed graph/geometry/seam
+  file paths and stamps, rather than the latest downloadable catalog version.
+  Replay had exposed a misleading September 9 catalog label on September 8 files.
+- Existing caller fuel deadlines and cancellation now propagate into detached
+  native searches. Incomplete work remains unknown rather than a proved fuel gap
+  or no-route result. No larger search budget or new fuel threshold was added.
+- Cyclic predecessor walks now detect the same existing rejection in constant
+  space instead of reaching the ten-million-step safety guard. Acyclic partial
+  edge overlap semantics remain unchanged; cycle/overlap checks accompany replay.
+- Test pack roots isolate fixture storage and disable catalog refresh. All four
+  accepted pack files are checked against manifest sizes and SHA-256 hashes.
+
+### Destination geometry correction
+
+The route-output audit found the existing `soft-stitch-end` connector reversed:
+it ran from the requested destination back to the road. The rural oracle exposed
+a 117.432 m join gap. The candidate reverses only this final connector so the
+route joins the road and ends at the requested destination. Selected roads,
+connector distance, snap limit and access classification remain unchanged. This
+bug is present in `71aa7fd` as well; the correction follows the explicit destination
+preservation requirement. Replay asserts connector continuity and actual arrival.
+
+### Explicit route-selection restoration
+
+The production-line source also raised the non-Clean settlement preference from
+`5` in `71aa7fd` to `20`. The candidate restores exactly `5`; Clean overrides
+remain unchanged. The corresponding regression assertion now names the recovered
+value. This is an explicit routing restoration, not a tuned replacement value.
+
+The production-line native implementation added `RoadCompass` road-distance
+progress penalties after `71aa7fd`. The candidate removes those penalties and
+restores that revision's geographic progress calculation. This is a behavior
+restoration, **not** a performance-only change. Current legal turn-state and
+customer-access handling remain; the whole router is not claimed byte-identical
+or proven equivalent to `71aa7fd`. No new Dirt/Balanced definition or fuel ranking
+has been introduced. Replay must establish the consequences before phone use.
+
+### Rejected work and current evidence
+
+- A proposed predecessor history index passed 20,000 isolated comparisons but
+  worsened actual route replay. It was fully reverted; the rejected patch is
+  preserved as `REJECTED-HISTORY-INDEX.patch`. It is not in the candidate.
+- Unoptimized native replay retained 17 route JSON outputs in
+  `/tmp/dirt-production-native-before-history-index`; it was interrupted and did
+  not pass. Cape Breton Balanced hit its time cap after 136.832 seconds.
+- Optimized pre-deadline replay retained 25 JSON outputs in
+  `/tmp/dirt-optimized-before-fuel-budget`; long fuel searches ignored the caller
+  deadline and the run was interrupted. It did not pass.
+- Full serial deadline replay: **321 tests, 40 suites, 11 failures**, 602.204
+  seconds. Ten oracle fuel workflows did not reach the requested endpoint; the
+  short itinerary also failed its complete-status assertion. Original destinations
+  and partial reached endpoints remain in the JSON evidence. Result bundle:
+  `/tmp/Dirt-Local-Deadline-Replay-41b.xcresult`; preserved route JSON:
+  `/tmp/dirt-deadline-before-progress-restoration`. This run precedes cycle detection,
+  decoded-pack caching and geographic progress restoration.
+- Service `139a173` on `fabric-v4-20260909-02` completed 36 standalone route/fuel
+  requests: 26 complete, 10 unknown/incomplete. This uses the harness's explicit
+  16-stop request shape, not the app's one-stop forward-window workflow, and is
+  not a passing parity comparison.
+- NS graph, geometry and fuel hashes match between September 8 accepted packs
+  and September 9 production packs; seams differ. NB graph and seams differ;
+  geometry/fuel match. Cross-province comparisons must use identical releases.
+- Geographic progress/cycle/cache run completed **324 tests in 41 suites**, with
+  12 issues: the same 11 replay failures plus an overlap-test assertion. Pack
+  reuse/invalidation passed. Result: `/tmp/Dirt-Local-Recovered-Progress-41b.xcresult`.
+- Station-match cache/endpoint run completed **325 tests in 41 suites**, with
+  **8 issues**, 401.936 seconds. Eleven of 18 oracle fuel workflows reached the
+  destination. Cross-province (3 profiles), multi-stop (3), and Canso Dirt remained
+  incomplete; the short builder itinerary retained an unproved destination-fuel
+  status. Clean Antigonish now completed 221,711.560 m with one pump, with hops
+  206,665.172 m and 15,046.388 m. Canso Clean and Balanced also completed with one
+  stop each. Request deadline exits were approximately 15 seconds rather than
+  23–33 seconds. All overlap, cancellation, pack-reuse and repeated-reachability
+  tests passed. The overlap test now evaluates its predicate before passing the
+  Boolean to the assertion; no overlap threshold changed.
+  Result: `/tmp/Dirt-Local-Station-Cache-41.xcresult`. Raw JSON is preserved under
+  `.build/recovery-evidence/station-cache-41/`. This run precedes restoration of
+  the settlement multiplier from 20 to the recorded value 5.
+- Final combined checkpoint run (including settlement value 5): **325 tests in
+  41 suites, eight failed assertions across two tests**, 403.588 seconds. Nineteen
+  direct road requests completed (six short/rural profile requests, twelve
+  September 13 NS requests, one NS/NB Dirt request). Eleven of eighteen oracle
+  fuel workflows completed; the same seven workflows and the destination-fuel
+  assertion remain unqualified. Result:
+  `/tmp/Dirt-Local-Recovery-Checkpoint-41.xcresult`. Raw outputs:
+  `.build/recovery-evidence/checkpoint-41/`.
+- Build 41 retains the production-foundation DEV catalog `fabric-v4-20260909-02`;
+  these historical replays explicitly use accepted `fabric-v4-20260908-02` files.
+  They do not qualify the candidate's catalog release. A complete matched-release
+  replay and resolution of the NS/NB data differences remain required before
+  installation. No installed pack or published catalog was replaced.
+- No new phone installation or production modification occurred. Build 40 remains
+  the accepted app foundation and signed rollback artifact.
+
+### Shape versus surface-reporting discrepancy
+
+The pre-station-cache native comparison and service `139a173` standalone route
+outputs use identical oracle coordinates, seed and profile flags. NS road,
+geometry and fuel bytes match between the two releases; seam bytes do not.
+These observations are specific to the intra-NS requests, not proof of complete
+pack/release equivalence or fuel-workflow parity:
+
+| Case/profile | Native metres / dirt | Service metres / dirt | Road edge order |
+| --- | ---: | ---: | --- |
+| Short Clean | 7,640 / 11% | 7,561 / 6% | Identical 70 road edges |
+| Short Balanced | 7,521 / 17% | 7,445 / 6% | Different (63 shared edges) |
+| Short Dirt | 7,521 / 17% | 7,445 / 6% | Different (63 shared edges) |
+| Rural Clean | 57,179 / 0% | 56,903 / 0% | Different (82 shared edges) |
+| Rural Balanced | 98,179 / 49% | 95,231 / 71% | Different (104 shared edges) |
+| Rural Dirt | 95,495 / 71% | 95,231 / 71% | Identical 135 road edges |
+
+The short Clean percentage discrepancy is concrete: service segments contain
+439 m of known unpaved surface and about 414 m of unknown surface. Native
+`SurfaceFamily.swift` explicitly includes unknown surface in displayed Dirt%;
+service `adventure/surface.js` excludes it. The road sequence is identical in
+this case, so this discrepancy is not evidence to retune search costs. Native
+endpoint connectors also contribute distance that the service's road-only
+geometry omits. Neither surface rule has been silently redefined in this work.
+
+### Avoidance audit scope
+
+`RECOVERY-STATION-CACHE-AVOIDANCE-AUDIT.json` measures the saved geometry against
+all 3 city and 57 town rectangles embedded in the accepted NS pack. The only
+city overlaps in those completed outputs occur on the Canso Clean/Balanced
+arrivals into Sydney, where the requested destination is inside the city box.
+Town overlaps are retained as measurements; the contract uses finite preferences,
+so overlap alone does not establish a violation or prove an alternative exists.
+The accepted NB pack has neither embedded list. Native static fallback data is
+separate and is not covered by this rectangle-only audit; NB avoidance remains
+unqualified. No boxes or location-specific exceptions were added.
+
+### Final geometry and device-build checks
+
+`RECOVERY-CHECKPOINT-GEOMETRY-AUDIT.json` records 30 completed native outputs
+and the separately identified service comparison. Final native geometry joins
+are contiguous under the audit's coordinate-segment method (maximum join gap
+0.0 m). The earlier reversed endpoint connector is corrected.
+
+**Completion is not quality acceptance.** Exact undirected coordinate-segment
+repeats remain: Antigonish Clean fuel itinerary 2,396.33 m; long NS/NB Dirt
+1,734.13 m; Canso Balanced 84.13 m; Canso Clean 53.44 m. This is a lower bound
+and does not detect nearby or differently split duplicate roads. Fuel approaches
+and border joins need segment-level qualification; native backtrack summaries
+alone did not expose these physical overlaps. No acceptable repeat threshold
+has been invented, and no passing route-quality claim is made.
+
+The signed generic-iPhone DEV 41 build succeeded. Development environment checks,
+StoreKit reference checks, and strict recursive code-signing verification passed;
+Info.plist confirms build 41. Artifact:
+`.build/production-foundation-device/Build/Products/Debug-iphoneos/Dirt.app`.
+It has **not** been installed. Production/TestFlight and White's accepted build
+40 remain unchanged. The signed rollback app is separately preserved.
+
+### Owner contract clarification pending
+
+The owner has been asked which existing surface-reporting rule to preserve:
+the frozen/native unknown-inclusive calculation or current production's known-dirt
+calculation. The short Clean case supplies a concrete same-road comparison
+(11% versus 6%). This is not a proposed new profile definition; the sources
+already disagree. No change to either definition has been made pending the
+answer. Fuel completion, candidate pack parity and custom preferences remain
+separate technical gates.
+
+### Remaining release gates
+
+Custom ride preferences/Loop cannot be silently discarded: the current native
+source explicitly rejects preference-bearing requests. Accepted service behavior
+must be migrated before this is a functionally equivalent product. Fuel windows,
+full oracle route shapes, dirt contribution, repeated roads, forward pump progress,
+city/town avoidance, access and border seams still need passing comparisons on
+matched pack identities. A no-stop route fitting the tank is not by itself proof
+that the intended Dirt route was preserved. No candidate is ready for installation.
 
 ## Historical investigation (superseded as an app foundation)
 

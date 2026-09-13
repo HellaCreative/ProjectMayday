@@ -331,6 +331,7 @@ nonisolated struct OnDeviceRouter {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
     ) -> Swift.Result<Result, Failure> {
+        if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
         let pavedWall = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -509,6 +510,7 @@ nonisolated struct OnDeviceRouter {
         }
         let policyUnknown = allowUnknown && profile != .cleanest
         while let cur = heap.pop() {
+            if RoutingWorkContext.stopReason != nil { return nil }
             if cur.cost != dist[cur.node] { continue }
             if cur.cost > maxMeters { break }
             let arcStart = Int(pack.nodeOffsets[cur.node])
@@ -549,10 +551,11 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool
     ) -> Double? {
         var best = Double.infinity
-        let snaps = nearestEdgeSnaps(
-            to: point, allowUnknown: allowUnknown, profile: profile,
-            maxMeters: Self.preferredMatchMeters
-        )
+        let snaps = Self.rangeSnapCache.snaps(pack: pack, point: point,
+            profile: profile, allowUnknown: allowUnknown) {
+            nearestEdgeSnaps(to: point, allowUnknown: allowUnknown, profile: profile,
+                maxMeters: Self.preferredMatchMeters)
+        }
         for snap in snaps {
             guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
             let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
@@ -585,6 +588,7 @@ nonisolated struct OnDeviceRouter {
         ) else { return [:] }
         var out: [String: Double] = [:]
         for pump in pumps {
+            if RoutingWorkContext.stopReason != nil { return [:] }
             let ll = CLLocationCoordinate2D(latitude: pump.latitude, longitude: pump.longitude)
             if let m = graphMeters(to: ll, dist: dist, profile: profile, allowUnknown: allowUnknown),
                m <= maxMeters {
@@ -1647,52 +1651,9 @@ nonisolated struct OnDeviceRouter {
             ctx.customerEndEdges = pack.customerEndpointEdges(edgeIndex: endEi,
                 seeds: (virtAdjRev[endVirt] ?? []).filter { $0.to < n }.map { ($0.to, virt[$0.id].meters) }, reverse: true)
         }
-        if pack.version >= 4, profile != .cleanest, ctx.costMode != .distance {
-            let compass = RoadCompass.build(stateCount: total, destination: endVirt,
-                deadline: Date().addingTimeInterval(ctx.timeCapSeconds ?? HopSearchPolicy.pass2TimeCapSeconds)) { state, visit in
-                let node = turnState.graphNode(of: state)
-                if node < n {
-                    for arc in Int(pack.nodeOffsets[node])..<Int(pack.nodeOffsets[node + 1]) {
-                        let ei = Int(pack.edgeUndirectedIndex[arc]), target = Int(pack.edgeTargets[arc])
-                        if avoidEdgeIds.contains(pack.edgeId(ei)) { continue }
-                        if !pack.v4AccessAllowed(ei: ei, from: node, to: target,
-                            startEi: startEi, endEi: endEi, allowUnknown: policyUnknown,
-                            startEndpointKind: startEndpointKind, endEndpointKind: endEndpointKind,
-                            customerStartEdges: ctx.customerStartEdges, customerEndEdges: ctx.customerEndEdges) { continue }
-                        let next = turnState.transition(state: state, outgoingEdge: ei, toNode: target)
-                        if next >= 0 { visit(.init(to: next, edge: ei, meters: Double(pack.edgeMeters[ei]))) }
-                    }
-                }
-                for item in virtAdj[node] ?? [] {
-                    let v = virt[item.id]
-                    if v.ei < 0 || avoidEdgeIds.contains(pack.edgeId(v.ei)) { continue }
-                    if item.to == endVirt, !turnState.allowsExit(state: state, outgoingEdge: v.ei) { continue }
-                    let a = Int(pack.edgeFrom?[v.ei] ?? -1), b = Int(pack.edgeTo?[v.ei] ?? -1)
-                    let accessFrom: Int, accessTo: Int
-                    if node == startVirt, item.to < n {
-                        accessTo = item.to; accessFrom = item.to == a ? b : a
-                    } else if node < n, item.to == endVirt {
-                        accessFrom = node; accessTo = node == a ? b : a
-                    } else {
-                        let forward = startSnap.distanceAlongM <= endSnap.distanceAlongM
-                        accessFrom = forward ? a : b; accessTo = forward ? b : a
-                    }
-                    if !pack.v4AccessAllowed(ei: v.ei, from: accessFrom, to: accessTo,
-                        startEi: startEi, endEi: endEi, allowUnknown: policyUnknown,
-                        startEndpointKind: startEndpointKind, endEndpointKind: endEndpointKind,
-                        customerStartEdges: ctx.customerStartEdges, customerEndEdges: ctx.customerEndEdges) { continue }
-                    let next = item.to < n ? turnState.stateForArrival(node: item.to, incomingEdge: v.ei) : item.to
-                    visit(.init(to: next, edge: v.ei, meters: v.meters))
-                }
-            }
-            guard compass.status == "complete" else { return .failure(.searchLimit(compass.status)) }
-            ctx.roadRemaining = compass.remaining
-        }
+        // Restore the accepted 71aa7fd geographic-progress calculation.
+        // Legal turn states still resolve to their physical graph coordinates.
         func awayExtra(fromNode: Int, toNode: Int) -> Double {
-            if let remaining = ctx.roadRemaining {
-                return OnDeviceProfileCosts.approachAwayExtra(profile: profile,
-                    dFromMeters: remaining[fromNode], dToMeters: remaining[toNode], abMeters: remaining[startVirt])
-            }
             func ll(_ node: Int) -> CLLocationCoordinate2D? {
                 if node == startVirt { return startSnap.projected }
                 if node == endVirt { return endSnap.projected }
@@ -1810,6 +1771,7 @@ nonisolated struct OnDeviceRouter {
             : nil
 
         while let cur = heap.pop() {
+            if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
             if cur.cost != dist[cur.node] { continue }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
@@ -2160,7 +2122,7 @@ nonisolated struct OnDeviceRouter {
         }
 
         guard dist[endVirt].isFinite else {
-            return .failure(abort == "completed" ? .noPath : .searchLimit(abort))
+            return .failure(RoutingWorkContext.stopReason.map(Failure.searchLimit) ?? (abort == "completed" ? .noPath : .searchLimit(abort)))
         }
 
         var legs: [Leg] = []
@@ -2295,11 +2257,6 @@ nonisolated struct OnDeviceRouter {
         let abMeters = meters(startSnap.projected, endLL)
         let startOnMajorHighway = snapIsMajorHighwayPin(startSnap, profile: profile)
         let endOnMajorHighway = snapIsMajorHighwayPin(endSnap, profile: profile)
-        func roadAway(_ state: Int, _ target: Int) -> Double {
-            guard let remaining = ctx.roadRemaining else { return 0 }
-            return OnDeviceProfileCosts.approachAwayExtra(profile: profile,
-                dFromMeters: remaining[state], dToMeters: remaining[target], abMeters: remaining[startVirt])
-        }
         let B = HopSearchPolicy.balancedBuckets
         let turnState = pack.makeV4TurnStateSpace(startNode: startVirt, endNode: endVirt)
         let totalNodes = turnState.stateCount
@@ -2344,6 +2301,7 @@ nonisolated struct OnDeviceRouter {
             : nil
 
         while let cur = heap.pop() {
+            if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
             if let deadline, (pops & 255) == 0, CFAbsoluteTimeGetCurrent() > deadline {
@@ -2595,7 +2553,7 @@ nonisolated struct OnDeviceRouter {
                     let virtualStep = v.meters * settlementMult * urbanMult
                         * (shortDirtPenalized ? HopSearchPolicy.dirtRidePavedPerKm : 1)
                     let newScore = cur.cost + backtrackPenalized(
-                        virtualStep + roadAway(state, toState),
+                        virtualStep,
                         edgeID: virtualEdgeID,
                         ctx: ctx
                     )
@@ -2644,7 +2602,7 @@ nonisolated struct OnDeviceRouter {
         }?.lab
         guard let bestLab,
               dist[bestLab].isFinite else {
-            return .failure(abort == "completed" ? .noPath : .searchLimit(abort))
+            return .failure(RoutingWorkContext.stopReason.map(Failure.searchLimit) ?? (abort == "completed" ? .noPath : .searchLimit(abort)))
         }
 
         var legs: [Leg] = []
@@ -2804,6 +2762,7 @@ nonisolated struct OnDeviceRouter {
         dist[origin] = 0
         heap.push(node: origin, cost: 0)
         while let cur = heap.pop() {
+            if RoutingWorkContext.stopReason != nil { return dist }
             if cur.cost != dist[cur.node] { continue }
             if cur.cost > capMeters { continue }
             if cur.node < n {
@@ -3193,6 +3152,7 @@ nonisolated struct OnDeviceRouter {
         }
 
         while let cur = heap.pop() {
+            if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
             if cur.cost != dist[cur.node] { continue }
             if cur.node == end { break }
 
@@ -3342,6 +3302,7 @@ nonisolated struct OnDeviceRouter {
             }
         }
 
+        if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
         guard dist[end].isFinite else { return .failure(.noPath) }
 
         var legs: [Leg] = []
@@ -3692,7 +3653,7 @@ nonisolated struct OnDeviceRouter {
         guard d <= Self.preferredMatchMeters else { return nil }
 
         return Leg(
-            coordinates: [tap, snap.projected],
+            coordinates: idSuffix == "end" ? [snap.projected, tap] : [tap, snap.projected],
             distanceMeters: d,
             surfaceName: "access",
             edgeId: "soft-stitch-\(idSuffix)"
@@ -3859,6 +3820,50 @@ nonisolated struct OnDeviceRouter {
         var accessClass: String? = nil
         var accessCode: Int = 0
         var component: Int = -1
+    }
+
+    /// Range queries repeat the same station matches. Reuse only the matching
+    /// result; reachability distances still come from this request's search.
+    private static let rangeSnapCache = RangeSnapCache()
+    private nonisolated final class RangeSnapCache: @unchecked Sendable {
+        private struct Key: Hashable {
+            let latitude: Double
+            let longitude: Double
+            let profile: String
+            let allowUnknown: Bool
+        }
+        private let lock = NSLock()
+        private var owner: GraphV2Pack?
+        private var geometry: GeometryV1Pack?
+        private var values: [Key: [EdgeSnap]] = [:]
+
+        func snaps(pack: GraphV2Pack, point: CLLocationCoordinate2D,
+                   profile: RouteProfile, allowUnknown: Bool,
+                   make: () -> [EdgeSnap]) -> [EdgeSnap] {
+            // For legal V4 range matching the profile affects only unknown
+            // access. These calls have no heading/intent preference. Share the
+            // identical match across profiles, never across access policies.
+            let legalV4 = pack.version >= 4 && pack.legalTopology
+            let key = Key(latitude: point.latitude, longitude: point.longitude,
+                profile: legalV4 ? "legal-v4" : profile.rawValue,
+                allowUnknown: allowUnknown && profile != .cleanest)
+            lock.lock()
+            if owner === pack, geometry === pack.geometry, let cached = values[key] {
+                lock.unlock()
+                return cached
+            }
+            lock.unlock()
+            let result = make()
+            lock.lock()
+            if owner !== pack || geometry !== pack.geometry || values.count >= 8192 {
+                values.removeAll(keepingCapacity: true)
+                owner = pack
+                geometry = pack.geometry
+            }
+            values[key] = result
+            lock.unlock()
+            return result
+        }
     }
 
     /// Snap a seam seed onto pack fabric (cross-pack hops). Wider than pin snap.

@@ -12,6 +12,14 @@ enum DirtBackendEnvironment: String, Sendable {
 }
 
 enum AppConfig {
+    /// DEV qualification switch: route/fuel computation stays local even online.
+    /// Production and the owner-accepted foundation keep their existing policy.
+    #if DIRT_DEVELOPMENT && DIRT_LOCAL_ROUTING
+    nonisolated static let computesRoutesOnDevice = true
+    #else
+    nonisolated static let computesRoutesOnDevice = false
+    #endif
+
     /// Must match the deployed route and fuel-chain service. A missing or stale
     /// value is rejected so device evidence cannot silently mix releases.
     nonisolated static let routingServiceContract = "dirt-routing.r0.v1"

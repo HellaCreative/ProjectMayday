@@ -1,0 +1,1662 @@
+{
+  "method": "Haversine geometry lengths; undirected identical coordinate-segment repeats rounded to six decimals. This is a repeat lower bound, not proof against nearby or differently split repeated roads. Join gaps are reported without inventing an acceptance cutoff.",
+  "records": [
+    {
+      "file": "oracle-canso-causeway-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 290384.46,
+      "exactSegmentRepeatMeters": 84.13,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 2,
+      "reachedEndpoint": [
+        -60.207399862401765,
+        46.10470728243489
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -60.2074,
+        46.10471
+      ],
+      "failure": null,
+      "profile": "balanced",
+      "distanceMeters": 290379.76421366725,
+      "fuelStopIds": [
+        "osm:a1095285210"
+      ],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        205425.47969729712,
+        84954.28451637014
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 31.02150452499375
+    },
+    {
+      "file": "oracle-canso-causeway-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 249260.32,
+      "exactSegmentRepeatMeters": 53.44,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 2,
+      "reachedEndpoint": [
+        -60.207399862401765,
+        46.10470728243489
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -60.2074,
+        46.10471
+      ],
+      "failure": null,
+      "profile": "cleanest",
+      "distanceMeters": 249264.9846011132,
+      "fuelStopIds": [
+        "osm:w547667530"
+      ],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        206373.6679855878,
+        42891.3166155254
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 1.6558576674203773
+    },
+    {
+      "file": "oracle-canso-causeway-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 0,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.34412,
+        45.667087
+      ],
+      "reachedDestination": false,
+      "requestedDestination": [
+        -60.2074,
+        46.10471
+      ],
+      "failure": "Fuel planning reached its time budget. A fuel gap has not been proved.",
+      "profile": "dirt",
+      "distanceMeters": 0,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [],
+      "overRangeHops": [],
+      "dirtPercent": 0.0
+    },
+    {
+      "file": "oracle-cross-province-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 0,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.34035,
+        44.764919
+      ],
+      "reachedDestination": false,
+      "requestedDestination": [
+        -64.7782,
+        46.0878
+      ],
+      "failure": "Fuel planning reached its time budget. A fuel gap has not been proved.",
+      "profile": "balanced",
+      "distanceMeters": 0,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [],
+      "overRangeHops": [],
+      "dirtPercent": 0.0
+    },
+    {
+      "file": "oracle-cross-province-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 0,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.34035,
+        44.764919
+      ],
+      "reachedDestination": false,
+      "requestedDestination": [
+        -64.7782,
+        46.0878
+      ],
+      "failure": "Fuel planning reached its time budget. A fuel gap has not been proved.",
+      "profile": "cleanest",
+      "distanceMeters": 0,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [],
+      "overRangeHops": [],
+      "dirtPercent": 0.0
+    },
+    {
+      "file": "oracle-cross-province-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 0,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.34035,
+        44.764919
+      ],
+      "reachedDestination": false,
+      "requestedDestination": [
+        -64.7782,
+        46.0878
+      ],
+      "failure": "Fuel planning reached its time budget. A fuel gap has not been proved.",
+      "profile": "dirt",
+      "distanceMeters": 0,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [],
+      "overRangeHops": [],
+      "dirtPercent": 0.0
+    },
+    {
+      "file": "oracle-multi-fuel-stop-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 0,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.1174,
+        43.8375
+      ],
+      "reachedDestination": false,
+      "requestedDestination": [
+        -60.1942,
+        46.1368
+      ],
+      "failure": "Fuel planning reached its time budget. A fuel gap has not been proved.",
+      "profile": "balanced",
+      "distanceMeters": 0,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [],
+      "overRangeHops": [],
+      "dirtPercent": 0.0
+    },
+    {
+      "file": "oracle-multi-fuel-stop-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 0,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.1174,
+        43.8375
+      ],
+      "reachedDestination": false,
+      "requestedDestination": [
+        -60.1942,
+        46.1368
+      ],
+      "failure": "Fuel planning reached its time budget. A fuel gap has not been proved.",
+      "profile": "cleanest",
+      "distanceMeters": 0,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [],
+      "overRangeHops": [],
+      "dirtPercent": 0.0
+    },
+    {
+      "file": "oracle-multi-fuel-stop-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 0,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.1174,
+        43.8375
+      ],
+      "reachedDestination": false,
+      "requestedDestination": [
+        -60.1942,
+        46.1368
+      ],
+      "failure": "Fuel planning reached its time budget. A fuel gap has not been proved.",
+      "profile": "dirt",
+      "distanceMeters": 0,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [],
+      "overRangeHops": [],
+      "dirtPercent": 0.0
+    },
+    {
+      "file": "oracle-one-fuel-stop-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 206758.2,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -61.93025,
+        45.60272
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -61.93025,
+        45.60272
+      ],
+      "failure": null,
+      "profile": "balanced",
+      "distanceMeters": 206761.97849825933,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        206761.97849825933
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 25.0
+    },
+    {
+      "file": "oracle-one-fuel-stop-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 221707.6,
+      "exactSegmentRepeatMeters": 2396.33,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 16,
+      "reachedEndpoint": [
+        -61.93025,
+        45.60272
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -61.93025,
+        45.60272
+      ],
+      "failure": null,
+      "profile": "cleanest",
+      "distanceMeters": 221711.55955809262,
+      "fuelStopIds": [
+        "osm:n5292110090"
+      ],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        206665.17173878464,
+        15046.387819307974
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 6.678646970383406
+    },
+    {
+      "file": "oracle-one-fuel-stop-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 206769.14,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -61.93025,
+        45.60272
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -61.93025,
+        45.60272
+      ],
+      "failure": null,
+      "profile": "dirt",
+      "distanceMeters": 206770.97849825933,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        206770.97849825933
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 25.0
+    },
+    {
+      "file": "oracle-rural-pair-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 98179.73,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.621027,
+        45.261359
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ],
+      "failure": null,
+      "profile": "balanced",
+      "distanceMeters": 98179.31990742336,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        98179.31990742336
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 49.0
+    },
+    {
+      "file": "oracle-rural-pair-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 57177.55,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.621027,
+        45.261359
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ],
+      "failure": null,
+      "profile": "cleanest",
+      "distanceMeters": 57179.319907423356,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        57179.319907423356
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 0.0
+    },
+    {
+      "file": "oracle-rural-pair-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 95496.84,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.621027,
+        45.261359
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ],
+      "failure": null,
+      "profile": "dirt",
+      "distanceMeters": 95494.71231473693,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        95494.71231473693
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 71.0
+    },
+    {
+      "file": "oracle-short-intra-metro-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 7520.06,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ],
+      "failure": null,
+      "profile": "balanced",
+      "distanceMeters": 7520.97199984802,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        7520.97199984802
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 17.0
+    },
+    {
+      "file": "oracle-short-intra-metro-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 7640.09,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ],
+      "failure": null,
+      "profile": "cleanest",
+      "distanceMeters": 7639.971040269682,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        7639.971040269682
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 11.0
+    },
+    {
+      "file": "oracle-short-intra-metro-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 7520.06,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ],
+      "reachedDestination": true,
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ],
+      "failure": null,
+      "profile": "dirt",
+      "distanceMeters": 7520.971040269682,
+      "fuelStopIds": [],
+      "duplicateFuelStops": 0,
+      "hopMeters": [
+        7520.971040269682
+      ],
+      "overRangeHops": [],
+      "dirtPercent": 17.0
+    },
+    {
+      "file": "road-20260913-43.807616-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 587958.24,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.01610710890654,
+        43.807616155835106
+      ],
+      "distanceMeters": 587912.9679369581,
+      "dirtPercent": 37,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -66.016108,
+        43.807616
+      ]
+    },
+    {
+      "file": "road-20260913-43.807616-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 382175.08,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.01610710890654,
+        43.807616155835106
+      ],
+      "distanceMeters": 382151.96793695807,
+      "dirtPercent": 1,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -66.016108,
+        43.807616
+      ]
+    },
+    {
+      "file": "road-20260913-43.807616-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 519124.15,
+      "exactSegmentRepeatMeters": 0.0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.01610710890654,
+        43.807616155835106
+      ],
+      "distanceMeters": 519090.96793695807,
+      "dirtPercent": 57,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "dirt",
+      "requestedDestination": [
+        -66.016108,
+        43.807616
+      ]
+    },
+    {
+      "file": "road-20260913-43.849315-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 584657.65,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.057385,
+        43.849315
+      ],
+      "distanceMeters": 584616.7057140606,
+      "dirtPercent": 37,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -66.057385,
+        43.849315
+      ]
+    },
+    {
+      "file": "road-20260913-43.849315-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 378902.99,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.057385,
+        43.849315
+      ],
+      "distanceMeters": 378886.7057140605,
+      "dirtPercent": 1,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -66.057385,
+        43.849315
+      ]
+    },
+    {
+      "file": "road-20260913-43.849315-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 515815.83,
+      "exactSegmentRepeatMeters": 0.0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.057385,
+        43.849315
+      ],
+      "distanceMeters": 515785.7057140605,
+      "dirtPercent": 57,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "dirt",
+      "requestedDestination": [
+        -66.057385,
+        43.849315
+      ]
+    },
+    {
+      "file": "road-20260913-45.091108-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 93490.74,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.057616,
+        45.091108
+      ],
+      "distanceMeters": 93483.11239295076,
+      "dirtPercent": 47,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -63.057616,
+        45.091108
+      ]
+    },
+    {
+      "file": "road-20260913-45.091108-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 68101.57,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.057616,
+        45.091108
+      ],
+      "distanceMeters": 68095.11239295076,
+      "dirtPercent": 0,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -63.057616,
+        45.091108
+      ]
+    },
+    {
+      "file": "road-20260913-45.091108-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 136884.97,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.057616,
+        45.091108
+      ],
+      "distanceMeters": 136873.11239295077,
+      "dirtPercent": 55,
+      "repeatedMeters": 0,
+      "timedOut": true,
+      "pass2": "popCap",
+      "profile": "dirt",
+      "requestedDestination": [
+        -63.057616,
+        45.091108
+      ]
+    },
+    {
+      "file": "road-20260913-46.845234-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 551103.03,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -60.408302,
+        46.845234
+      ],
+      "distanceMeters": 551080.9595453601,
+      "dirtPercent": 49,
+      "repeatedMeters": 0,
+      "timedOut": true,
+      "pass2": "timeCap",
+      "profile": "balanced",
+      "requestedDestination": [
+        -60.408302,
+        46.845234
+      ]
+    },
+    {
+      "file": "road-20260913-46.845234-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 465037.69,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -60.408302,
+        46.845234
+      ],
+      "distanceMeters": 465038.5567201733,
+      "dirtPercent": 0,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -60.408302,
+        46.845234
+      ]
+    },
+    {
+      "file": "road-20260913-46.845234-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 590340.99,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -60.408302,
+        46.845234
+      ],
+      "distanceMeters": 590314.5567201731,
+      "dirtPercent": 65,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "dirt",
+      "requestedDestination": [
+        -60.408302,
+        46.845234
+      ]
+    },
+    {
+      "file": "road-20260913-ns-nb-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 864964.04,
+      "exactSegmentRepeatMeters": 1734.13,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -66.074515,
+        47.903181
+      ],
+      "distanceMeters": 864947.6355426157,
+      "dirtPercent": 68,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "",
+      "profile": "dirt",
+      "requestedDestination": [
+        -66.074515,
+        47.903181
+      ]
+    },
+    {
+      "file": "road-3511091208-44.755736-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 7520.06,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ],
+      "distanceMeters": 7520.97199984802,
+      "dirtPercent": 17,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ]
+    },
+    {
+      "file": "road-3511091208-44.755736-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 7640.09,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ],
+      "distanceMeters": 7639.971040269682,
+      "dirtPercent": 11,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ]
+    },
+    {
+      "file": "road-3511091208-44.755736-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 7520.06,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ],
+      "distanceMeters": 7520.971040269682,
+      "dirtPercent": 17,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "dirt",
+      "requestedDestination": [
+        -63.301255,
+        44.755736
+      ]
+    },
+    {
+      "file": "road-3511091208-45.261359-balanced.json",
+      "runtime": "swift",
+      "geometryMeters": 98179.73,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.621027,
+        45.261359
+      ],
+      "distanceMeters": 98179.31990742336,
+      "dirtPercent": 49,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "balanced",
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ]
+    },
+    {
+      "file": "road-3511091208-45.261359-cleanest.json",
+      "runtime": "swift",
+      "geometryMeters": 57177.55,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.621027,
+        45.261359
+      ],
+      "distanceMeters": 57179.319907423356,
+      "dirtPercent": 0,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "cleanest",
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ]
+    },
+    {
+      "file": "road-3511091208-45.261359-dirt.json",
+      "runtime": "swift",
+      "geometryMeters": 95496.84,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.621027,
+        45.261359
+      ],
+      "distanceMeters": 95494.71231473693,
+      "dirtPercent": 71,
+      "repeatedMeters": 0,
+      "timedOut": false,
+      "pass2": "completed",
+      "profile": "dirt",
+      "requestedDestination": [
+        -62.621027,
+        45.261359
+      ]
+    },
+    {
+      "file": "canso-causeway-balanced-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "balanced",
+        "locations": [
+          {
+            "lat": 45.667087,
+            "lon": -62.34412
+          },
+          {
+            "lat": 46.10471,
+            "lon": -60.2074
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 346841.311945124,
+      "dirtPercent": 73,
+      "geometryMeters": 346864.81,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 5,
+      "reachedEndpoint": [
+        -60.207399862401765,
+        46.10470728243489
+      ]
+    },
+    {
+      "file": "canso-causeway-cleanest-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "cleanest",
+        "locations": [
+          {
+            "lat": 45.667087,
+            "lon": -62.34412
+          },
+          {
+            "lat": 46.10471,
+            "lon": -60.2074
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": true,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 515330.41917436797,
+      "dirtPercent": 0,
+      "geometryMeters": 515355.84,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 5,
+      "reachedEndpoint": [
+        -60.207399862401765,
+        46.10470728243489
+      ]
+    },
+    {
+      "file": "canso-causeway-dirt-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "dirt",
+        "locations": [
+          {
+            "lat": 45.667087,
+            "lon": -62.34412
+          },
+          {
+            "lat": 46.10471,
+            "lon": -60.2074
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 346841.311945124,
+      "dirtPercent": 73,
+      "geometryMeters": 346864.81,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 5,
+      "reachedEndpoint": [
+        -60.207399862401765,
+        46.10470728243489
+      ]
+    },
+    {
+      "file": "cross-province-balanced-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "balanced",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 46.0878,
+            "lon": -64.7782
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 450554.5011037283,
+      "dirtPercent": 46,
+      "geometryMeters": 450570.33,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 6,
+      "reachedEndpoint": [
+        -64.77819610980136,
+        46.087803133771125
+      ]
+    },
+    {
+      "file": "cross-province-cleanest-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "cleanest",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 46.0878,
+            "lon": -64.7782
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": true,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 472068.5011037283,
+      "dirtPercent": 0,
+      "geometryMeters": 472102.15,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 7,
+      "reachedEndpoint": [
+        -64.77819610980136,
+        46.087803133771125
+      ]
+    },
+    {
+      "file": "cross-province-dirt-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "dirt",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 46.0878,
+            "lon": -64.7782
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 450554.5011037283,
+      "dirtPercent": 46,
+      "geometryMeters": 450570.33,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 6,
+      "reachedEndpoint": [
+        -64.77819610980136,
+        46.087803133771125
+      ]
+    },
+    {
+      "file": "multi-fuel-stop-balanced-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "balanced",
+        "locations": [
+          {
+            "lat": 43.8375,
+            "lon": -66.1174
+          },
+          {
+            "lat": 46.1368,
+            "lon": -60.1942
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 957845.0699713406,
+      "dirtPercent": 71,
+      "geometryMeters": 957921.16,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 13,
+      "reachedEndpoint": [
+        -60.194268272946005,
+        46.13677949697907
+      ]
+    },
+    {
+      "file": "multi-fuel-stop-cleanest-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "cleanest",
+        "locations": [
+          {
+            "lat": 43.8375,
+            "lon": -66.1174
+          },
+          {
+            "lat": 46.1368,
+            "lon": -60.1942
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": true,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 1016150.0699713406,
+      "dirtPercent": 0,
+      "geometryMeters": 1016208.56,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 21,
+      "reachedEndpoint": [
+        -60.194268272946005,
+        46.13677949697907
+      ]
+    },
+    {
+      "file": "multi-fuel-stop-dirt-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "dirt",
+        "locations": [
+          {
+            "lat": 43.8375,
+            "lon": -66.1174
+          },
+          {
+            "lat": 46.1368,
+            "lon": -60.1942
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 1013259.0699713406,
+      "dirtPercent": 73,
+      "geometryMeters": 1013347.35,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 15,
+      "reachedEndpoint": [
+        -60.194268272946005,
+        46.13677949697907
+      ]
+    },
+    {
+      "file": "one-fuel-stop-balanced-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "balanced",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 45.60272,
+            "lon": -61.93025
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 283187.59550655,
+      "dirtPercent": 73,
+      "geometryMeters": 283201.08,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 3,
+      "reachedEndpoint": [
+        -61.93025023377299,
+        45.602720714773525
+      ]
+    },
+    {
+      "file": "one-fuel-stop-cleanest-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "cleanest",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 45.60272,
+            "lon": -61.93025
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": true,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 242308.59550655,
+      "dirtPercent": 0,
+      "geometryMeters": 242325.91,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 8,
+      "reachedEndpoint": [
+        -61.93025023377299,
+        45.602720714773525
+      ]
+    },
+    {
+      "file": "one-fuel-stop-dirt-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "dirt",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 45.60272,
+            "lon": -61.93025
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 309502.59550655,
+      "dirtPercent": 76,
+      "geometryMeters": 309516.79,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 2,
+      "reachedEndpoint": [
+        -61.93025023377299,
+        45.602720714773525
+      ]
+    },
+    {
+      "file": "rural-pair-balanced-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "balanced",
+        "locations": [
+          {
+            "lat": 44.911062,
+            "lon": -62.386656
+          },
+          {
+            "lat": 45.261359,
+            "lon": -62.621027
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 95230.52648462827,
+      "dirtPercent": 71,
+      "geometryMeters": 95233.88,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ]
+    },
+    {
+      "file": "rural-pair-cleanest-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "cleanest",
+        "locations": [
+          {
+            "lat": 44.911062,
+            "lon": -62.386656
+          },
+          {
+            "lat": 45.261359,
+            "lon": -62.621027
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": true,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 56902.58285712585,
+      "dirtPercent": 0,
+      "geometryMeters": 56903.04,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ]
+    },
+    {
+      "file": "rural-pair-dirt-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "dirt",
+        "locations": [
+          {
+            "lat": 44.911062,
+            "lon": -62.386656
+          },
+          {
+            "lat": 45.261359,
+            "lon": -62.621027
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 95230.52648462827,
+      "dirtPercent": 71,
+      "geometryMeters": 95233.88,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -62.6202278137207,
+        45.26225280761719
+      ]
+    },
+    {
+      "file": "short-intra-metro-balanced-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "balanced",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 44.755736,
+            "lon": -63.301255
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 7444.984264119401,
+      "dirtPercent": 6,
+      "geometryMeters": 7446.38,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ]
+    },
+    {
+      "file": "short-intra-metro-cleanest-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "cleanest",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 44.755736,
+            "lon": -63.301255
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": true,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 7560.984264119401,
+      "dirtPercent": 6,
+      "geometryMeters": 7561.76,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ]
+    },
+    {
+      "file": "short-intra-metro-dirt-route.json",
+      "runtime": "js-standalone",
+      "source": "139a173",
+      "request": {
+        "profile": "dirt",
+        "locations": [
+          {
+            "lat": 44.764919,
+            "lon": -63.34035
+          },
+          {
+            "lat": 44.755736,
+            "lon": -63.301255
+          }
+        ],
+        "vehicle": "dual-sport-motorcycle",
+        "accessPolicy": {
+          "motorizedPermissive": true,
+          "motorizedUnknown": false
+        },
+        "options": {
+          "sessionSeed": 3511091208,
+          "avoidMotorways": false,
+          "backtrackFactor": 4
+        }
+      },
+      "status": "complete",
+      "distanceMeters": 7444.984264119401,
+      "dirtPercent": 6,
+      "geometryMeters": 7446.38,
+      "exactSegmentRepeatMeters": 0,
+      "maxGeometryJoinGapMeters": 0.0,
+      "emptyEdgeIds": 0,
+      "duplicateEdgeOccurrences": 0,
+      "reachedEndpoint": [
+        -63.3012563804662,
+        44.755722688361644
+      ]
+    }
+  ],
+  "qualification": "Unqualified native checkpoint on fabric-v4-20260908-02 versus standalone service139a173 on fabric-v4-20260909-02; not matched-release or fuel-request parity."
+}

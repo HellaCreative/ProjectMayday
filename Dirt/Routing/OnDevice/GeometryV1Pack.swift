@@ -83,18 +83,17 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
 
 private extension Data {
     nonisolated func readUInt32LE(_ offset: Int) -> UInt32 {
-        self[offset..<offset + 4].withUnsafeBytes { $0.load(as: UInt32.self).littleEndian }
+        withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self).littleEndian }
     }
 
     nonisolated func readUInt16LE(_ offset: Int) -> UInt16 {
-        self[offset..<offset + 2].withUnsafeBytes { $0.load(as: UInt16.self).littleEndian }
+        withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt16.self).littleEndian }
     }
 
     nonisolated func readInt32Array(at offset: Int, count: Int) -> [Int32] {
         guard count > 0 else { return [] }
-        let byteCount = count * 4
-        return subdata(in: offset..<(offset + byteCount)).withUnsafeBytes { raw in
-            Array(raw.bindMemory(to: Int32.self).prefix(count)).map { Int32(littleEndian: $0) }
+        return withUnsafeBytes { raw in
+            (0..<count).map { raw.loadUnaligned(fromByteOffset: offset + $0 * 4, as: Int32.self).littleEndian }
         }
     }
 

@@ -56,9 +56,14 @@ def main():
         records.append({'file':f.name,'runtime':'swift',**audit})
     for f in sorted(args.js.glob('*.json')):
         d=json.loads(f.read_text())
-        if d.get('endpoint')!='/api/route':continue
+        exact = d.get('endpoint') == '/api/route'
+        standalone = 'body' in d and f.name.endswith('-route.json')
+        if not (exact or standalone): continue
         r=d['result']; audit=geometry_audit(r.get('segments',[]) or [])
-        records.append({'file':f.name,'runtime':'js-exact-oracle','status':r.get('status'), 'distanceMeters':r.get('distanceMeters'), 'dirtPercent':r.get('stats',{}).get('dirtPercent'),**audit})
+        records.append({'file':f.name,'runtime':'js-exact-oracle' if exact else 'js-standalone',
+            'source':d.get('source'), 'request':d.get('body'),
+            'status':r.get('status'), 'distanceMeters':r.get('distanceMeters'),
+            'dirtPercent':r.get('stats',{}).get('dirtPercent'),**audit})
     (args.output/'RECOVERY-GEOMETRY-AUDIT.json').write_text(json.dumps({'method':'Haversine geometry lengths; undirected identical coordinate-segment repeats rounded to six decimals. This is a repeat lower bound, not proof against nearby or differently split repeated roads. Join gaps are reported without inventing an acceptance cutoff.','records':records},indent=2)+'\n')
     print(f'Audited {len(records)} outputs')
     for r in records:
