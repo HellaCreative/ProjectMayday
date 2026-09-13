@@ -1019,9 +1019,18 @@ final class GraphPackStore {
                 )
                 let finalElapsedMs = Int((ProcessInfo.processInfo.systemUptime - finalStartedAt) * 1_000)
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
-                    if case .failure(let reason) = final { lastFailure = reason }
+                    let failureText: String
+                    if case .failure(let reason) = final {
+                        lastFailure = reason
+                        failureText = " reason=\(reason)"
+                    } else {
+                        failureText = ""
+                    }
                     RoutingDebugLog.shared.event(
                         "on-device final hop region=\(regionId) elapsedMs=\(finalElapsedMs) result=failure"
+                            + failureText
+                            + " start=\(String(format: "%.5f,%.5f", current.latitude, current.longitude))"
+                            + " end=\(String(format: "%.5f,%.5f", to.latitude, to.longitude))"
                     )
                     return nil
                 }
@@ -1732,6 +1741,25 @@ final class GraphPackStore {
             minLon: min(start.longitude, end.longitude) - padDeg,
             maxLon: max(start.longitude, end.longitude) + padDeg
         )
+    }
+
+    /// Fuel stations for the first hop of a cross-pack itinerary. Keeping the
+    /// lookup inside the departure pack avoids decoding the destination
+    /// sidecar before the first local pump has been proven.
+    func fuelStations(
+        regionId: String,
+        from start: RouteCoordinate,
+        to end: RouteCoordinate
+    ) -> [POIFeature] {
+        let padDeg = 150_000.0 / 111_000.0
+        let minLat = min(start.latitude, end.latitude) - padDeg
+        let maxLat = max(start.latitude, end.latitude) + padDeg
+        let minLon = min(start.longitude, end.longitude) - padDeg
+        let maxLon = max(start.longitude, end.longitude) + padDeg
+        return loadedFuel(regionId: regionId.lowercased()).filter {
+            $0.latitude >= minLat && $0.latitude <= maxLat
+                && $0.longitude >= minLon && $0.longitude <= maxLon
+        }
     }
 
     func fuelStations(

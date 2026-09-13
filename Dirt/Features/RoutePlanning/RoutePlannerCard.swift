@@ -204,7 +204,10 @@ struct RoutePlannerCard: View {
         GeometryReader { geo in
             // Preserve the map as the primary canvas. Short planner states hug their
             // content; longer routes stop here and scroll beneath the sticky dock.
-            let maxPanelHeight = max(160, min(geo.size.height * 0.46, geo.size.height - 380))
+            // Six 50pt control rows + five 10pt gaps + the extra zoom gap.
+            // Leave the same 6pt top inset as the DIRT logo above the stack.
+            let controlsHeight: CGFloat = 360
+            let maxPanelHeight = max(160, geo.size.height - controlsHeight - DockSheetMotion.portraitRouteControlsGap - 6)
             let fixedChromeHeight = 14 + min(planningTabHeight, 76) + 10 + 10
             let maxPlanningHeight = max(1, maxPanelHeight - fixedChromeHeight)
             let measuredPlanningHeight = max(1, portraitPlanningContentHeight)
@@ -234,7 +237,7 @@ struct RoutePlannerCard: View {
                 }
                 .frame(height: planningHeight)
                 .scrollBounceBehavior(.basedOnSize)
-                .scrollIndicators(.visible)
+                .scrollIndicators(.hidden)
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
@@ -312,7 +315,7 @@ struct RoutePlannerCard: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.visible)
+            .scrollIndicators(.hidden)
         }
         .padding(.vertical, 12)
         .padding(.leading, dockLeading ? dockClearance + 10 : 14)
@@ -372,9 +375,9 @@ struct RoutePlannerCard: View {
                 Text(title == "Plan a route" ? "Plan" : title).font(.caption.weight(selected ? .bold : .medium))
                     .lineLimit(2).multilineTextAlignment(.center)
             }
-            .foregroundStyle(selected ? DirtTheme.action : DirtTheme.muted)
+            .foregroundStyle(selected ? Color.white : DirtTheme.muted)
             .frame(maxWidth: .infinity, minHeight: min(planningTabHeight, 76))
-            .background(selected ? DirtTheme.rowFill : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .background(selected ? DirtTheme.navigationSurface : .clear, in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -414,7 +417,7 @@ struct RoutePlannerCard: View {
                             Text(direction.rawValue).tag(direction)
                         }
                     }
-                    .pickerStyle(.menu).labelsHidden().accessibilityLabel("Direction")
+                    .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Direction")
                     .accessibilityValue(planner.loopDirection.rawValue)
                     .fixedSize(horizontal: false, vertical: true)
                 }
@@ -425,10 +428,11 @@ struct RoutePlannerCard: View {
                     if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                     Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
                         ForEach(RouteProfile.allCases) { profile in
-                            Label(profile.title, systemImage: DirtSurfaceIcon.symbol(for: profile.title)).tag(profile)
+                            Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
+                                .foregroundStyle(DirtTheme.orange).tag(profile)
                         }
                     }
-                    .pickerStyle(.menu).labelsHidden().accessibilityLabel("Surface")
+                    .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
                     .accessibilityValue(planner.profile.title)
                     .fixedSize(horizontal: false, vertical: true)
                 }
@@ -578,16 +582,19 @@ struct RoutePlannerCard: View {
 
     @ViewBuilder private var fromHereProfileHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if fromHereChipsOpen {
-                profileSegments(active: planner.profile) { profile in
-                    planner.profile = profile
-                    withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = false }
+            HStack {
+                Text("Surface")
+                Spacer()
+                Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
+                    ForEach(RouteProfile.allCases) { profile in
+                        Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
+                                .foregroundStyle(DirtTheme.orange).tag(profile)
+                    }
                 }
-            } else {
-                profileEyebrow(planner.profile) {
-                    withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = true }
-                }
+                .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
+                .accessibilityValue(planner.profile.title)
             }
+            .frame(minHeight: DirtHit.min)
             profileGuidanceLine(planner.profile)
         }
     }
@@ -783,7 +790,7 @@ struct RoutePlannerCard: View {
             .listRowSpacing(10)
             .frame(height: selectedStage == nil ? collapsedHeight : bandHeight)
             .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.visible)
+            .scrollIndicators(.hidden)
             .onAppear {
                 if let last = planner.stages.last?.id {
                     proxy.scrollTo(last, anchor: .bottom)
@@ -1152,32 +1159,6 @@ struct RoutePlannerCard: View {
                 .accessibilityAddTraits(active == profile ? [.isSelected] : [])
             }
         }
-    }
-
-    /// Collapsed profile label — used only by the From here empty state, which has no stage row yet.
-    private func profileEyebrow(_ profile: RouteProfile, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Text(profile.title)
-                    .font(DirtType.rowTitle)
-                    .fontWeight(.bold)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-            }
-            .foregroundStyle(DirtTheme.ink)
-            .padding(.horizontal, 12)
-            .frame(minHeight: DirtHit.min)
-            .background(DirtTheme.rowFill)
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(DirtTheme.hairline, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(profile.title) mode. Tap to change.")
-        .accessibilityHint("Opens route mode options")
     }
 
     private func toggleStageSelection(_ index: Int) {
@@ -1715,18 +1696,8 @@ struct StageCard<Headline: View, Detail: View>: View {
                 .font(.system(size: 9, weight: .black))
                 .rotationEffect(.degrees(isActive ? 180 : 0))
         }
-        .foregroundStyle(isActive ? DirtTheme.onOrange : DirtTheme.ink)
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .background(isActive ? DirtTheme.orange : DirtTheme.wash)
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .stroke(
-                    isActive ? DirtTheme.onOrange.opacity(0.25) : DirtTheme.hairline,
-                    lineWidth: 1
-                )
-        )
+        .foregroundStyle(DirtTheme.orange)
+        .dirtDropdownSurface()
     }
 }
 

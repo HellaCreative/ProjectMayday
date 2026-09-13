@@ -47,6 +47,7 @@ enum DirtTheme {
     static let onOrange = Color(dirtHex: 0x16181C)
     /// Dock “route still on map” while the planner sheet is minimized (not selected).
     static let orangeSoft = Color(dirtHex: 0xFFB35C)
+    static let navigationSurface = Color(dirtHex: 0x202820)
     static let chrome = Color(dirtHex: 0x16181C)
     static let chromeBorder = Color.white.opacity(0.12)
     static let ink = Color(dirtLight: 0x16181C, dark: 0xF2F4F7)
@@ -62,7 +63,7 @@ enum DirtTheme {
     /// Sheets sit on system material so the map still reads underneath — translucency
     /// here is orientation, not decoration. `.thin` keeps terrain legible through the
     /// panel; `.regular` washed out to near-white over bright basemaps.
-    static let sheetMaterial: Material = .ultraThinMaterial
+    static let sheetMaterial: Material = .regularMaterial
     /// Map controls and dock: thin material carrying a dark scrim, so white glyphs
     /// keep contrast over snow, water, and satellite imagery alike.
     static let chromeMaterial: Material = .ultraThinMaterial
@@ -461,6 +462,13 @@ struct BrandChip: View {
 
 /// One surface vocabulary across route controls and navigation.
 enum DirtSurfaceIcon {
+    /// Native menu rows retain brand tint instead of inheriting UIKit label black.
+    static func menuImage(for title: String) -> Image {
+        let symbol = UIImage(systemName: symbol(for: title))?
+            .withTintColor(UIColor(DirtTheme.orange), renderingMode: .alwaysOriginal)
+        return Image(uiImage: symbol ?? UIImage()).renderingMode(.original)
+    }
+
     static func symbol(for title: String) -> String {
         let value = title.lowercased()
         if value.contains("ferry") { return "ferry" }
@@ -469,5 +477,17 @@ enum DirtSurfaceIcon {
         if value.contains("dirt") || value.contains("loose") || value.contains("sand") { return "mountain.2" }
         if value.contains("balanced") { return "arrow.triangle.branch" }
         return "road.lanes"
+    }
+}
+
+/// Opaque dropdown affordance: the field stays legible above map-backed sheets.
+extension View {
+    func dirtDropdownSurface() -> some View {
+        tint(DirtTheme.orange)
+            .foregroundStyle(DirtTheme.orange)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 36)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(dirtHex: 0xD8DADD), lineWidth: 1))
     }
 }

@@ -241,3 +241,20 @@ Dirt leg with automatic fuel enabled completes in 0.98 s end to end (130 ms
 graph search), produces one built leg and zero generated fuel stops, and emits
 `Route ready`. This prevents the former 10–15 s fuel-window path from
 regressing onto ordinary rides.
+
+## 2026-09-13 settlement avoidance
+
+The rider route now applies a settlement wall before scoring every Cleanest,
+Balanced, and Dirt route. It uses the pack's settlement metadata and fills any
+omitted rows from the compatibility list, so a partial pack cannot silently
+turn town avoidance off. A town is exempt only when it contains the rider's
+start or destination. If the wall disconnects the graph, the router retries
+without it and marks the result as a last-resort settlement fallback. Fuel
+forecourt qualification remains exempt because the pump is the explicit next
+destination.
+
+The route diagnostic reports `townWall=1` when the route stayed outside mapped
+settlements and `townFallback=1` when a settlement crossing was required. The
+serial real-pack benchmark remains green after this change: all 8 on-device
+benchmark tests passed, including the NS-only short bypass, NS fuel itinerary,
+and NS→NB fuel itinerary.

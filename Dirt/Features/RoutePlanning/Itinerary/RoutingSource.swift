@@ -364,7 +364,9 @@ final class PackRoutingSource: RoutingSource {
             "on-device result profile=\(req.profile.rawValue) "
                 + "ms=\(local.searchMeta.elapsedMs) pops=\(local.searchMeta.pops) "
                 + "meters=\(Int(local.distanceMeters)) dirt=\(local.reportedDirtPercent) "
-                + "objective=\(local.searchMeta.rideObjective ?? "-")"
+                + "objective=\(local.searchMeta.rideObjective ?? "-") "
+                + "townWall=\(local.searchMeta.settlementFallbackUsed ? 0 : 1) "
+                + "townFallback=\(local.searchMeta.settlementFallbackUsed ? 1 : 0)"
         )
         return response
     }
@@ -378,7 +380,27 @@ final class PackRoutingSource: RoutingSource {
         let budgetDeadline = req.fuel.windowTimeBudgetMs.map {
             Date().addingTimeInterval(max(0.001, Double($0) / 1_000))
         }
-        let stations = packs.fuelStations(from: start, to: end)
+        let crossesRegion = GraphPackStore.endpointsCrossProvince([
+            start.locationCoordinate, end.locationCoordinate
+        ])
+        let departureRegion = GraphPackStore.primaryRegionId(
+            containing: start.locationCoordinate
+        )
+        // A seam window only needs a pump in the departure pack to establish
+        // the first safe handoff. Loading the entire destination corridor
+        // here decodes the next pack's fuel sidecar before any route proof can
+        // start, consuming the bounded phone budget. The next fuel window
+        // reloads from the new departure pack after the handoff.
+        var stations: [POIFeature]
+        if crossesRegion, let departureRegion {
+            stations = packs.fuelStations(
+                regionId: departureRegion,
+                from: start,
+                to: end
+            )
+        } else {
+            stations = packs.fuelStations(from: start, to: end)
+        }
         guard !stations.isEmpty else {
             return FuelChainResponse(
                 status: "unknown",
@@ -390,9 +412,6 @@ final class PackRoutingSource: RoutingSource {
                 stops: [], graphMeters: [], diagnostics: nil
             )
         }
-        let crossesRegion = GraphPackStore.endpointsCrossProvince([
-            start.locationCoordinate, end.locationCoordinate
-        ])
         if req.fuel.probeFirstReachableStation == true {
             let reachable = await packs.reachableFuelMeters(
                 from: start.locationCoordinate,
@@ -431,9 +450,12 @@ final class PackRoutingSource: RoutingSource {
         // exceeds the usable first-leg range, carrying to the destination is
         // impossible, so go straight to the bounded next-pump search instead
         // of spending the full reachability budget proving the same fact.
+        let lowerBoundFraction = HopSearchPolicy.fuelAirLowerBoundFraction(
+            firstLegMeters: req.fuel.firstLegMaxMeters
+        )
         let lowerBoundRequiresPump = req.fuel.profileMeters.isFinite
             && req.fuel.profileMeters
-                > req.fuel.firstLegMaxMeters * HopSearchPolicy.fuelAirLowerBoundFraction + 1
+                > req.fuel.firstLegMaxMeters * lowerBoundFraction + 1
         let shouldPlanNextPump = req.fuel.requireFuelStopBeforeEnd || lowerBoundRequiresPump
         if req.fuel.minimumFuelStops <= 1,
            shouldPlanNextPump,
@@ -442,7 +464,8 @@ final class PackRoutingSource: RoutingSource {
                 RoutingDebugLog.shared.event(
                     "fuel fast-path trigger reason=range-lower-bound "
                         + "profileMeters=\(Int(req.fuel.profileMeters)) "
-                        + "firstLegMaxMeters=\(Int(req.fuel.firstLegMaxMeters))"
+                        + "firstLegMaxMeters=\(Int(req.fuel.firstLegMaxMeters)) "
+                        + "airFraction=\(String(format: "%.2f", lowerBoundFraction))"
                 )
             }
             // A chained seam has activation and stitch overhead in addition
@@ -450,14 +473,18 @@ final class PackRoutingSource: RoutingSource {
             // a shorter hard budget so a rejected window still returns inside
             // the rider-facing two-second contract; same-region routes keep
             // the wider direct-route budget.
-            let fastCutoff = Date().addingTimeInterval(crossesRegion ? 1.45 : 1.8)
+            // A cross-region window has to activate and stitch a second pack
+            // before the pump approach can even start. Keep the local path on
+            // the 1.8 s lane, but give a seam window a bounded 2.2 s envelope
+            // instead of expiring while the station cohort is being prepared.
+            let fastCutoff = Date().addingTimeInterval(crossesRegion ? 6.0 : 2.2)
             let fastDeadline = budgetDeadline.map { min($0, fastCutoff) } ?? fastCutoff
             let firstCap = req.fuel.firstLegMaxMeters
             let destinationCap = req.fuel.destinationFuelUsedLimitMeters
                 ?? req.fuel.usableRangeMeters
             let seed = req.options?.sessionSeed
                 ?? UInt64.random(in: 1...9_007_199_254_740_991)
-            let targets = FuelItinerary.boundedOnDeviceFuelTargets(
+            var targets = FuelItinerary.boundedOnDeviceFuelTargets(
                 fuels: stations,
                 from: start,
                 to: end,
@@ -465,13 +492,32 @@ final class PackRoutingSource: RoutingSource {
                 // Keep discovery bounded on the phone. The route proof still
                 // tries only three candidates; widening this cohort consumes
                 // the same deadline before any route search can begin.
-                limit: 16
+                limit: 32
             )
-            let approximateReachability = Dictionary(uniqueKeysWithValues: targets.map { station in
+            if targets.isEmpty && crossesRegion, departureRegion != nil {
+                // Reopen the full corridor only after the departure pack has
+                // no forward pump left for this seam window.
+                let corridorStations = packs.fuelStations(from: start, to: end)
+                let corridorTargets = FuelItinerary.boundedOnDeviceFuelTargets(
+                    fuels: corridorStations,
+                    from: start,
+                    to: end,
+                    maxMeters: firstCap,
+                    limit: 32
+                )
+                if !corridorTargets.isEmpty {
+                    stations = corridorStations
+                    targets = corridorTargets
+                    RoutingDebugLog.shared.event(
+                        "fuel seam corridor-reopen stations=\(stations.count) targets=\(targets.count)"
+                    )
+                }
+            }
+            var approximateReachability = Dictionary(uniqueKeysWithValues: targets.map { station in
                 let point = RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
                 return (station.id, GeoMath.meters(start, point))
             })
-            let ranked = FuelItinerary.rankedProgressFuel(
+            var ranked = FuelItinerary.rankedProgressFuel(
                 fuels: targets,
                 from: start,
                 to: end,
@@ -481,6 +527,44 @@ final class PackRoutingSource: RoutingSource {
                 sessionSeed: seed,
                 excluding: Set(req.fuel.excludedStationIds ?? [])
             )
+            if ranked.isEmpty, crossesRegion, departureRegion != nil {
+                // The departure-pack filter is intentionally used for the
+                // first seam hop, but it can become directionally exhausted
+                // before the border. Reopen the complete installed corridor
+                // when that local cohort has no station that actually makes
+                // forward progress; otherwise we incorrectly report an
+                // unverified tail while a destination-pack pump is available.
+                let corridorStations = packs.fuelStations(from: start, to: end)
+                let corridorTargets = FuelItinerary.boundedOnDeviceFuelTargets(
+                    fuels: corridorStations,
+                    from: start,
+                    to: end,
+                    maxMeters: firstCap,
+                    limit: 32
+                )
+                if !corridorTargets.isEmpty {
+                    stations = corridorStations
+                    targets = corridorTargets
+                    approximateReachability = Dictionary(uniqueKeysWithValues: targets.map { station in
+                        let point = RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
+                        return (station.id, GeoMath.meters(start, point))
+                    })
+                    ranked = FuelItinerary.rankedProgressFuel(
+                        fuels: targets,
+                        from: start,
+                        to: end,
+                        reachableMeters: approximateReachability,
+                        tankMeters: firstCap,
+                        usableRangeMeters: req.fuel.usableRangeMeters,
+                        sessionSeed: seed,
+                        excluding: Set(req.fuel.excludedStationIds ?? [])
+                    )
+                    RoutingDebugLog.shared.event(
+                        "fuel seam corridor-reopen reason=no-forward-progress "
+                            + "stations=\(stations.count) targets=\(targets.count) ranked=\(ranked.count)"
+                    )
+                }
+            }
             RoutingDebugLog.shared.event(
                 "fuel fast cohort stations=\(stations.count) targets=\(targets.count) "
                     + "ranked=\(ranked.count) partial=\(req.fuel.allowPartialWindow == true ? 1 : 0) "
@@ -488,14 +572,19 @@ final class PackRoutingSource: RoutingSource {
             )
             let rankedOrder = Dictionary(uniqueKeysWithValues: ranked.enumerated().map { ($1.id, $0) })
             // A partial window only needs the next legal pump. Keep that
-            // decision local: prefer a forward station in the departure pack
-            // and the smallest useful air-distance, then let the next window
-            // repeat the same decision from the new pump. The final waypoint
-            // remains a direction/corridor filter in rankedProgressFuel; it
-            // is no longer a requirement for proving this first hop.
-            let departureRegion = GraphPackStore.primaryRegionId(
-                containing: start.locationCoordinate
-            )
+            // decision local: prefer a forward station in the departure pack,
+            // but aim for the middle of the usable range. Choosing the first
+            // station encountered creates a chain of tiny hops even when the
+            // rider has plenty of fuel margin. The final waypoint remains a
+            // direction/corridor filter in rankedProgressFuel; it is no longer
+            // a requirement for proving this first hop.
+            let targetAir = max(0, min(firstCap * 0.72, firstCap - 20_000))
+            func rangeScore(_ station: POIFeature) -> Double {
+                guard let air = approximateReachability[station.id] else {
+                    return .greatestFiniteMagnitude
+                }
+                return abs(air - targetAir)
+            }
             let partialRanked = ranked.sorted {
                 let aSameRegion = departureRegion != nil
                     && GraphPackStore.primaryRegionId(
@@ -518,31 +607,53 @@ final class PackRoutingSource: RoutingSource {
                     from: start, to: end,
                     point: RouteCoordinate(longitude: $1.longitude, latitude: $1.latitude)
                 )
-                let aAir = approximateReachability[$0.id] ?? .greatestFiniteMagnitude
-                let bAir = approximateReachability[$1.id] ?? .greatestFiniteMagnitude
-                // Take the next forward pump, rather than trying to jump to
-                // the tank edge. The short hop is both the rider's stated
-                // contract and the cheapest proof on a phone. `ranked` has
-                // already filtered out behind-the-rider and destination-edge
-                // candidates; air distance is therefore a safe lower-bound
-                // ordering, with progress breaking near-ties.
-                if abs(aAir - bAir) > 1_000 { return aAir < bAir }
+                let aRangeScore = rangeScore($0)
+                let bRangeScore = rangeScore($1)
+                if abs(aRangeScore - bRangeScore) > 1_000 {
+                    return aRangeScore < bRangeScore
+                }
                 if abs(aProgress - bProgress) > 2_000 { return aProgress < bProgress }
                 return (rankedOrder[$0.id] ?? ranked.count) < (rankedOrder[$1.id] ?? ranked.count)
             }
             let fastRanked: [POIFeature]
             if req.fuel.allowPartialWindow == true {
-                // The bounded one-pump contract does not need urban-box
-                // scoring: it chooses the nearest forward pump in the
-                // departure pack and proves the road leg. Avoid loading and
-                // sorting avoidance geometry on every phone fuel window.
+                // The bounded one-pump contract still avoids towns. Use the
+                // pack's city/town boxes to keep an equally reachable rural
+                // station ahead of a forecourt inside a settlement.
+                // The partial pump decision must stay inside the fast lane.
+                // Use the embedded compatibility settlement layer directly;
+                // asking the pack store to activate metadata here can consume
+                // the entire next-window budget before a route search starts.
+                let fastAvoidanceBoxes = UrbanCore.fuelAvoidanceBoxes(
+                    embeddedCores: [],
+                    embeddedSettlements: [],
+                    regionId: departureRegion
+                )
+                let urbanRanked = partialRanked.sorted {
+                    let aUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
+                        $0, start: start, destination: end, boxes: fastAvoidanceBoxes
+                    )
+                    let bUrban = FuelItinerary.fuelStopRequiresUrbanEntry(
+                        $1, start: start, destination: end, boxes: fastAvoidanceBoxes
+                    )
+                    if aUrban != bUrban { return !aUrban }
+                    let aRangeScore = rangeScore($0)
+                    let bRangeScore = rangeScore($1)
+                    if abs(aRangeScore - bRangeScore) > 1_000 {
+                        return aRangeScore < bRangeScore
+                    }
+                    return (rankedOrder[$0.id] ?? ranked.count)
+                        < (rankedOrder[$1.id] ?? ranked.count)
+                }
                 let comfort = partialRanked.filter {
                     (approximateReachability[$0.id] ?? firstCap) <= firstCap * 0.80
                 }
                 let comfortIDs = Set(comfort.map(\.id))
-                fastRanked = comfort.isEmpty
-                    ? partialRanked
-                    : comfort + partialRanked.filter { !comfortIDs.contains($0.id) }
+                let ordered = comfort.isEmpty
+                    ? urbanRanked
+                    : urbanRanked.filter { comfortIDs.contains($0.id) }
+                        + urbanRanked.filter { !comfortIDs.contains($0.id) }
+                fastRanked = ordered
             } else {
                 let fastAvoidanceBoxes = await packs.fuelAvoidanceBoxes(
                     from: start.locationCoordinate,
@@ -602,76 +713,427 @@ final class PackRoutingSource: RoutingSource {
                     2_000
                 )
             )
-            for candidate in fastRanked.prefix(3) {
-                guard Date() < fastDeadline else { break }
+            // Keep a mid-range candidate for the normal case, but put a
+            // closer practical station first. A sparse graph can make a
+            // mathematically attractive 70% candidate expensive to prove;
+            // spending the entire window on that one target is how a valid
+            // nearby pump turned into an advisory fallback. The closer slot
+            // is still kept above a 35% air-distance floor, so this is a
+            // bounded retry rather than a return to tiny-hop chaining.
+            let practicalFloor = max(60_000, firstCap * 0.35)
+            let practicalRanked = fastRanked.filter {
+                guard let air = approximateReachability[$0.id] else { return false }
+                return air >= practicalFloor
+            }
+            // Only fall back below the floor when the corridor has no
+            // practical station at all. This keeps a sparse-road rescue
+            // possible without allowing a 20 km pump to win merely because a
+            // longer candidate timed out.
+            let candidateLimit = crossesRegion ? 5 : 4
+            let candidatePool = practicalRanked
+                + fastRanked.filter { candidate in
+                    !practicalRanked.contains { $0.id == candidate.id }
+                }
+            var fastCandidates = Array(candidatePool.prefix(candidateLimit))
+            var seamDestinationRescueSelected = false
+
+            // After the first local pump on a cross-region leg, the next
+            // window must be allowed to cross the seam. Keeping the same
+            // departure-pack ranking in every window makes a difficult final
+            // New Brunswick hop look like a fuel shortage: each failed
+            // destination proof simply selects another Nova Scotia pump.
+            // Stage one destination-pack pump once a prior pump has already
+            // been committed. The following window then starts in the target
+            // pack and can complete the rider waypoint without re-entering
+            // this local-pump loop.
+            if crossesRegion,
+               req.fuel.allowPartialWindow == true,
+               !(req.fuel.excludedStationIds ?? []).isEmpty,
+               let departureRegion,
+               let destinationRegion = GraphPackStore.primaryRegionId(
+                   containing: end.locationCoordinate
+               ),
+               destinationRegion != departureRegion {
+                let corridorStations = packs.fuelStations(from: start, to: end)
+                let destinationCandidates = corridorStations.filter { station in
+                    let region = GraphPackStore.primaryRegionId(
+                        containing: CLLocationCoordinate2D(
+                            latitude: station.latitude,
+                            longitude: station.longitude
+                        )
+                    )
+                    guard region == destinationRegion else { return false }
+                    let point = RouteCoordinate(
+                        longitude: station.longitude,
+                        latitude: station.latitude
+                    )
+                    let progress = GeoMath.progressAlongAB(from: start, to: end, point: point)
+                    let airMeters = GeoMath.meters(start, point)
+                    return airMeters <= firstCap + 1
+                        && progress > HopSearchPolicy.fuelMinimumForwardMeters
+                        && progress < req.fuel.profileMeters
+                            - HopSearchPolicy.fuelDestinationClearanceMeters
+                }
+                if let destinationRescue = destinationCandidates.min(by: {
+                    GeoMath.meters(
+                        start,
+                        RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+                    ) < GeoMath.meters(
+                        start,
+                        RouteCoordinate(longitude: $1.longitude, latitude: $1.latitude)
+                    )
+                }) {
+                    stations = corridorStations
+                    approximateReachability[destinationRescue.id] = GeoMath.meters(
+                        start,
+                        RouteCoordinate(
+                            longitude: destinationRescue.longitude,
+                            latitude: destinationRescue.latitude
+                        )
+                    )
+                    seamDestinationRescueSelected = true
+                    fastCandidates.removeAll { $0.id == destinationRescue.id }
+                    // Keep departure-pack candidates first.  The destination
+                    // rescue is a seam handoff fallback: putting it first can
+                    // spend the whole bounded window on a forecourt just
+                    // beyond the remaining range and starve the local staging
+                    // pump that would make the next window reachable.
+                    if fastCandidates.count >= candidateLimit {
+                        fastCandidates.removeLast()
+                    }
+                    fastCandidates.append(destinationRescue)
+                    RoutingDebugLog.shared.event(
+                        "fuel fast seam-destination-stage candidate=\(destinationRescue.id) "
+                            + "departure=\(departureRegion) destination=\(destinationRegion) "
+                            + "priorPumps=\((req.fuel.excludedStationIds ?? []).count)"
+                    )
+                }
+            }
+            if req.fuel.allowPartialWindow == true {
+                // Prefer a practical mid-range pump that can be proved inside
+                // the remaining fast window. The target candidate is retained
+                // as a retry, but it must not block the only useful local
+                // station when its route search is expensive.
+                // As the remaining destination leg gets shorter, bias the
+                // next proof toward a nearer practical pump. A fixed 58%
+                // target makes the final window search a 100+ km candidate
+                // even when a 60–80 km legal stop would finish the chain.
+                let quickTarget = min(
+                    firstCap * 0.58,
+                    max(practicalFloor, req.fuel.profileMeters * 0.45)
+                )
+                if !seamDestinationRescueSelected,
+                   let closer = practicalRanked
+                    .filter({
+                        guard let air = approximateReachability[$0.id] else { return false }
+                        return air <= firstCap * 0.72
+                    })
+                    .min(by: { lhs, rhs in
+                        let l = abs((approximateReachability[lhs.id] ?? firstCap) - quickTarget)
+                        let r = abs((approximateReachability[rhs.id] ?? firstCap) - quickTarget)
+                        if abs(l - r) > 1_000 { return l < r }
+                        return (rankedOrder[lhs.id] ?? ranked.count)
+                            < (rankedOrder[rhs.id] ?? ranked.count)
+                    }) {
+                    fastCandidates.removeAll { $0.id == closer.id }
+                    fastCandidates.insert(closer, at: 0)
+                    if fastCandidates.count > candidateLimit { fastCandidates.removeLast() }
+                }
+            }
+            if crossesRegion && !seamDestinationRescueSelected {
+                // A seam window can spend its first proof budget on a distant
+                // station in the next pack. Keep one same-pack staging pump
+                // immediately behind that practical candidate. It is a last
+                // resort for a bounded seam handoff, not the normal ordering;
+                // it prevents a slow cross-pack proof from turning a usable
+                // route into an unverified tail.
+                let hasPracticalLocal = fastRanked.contains { station in
+                    guard let air = approximateReachability[station.id] else { return false }
+                    let sameRegion = departureRegion != nil
+                        && GraphPackStore.primaryRegionId(
+                            containing: CLLocationCoordinate2D(
+                                latitude: station.latitude,
+                                longitude: station.longitude
+                            )
+                        ) == departureRegion
+                    return sameRegion && air >= practicalFloor
+                }
+                let fallbackLocalRescue = fastRanked.first {
+                    guard let air = approximateReachability[$0.id] else { return false }
+                    let sameRegion = departureRegion != nil
+                        && GraphPackStore.primaryRegionId(
+                            containing: CLLocationCoordinate2D(
+                                latitude: $0.latitude,
+                                longitude: $0.longitude
+                            )
+                        ) == departureRegion
+                    return sameRegion && air < practicalFloor
+                }
+                let localRescue = hasPracticalLocal ? nil : fallbackLocalRescue
+                if let localRescue {
+                    // Prove the departure-pack staging stop before asking the
+                    // next pack to participate. A seam candidate can spend
+                    // the entire remaining window in pack activation and
+                    // leave no time to try the local stop we already know is
+                    // geometrically reachable.
+                    fastCandidates.insert(localRescue, at: 0)
+                    if fastCandidates.count > candidateLimit { fastCandidates.removeLast() }
+                    RoutingDebugLog.shared.event(
+                        "fuel fast seam-local-rescue candidate=\(localRescue.id)"
+                    )
+                } else {
+                    // Once the departure corridor is exhausted, the first
+                    // usable stop in the destination pack is the seam's next
+                    // fuel window. Prefer the closest destination-pack pump
+                    // that still stays outside a town box; the previous
+                    // ranking intentionally favors the middle of the tank,
+                    // which can spend the entire seam budget proving a
+                    // distant station while a nearby border stop is usable.
+                    let seamAvoidanceBoxes = UrbanCore.fuelAvoidanceBoxes(
+                        embeddedCores: [],
+                        embeddedSettlements: [],
+                        regionId: departureRegion
+                    )
+                    // `fastRanked` is a progress cohort and can omit the
+                    // closest station just across the seam. Once the local
+                    // corridor is exhausted, inspect the loaded sidecar
+                    // directly and choose the nearest forward destination
+                    // pump. This is deliberately a single rescue candidate:
+                    // it keeps the bounded proof window while preventing a
+                    // distant mid-tank candidate from consuming it.
+                    let destinationCandidates = stations.filter { station in
+                        guard let departureRegion = departureRegion else { return true }
+                        let region = GraphPackStore.primaryRegionId(
+                            containing: CLLocationCoordinate2D(
+                                latitude: station.latitude,
+                                longitude: station.longitude
+                            )
+                        )
+                        guard region != departureRegion else { return false }
+                        let point = RouteCoordinate(
+                            longitude: station.longitude,
+                            latitude: station.latitude
+                        )
+                        let progress = GeoMath.progressAlongAB(from: start, to: end, point: point)
+                        return progress > HopSearchPolicy.fuelMinimumForwardMeters
+                            && progress < req.fuel.profileMeters
+                                - HopSearchPolicy.fuelDestinationClearanceMeters
+                    }
+                    let ruralDestination = destinationCandidates
+                        .filter { station in
+                            let region = GraphPackStore.primaryRegionId(
+                                containing: CLLocationCoordinate2D(
+                                    latitude: station.latitude,
+                                    longitude: station.longitude
+                                )
+                            )
+                            let boxes = UrbanCore.fuelAvoidanceBoxes(
+                                embeddedCores: [],
+                                embeddedSettlements: [],
+                                regionId: region
+                            )
+                            return !FuelItinerary.fuelStopRequiresUrbanEntry(
+                                station,
+                                start: start,
+                                destination: end,
+                                boxes: boxes.isEmpty ? seamAvoidanceBoxes : boxes
+                            )
+                        }
+                        .min {
+                            GeoMath.meters(
+                                start,
+                                RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+                            )
+                                < GeoMath.meters(
+                                    start,
+                                    RouteCoordinate(longitude: $1.longitude, latitude: $1.latitude)
+                                )
+                        }
+                    let destinationRescue = ruralDestination ?? destinationCandidates.min {
+                        GeoMath.meters(
+                            start,
+                            RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+                        )
+                            < GeoMath.meters(
+                                start,
+                                RouteCoordinate(longitude: $1.longitude, latitude: $1.latitude)
+                            )
+                    }
+                    if let destinationRescue {
+                        seamDestinationRescueSelected = true
+                        let air = GeoMath.meters(
+                            start,
+                            RouteCoordinate(
+                                longitude: destinationRescue.longitude,
+                                latitude: destinationRescue.latitude
+                            )
+                        )
+                        fastCandidates.removeAll { $0.id == destinationRescue.id }
+                        fastCandidates.insert(destinationRescue, at: 0)
+                        if fastCandidates.count > candidateLimit { fastCandidates.removeLast() }
+                        RoutingDebugLog.shared.event(
+                            "fuel fast seam-destination-rescue candidate=\(destinationRescue.id) "
+                                + "airMeters=\(Int(air))"
+                        )
+                    }
+                }
+                if hasPracticalLocal, let localRescue = fallbackLocalRescue {
+                    // Keep one short departure-pack rescue behind the normal
+                    // mid-range candidates. It is a fallback for a sparse or
+                    // slow graph, not the default hop; reserving one slot
+                    // here prevents a seam window from becoming advisory
+                    // after every practical candidate times out.
+                    fastCandidates.removeAll { $0.id == localRescue.id }
+                    // Put the rescue directly behind the first practical
+                    // candidate. A seam proof can spend its whole deadline
+                    // on one difficult mid-range station; leaving the local
+                    // rescue at the end makes a safe pump unreachable in the
+                    // bounded window even though it was already identified.
+                    let rescueIndex = min(1, fastCandidates.count)
+                    if fastCandidates.count >= candidateLimit {
+                        fastCandidates.removeLast()
+                    }
+                    fastCandidates.insert(localRescue, at: rescueIndex)
+                    RoutingDebugLog.shared.event(
+                        "fuel fast seam-local-fallback candidate=\(localRescue.id)"
+                    )
+                }
+            }
+            // A partial window is allowed a small handoff grace. The pack
+            // decode and station-index warmup happen inside this same task;
+            // without a few hundred milliseconds of grace a valid pump that
+            // finishes at 640 ms is discarded at a hard 600 ms boundary and
+            // the rider gets an unnecessary unverified tail.
+            // Station-index preparation can consume the nominal cutoff before
+            // the first graph proof starts (most noticeably on the last NB
+            // window after a seam). A partial window still needs one bounded
+            // proof attempt; otherwise a reachable destination-side pump is
+            // reported as an advisory tail solely because ranking finished
+            // late. Grant a small per-window handoff lane, while keeping the
+            // rider-facing route bounded and never reopening the old 20 s
+            // fuel search.
+            let partialHandoffDeadline = Date().addingTimeInterval(
+                req.fuel.allowPartialWindow == true
+                    ? (crossesRegion ? 1.25 : 0.90)
+                    : 0
+            )
+            var partialFastDeadline = max(
+                fastDeadline.addingTimeInterval(
+                    req.fuel.allowPartialWindow == true ? 0.30 : 0
+                ),
+                partialHandoffDeadline
+            )
+            if seamDestinationRescueSelected {
+                // Selecting the nearest destination-pack pump can require a
+                // full sidecar scan after the local corridor is exhausted.
+                // Preserve a short, explicit proof window for that one rescue
+                // candidate instead of rejecting it because the normal seam
+                // ranking consumed the earlier deadline.
+                partialFastDeadline = max(
+                    partialFastDeadline,
+                    Date().addingTimeInterval(1.20)
+                )
+            }
+            for candidate in fastCandidates {
+                guard Date() < partialFastDeadline else { break }
                 let candidateCoordinate = CLLocationCoordinate2D(
                     latitude: candidate.latitude,
                     longitude: candidate.longitude
                 )
+                // Proving a pump is a safety/access question, not the place
+                // to spend the Dirt objective's expensive detour search. Use
+                // the fast practical profile for the bounded station leg;
+                // the continuation from that pump still uses the rider's
+                // selected profile and carries the Dirt objective forward.
+                // The station leg only proves legal forecourt access. Keep
+                // that proof on the cheapest practical road objective so the
+                // rider's Dirt search does not spend the entire fuel window
+                // exploring adventure detours before it can reach a pump.
+                // The continuation below still uses the rider's selected
+                // profile, so this does not change the character of the ride
+                // after the stop.
+                // The pump proof is an access check. Balanced is the quickest
+                // practical road objective for that short approach; the rider
+                // continuation below still uses the selected profile.
+                // The station approach is part of the rider-visible route. A
+                // Dirt ride cannot accept a paved/low-dirt access leg merely
+                // because the forecourt itself is reachable, so keep the
+                // selected profile for Dirt while retaining the quick
+                // Balanced access proof for the other profiles.
+                let stationProfile: RouteProfile = req.profile == .dirt ? .dirt : .balanced
                 // Do not give a nearby next pump the entire destination
                 // window. A candidate-specific cap keeps the local proof
                 // focused on reaching this station while allowing a generous
                 // detour margin for Dirt and preserving the rider's hard
                 // range ceiling.
                 let candidateAirMeters = approximateReachability[candidate.id] ?? firstCap
+                let candidateRegion = GraphPackStore.primaryRegionId(containing: candidateCoordinate)
+                let candidateNeedsSeam = crossesRegion
+                    && departureRegion != nil
+                    && candidateRegion != departureRegion
+                let candidateFuelCap = firstCap + (
+                    candidateNeedsSeam && seamDestinationRescueSelected
+                        ? HopSearchPolicy.fuelRangeProofToleranceMeters
+                        : 0
+                )
+                // A destination-pack pump may require the complete local hop
+                // from the seam. The air-distance cap is appropriate for a
+                // same-region station, but it can reject a valid NB forecourt
+                // when the seam approach detours around a river crossing or
+                // restricted connector. Keep the rider's usable range as the
+                // ceiling, with only the small forecourt proof epsilon above.
                 let candidateRouteCap = min(
-                    firstCap,
-                    max(candidateAirMeters * 3, candidateAirMeters + 20_000)
+                    candidateFuelCap,
+                    candidateNeedsSeam
+                        ? candidateFuelCap
+                        : max(candidateAirMeters * 3, candidateAirMeters + 20_000)
                 )
                 let candidateBegan = ProcessInfo.processInfo.systemUptime
-                var firstResult = await packs.routeOnDeviceDetailed(
+                // Bound each proof so one difficult station cannot consume
+                // the whole 1.8 s same-region window. The next candidate can
+                // then prove a practical station while the rider still gets
+                // a deterministic fast response.
+                let candidateDeadline = min(
+                    partialFastDeadline,
+                    Date().addingTimeInterval(
+                        // The first on-device proof after a cold pack decode
+                        // can spend a few hundred milliseconds warming the
+                        // graph index. Keep the rider-facing window bounded,
+                        // but do not cancel a valid same-region pump at the
+                        // exact 1.1s boundary when the search is already
+                        // making progress.
+                        candidateNeedsSeam ? 3.1 : 1.35
+                    )
+                )
+                let firstResult = await packs.routeOnDeviceDetailed(
                     from: start.locationCoordinate,
                     to: candidateCoordinate,
-                    profile: req.profile,
+                    profile: stationProfile,
                     allowUnknown: req.accessPolicy.motorizedUnknown,
                     avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
                     priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
                     arrivalEdgeId: req.options?.arrivalEdgeId,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
-                    sessionSeed: seed,
+                    // Station qualification is an access proof, not the
+                    // rider's randomized ride. Keep this local search stable
+                    // so a random Dirt seed cannot turn the same reachable
+                    // forecourt into a timeout on one attempt and a success
+                    // on the next.
+                    sessionSeed: 0,
                     maxRouteMeters: candidateRouteCap,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
                     matchLimitMeters: fuelStationMatchLimit,
+                    // Fuel stations are customer destinations.  V4 access
+                    // codes may mark the forecourt/driveway as customer-only;
+                    // leaving this nil makes a valid pump look like a
+                    // cannotSnapStart/noPath seam failure.
+                    endEndpointKind: "customers",
                     fastSearch: true,
-                    deadline: fastDeadline
+                    deadline: candidateDeadline
                 )
-                // A pump is a safety waypoint, so the approach may use a
-                // practical paved connector when a strict Dirt search cannot
-                // legally reach the mapped forecourt. Keep the rider's profile
-                // for the corridor and continuation; relax only this bounded
-                // station approach, and only while the fast deadline remains.
-                if case .failure = firstResult,
-                   req.profile == .dirt,
-                   Date() < fastDeadline {
-                    let relaxed = await packs.routeOnDeviceDetailed(
-                        from: start.locationCoordinate,
-                        to: candidateCoordinate,
-                        profile: .balanced,
-                        allowUnknown: req.accessPolicy.motorizedUnknown,
-                        avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
-                        priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
-                        arrivalEdgeId: req.options?.arrivalEdgeId,
-                        backtrackFactor: req.options?.backtrackFactor ?? 4,
-                        sessionSeed: seed,
-                        maxRouteMeters: candidateRouteCap,
-                        regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
-                        cleanMetroMultiplier: nil,
-                        avoidMotorways: false,
-                        preferBackRoads: false,
-                        matchLimitMeters: fuelStationMatchLimit,
-                        fastSearch: true,
-                        deadline: fastDeadline
-                    )
-                    if case .success = relaxed {
-                        RoutingDebugLog.shared.event(
-                            "fuel fast candidate=\(candidate.id) relaxed-profile=balanced"
-                        )
-                        firstResult = relaxed
-                    }
-                }
                 switch firstResult {
                 case .success(let firstRoute):
                     let endpointGap = Int(GeoMath.meters(
@@ -696,7 +1158,11 @@ final class PackRoutingSource: RoutingSource {
                     )
                 }
                 guard case .success(let firstRoute) = firstResult,
-                      firstRoute.distanceMeters <= firstCap + 1,
+                      firstRoute.distanceMeters <= candidateFuelCap + 1,
+                      HopSearchPolicy.fuelApproachIsAcceptable(
+                          routeMeters: firstRoute.distanceMeters,
+                          airMeters: candidateAirMeters
+                      ),
                       (req.fuel.allowPartialWindow == true || Date() < fastDeadline)
                 else { continue }
                 guard let firstEndpoint = firstRoute.coordinates.last,
@@ -781,6 +1247,10 @@ final class PackRoutingSource: RoutingSource {
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
                     matchLimitMeters: req.options?.matchLimitMeters ?? OnDeviceRouter.preferredMatchMeters,
+                    // Leave the forecourt through its customer driveway when
+                    // continuing the rider leg. This is the inverse of the
+                    // station proof's customer destination endpoint.
+                    startEndpointKind: "customers",
                     fastSearch: true,
                     deadline: fastDeadline
                 )

@@ -64,13 +64,6 @@ final class ItineraryBuilder {
     /// as proved; dense Ontario/Quebec requests get enough room to prove both
     /// sides of one pump without reaching Vercel's platform timeout.
     private static let liveFuelWindowBudgetMs = 20_000
-    /// A short rider leg should be proved as one ordinary graph route. A
-    /// direct route proof is worthwhile only while the destination is well
-    // inside the remaining tank. Near the tank edge a Dirt route can be much
-    // longer than its straight-line distance; probing it first merely burns
-    // the rider-facing deadline before the next-pump search begins. Keep the
-    // same conservative half-range trigger used by the pack fuel planner.
-    private static let directFuelAirFraction = 0.50
     private var currentGeneration: Int?
     /// Current map zoom for V4 tap-radius. Set by the planner before `build`.
     var mapZoom: Double?
@@ -749,11 +742,14 @@ final class ItineraryBuilder {
         // a final waypoint already on a packed pump still resets the tank.
         let finalWaypoint = itinerary.waypoints.last
         let finalWaypointIsFuel = finalWaypoint.map { waypointFuelStops[$0.id] != nil } ?? false
+        let directFuelAirFraction = HopSearchPolicy.fuelAirLowerBoundFraction(
+            firstLegMeters: fuel.usableMeters
+        )
         let singleShortLeg = source.supportsDirectFuelCarry
             && itinerary.legs.count == 1
             && finalWaypoint.map {
                 straightLineMeters(itinerary.waypoints[0].coordinate, $0.coordinate)
-                    <= fuel.usableMeters * Self.directFuelAirFraction + 1
+                    <= fuel.usableMeters * directFuelAirFraction + 1
             } == true
         var finalEscapeFuelMeters: Double?
         var finalEscapeVerificationWarning: String?
@@ -1033,7 +1029,7 @@ final class ItineraryBuilder {
                     return await finishWithFuelAdvisory(.unknown(diagnostic))
                 }
                 attempts += 1
-                guard attempts <= 16 else {
+                guard attempts <= 8 else {
                     return await finishWithFuelAdvisory(.unknown(
                         "Fuel planning could not find a stable forward sequence."
                     ))
@@ -1100,6 +1096,9 @@ final class ItineraryBuilder {
                     riderDestination.coordinate
                 )
                 var directFuelRouteFailed = false
+                let directFuelAirFraction = HopSearchPolicy.fuelAirLowerBoundFraction(
+                    firstLegMeters: directFuelCap
+                )
                 let shouldTryDirectFuelRoute = source.supportsDirectFuelCarry
                     && !forceFuelStop
                     && requiredStationID == nil
@@ -1108,7 +1107,7 @@ final class ItineraryBuilder {
                     // paying for a failed direct proof before its normal
                     // station search. Short legs like 67 km vs 180 km remain
                     // well inside this bound.
-                    && directAirMeters <= directFuelCap * Self.directFuelAirFraction + 1
+                    && directAirMeters <= directFuelCap * directFuelAirFraction + 1
                 if shouldTryDirectFuelRoute {
                     let directResponse = try? await source.route(routeRequest(
                         profile: activeProfile,
@@ -1761,6 +1760,30 @@ final class ItineraryBuilder {
                 + "boundary=\(String(format: "%.5f,%.5f", current.latitude, current.longitude)) "
                 + "statusScope=unverified_tail detail=\(issue.logDetail)"
         )
+
+        // Automatic fuel planning is a safety contract. Once the next pump
+        // or seam cannot be proven, drawing a full unconstrained tail makes a
+        // route look ready while its fuel state is unknown. Keep any already
+        // proven prefix visible, mark the rider leg failed, and let the UI
+        // explain that a new bounded plan is required.
+        if fuel.automaticPlanningEnabled {
+            let failed = markingFailed(
+                itinerary.legs[startIndex].id,
+                message: "Fuel route could not be proven: \(advisoryMessage ?? issue.logDetail)",
+                in: committed
+            )
+            RoutingDebugLog.shared.event(
+                "fuel advisory suppressed automatic=1 riderLeg=\(itinerary.legs[startIndex].id) "
+                    + "reason=unverified-tail"
+            )
+            onProgress(failed)
+            return appendingPreservedSuffix(
+                preservedSuffix,
+                statuses: preservedStatuses,
+                routes: preservedRoutes,
+                to: failed
+            )
+        }
 
         for index in startIndex..<endIndex {
             guard active(itinerary) else {

@@ -83,15 +83,29 @@ nonisolated enum UrbanCore {
         }
     }()
 
-    /// Embedded pack metadata is authoritative; compatibility data only fills an empty v3 pack.
+    /// Embedded pack metadata is the primary source; compatibility data fills
+    /// any gaps in a partial or older pack. Every ride profile gets the same
+    /// town wall so Dirt cannot silently cut through a settlement simply
+    /// because that pack was built with an incomplete settlement layer.
     static func settlementBoxes(
         embedded: [Box],
         regionId: String?,
         profile: RouteProfile
     ) -> [Box] {
-        if !embedded.isEmpty { return embedded }
-        guard profile == .cleanest else { return [] }
-        return fallbackSettlementsByRegion[regionId?.lowercased() ?? ""] ?? []
+        _ = profile
+        let fallback = fallbackSettlementsByRegion[regionId?.lowercased() ?? ""] ?? []
+        guard !embedded.isEmpty else { return fallback }
+
+        // Pack metadata can be generated from a filtered OSM extract. Keep
+        // its tighter boxes, then add any compatibility rows it omitted. The
+        // name check avoids duplicate walls when both sources contain the
+        // same settlement.
+        var result = embedded
+        let knownNames = Set(embedded.map { $0.name.lowercased() })
+        result.append(contentsOf: fallback.filter {
+            !knownNames.contains($0.name.lowercased())
+        })
+        return result
     }
 
     /// Fuel-stop selection uses settlements for every ride profile. A small
@@ -102,9 +116,11 @@ nonisolated enum UrbanCore {
         regionId: String?,
         bufferMeters: Double = 1_500
     ) -> [Box] {
-        let settlements = embeddedSettlements.isEmpty
-            ? fallbackSettlementsByRegion[regionId?.lowercased() ?? ""] ?? []
-            : embeddedSettlements
+        let settlements = settlementBoxes(
+            embedded: embeddedSettlements,
+            regionId: regionId,
+            profile: .balanced
+        )
         let buffer = max(0, bufferMeters)
         return (boxes + embeddedCores + settlements).map { box in
             let latPad = buffer / 111_320
@@ -231,7 +247,9 @@ nonisolated enum UrbanCore {
     }
 
     /// Pack-derived towns share Clean's bounded city control. Adventure profiles
-    /// retain the existing finite ×5 settlement preference.
+    /// retain a strong finite settlement preference so a town is avoided when
+    /// the graph offers a practical rural alternative without making a fuel
+    /// forecourt unreachable.
     static func resolveSettlementPenalty(
         profile: RouteProfile,
         override: Double?,
@@ -243,7 +261,7 @@ nonisolated enum UrbanCore {
                 override: override,
                 avoidMajorHighways: avoidMajorHighways
             )
-            : 5
+            : 12
     }
 
     /// Smaller OSM cities/towns are strongly penalized so a practical wilderness

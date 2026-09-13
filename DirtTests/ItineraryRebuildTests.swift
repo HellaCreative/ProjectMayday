@@ -38,7 +38,7 @@ struct UrbanCoreTests {
         #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: nil, avoidMajorHighways: true) == 10)
         #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: nil, avoidMajorHighways: false) == 2)
         #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: 99, avoidMajorHighways: true) == 20)
-        #expect(UrbanCore.resolveSettlementPenalty(profile: .balanced, override: 20, avoidMajorHighways: true) == 5)
+        #expect(UrbanCore.resolveSettlementPenalty(profile: .balanced, override: 20, avoidMajorHighways: true) == 12)
     }
 
     @Test func packTownPenaltyIsFiniteAndKeepsEndpointExemption() {
@@ -68,18 +68,25 @@ struct UrbanCoreTests {
         let embedded = [UrbanCore.Box(
             minLat: 1, maxLat: 2, minLon: 3, maxLon: 4, name: "pack-authoritative"
         )]
-        #expect(UrbanCore.settlementBoxes(
+        let merged = UrbanCore.settlementBoxes(
             embedded: embedded, regionId: "ns", profile: .balanced
-        ).first?.name == "pack-authoritative")
+        )
+        #expect(merged.first?.name == "pack-authoritative")
+        #expect(merged.contains { $0.name == "Truro" })
         #expect(UrbanCore.settlementBoxes(
             embedded: [], regionId: "ns", profile: .balanced
-        ).isEmpty)
+        ).contains { $0.name == "Truro" })
         #expect(UrbanCore.settlementBoxes(
             embedded: [], regionId: "ns", profile: .dirt
-        ).isEmpty)
+        ).contains { $0.name == "Truro" })
         #expect(UrbanCore.settlementBoxes(
             embedded: [], regionId: "nb", profile: .cleanest
-        ).isEmpty)
+        ).contains { $0.name == "Edmundston" })
+        for profile in RouteProfile.allCases {
+            #expect(UrbanCore.settlementBoxes(
+                embedded: [], regionId: "ns", profile: profile
+            ).contains { $0.name == "Truro" })
+        }
     }
 }
 

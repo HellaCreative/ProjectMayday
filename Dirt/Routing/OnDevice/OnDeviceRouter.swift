@@ -361,6 +361,14 @@ nonisolated struct OnDeviceRouter {
         preferBackRoads: Bool = false
     ) -> Swift.Result<Result, Failure> {
         guard !executionCancelled() else { return .failure(.searchLimit("cancelled")) }
+        // Every rider route gets a first pass with the mapped town boundary.
+        // Clean, Balanced, and Dirt therefore all avoid a town when the pack
+        // has a practical rural alternative. If that wall makes the graph
+        // genuinely disconnected, the profile-specific fallback below admits
+        // the shortest necessary through-road. Bounded fuel qualification is
+        // deliberately exempt: a pump driveway inside a town is an explicit
+        // customer destination and must remain reachable.
+        let useSettlementWall = maxRouteMeters == nil
         let pavedWall = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -372,7 +380,7 @@ nonisolated struct OnDeviceRouter {
             cityWall: true,
             pavedOnly: profile == .cleanest,
             urbanCoreFallback: false,
-            settlementWall: false,
+            settlementWall: useSettlementWall,
             settlementFallback: true,
             cleanMetroMultiplier: cleanMetroMultiplier,
             avoidMotorways: avoidMotorways,
@@ -423,7 +431,7 @@ nonisolated struct OnDeviceRouter {
             cityWall: true,
             pavedOnly: false,
             urbanCoreFallback: false,
-            settlementWall: false,
+            settlementWall: useSettlementWall,
             settlementFallback: true,
             cleanMetroMultiplier: cleanMetroMultiplier,
             avoidMotorways: avoidMotorways,
@@ -864,6 +872,15 @@ nonisolated struct OnDeviceRouter {
                     coincidentSiblings: coincidentSiblings
                 ) {
                 case .success(let result):
+                    if profile == .dirt,
+                       result.reportedDirtPercent < HopSearchPolicy.minimumReportedDirtPercent {
+                        lastFailure = .noPath
+                        RoutingDebugLog.shared.event(
+                            "on-device dirt rejected reported=\(result.reportedDirtPercent) "
+                                + "minimum=\(HopSearchPolicy.minimumReportedDirtPercent)"
+                        )
+                        continue
+                    }
                     return .success(attachSnap(result, startSnap: startSnap, endSnap: endSnap))
                 case .failure(let reason):
                     lastFailure = reason
@@ -902,8 +919,15 @@ nonisolated struct OnDeviceRouter {
         ctx.urbanCoreFallback = urbanCoreFallback
         // Major urban cores are walls. Ordinary mapped towns are a finite
         // avoidance cost so they do not sever otherwise valid rural routes.
-        ctx.settlementWall = false
-        ctx.settlementFallback = profile != .cleanest ? true : settlementFallback
+        ctx.settlementWall = settlementWall
+        // A bounded fuel proof is already selecting an explicit forecourt.
+        // Keep town avoidance on rider routes, but do not add the settlement
+        // multiplier while proving the short approach to that forecourt. The
+        // finite cost can make a valid pump look unreachable under the hard
+        // fuel cap; candidate ordering still prefers rural stations first.
+        ctx.settlementFallback = maxRouteMeters == nil
+            ? (profile != .cleanest ? true : settlementFallback)
+            : false
         ctx.fastSearch = fastSearch
         ctx.cleanMetroMultiplier = cleanMetroMultiplier
         let e4 = RoadTierStats.e4Flags(
@@ -929,7 +953,9 @@ nonisolated struct OnDeviceRouter {
                 ? min(HopSearchPolicy.dirtCorridorMeters, 40_000)
                 : HopSearchPolicy.dirtCorridorMeters
             let base = fastDirtCorridorMetersOverride ?? policyBase
-            let comparisonWidths = fastSearch ? [base] : [base * 2, base]
+            let comparisonWidths = fastSearch
+                ? [base, min(HopSearchPolicy.dirtCorridorMeters, base * 1.5)]
+                : [base * 2, base]
             let connectivityWidths: [Double?] = fastSearch ? [nil] : [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double, objective: String)] = []
             var lastBoundedFailure: Failure = .noPath
@@ -978,10 +1004,19 @@ nonisolated struct OnDeviceRouter {
                 return .success(route)
             }
 
-            for width in comparisonWidths {
+            comparisonLoop: for width in comparisonWidths {
                 switch searchDirt(width: width) {
                 case .success(let route):
                     candidates.append((route, width, "pavement"))
+                    // The first fast corridor is preferred when it already
+                    // earns the product's Dirt threshold. Widen only a weak
+                    // result; this keeps the normal phone path in the 1–2 s
+                    // lane while still giving Yarmouth-style routes one
+                    // bounded opportunity to find real dirt.
+                    if fastSearch,
+                       route.reportedDirtPercent >= HopSearchPolicy.minimumReportedDirtPercent {
+                        break comparisonLoop
+                    }
                 case .failure(let failure):
                     lastBoundedFailure = failure
                 }
@@ -1003,7 +1038,7 @@ nonisolated struct OnDeviceRouter {
             // weak result, compare one bounded resource-labelled route so a
             // shorter route with less dirt cannot beat a genuinely dirtier
             // ride merely because it contains fewer paved kilometres.
-            let primaryBestDirt = candidates.map(\.route.dirtPercent).max() ?? 0
+            let primaryBestDirt = candidates.map(\.route.reportedDirtPercent).max() ?? 0
             if !fastSearch && primaryBestDirt < 70 {
                 switch searchDirt(width: base, costMode: .balancedResource) {
                 case .success(let route):
@@ -1080,8 +1115,8 @@ nonisolated struct OnDeviceRouter {
             envelope.corridorMeters = nil
             envelope.hardCorridor = false
             envelope.boundedSearch = true
-            envelope.settlementWall = false
-            envelope.settlementFallback = false
+            envelope.settlementWall = ctx.settlementWall
+            envelope.settlementFallback = ctx.settlementFallback
             envelope.timeCapSeconds = fastSearch
                 ? 2.0
                 : (ctx.pavedOnly ? 12.0 : HopSearchPolicy.pass2TimeCapSeconds)
@@ -1235,18 +1270,18 @@ nonisolated struct OnDeviceRouter {
         let coherent = summaries.filter {
             $0.shape.backwardMeters <= max(5_000, $0.shape.routeMeters * 0.08)
         }
-        let bestDirt = summaries.map(\.candidate.route.dirtPercent).max() ?? 0
-        let bestCoherentDirt = coherent.map(\.candidate.route.dirtPercent).max() ?? Int.min
+        let bestDirt = summaries.map(\.candidate.route.reportedDirtPercent).max() ?? 0
+        let bestCoherentDirt = coherent.map(\.candidate.route.reportedDirtPercent).max() ?? Int.min
         let pool = !coherent.isEmpty && bestDirt - bestCoherentDirt < 10
             ? coherent
             : summaries
         return pool.min { lhs, rhs in
             let a = lhs.candidate
             let b = rhs.candidate
-            let dirtDelta = a.route.dirtPercent - b.route.dirtPercent
+            let dirtDelta = a.route.reportedDirtPercent - b.route.reportedDirtPercent
             if abs(dirtDelta) > 2 { return dirtDelta > 0 }
-            let pavedA = a.route.distanceMeters * Double(100 - a.route.dirtPercent) / 100
-            let pavedB = b.route.distanceMeters * Double(100 - b.route.dirtPercent) / 100
+            let pavedA = a.route.distanceMeters * Double(100 - a.route.reportedDirtPercent) / 100
+            let pavedB = b.route.distanceMeters * Double(100 - b.route.reportedDirtPercent) / 100
             if abs(pavedA - pavedB) > 2_000 { return pavedA < pavedB }
             func crossTrack(_ route: Result) -> Double {
                 guard let start = route.coordinates.first,
@@ -1258,8 +1293,8 @@ nonisolated struct OnDeviceRouter {
             let crossA = crossTrack(a.route)
             let crossB = crossTrack(b.route)
             if abs(crossA - crossB) > 1_000 { return crossA < crossB }
-            if a.route.dirtPercent != b.route.dirtPercent {
-                return a.route.dirtPercent > b.route.dirtPercent
+            if a.route.reportedDirtPercent != b.route.reportedDirtPercent {
+                return a.route.reportedDirtPercent > b.route.reportedDirtPercent
             }
             return a.width < b.width
         }?.candidate
@@ -4511,7 +4546,22 @@ nonisolated struct OnDeviceRouter {
             return true
         }
         if ctx.settlementWall,
-           UrbanCore.blocks(point: point, start: from, end: to, boxes: packSettlements) {
+           UrbanCore.blocks(
+               point: point,
+               start: from,
+               end: to,
+               boxes: settlementBoxes(for: ctx.profile)
+           ) {
+            return true
+        }
+        if ctx.settlementWall, let edgeFrom,
+           UrbanCore.blocks(
+               segmentFrom: edgeFrom,
+               segmentTo: point,
+               start: from,
+               end: to,
+               boxes: settlementBoxes(for: ctx.profile)
+           ) {
             return true
         }
         if ctx.hardCorridor, let corridor = ctx.corridorMeters,

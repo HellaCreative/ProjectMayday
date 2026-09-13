@@ -563,7 +563,14 @@ nonisolated enum FuelItinerary {
         }
         guard !cands.isEmpty else { return [] }
 
-        return cands.sorted { a, b in
+        // An off-axis candidate is useful only when the corridor has no
+        // coherent forward candidate at all. Keeping it in the normal ranked
+        // list lets a fuel chain walk back across the departure corridor and
+        // repeatedly retry a failed seam from a different point.
+        let coherentCandidates = cands.filter(\.coherent)
+        let rankedCandidates = coherentCandidates.isEmpty ? cands : coherentCandidates
+
+        return rankedCandidates.sorted { a, b in
             // Preserve an off-axis pump as a last-resort connectivity fallback,
             // but never rank it above a route-coherent forward pump.
             if a.coherent != b.coherent { return a.coherent }
