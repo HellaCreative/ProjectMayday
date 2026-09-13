@@ -17,10 +17,10 @@ struct OnDevicePackBenchmarkTests {
     }
 
 
-    private func verifyPack(_ region: String) throws {
-        let dir = root.appendingPathComponent(region)
+    private func verifyPack(_ region: String, packRoot: URL? = nil, version: String = "fabric-v4-20260908-02") throws {
+        let dir = (packRoot ?? root).appendingPathComponent(region)
         let manifest = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("pack-manifest.v2.json"))) as? [String: Any])
-        #expect(manifest["fabricReleaseId"] as? String == "fabric-v4-20260908-02")
+        #expect(manifest["fabricReleaseId"] as? String == version)
         for key in ["graph", "geometry", "fuel", "seams"] {
             let file = try #require(manifest[key] as? [String: Any])
             let name = try #require(file["name"] as? String)
@@ -31,16 +31,16 @@ struct OnDevicePackBenchmarkTests {
     }
 
     @MainActor
-    private func fixtureStore() throws -> (GraphPackStore, URL) {
+    private func fixtureStore(packRoot: URL? = nil, version: String = "fabric-v4-20260908-02") throws -> (GraphPackStore, URL) {
         let fm = FileManager.default
         let temp = fm.temporaryDirectory.appendingPathComponent("recovery-packs-\(UUID())")
         do {
             for region in ["ns", "nb"] {
-                try verifyPack(region)
-                let destination = temp.appendingPathComponent("fabric-v4-20260908-02/\(region)")
+                try verifyPack(region, packRoot: packRoot, version: version)
+                let destination = temp.appendingPathComponent("\(version)/\(region)")
                 try fm.createDirectory(at: destination, withIntermediateDirectories: true)
                 for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json", "pack-manifest.v2.json"] {
-                    try fm.copyItem(at: root.appendingPathComponent("\(region)/\(name)"), to: destination.appendingPathComponent(name))
+                    try fm.copyItem(at: (packRoot ?? root).appendingPathComponent("\(region)/\(name)"), to: destination.appendingPathComponent(name))
                 }
             }
             return (GraphPackStore(cacheRoot: temp, refreshCatalogOnInit: false), temp)
@@ -243,6 +243,46 @@ struct OnDevicePackBenchmarkTests {
         }
     }
 
+    @Test("Owner phone 42 requests replay with its exact catalog and fuel settings")
+    @MainActor
+    func ownerPhone42Requests() async throws {
+        let version = "fabric-v4-20260909-02"
+        let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(version).appendingPathComponent("packs")
+        let (store, temp) = try fixtureStore(packRoot: candidate, version: version)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let cases: [(String, Double, Double, Double, UInt64)] = [
+            ("20AB1401-6158-52C4-8FF8-572F828EC800", 46.95522997783574, -60.45932167843518, 10.2, 5934816597329416),
+            ("B43439CF-6AD5-5307-840F-B44671702BE7", 46.907159895654424, -60.5140885784627, 11.2, 5514739685182283),
+            ("531BC48C-868A-5545-AB93-1FD01CEBABFF", 46.885033126489716, -60.49502889835437, 11.2, 5797475437955788),
+            ("EB86574E-9CF2-5EC8-AF91-664BABDD8718", 45.56808192814221, -62.233921261078635, 7.9, 6709655860308004)
+        ]
+        for (id, lat, lon, zoom, seed) in cases {
+            let a = RiderWaypoint(coordinate: RouteCoordinate(longitude: -63.34024797349485, latitude: 44.764804567541226))
+            let b = RiderWaypoint(coordinate: RouteCoordinate(longitude: lon, latitude: lat))
+            let template = RiderLeg(from: a.id, to: b.id, profile: .dirt, allowUnknown: false, avoidMotorways: false)
+            var raw = try #require(try object(template) as? [String: Any])
+            raw["id"] = id
+            let leg = try JSONDecoder().decode(RiderLeg.self, from: JSONSerialization.data(withJSONObject: raw))
+            #expect(leg.routingSessionSeed == seed)
+            let itinerary = RiderItinerary(waypoints: [a, b], legs: [leg], generation: 1, impassableEdgeIDs: [])
+            let builder = ItineraryBuilder()
+            builder.mapZoom = zoom
+            let result = await builder.build(itinerary, from: 0, reuse: nil,
+                fuel: FuelRangePrefs.Snapshot(tankMeters: 200_000, usableMeters: 180_000, reservePercent: 10, automaticPlanningEnabled: true),
+                source: .fixed(PackRoutingSource(packs: store, cache: RouteResponseCache())),
+                onFuelStatus: { _ in }, onProgress: { _ in })
+            try saveEvidence(["pack": version, "itinerary": try object(itinerary), "mapZoom": zoom,
+                "tankMeters": 200_000, "usableMeters": 180_000,
+                "routes": try result.legs.map { try object($0.response) },
+                "status": String(describing: result.riderLegStatus),
+                "stops": result.legs.compactMap { $0.endsAtFuelStop?.stationID }], name: "phone42-" + id)
+            #expect(result.legs.first?.endsAtFuelStop?.stationID != nil)
+            #expect(result.legs.last?.toCoordinate == b.coordinate)
+            #expect(result.riderLegStatus[leg.id] == .built)
+        }
+    }
+
     @Test("Short fuel-enabled itinerary begins with the required initial refill")
     @MainActor
     func shortItineraryStartsWithRefill() async throws {
@@ -277,6 +317,8 @@ struct OnDevicePackBenchmarkTests {
         let pumps = store.fuelStations(from: from, to: to)
         let ns = try loadPack("ns"), nb = try loadPack("nb")
         let anchor = try #require(ns.crossPackSeams["nb"]?.first)
+        let seamNode = try #require(anchor.osmNodeId)
+        #expect(ns.osmNodeIds.contains(seamNode) && nb.osmNodeIds.contains(seamNode))
         let parts = anchor.localEdgeId.split(separator: ":")
         let a = try #require(Int64(parts[1])), b = try #require(Int64(parts[2]))
         let canonical = "w\(anchor.osmWayId):\(min(a, b)):\(max(a, b))"

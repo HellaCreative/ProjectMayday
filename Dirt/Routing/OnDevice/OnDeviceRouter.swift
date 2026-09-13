@@ -184,6 +184,9 @@ nonisolated struct OnDeviceRouter {
     var pavedBias: Double = 1
     /// The owner-required refill approach precedes the recreational ride.
     var initialFuelApproach = false
+    /// Regional joins are recorded graph nodes, not rider tap locations.
+    var recordedStartNode: Int? = nil
+    var recordedEndNode: Int? = nil
 
     /// Planning-session seed for controlled variety. New process → new seed.
     var sessionSeed: UInt64 = 0
@@ -479,10 +482,11 @@ nonisolated struct OnDeviceRouter {
         cityWall: Bool
     ) -> [Double]? {
         _ = cityWall
-        let snaps = nearestEdgeSnaps(
-            to: from, allowUnknown: allowUnknown, profile: profile,
-            maxMeters: Self.preferredMatchMeters
-        )
+        let snaps = Self.rangeSnapCache.snaps(pack: pack, point: from,
+            profile: profile, allowUnknown: allowUnknown) {
+            nearestEdgeSnaps(to: from, allowUnknown: allowUnknown, profile: profile,
+                maxMeters: Self.preferredMatchMeters)
+        }
         guard !snaps.isEmpty else {
             return nil
         }
@@ -780,6 +784,12 @@ nonisolated struct OnDeviceRouter {
             intentBearingDeg: endEndpointKind == "customers" ? nil : bearingDeg(from: to, to: from),
             rejections: &endRejects
         ).filter { $0.distanceMeters <= snapCap }
+        if let node = recordedStartNode {
+            startRaw = recordedNodeSnaps(node: node, point: from, profile: profile, allowUnknown: allowUnknown)
+        }
+        if let node = recordedEndNode {
+            endRaw = recordedNodeSnaps(node: node, point: to, profile: profile, allowUnknown: allowUnknown)
+        }
         // Selected pumps stay on the closest packed anchor; intent must not
         // move a failed station entrance onto a nearby public through-road.
         if v4, startEndpointKind == "customers", let nearest = startRaw.first?.distanceMeters {
@@ -4071,6 +4081,26 @@ nonisolated struct OnDeviceRouter {
     /// Closest eligible pack edges within `maxMeters`, nearest first (capped).
     /// Returns extra candidates so adventure re-sort + paved diversification still
     /// have yellow/white connectors available in dense track meshes.
+    private func recordedNodeSnaps(node: Int, point: CLLocationCoordinate2D,
+                                   profile: RouteProfile, allowUnknown: Bool) -> [EdgeSnap] {
+        guard node >= 0, node < pack.nodeCount else { return [] }
+        let coordinate = coordinate(forNode: node)
+        // The accepted seam contract permits at most a two-metre join.
+        guard meters(point, coordinate) <= 2 else { return [] }
+        return nearestEdgeSnaps(to: coordinate, allowUnknown: allowUnknown,
+            profile: profile, maxMeters: 2).filter {
+                $0.nodeA == node || $0.nodeB == node
+            }.map { candidate in
+                var snap = candidate
+                snap.projected = coordinate
+                snap.distanceMeters = meters(point, coordinate)
+                let atStart = snap.nodeA == node
+                snap.distanceAlongM = atStart ? 0 : Double(pack.edgeMeters[snap.edgeIndex])
+                snap.segmentIndex = atStart ? 0 : max(0, (edgeGeometry(snap.edgeIndex)?.count ?? 2) - 2)
+                return snap
+            }
+    }
+
     private func nearestEdgeSnaps(
         to point: CLLocationCoordinate2D,
         allowUnknown: Bool,

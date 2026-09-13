@@ -118,7 +118,7 @@ enum PackAcquisitionEvaluator {
     static func requiredRegionIDs(
         for coordinates: [CLLocationCoordinate2D]
     ) -> [String] {
-        GraphPackStore.regionIds(containingAny: coordinates)
+        GraphPackStore.requiredRoutingRegionIDs(for: coordinates)
     }
 
     static func decide(

@@ -58,6 +58,77 @@ struct PackFirstRoutingTests {
         #expect(policy.select(for: nsRequest()).name == "pack")
     }
 
+    @Test func localPlanningWaitsForInstallationThenResumesTheSameRide() async {
+        let live = NamedFakeRoutingSource(name: "live")
+        let pack = NamedFakeRoutingSource(name: "pack")
+        let coverage = FakePackCoverage(installed: [], published: ["ns"])
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let model = makePackFirstModel(live: live, pack: pack,
+            policy: RoutingSourcePolicy(isOnline: { true }, installedPacks: coverage,
+                live: live, pack: pack, onDeviceOnly: true), acquisition: coordinator,
+            requiresInstalledRoutingPacks: true)
+        model.apply(.replaceAll(waypoints: [halifax, sydney], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+        await model.waitForCanonicalBuildForTesting()
+        let requested = model.itinerary
+        #expect(model.packConsent?.regionIDs == ["ns"])
+        #expect(pack.routeRequests.isEmpty && live.routeRequests.isEmpty)
+        await model.acceptPackConsent()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(coverage.installCalls == [["ns"]])
+        #expect(model.packConsent == nil)
+        #expect(model.itinerary.waypoints == requested.waypoints)
+        #expect(!pack.routeRequests.isEmpty)
+        #expect(live.routeRequests.isEmpty)
+    }
+
+    @Test func decliningRequiredLocalPackPreservesPinsWithoutRouting() async {
+        let live = NamedFakeRoutingSource(name: "live")
+        let pack = NamedFakeRoutingSource(name: "pack")
+        let coverage = FakePackCoverage(installed: [], published: ["ns"])
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let model = makePackFirstModel(live: live, pack: pack,
+            policy: RoutingSourcePolicy(isOnline: { true }, installedPacks: coverage,
+                live: live, pack: pack, onDeviceOnly: true), acquisition: coordinator,
+            requiresInstalledRoutingPacks: true)
+        model.apply(.replaceAll(waypoints: [halifax, sydney], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+        model.declinePackConsent()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [halifax, sydney])
+        #expect(pack.routeRequests.isEmpty && live.routeRequests.isEmpty)
+        #expect(model.errorMessage?.contains("routing pack") == true)
+    }
+
+    @Test func missingPackCannotBeReportedAsDisconnectedRoads() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = GraphPackStore(cacheRoot: root, refreshCatalogOnInit: false)
+        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+        do {
+            _ = try await source.route(nsRequest())
+            Issue.record("Missing pack must not produce a route")
+        } catch {
+            let message = error.localizedDescription
+            #expect(message.contains("routing pack"))
+            #expect(!message.contains("don’t connect"))
+            #expect(!message.contains("try Balanced"))
+        }
+    }
+
+    @Test func crossCanadaAcquisitionIncludesIntermediateProvinces() {
+        let vancouver = CLLocationCoordinate2D(latitude: 49.2827, longitude: -123.1207)
+        let required = PackAcquisitionEvaluator.requiredRegionIDs(for: [halifax.locationCoordinate, vancouver])
+        #expect(required == ["ns", "nb", "qc", "on", "mb", "sk", "ab", "bc"])
+        let coverage = FakePackCoverage(installed: ["ns"], published: Set(required))
+        let decision = PackAcquisitionEvaluator.decide(coordinates: [halifax.locationCoordinate, vancouver],
+            registry: coverage, declinedDownloads: [], declinedUpdates: [], protectInstalledRevisions: false)
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("Intermediate missing packs must be requested"); return
+        }
+        #expect(prompt.regionIDs == Array(required.dropFirst()))
+    }
+
     @Test func missingNSTriggersConsent() {
         let coverage = FakePackCoverage(installed: [], published: ["ns"])
         let decision = PackAcquisitionEvaluator.decide(
@@ -382,7 +453,8 @@ private func makePackFirstModel(
     live: NamedFakeRoutingSource,
     pack: NamedFakeRoutingSource,
     policy: RoutingSourcePolicy,
-    acquisition: PackAcquisitionCoordinator
+    acquisition: PackAcquisitionCoordinator,
+    requiresInstalledRoutingPacks: Bool = false
 ) -> RoutePlannerModel {
     RoutePlannerModel(
         routing: RoutingClient(),
@@ -394,7 +466,8 @@ private func makePackFirstModel(
         network: NetworkPathMonitor(),
         routingSourcePolicy: policy,
         itineraryBuilder: ItineraryBuilder(),
-        packAcquisition: acquisition
+        packAcquisition: acquisition,
+        requiresInstalledRoutingPacks: requiresInstalledRoutingPacks
     )
 }
 

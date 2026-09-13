@@ -477,6 +477,7 @@ final class RoutePlannerModel {
     private let itineraryBuilder: ItineraryBuilder
     private let routingSourcePolicy: RoutingSourcePolicy
     private let packAcquisition: PackAcquisitionCoordinator
+    private let requiresInstalledRoutingPacks: Bool
     private weak var poiManager: POIManager?
     /// Wired by AppEnvironment — restore Music volume after End Navigation.
     /// Fires after nav teardown. Argument is a contribute candidate when enough
@@ -494,7 +495,8 @@ final class RoutePlannerModel {
         poiManager: POIManager? = nil,
         routingSourcePolicy: RoutingSourcePolicy? = nil,
         itineraryBuilder: ItineraryBuilder? = nil,
-        packAcquisition: PackAcquisitionCoordinator? = nil
+        packAcquisition: PackAcquisitionCoordinator? = nil,
+        requiresInstalledRoutingPacks: Bool? = nil
     ) {
         self.routing = routing
         self.locationService = locationService
@@ -521,6 +523,8 @@ final class RoutePlannerModel {
             )
         }
         self.packAcquisition = packAcquisition ?? PackAcquisitionCoordinator(store: graphPacks)
+        self.requiresInstalledRoutingPacks = requiresInstalledRoutingPacks
+            ?? (routingSourcePolicy == nil && AppConfig.computesRoutesOnDevice)
 
         navigation.onRerouteNeeded = { [weak self] in
             guard let self else { return }
@@ -855,6 +859,31 @@ final class RoutePlannerModel {
         replanFromStationID: String? = nil
     ) {
         let requested = itinerary
+        if requiresInstalledRoutingPacks {
+            let coordinates = requested.waypoints.map { $0.coordinate.locationCoordinate }
+            switch packAcquisition.evaluate(coordinates: coordinates,
+                protectInstalledRevisions: graphPacks.protectInstalledRevisions) {
+            case .requestConsent:
+                pendingPackBuild = (legIndex, throughLegIndex, reuse, replanFromStationID)
+                isRouting = false
+                isAssemblingRoute = false
+                fuelPlanningStatus = nil
+                toast = nil
+                RoutingDebugLog.shared.event("local planning waiting for required routing packs")
+                return
+            case .useLive:
+                pendingPackBuild = nil
+                isRouting = false
+                isAssemblingRoute = false
+                fuelPlanningStatus = nil
+                toast = nil
+                errorMessage = "Install the required regional routing pack before building this ride."
+                RoutingDebugLog.shared.event("local planning blocked: required routing packs unavailable")
+                return
+            case .useInstalledPacks:
+                pendingPackBuild = nil
+            }
+        }
         let preferences = ridePreferences
         let fuel = FuelRangePrefs.snapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)

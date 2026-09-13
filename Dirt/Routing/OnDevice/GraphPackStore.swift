@@ -138,6 +138,8 @@ final class GraphPackStore {
         let startKind: String?
         let endKind: String?
         let initialFuelApproach: Bool
+        let recordedStartNode: Int64?
+        let recordedEndNode: Int64?
     }
     private final class RegionalRouteEntry {
         weak var pack: GraphV2Pack?
@@ -954,11 +956,13 @@ final class GraphPackStore {
         guard regions.count >= 2 else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
         var seamAttempts = 0
+        var missingRecordedSeam = false
         let maximumSeamAttempts = max(24, min(96, (regions.count - 1) * 8))
 
         func search(
             regionIndex: Int,
             current: CLLocationCoordinate2D,
+            currentRecordedNode: Int64?,
             hops: [OnDeviceRouter.Result],
             usedEdges: Set<String>,
             incomingEdgeId: String?,
@@ -994,7 +998,8 @@ final class GraphPackStore {
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
                     endEndpointKind: endEndpointKind,
-                    initialFuelApproach: initialFuelApproach
+                    initialFuelApproach: initialFuelApproach,
+                    recordedStartNode: currentRecordedNode
                 )
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
                     if case .failure(let reason) = final { lastFailure = reason }
@@ -1028,6 +1033,16 @@ final class GraphPackStore {
                         && abs($0.longitude - anchor.longitude) < 0.00002
                         && $0.gapMeters <= 2
                 }) else { continue }
+                let recordedNode = anchor.osmNodeId
+                if localPack.version >= 4 || remotePack.version >= 4 {
+                    guard let recordedNode, reverse.osmNodeId == recordedNode,
+                          localPack.osmNodeIds.contains(recordedNode),
+                          remotePack.osmNodeIds.contains(recordedNode) else {
+                        missingRecordedSeam = true
+                        lastFailure = .searchLimit("recordedSeamNodeUnavailable")
+                        continue
+                    }
+                }
                 seamAttempts += 1
                 let seam = CLLocationCoordinate2D(
                     latitude: (anchor.latitude + reverse.latitude) / 2,
@@ -1050,15 +1065,19 @@ final class GraphPackStore {
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
                     endEndpointKind: nil,
-                    initialFuelApproach: initialFuelApproach
+                    initialFuelApproach: initialFuelApproach,
+                    recordedStartNode: currentRecordedNode,
+                    recordedEndNode: recordedNode
                 )
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
                     if case .failure(let reason) = hop { lastFailure = reason }
                     continue
                 }
+                RoutingDebugLog.shared.event("seam approach expectedWay=\(anchor.osmWayId) matchedWay=\(routed.snapDiagnostics?.end?.osmWayId ?? "unknown") offset=\(routed.snapDiagnostics?.end?.distanceM ?? -1)m")
                 if let result = await search(
                     regionIndex: regionIndex + 1,
                     current: seam,
+                    currentRecordedNode: recordedNode,
                     hops: hops + [routed],
                     usedEdges: usedEdges.union(routed.edgeIds),
                     incomingEdgeId: routed.edgeIds.last ?? incomingEdgeId,
@@ -1075,6 +1094,7 @@ final class GraphPackStore {
         if let result = await search(
             regionIndex: 0,
             current: from,
+            currentRecordedNode: nil,
             hops: [],
             usedEdges: priorEdgeIds,
             incomingEdgeId: arrivalEdgeId,
@@ -1084,6 +1104,7 @@ final class GraphPackStore {
         ) {
             return .success(result)
         }
+        if missingRecordedSeam { return .failure(.searchLimit("recordedSeamNodeUnavailable")) }
         return .failure(lastFailure)
     }
 
@@ -1127,14 +1148,22 @@ final class GraphPackStore {
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
         endEndpointKind: String? = nil,
-        initialFuelApproach: Bool = false
+        initialFuelApproach: Bool = false,
+        recordedStartNode: Int64? = nil,
+        recordedEndNode: Int64? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
         } else {
             await ensureActivePackAsync(for: [from, to])
         }
-        guard let pack = activePack else { return .failure(.noPath) }
+        guard let pack = activePack else { return .failure(.searchLimit("routingPackUnavailable")) }
+        let startNode = recordedStartNode.flatMap { pack.osmNodeIds.firstIndex(of: $0) }
+        let endNode = recordedEndNode.flatMap { pack.osmNodeIds.firstIndex(of: $0) }
+        guard (recordedStartNode == nil || startNode != nil),
+              (recordedEndNode == nil || endNode != nil) else {
+            return .failure(.searchLimit("recordedSeamNodeUnavailable"))
+        }
         let avoid = Set(avoidEdgeIds)
         if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
         let key = RegionalRouteKey(pack: ObjectIdentifier(pack),
@@ -1144,7 +1173,8 @@ final class GraphPackStore {
             arrival: arrivalEdgeId, backtrackFactor: backtrackFactor, seed: sessionSeed,
             cap: maxRouteMeters, metro: cleanMetroMultiplier, avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads, zoom: mapZoom, matchLimit: matchLimitMeters,
-            startKind: startEndpointKind, endKind: endEndpointKind, initialFuelApproach: initialFuelApproach)
+            startKind: startEndpointKind, endKind: endEndpointKind, initialFuelApproach: initialFuelApproach,
+            recordedStartNode: recordedStartNode, recordedEndNode: recordedEndNode)
         if maxRouteMeters != nil, let cached = regionalRoutes[key], cached.pack === pack {
             regionalRouteCacheHits += 1
             regionalRouteRecency.removeAll { $0 == key }
@@ -1171,6 +1201,8 @@ final class GraphPackStore {
             router.startEndpointKind = startKind
             router.endEndpointKind = endKind
             router.initialFuelApproach = initialFuelApproach
+            router.recordedStartNode = startNode
+            router.recordedEndNode = endNode
             let result = router.routeDetailed(
                 from: start,
                 to: end,
@@ -2155,6 +2187,25 @@ final class GraphPackStore {
         return ordered
     }
 
+    /// Download prerequisites between rider points, before detailed road search.
+    /// Use connected region adjacency, not a straight-line/bounding-box corridor.
+    static func requiredRoutingRegionIDs(for coordinates: [CLLocationCoordinate2D]) -> [String] {
+        let endpoints = coordinates.compactMap { primaryRegionId(containing: $0) }
+        guard let first = endpoints.first else { return [] }
+        let countries = Dictionary(uniqueKeysWithValues: catalogSeed.map { ($0.id, $0.country) })
+        let all = Set(catalogSeed.map(\.id))
+        var result = [first]
+        for (from, to) in zip(endpoints, endpoints.dropFirst()) {
+            let domestic = countries[from] == countries[to]
+                ? Set(catalogSeed.filter { $0.country == countries[from] }.map(\.id)) : all
+            let path = shortestRegionPath(from: from, to: to, allowedRegionIds: domestic)
+                ?? shortestRegionPath(from: from, to: to, allowedRegionIds: all)
+                ?? [from, to]
+            for region in path where !result.contains(region) { result.append(region) }
+        }
+        return result
+    }
+
     /// Collapse legacy QC quadrant / shard ids to one province pack family.
     /// Lockstep: `scripts/pack-fabric/routing/regional/select.js` `provinceFamily`.
     static func provinceFamily(_ regionId: String) -> String {
@@ -2457,6 +2508,9 @@ final class GraphPackStore {
         case .noPath:
             return "No on-device path between those points in \(regionClause). The pack roads near A and B don’t connect under this profile — try Balanced, nudge B onto a through-road, or turn on Allow unknown."
         case .searchLimit(let limit):
+            if limit == "routingPackUnavailable" {
+                return "The routing pack for \(regionClause) could not be loaded. Install the regional pack before building this ride."
+            }
             return "The on-device route search reached its \(limit) safety limit in \(regionClause). Try a shorter stage or add an intermediate waypoint."
         case .none:
             return "Couldn’t build an on-device route in \(regionClause). Check which end is off the roadway and nudge that pin."

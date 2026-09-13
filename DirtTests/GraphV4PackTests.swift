@@ -80,6 +80,32 @@ struct GraphV4PackTests {
         #expect(feasible.distanceMeters <= reference.distanceMeters + 1)
     }
 
+    @Test("recorded border endpoints cannot resnap away from their graph node")
+    func recordedBorderEndpoint() throws {
+        let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.graph.v4.bin")))
+        pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.geometry.v1.bin")))
+        let node = try #require((0..<pack.nodeCount).min { a, b in
+            abs(Double(pack.nodeCoords[a * 2]) + 63.996) < abs(Double(pack.nodeCoords[b * 2]) + 63.996)
+        })
+        let endpoint = CLLocationCoordinate2D(latitude: Double(pack.nodeCoords[node * 2 + 1]), longitude: Double(pack.nodeCoords[node * 2]))
+        let displaced = CLLocationCoordinate2D(latitude: endpoint.latitude - 0.0003, longitude: endpoint.longitude)
+        let from = CLLocationCoordinate2D(latitude: 45, longitude: -64.004)
+        var router = OnDeviceRouter(pack: pack)
+        router.matchLimitMeters = 80
+        router.initialFuelApproach = true
+        guard case .success = router.routeDetailed(from: from, to: displaced, profile: .cleanest, allowUnknown: false, sessionSeed: 0) else {
+            Issue.record("Ordinary rider pin should still match the nearby road"); return
+        }
+        router.recordedEndNode = node
+        if case .success = router.routeDetailed(from: from, to: displaced, profile: .cleanest, allowUnknown: false, sessionSeed: 0) {
+            Issue.record("A recorded border node must not accept a displaced connection")
+        }
+        guard case .success(let result) = router.routeDetailed(from: from, to: endpoint, profile: .cleanest, allowUnknown: false, sessionSeed: 0) else {
+            Issue.record("The exact recorded border node must remain reachable"); return
+        }
+        #expect((result.snapDiagnostics?.end?.distanceM ?? 999) <= 2)
+    }
+
     @Test("forbidden forecourt entrance cannot resnap to the public road")
     func forbiddenForecourt() throws {
         let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt-blocked.graph.v4.bin")))
@@ -294,6 +320,7 @@ struct GraphV4PackTests {
                     "coordinate": [-64.25, 45.85],
                     "gapMeters": 0,
                     "osmWayId": "100",
+                    "osmNodeId": "9876543210",
                     "localEdgeId": "100:1:2",
                     "remoteEdgeId": "100:1:2"
                 ]]
@@ -301,6 +328,7 @@ struct GraphV4PackTests {
         ]
         try pack.applyCrossPackSeams(data: JSONSerialization.data(withJSONObject: valid))
         #expect(pack.crossPackSeams["nb"]?.count == 1)
+        #expect(pack.crossPackSeams["nb"]?.first?.osmNodeId == 9876543210)
 
         var wrongEpoch = valid
         wrongEpoch["sourceEpoch"] = "different-source"

@@ -16,6 +16,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let gapMeters: Double
         var componentPair: String? = nil
         var networkSize: Int = 0
+        var osmNodeId: Int64? = nil
     }
 
     /// Resolved Graph-v3 leaf fields for one undirected edge (mirrors JS `edgeLeaves`).
@@ -750,7 +751,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                     remoteEdgeId: String(describing: remoteEdgeId),
                     gapMeters: gap.doubleValue,
                     componentPair: row["componentPair"] as? String,
-                    networkSize: (row["networkSize"] as? NSNumber)?.intValue ?? 0
+                    networkSize: (row["networkSize"] as? NSNumber)?.intValue ?? 0,
+                    osmNodeId: row["osmNodeId"].flatMap { Int64(String(describing: $0)) }
                 )
             }
         }

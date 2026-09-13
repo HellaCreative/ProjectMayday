@@ -198,7 +198,18 @@ final class PackRoutingSource: RoutingSource {
         self.cache = cache
     }
 
+    private func requireInstalledPacks(_ locations: [RouteLocation]) throws {
+        let coordinates = locations.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+        let needed = GraphPackStore.requiredRoutingRegionIDs(for: coordinates)
+        let missing = needed.filter { !packs.isInstalled($0) }
+        guard !needed.isEmpty, missing.isEmpty else {
+            let names = missing.map { packs.displayTitle(forRegionId: $0) }.joined(separator: " / ")
+            throw RoutingError.server("Routing data is unavailable for \(names.isEmpty ? "this area" : names). Install the required regional routing pack before building this ride.")
+        }
+    }
+
     func route(_ req: RouteRequest) async throws -> RouteResponse {
+        try requireInstalledPacks(req.locations)
         guard req.options?.ridePreferences == nil else { throw RoutingError.server("Custom ride settings require online planning.") }
         let endpoints = try routeEndpoints(req)
         let key = RouteResponseCache.Key(
@@ -302,6 +313,7 @@ final class PackRoutingSource: RoutingSource {
     /// Offline equivalent of the existing forward fuel-chain path: the pack's
     /// own reachability search proves each pump before it is committed.
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
+        try requireInstalledPacks(req.locations)
         let deadline = RoutingWorkContext.limitedDeadline(milliseconds: req.fuel.windowTimeBudgetMs)
         return try await RoutingWorkContext.$deadline.withValue(deadline) {
             try await fuelChainUsingPack(req)
