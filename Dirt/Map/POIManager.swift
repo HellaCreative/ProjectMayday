@@ -227,7 +227,6 @@ final class POIManager {
     private let mapState: MapState
     private let graphPacks: GraphPackStore
     private let network: NetworkPathMonitor
-    private let onDeviceOnly: Bool
     private let riderServicesStore = RiderServicesStore()
     private var debounceTask: Task<Void, Never>?
     private var refreshInProgress = false
@@ -243,16 +242,10 @@ final class POIManager {
         return URLSession(configuration: cfg)
     }()
 
-    init(
-        mapState: MapState,
-        graphPacks: GraphPackStore,
-        network: NetworkPathMonitor,
-        onDeviceOnly: Bool = false
-    ) {
+    init(mapState: MapState, graphPacks: GraphPackStore, network: NetworkPathMonitor) {
         self.mapState = mapState
         self.graphPacks = graphPacks
         self.network = network
-        self.onDeviceOnly = onDeviceOnly
         armObservation()
     }
 
@@ -401,8 +394,7 @@ final class POIManager {
         )
         var features: [POIFeature] = []
         if prefs.showFuel {
-            let useLive = network.isOnline && !onDeviceOnly
-            let sourceID = useLive ? "live-pack" : "installed-pack"
+            let sourceID = network.isOnline ? "live-pack" : "installed-pack"
             let sourceChanged = fuelViewportCache.prepare(for: sourceID)
             if sourceChanged {
                 // Never paint installed-pack stations as if they were a live
@@ -410,7 +402,7 @@ final class POIManager {
                 mapState.updatePOIFeatures([])
             }
             if !fuelViewportCache.covers(queryBounds) {
-                if useLive {
+                if network.isOnline {
                     let from = RouteCoordinate(longitude: bbox.minLon, latitude: bbox.minLat)
                     let to = RouteCoordinate(longitude: bbox.maxLon, latitude: bbox.maxLat)
                     do {

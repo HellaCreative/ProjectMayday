@@ -92,6 +92,7 @@ struct AccessPolicy: Codable, Sendable {
 /// Optional per-request routing options. `avoidEdgeIds` is honored on-device
 /// (route incident recovery). Requests without it omit `options`.
 struct RouteRequestOptions: Codable, Sendable {
+    var ridePreferences: RidePreferences?
     var avoidEdgeIds: [String]?
     var priorEdgeIds: [String]?
     var arrivalEdgeId: String?
@@ -112,6 +113,10 @@ struct RouteRequestOptions: Codable, Sendable {
     var mapZoom: Double?
     /// Optional override of the zoom-aware snap radius, still capped.
     var matchLimitMeters: Double?
+    /// V4 access intent. `customers` is set only for a deliberately selected
+    /// service/fuel endpoint; ordinary rider pins omit these fields.
+    var startEndpointKind: String?
+    var endEndpointKind: String?
 
     init(
         avoidEdgeIds: [String] = [],
@@ -126,8 +131,11 @@ struct RouteRequestOptions: Codable, Sendable {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false,
         mapZoom: Double? = nil,
-        matchLimitMeters: Double? = nil
+        matchLimitMeters: Double? = nil,
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil
     ) {
+        self.ridePreferences = RidePreferenceContext.current
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
         self.arrivalEdgeId = arrivalEdgeId
@@ -146,6 +154,8 @@ struct RouteRequestOptions: Codable, Sendable {
         self.preferBackRoads = preferBackRoads ? true : nil
         self.mapZoom = mapZoom?.isFinite == true ? mapZoom : nil
         self.matchLimitMeters = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
+        self.startEndpointKind = startEndpointKind == "customers" ? "customers" : nil
+        self.endEndpointKind = endEndpointKind == "customers" ? "customers" : nil
     }
 }
 
@@ -172,7 +182,9 @@ struct RouteRequest: Codable, Sendable {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false,
         mapZoom: Double? = nil,
-        matchLimitMeters: Double? = nil
+        matchLimitMeters: Double? = nil,
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil
     ) {
         self.profile = profile
         self.locations = locations
@@ -190,7 +202,8 @@ struct RouteRequest: Codable, Sendable {
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
-           !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil {
+           !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil,
+           startEndpointKind == nil, endEndpointKind == nil, RidePreferenceContext.current == nil {
             options = nil
         } else {
             options = RouteRequestOptions(
@@ -206,7 +219,9 @@ struct RouteRequest: Codable, Sendable {
                 avoidMotorways: scopedAvoid,
                 preferBackRoads: scopedPrefer,
                 mapZoom: zoom,
-                matchLimitMeters: matchLimit
+                matchLimitMeters: matchLimit,
+                startEndpointKind: startEndpointKind,
+                endEndpointKind: endEndpointKind
             )
         }
     }
@@ -296,7 +311,7 @@ struct FuelChainRequest: Codable, Sendable {
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
         options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
-            && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil
+            && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil && RidePreferenceContext.current == nil
             ? nil
             : RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
@@ -543,6 +558,9 @@ struct FuelChainResponse: Codable, Sendable {
     /// chain. There is one response per returned hop, plus the destination hop
     /// when windowComplete is true.
     var routes: [RouteResponse]? = nil
+    /// A completed road foundation retained after an incomplete fuel proof.
+    /// This is advisory geometry, never a fuel-qualified route.
+    var foundationRoute: RouteResponse? = nil
     var stationCandidates: [FuelStationCandidate]? = nil
     var firstReachableStationMeters: Double? = nil
     var destinationEscapeMeters: Double? = nil

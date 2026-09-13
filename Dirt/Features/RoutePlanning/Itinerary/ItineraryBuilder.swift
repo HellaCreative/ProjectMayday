@@ -58,12 +58,25 @@ struct FuelPlanningProgressWatchdog {
     }
 }
 
+enum FuelPlanningWindowPolicy {
+    static func milliseconds(regions: [String], live: Bool) -> Int {
+        let atlantic: Set<String> = ["ns", "nb", "pe", "nl"]
+        return live && regions.contains(where: { !atlantic.contains($0) }) ? 90_000 : 20_000
+    }
+
+    static func transportSeconds(milliseconds: Int) -> TimeInterval {
+        max(1, Double(milliseconds) / 1_000 + (milliseconds > 20_000 ? 10 : 3))
+    }
+
+    @MainActor static func milliseconds(points: [RouteCoordinate], live: Bool) -> Int {
+        milliseconds(regions: GraphPackStore.endpointProvinceIds(
+            containingAny: points.map(\.locationCoordinate)
+        ), live: live)
+    }
+}
+
 @MainActor
 final class ItineraryBuilder {
-    /// Hard live window, not a delay target. Small rides still return as soon
-    /// as proved; dense Ontario/Quebec requests get enough room to prove both
-    /// sides of one pump without reaching Vercel's platform timeout.
-    private static let liveFuelWindowBudgetMs = 20_000
     private var currentGeneration: Int?
     /// Current map zoom for V4 tap-radius. Set by the planner before `build`.
     var mapZoom: Double?
@@ -366,7 +379,11 @@ final class ItineraryBuilder {
 
         // Actual construction always receives its complete budget regardless
         // of whether an optional look-ahead probe succeeded, failed, or timed out.
-        let fuelDeadline = fuelReplan ? Date().addingTimeInterval(20) : .distantFuture
+        let replanBudgetMs = FuelPlanningWindowPolicy.milliseconds(
+            points: itinerary.waypoints.map(\.coordinate), live: selectedSource.name == "live"
+        )
+        let fuelDeadline = fuelReplan
+            ? Date().addingTimeInterval(Double(replanBudgetMs) / 1_000) : .distantFuture
 
         let onwardFuelDistance = distanceToNextFuelOpportunity(
             itinerary: itinerary,
@@ -389,7 +406,7 @@ final class ItineraryBuilder {
             if fuelReplan, Date() >= fuelDeadline {
                 let failedIndex = min(max(0, finalStartIndex), itinerary.legs.count - 1)
                 let failedID = itinerary.legs[failedIndex].id
-                let message = "Fuel planning reached its 20-second itinerary budget."
+                let message = "Fuel planning reached its itinerary time budget."
                 committed = fuelAttemptBase
                 var markedUnknown = false
                 for index in finalStartIndex..<lastBuildable {
@@ -843,7 +860,12 @@ final class ItineraryBuilder {
         // This is an inactivity watchdog, not a cap on total itinerary time.
         // Long routes may legitimately need many quick fuel hops; every proven
         // forward leg renews the window while stalled searches still terminate.
-        var progressWatchdog = FuelPlanningProgressWatchdog()
+        let itineraryWindowMs = FuelPlanningWindowPolicy.milliseconds(
+            points: itinerary.waypoints.map(\.coordinate), live: source.name == "live"
+        )
+        var progressWatchdog = FuelPlanningProgressWatchdog(
+            inactivityInterval: itineraryWindowMs > 20_000 ? 105 : 28
+        )
 
         if let resume {
             RoutingDebugLog.shared.event(
@@ -969,6 +991,8 @@ final class ItineraryBuilder {
             var attempts = 0
             var lastRejectedStationID: String?
             var lastRejectedReason: String?
+            var advisoryFoundationRoute: RouteResponse?
+            var advisoryFoundationStart: RouteCoordinate?
             func finishWithFuelAdvisory(_ issue: FuelAdvisoryIssue) async -> BuiltItinerary {
                 await buildAdvisoryRemainder(
                     itinerary: itinerary,
@@ -985,6 +1009,7 @@ final class ItineraryBuilder {
                     fuel: fuel,
                     source: source,
                     history: history,
+                    firstRoute: advisoryFoundationStart == current ? advisoryFoundationRoute : nil,
                     onProgress: onProgress
                 )
             }
@@ -1101,13 +1126,25 @@ final class ItineraryBuilder {
                 // A multi-stop response is only safe when every generated hop
                 // uses the same riding profile and one regional runtime can
                 // return all of the corresponding route geometry.
+                // DEV NS/NB uses one fuel-aware regional graph. Request its
+                // complete ordinary test itinerary rather than graph-only anchors.
+                #if DIRT_DEVELOPMENT
+                let integratedAtlantic = Set(GraphPackStore.endpointProvinceIds(containingAny: [
+                    current.locationCoordinate, riderDestination.coordinate.locationCoordinate
+                ])) == Set(["ns", "nb"])
+                #else
+                let integratedAtlantic = false
+                #endif
                 let canConsumeCombinedWindow = source.supportsCombinedFuelPlanning
                     && riderLeg.hopOverrides.isEmpty
                     && riderLeg.hopAllowUnknown.isEmpty
-                    && !crossesProvinceBoundary
+                    && (!crossesProvinceBoundary || integratedAtlantic)
+                let requestedWindowStops = canConsumeCombinedWindow ? (integratedAtlantic ? 12 : 4) : 1
                 let chain: FuelChainResponse
                 let requestBudgetMs = min(
-                    Self.liveFuelWindowBudgetMs,
+                    FuelPlanningWindowPolicy.milliseconds(
+                        points: [current, riderDestination.coordinate], live: source.name == "live"
+                    ),
                     max(100, progressWatchdog.remainingMilliseconds())
                 )
                 RoutingDebugLog.shared.event(
@@ -1121,7 +1158,7 @@ final class ItineraryBuilder {
                         + "requiredStation=\(requiredStationID ?? "-") "
                         + "windowAnchor=\(builtLegs.last?.endsAtFuelStop == nil ? "rider" : "pump") "
                         + "crossProvince=\(crossesProvinceBoundary ? 1 : 0) "
-                        + "windowStops=\(canConsumeCombinedWindow ? 4 : 1) "
+                        + "windowStops=\(requestedWindowStops) "
                         + "budgetMs=\(requestBudgetMs)"
                 )
                 do {
@@ -1144,11 +1181,11 @@ final class ItineraryBuilder {
                         arrivalEdgeId: history.arrivalEdgeID,
                         backtrackFactor: 4,
                         excludedStationIds: Array(excludedStations),
-                        windowMaxStops: canConsumeCombinedWindow ? 4 : 1,
+                        windowMaxStops: requestedWindowStops,
                         allowPartialWindow: true,
                         windowTimeBudgetMs: requestBudgetMs,
                         requiredFirstStationId: requiredStationID,
-                        forwardFeeler: crossesProvinceBoundary,
+                        forwardFeeler: crossesProvinceBoundary && !canConsumeCombinedWindow,
                         routeFirstPlan: source.supportsCombinedFuelPlanning,
                         ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
                             && index == itinerary.legs.count - 1
@@ -1174,6 +1211,11 @@ final class ItineraryBuilder {
                         "Fuel planning unavailable: \(error.localizedDescription)"
                     ))
                 }
+
+                // A response belongs to this exact departure. Never reuse an
+                // earlier foundation after advancing to a committed pump.
+                advisoryFoundationRoute = chain.foundationRoute?.isComplete == true ? chain.foundationRoute : nil
+                advisoryFoundationStart = current
 
                 if chain.isFuelUnknown {
                     return await finishWithFuelAdvisory(.unknown(
@@ -1433,7 +1475,9 @@ final class ItineraryBuilder {
                                 regionalHopMinimumMeters: option.regionalMeters,
                                 history: history,
                                 avoidMotorways: activeAvoidMotorways,
-                                preferBackRoads: riderLeg.preferBackRoads
+                                preferBackRoads: riderLeg.preferBackRoads,
+                                startEndpointKind: builtLegs.last?.endsAtFuelStop == nil ? nil : "customers",
+                                endEndpointKind: option.stop == nil ? nil : "customers"
                             ))
                         }
                         let meters = try responseMeters(response)
@@ -1602,6 +1646,7 @@ final class ItineraryBuilder {
         fuel: FuelRangePrefs.Snapshot,
         source: any RoutingSource,
         history initialHistory: EdgeHistory,
+        firstRoute: RouteResponse? = nil,
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
         var committed = initial
@@ -1640,7 +1685,12 @@ final class ItineraryBuilder {
                 effectiveProfile: profile
             )
             do {
-                let response = try await source.route(routeRequest(
+                let response: RouteResponse
+                if index == startIndex, let firstRoute, firstRoute.isComplete {
+                    response = firstRoute
+                    RoutingDebugLog.shared.event("fuel advisory reused completed foundation riderLeg=\(riderLeg.id)")
+                } else {
+                    response = try await source.route(routeRequest(
                     profile: profile,
                     allowUnknown: allowUnknown,
                     from: firstFrom,
@@ -1651,6 +1701,7 @@ final class ItineraryBuilder {
                     avoidMotorways: avoidMotorways,
                     preferBackRoads: riderLeg.preferBackRoads
                 ))
+                }
                 let meters = try responseMeters(response)
                 let resetsAtWaypoint = committed.waypointFuelStops.values.contains {
                     $0.coordinate == destination
@@ -1887,7 +1938,7 @@ final class ItineraryBuilder {
         while true {
             let remainingBudgetMs = Int(fuelDeadline.timeIntervalSinceNow * 1_000)
             guard remainingBudgetMs > 0 else {
-                throw RoutingError.server("Fuel planning reached its 20-second itinerary budget.")
+                throw RoutingError.server("Fuel planning reached its itinerary time budget.")
             }
             windowIndex += 1
             guard windowIndex <= 16 else {
@@ -1942,7 +1993,9 @@ final class ItineraryBuilder {
                         ? (usesWindows ? min(4, max(1, remainingStops + 1)) : nil)
                         : 1,
                     allowPartialWindow: usesWindows,
-                    windowTimeBudgetMs: min(Self.liveFuelWindowBudgetMs, remainingBudgetMs),
+                    windowTimeBudgetMs: min(FuelPlanningWindowPolicy.milliseconds(
+                        points: [windowStart, to], live: source.name == "live"
+                    ), remainingBudgetMs),
                     requiredFirstStationId: requiredStationID
                 ), zoom: DirtSnapRequestContext.mapZoom))
             } catch {
@@ -2007,7 +2060,10 @@ final class ItineraryBuilder {
                         departingFrom: hopDepartureID,
                         effectiveProfile: hopProfile
                     ),
-                    preferBackRoads: riderLeg.preferBackRoads
+                    preferBackRoads: riderLeg.preferBackRoads,
+                    startEndpointKind: subIndex > 0 || departureAnchorID != riderDepartureID
+                        ? "customers" : nil,
+                    endEndpointKind: subIndex < stops.count ? "customers" : nil
                 )
                 let response = try await source.route(request)
                 guard active(itinerary) else { throw CancellationError() }
@@ -2471,9 +2527,11 @@ private func routeRequest(
     directExtraBudgetMeters: Double? = nil,
     regionalHopMinimumMeters: [Double] = [],
     history: EdgeHistory = EdgeHistory(),
-        avoidMotorways: Bool = false,
-        preferBackRoads: Bool = false,
-        mapZoom: Double? = nil
+    avoidMotorways: Bool = false,
+    preferBackRoads: Bool = false,
+    mapZoom: Double? = nil,
+    startEndpointKind: String? = nil,
+    endEndpointKind: String? = nil
     ) -> RouteRequest {
     RouteRequest(
         profile: profile,
@@ -2492,7 +2550,9 @@ private func routeRequest(
         cleanMetroMultiplier: nil,
         avoidMotorways: avoidMotorways,
         preferBackRoads: preferBackRoads,
-        mapZoom: DirtSnapRequestContext.mapZoom
+        mapZoom: DirtSnapRequestContext.mapZoom,
+        startEndpointKind: startEndpointKind,
+        endEndpointKind: endEndpointKind
     )
 }
 

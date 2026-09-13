@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-09T14:54:53.634231+00:00",
+  "title": "Design System: DIRT Route Planner",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "portrait-planner",
+        "value": "0 -2px 14px rgba(0,0,0,0.18)",
+        "purpose": "Native point-based shadow when the portrait planner is not behind the dock; otherwise suppressed."
+      }
+    ],
+    "native": {
+      "scope": "RoutePlannerCard.swift only",
+      "platform": "SwiftUI",
+      "sheetMaterial": "thinMaterial",
+      "tabMaterial": "regularMaterial",
+      "tabDynamicTypeMaximum": "xxxLarge",
+      "tabScaledMinimumHeightPoints": 54,
+      "tabHeightCapPoints": 76,
+      "largeContentViewer": true,
+      "verification": "Nine focused tests and final simulator/signed iPhone builds passed; development checks passed. Impeccable bounded review: ship. Normal controls and permission feedback inspected; maximum-text rows reflow, scrolling unverified. No physical-device or other platform acceptance claimed.",
+      "loopControlLayout": "Horizontal normally; leading-aligned vertical stack at accessibility Dynamic Type sizes."
+    }
+  },
+  "components": [
+    {
+      "name": "Planning tabs",
+      "kind": "nav",
+      "description": "Four native icon-and-title buttons: From here, Loop, Plan, Saved. Plan accessibility name: Plan a route. Selected foreground orangePressed with rowFill surface."
+    },
+    {
+      "name": "Loop direction",
+      "kind": "input",
+      "description": "Native menu: eight compass points, initially North; start and end use current GPS location."
+    },
+    {
+      "name": "Loop distance",
+      "kind": "input",
+      "description": "Native slider, 50\u2013500 total kilometres in 25-kilometre steps, initially 100 km, with visible km and spoken kilometres."
+    },
+    {
+      "name": "Loop surface",
+      "kind": "input",
+      "description": "Native menu bound to existing route profiles; accessible label and selected value."
+    },
+    {
+      "name": "Loop generation",
+      "kind": "button",
+      "description": "Create Loop uses DirtCTAStyle.brand() and remains available without pins. Authorization and current-location errors appear inline. Progress offers Cancel."
+    },
+    {
+      "name": "Create Return Route",
+      "kind": "button",
+      "description": "Existing action for eligible open itineraries, using rowFill and the control radius."
+    },
+    {
+      "name": "Loop result",
+      "kind": "custom",
+      "description": "Completed loop shows legs, standard route details/notices/statistics and Save/Export/Start actions, followed by Clear route. Clear immediately removes the loop and returns to setup with direction/distance/surface retained."
+    }
+  ],
+  "narrative": {
+    "northStar": "Map-first DIRT",
+    "overview": "This reference covers only `RoutePlannerCard.swift`. Planning controls sit over the map using the existing DIRT materials, system typography, orange accents, and compact rounded controls. The map remains the rider's spatial reference while the form explains the next action.",
+    "keyCharacteristics": [
+      "Map visible behind system material.",
+      "Four equally weighted icon-and-title planning tabs.",
+      "Adaptive form content with explicit distance units."
+    ],
+    "rules": [
+      {
+        "name": "The Readable Tab Rule",
+        "body": "Only planning-tab typography is capped at `xxxLarge`. The visible short label \u201cPlan\u201d retains \u201cPlan a route\u201d as its accessibility name and native large-content viewer label. Every tab exposes selected state. The form remains outside that cap and continues scaling with Dynamic Type.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "Do preserve native material, semantic theme tokens, and map context.",
+      "Do keep complete accessibility labels and explicit distance units.",
+      "Do let Loop form controls adapt to larger text independently of tab chrome."
+    ],
+    "donts": [
+      "Don't change the existing bottom dock as part of this planner treatment.",
+      "Don't treat this scoped visual reference as routing authority or evidence of platform acceptance."
+    ]
+  }
+}

@@ -124,7 +124,7 @@ nonisolated func reduce(
     case .setHopProfile(let legID, let stationID, let profile):
         guard !stationID.isEmpty,
               let index = itinerary.legs.firstIndex(where: { $0.id == legID }),
-              itinerary.legs[index].hopOverrides[stationID] != profile
+              itinerary.legs[index].effectiveProfile(departingFrom: stationID) != profile
         else { return unchanged(itinerary) }
         var legs = itinerary.legs
         legs[index].hopOverrides[stationID] = profile

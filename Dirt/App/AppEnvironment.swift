@@ -188,6 +188,11 @@ final class AppEnvironment {
             // Details first — never drop a From here pin here.
             self.groups.selectPeer(fromRiderMarkerID: markerID)
         }
+        mapState.onPlannerPinSnapFailed = { [planner] in
+            planner.showsWaypointPlacementConfirmation = false
+            planner.toast = "Move the waypoint closer to a road, then try again"
+            planner.refreshMap()
+        }
         mapState.onPlannerPinDragEnd = { [planner] markerID, coordinate in
             planner.moveWaypoint(markerID: markerID, to: coordinate)
         }

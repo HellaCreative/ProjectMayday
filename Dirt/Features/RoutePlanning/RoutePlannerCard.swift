@@ -22,10 +22,12 @@ struct RoutePlannerCard: View {
     var sitsBehindDock: Bool = false
     /// Figma landscape-primary side drawer. `true` = dock leading; `false` = dock trailing.
     var landscapeDockLeading: Bool? = nil
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppEnvironment.self) private var app
     @Environment(\.modelContext) private var modelContext
 
     @State private var showSaveDialog = false
+    @State private var showLoopReplaceConfirm = false
     @State private var saveName = ""
     /// GPX share sheet — only presented after the export gate allows it.
     @State private var exportShareURL: URL?
@@ -43,6 +45,7 @@ struct RoutePlannerCard: View {
     /// Intrinsic height of the planning content below the fixed mode tabs.
     /// Portrait uses this to hug short content, then caps the sheet and scrolls.
     @State private var portraitPlanningContentHeight: CGFloat = 0
+    @ScaledMetric(relativeTo: .caption) private var planningTabHeight: CGFloat = 54
 
     private var planner: RoutePlannerModel { app.planner }
 
@@ -63,6 +66,12 @@ struct RoutePlannerCard: View {
             } else {
                 portraitShell
             }
+        }
+        .confirmationDialog("Start a new loop?", isPresented: $showLoopReplaceConfirm, titleVisibility: .visible) {
+            Button("Start a new loop") { planner.selectLoop() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This replaces the current unsaved plan. Saved rides are kept.")
         }
         .alert("Unknown access is not permission", isPresented: $showUnknownAck) {
             Button("I understand — continue", role: .destructive) {
@@ -195,8 +204,11 @@ struct RoutePlannerCard: View {
         GeometryReader { geo in
             // Preserve the map as the primary canvas. Short planner states hug their
             // content; longer routes stop here and scroll beneath the sticky dock.
-            let maxPanelHeight = max(220, geo.size.height * 0.56)
-            let fixedChromeHeight = 14 + (DirtHit.min + 4) + 10
+            // Six 50pt control rows + five 10pt gaps + the extra zoom gap.
+            // Leave the same 6pt top inset as the DIRT logo above the stack.
+            let controlsHeight: CGFloat = 360
+            let maxPanelHeight = max(160, geo.size.height - controlsHeight - DockSheetMotion.portraitRouteControlsGap - 6)
+            let fixedChromeHeight = 14 + min(planningTabHeight, 76) + 10 + 10
             let maxPlanningHeight = max(1, maxPanelHeight - fixedChromeHeight)
             let measuredPlanningHeight = max(1, portraitPlanningContentHeight)
             let planningHeight = min(measuredPlanningHeight, maxPlanningHeight)
@@ -225,7 +237,7 @@ struct RoutePlannerCard: View {
                 }
                 .frame(height: planningHeight)
                 .scrollBounceBehavior(.basedOnSize)
-                .scrollIndicators(.visible)
+                .scrollIndicators(.hidden)
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
@@ -238,9 +250,9 @@ struct RoutePlannerCard: View {
                     .fill(DirtTheme.sheetMaterial)
                     .overlay(portraitSurfaceShape.stroke(DirtTheme.hairline, lineWidth: 1))
                     .shadow(
-                        color: sitsBehindDock ? .clear : .black.opacity(0.18),
-                        radius: sitsBehindDock ? 0 : 14,
-                        y: sitsBehindDock ? 0 : -2
+                        color: .black.opacity(0.16),
+                        radius: 28,
+                        y: -8
                     )
                     .ignoresSafeArea(edges: sitsBehindDock ? .bottom : [])
             }
@@ -303,7 +315,7 @@ struct RoutePlannerCard: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.visible)
+            .scrollIndicators(.hidden)
         }
         .padding(.vertical, 12)
         .padding(.leading, dockLeading ? dockClearance + 10 : 14)
@@ -328,55 +340,147 @@ struct RoutePlannerCard: View {
 
     @ViewBuilder
     private var plannerModeContent: some View {
-        switch planner.mode {
-        case .fromHere:
-            fromHereContent
-        case .plan:
-            planContent
-        case .saved:
-            savedContent
+        if planner.showingLoop {
+            loopContent
+        } else {
+            switch planner.mode {
+            case .fromHere: fromHereContent
+            case .plan: planContent
+            case .saved: savedContent
+            }
         }
     }
 
     // MARK: - Tabs
 
     private var tabBar: some View {
-        HStack(spacing: 2) {
-            ForEach(RoutePlannerModel.Mode.allCases) { mode in
-                Button {
-                    requestMode(mode)
-                } label: {
-                    Text(mode.rawValue)
-                        .font(DirtType.rowTitle)
-                        // Unselected labels sit straight on the orange track, so they
-                        // carry ink too; the white pill and weight mark the selection.
-                        .fontWeight(planner.mode == mode ? .bold : .semibold)
-                        .foregroundStyle(planner.mode == mode ? DirtTheme.ink : DirtTheme.onOrange)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: DirtHit.min)
-                        .background(
-                            planner.mode == mode
-                                ? AnyShapeStyle(.white)
-                                : AnyShapeStyle(.clear)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        .shadow(
-                            color: planner.mode == mode ? .black.opacity(0.12) : .clear,
-                            radius: 1,
-                            y: 1
-                        )
-                }
+        HStack(spacing: 4) {
+            planningTab("From here", icon: "location", selected: !planner.showingLoop && planner.mode == .fromHere) { requestMode(.fromHere) }
+            planningTab("Loop", icon: "arrow.triangle.2.circlepath", selected: planner.showingLoop) {
+                guard !planner.showingLoop else { return }
+                if !planner.itinerary.waypoints.isEmpty || planner.hasRoute { showLoopReplaceConfirm = true }
+                else { planner.selectLoop() }
             }
+            planningTab("Plan a route", icon: "point.topleft.down.to.point.bottomright.curvepath", selected: !planner.showingLoop && planner.mode == .plan) { requestMode(.plan) }
+            planningTab("Saved", icon: "bookmark", selected: !planner.showingLoop && planner.mode == .saved) { requestMode(.saved) }
         }
-        .padding(2)
-        .background(DirtTheme.orange)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .padding(5)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.control))
     }
 
-    /// Confirm before abandoning a From here pin or a multi-stage plan.
+    private func planningTab(_ title: String, icon: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: icon).font(.body.weight(.semibold))
+                Text(title == "Plan a route" ? "Plan" : title).font(.caption.weight(selected ? .bold : .medium))
+                    .lineLimit(2).multilineTextAlignment(.center)
+            }
+            .foregroundStyle(selected ? Color.white : DirtTheme.muted)
+            .frame(maxWidth: .infinity, minHeight: min(planningTabHeight, 76))
+            .background(selected ? DirtTheme.navigationSurface : .clear, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityLabel(title)
+        .accessibilityShowsLargeContentViewer { Label(title, systemImage: icon) }
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var loopControlLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout())
+    }
+
+    @ViewBuilder private var loopContent: some View {
+        if planner.hasRoute && !planner.isRouting {
+            stageList
+            routingStatus
+            fuelCoverageNotices
+            ferryNotice
+            statsRow
+            ctaRow
+            clearAllButton
+        } else {
+            loopSetupContent
+        }
+    }
+
+    private var loopSetupContent: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 8) {
+                loopControlLayout {
+                    Text("Direction")
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                    Picker("Direction", selection: Binding(get: { planner.loopDirection }, set: { planner.loopDirection = $0 })) {
+                        ForEach(LoopDirection.allCases) { direction in
+                            Text(direction.rawValue).tag(direction)
+                        }
+                    }
+                    .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Direction")
+                    .accessibilityValue(planner.loopDirection.rawValue)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(minHeight: DirtHit.min)
+                Divider()
+                loopControlLayout {
+                    Text("Surface")
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                    Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
+                        ForEach(RouteProfile.allCases) { profile in
+                            Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
+                                .foregroundStyle(DirtTheme.orange).tag(profile)
+                        }
+                    }
+                    .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
+                    .accessibilityValue(planner.profile.title)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(minHeight: DirtHit.min)
+                Divider()
+                VStack(spacing: 0) {
+                    loopControlLayout {
+                        Text("Distance")
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                        Text("\(Int(planner.loopDistanceKM)) km").fontWeight(.semibold).monospacedDigit()
+                    }
+                    Slider(value: Binding(get: { planner.loopDistanceKM }, set: { planner.loopDistanceKM = $0 }), in: 50...500, step: 25)
+                        .accessibilityLabel("Total loop distance")
+                        .accessibilityValue("\(Int(planner.loopDistanceKM)) kilometres")
+                        .frame(minHeight: DirtHit.min)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .font(.subheadline)
+            .foregroundStyle(DirtTheme.ink)
+            .tint(DirtTheme.action)
+            .padding(.horizontal, 14).padding(.vertical, 6)
+
+            .disabled(planner.isRouting)
+
+            if planner.isRouting {
+                loopControlLayout {
+                    ProgressView()
+                    Text(planner.fuelPlanningStatus ?? "Creating loop")
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                    Button("Cancel") { planner.selectMode(.plan) }.frame(minHeight: DirtHit.min)
+                }
+                .font(.subheadline).tint(DirtTheme.action)
+            } else {
+                Button("Create Loop") { planner.generateLoop() }
+                    .buttonStyle(DirtCTAStyle.brand())
+            }
+            if let summary = planner.loopSummary {
+                Text(summary).font(DirtType.helper).foregroundStyle(DirtTheme.ink)
+            }
+            if let error = planner.errorMessage {
+                Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
+            }
+        }
+    }
+
     private func requestMode(_ mode: RoutePlannerModel.Mode) {
+        if planner.showingLoop { planner.selectMode(mode); return }
         guard mode != planner.mode else { return }
         if planner.mode == .fromHere, mode == .plan, planner.hasFromHereDraft {
             showFromHereToPlanConfirm = true
@@ -478,16 +582,19 @@ struct RoutePlannerCard: View {
 
     @ViewBuilder private var fromHereProfileHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if fromHereChipsOpen {
-                profileSegments(active: planner.profile) { profile in
-                    planner.profile = profile
-                    withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = false }
+            HStack {
+                Text("Surface")
+                Spacer()
+                Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
+                    ForEach(RouteProfile.allCases) { profile in
+                        Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
+                                .foregroundStyle(DirtTheme.orange).tag(profile)
+                    }
                 }
-            } else {
-                profileEyebrow(planner.profile) {
-                    withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = true }
-                }
+                .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
+                .accessibilityValue(planner.profile.title)
             }
+            .frame(minHeight: DirtHit.min)
             profileGuidanceLine(planner.profile)
         }
     }
@@ -506,7 +613,7 @@ struct RoutePlannerCard: View {
                     } label: {
                         Text("Try again")
                             .font(DirtType.cta)
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                             .background(DirtTheme.rowFill)
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -546,6 +653,7 @@ struct RoutePlannerCard: View {
     // MARK: - Plan
 
     @ViewBuilder private var planContent: some View {
+
         // Mode chips live per-stage (tap a stage to expand). Hide the top row
         // until the first stage exists so empty Plan stays clean.
         if planner.stages.isEmpty {
@@ -556,6 +664,7 @@ struct RoutePlannerCard: View {
         } else {
             stageList
         }
+
 
         routingStatus
 
@@ -577,9 +686,16 @@ struct RoutePlannerCard: View {
             loadedTrackCard
             fuelCoverageNotices
             ferryNotice
-            ctaRow
-            continuePlanningButton
-            clearAllButton
+            HStack(spacing: 8) {
+                Button {
+                    planner.focusEntirePlannedRoute()
+                    isOpen = false
+                } label: {
+                    Label("View on map", systemImage: "map")
+                }
+                .buttonStyle(DirtSecondaryButtonStyle())
+                continuePlanningButton
+            }
         } else {
             SavedRoutesList(showImport: true)
         }
@@ -593,7 +709,7 @@ struct RoutePlannerCard: View {
             HStack(spacing: DirtSpace.tight) {
                 Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(DirtTheme.orange)
+                    .foregroundStyle(DirtTheme.action)
                 Text(loadedTrackName)
                     .font(DirtType.rowTitle)
                     .fontWeight(.bold)
@@ -651,16 +767,8 @@ struct RoutePlannerCard: View {
             _ = planner.continuePlanningFromSavedTrack()
         } label: {
             Label("Continue planning", systemImage: "arrow.triangle.branch")
-                .font(DirtType.cta)
-                .foregroundStyle(DirtTheme.orange)
-                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(DirtTheme.orange.opacity(0.45), lineWidth: 1)
-                )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DirtCTAStyle.brand())
         .accessibilityHint("Keeps this line and lets you add more waypoints")
     }
 
@@ -682,7 +790,7 @@ struct RoutePlannerCard: View {
             .listRowSpacing(10)
             .frame(height: selectedStage == nil ? collapsedHeight : bandHeight)
             .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.visible)
+            .scrollIndicators(.hidden)
             .onAppear {
                 if let last = planner.stages.last?.id {
                     proxy.scrollTo(last, anchor: .bottom)
@@ -787,7 +895,7 @@ struct RoutePlannerCard: View {
                     if let notice = planner.profileAvailabilityNotice(at: index) {
                         Label(notice, systemImage: "exclamationmark.triangle.fill")
                             .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if stage.endsAtFuelStop, planner.canReplaceFuelStop(at: index) {
@@ -800,7 +908,7 @@ struct RoutePlannerCard: View {
                                 .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(DirtTheme.orange)
+                        .foregroundStyle(DirtTheme.action)
                         .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                     profileSegments(active: stage.profile) { profile in
@@ -836,7 +944,7 @@ struct RoutePlannerCard: View {
                             )
                             .font(DirtType.chip)
                             .fontWeight(.bold)
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                             .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                         }
@@ -884,7 +992,7 @@ struct RoutePlannerCard: View {
                           ? "fuelpump.slash.fill"
                           : "fuelpump.fill")
                         .font(.system(.headline, weight: .bold))
-                        .foregroundStyle(DirtTheme.orange)
+                        .foregroundStyle(DirtTheme.action)
                         .frame(width: 24, height: 24)
                         .accessibilityHidden(true)
 
@@ -895,7 +1003,7 @@ struct RoutePlannerCard: View {
                         Text(notice.scope)
                             .font(DirtType.chip)
                             .fontWeight(.bold)
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                         Text(notice.message)
                             .font(DirtType.helper)
                             .foregroundStyle(DirtTheme.ink.opacity(0.76))
@@ -962,7 +1070,7 @@ struct RoutePlannerCard: View {
             if showsWarning {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(DirtType.metricInline)
-                    .foregroundStyle(DirtTheme.orange)
+                    .foregroundStyle(DirtTheme.action)
             }
         }
         .lineLimit(1)
@@ -1051,32 +1159,6 @@ struct RoutePlannerCard: View {
                 .accessibilityAddTraits(active == profile ? [.isSelected] : [])
             }
         }
-    }
-
-    /// Collapsed profile label — used only by the From here empty state, which has no stage row yet.
-    private func profileEyebrow(_ profile: RouteProfile, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Text(profile.title)
-                    .font(DirtType.rowTitle)
-                    .fontWeight(.bold)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-            }
-            .foregroundStyle(DirtTheme.ink)
-            .padding(.horizontal, 12)
-            .frame(minHeight: DirtHit.min)
-            .background(DirtTheme.rowFill)
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(DirtTheme.hairline, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(profile.title) mode. Tap to change.")
-        .accessibilityHint("Opens route mode options")
     }
 
     private func toggleStageSelection(_ index: Int) {
@@ -1288,9 +1370,7 @@ struct RoutePlannerCard: View {
                 .font(.dirtUI(9, weight: .heavy))
                 .foregroundStyle(DirtTheme.muted)
         }
-        .padding(8)
-        .background(DirtTheme.rowFill)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.vertical, 8)
     }
 
     private var mixBar: some View {
@@ -1317,7 +1397,7 @@ struct RoutePlannerCard: View {
                         beginSave(affordance)
                     } label: {
                         ctaLabel(
-                            affordance == .create ? "SAVE" : "UPDATE",
+                            affordance == .create ? "Save" : "Update",
                             icon: "square.and.arrow.down",
                             fill: DirtTheme.chrome
                         )
@@ -1331,7 +1411,7 @@ struct RoutePlannerCard: View {
                 Button {
                     requestStart()
                 } label: {
-                    ctaLabel("START", icon: "play.fill", fill: DirtTheme.navGreen)
+                    ctaLabel("Start ride", icon: "play.fill", fill: DirtTheme.navGreen)
                 }
                 .frame(width: showsSave ? max(unit - 8, 0) : pair * 0.58)
             }
@@ -1343,7 +1423,7 @@ struct RoutePlannerCard: View {
         Button {
             requestExport()
         } label: {
-            ctaLabel("EXPORT GPX", icon: "doc.badge.arrow.up", fill: DirtTheme.exportGray)
+            ctaLabel("Export", icon: "doc.badge.arrow.up", fill: DirtTheme.exportGray)
                 .opacity(planner.hasRoute ? 1 : 0.45)
         }
         .buttonStyle(.plain)
@@ -1415,7 +1495,7 @@ struct RoutePlannerCard: View {
 
     private var clearAllButton: some View {
         Button {
-            if shouldConfirmClear {
+            if shouldConfirmClear && !planner.showingLoop {
                 showClearConfirm = true
             } else {
                 performClear()
@@ -1549,7 +1629,7 @@ struct StageCard<Headline: View, Detail: View>: View {
                             if endpointIsFuelStation {
                                 Image(systemName: "fuelpump.fill")
                                     .font(.system(size: 13.5, weight: .semibold))
-                                    .foregroundStyle(DirtTheme.orange)
+                                    .foregroundStyle(DirtTheme.action)
                             }
                             Text(endpointTitle)
                                 .font(.dirtUI(10.5, weight: .bold))
@@ -1616,18 +1696,8 @@ struct StageCard<Headline: View, Detail: View>: View {
                 .font(.system(size: 9, weight: .black))
                 .rotationEffect(.degrees(isActive ? 180 : 0))
         }
-        .foregroundStyle(isActive ? DirtTheme.onOrange : DirtTheme.ink)
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .background(isActive ? DirtTheme.orange : DirtTheme.wash)
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .stroke(
-                    isActive ? DirtTheme.onOrange.opacity(0.25) : DirtTheme.hairline,
-                    lineWidth: 1
-                )
-        )
+        .foregroundStyle(DirtTheme.orange)
+        .dirtDropdownSurface()
     }
 }
 

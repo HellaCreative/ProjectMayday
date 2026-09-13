@@ -22,6 +22,38 @@ No phone installation or production modification occurred. Product parity must
 be established on the production-derived DEV candidate before route qualification
 and any owner review on the phone.
 
+## Production-derived DEV foundation — build 40
+
+Owner explicitly authorized installing DEV on September 13 to verify the current
+production app foundation, before completion of the on-device migration. This
+supersedes the earlier no-install boundary for this foundation build only; it
+is not route acceptance or permission to modify production.
+
+- App, resources, configuration, Xcode project, and test sources restored from
+  `91cc3ccdd9f51fa6ff503f3f06e7cab59b00393e`, the current production app workspace
+  checkpoint immediately before graph-loading experiments. Every file in `Dirt/`
+  matches that revision. This includes onboarding, Loop, preferences, pin
+  confirmation, navigation, profile, Groups, audio, and launch-preparation fixes.
+- This is the current production-line source, not a claim of binary identity
+  with uploaded TestFlight 2 (19). That archive predates the later workspace
+  checkpoint; its release record identifies `582fcb1` plus workspace changes.
+- DEV identity remains `com.mayday.dirt.dev`, development accounts/services, with
+  the source's immutable `fabric-v4-20260909-02` pack catalog. Production identity
+  and release build 19 remain unchanged. DEV build number is 40.
+- Only foundation adjustments relative to the source: DEV build number and
+  disabling parallel testing. No app routing, fuel, or UI edits are included.
+- Foundation planning therefore still follows the production source's existing
+  online policy. Build 40 does **not** claim completed local-only routing.
+- Historical experiment and replay source are preserved in `4d467b7`; original
+  hybrid checkpoint remains `165eac4`. They are not merged into this app baseline.
+- Next enhancement must move route and fuel computation to installed graphs,
+  preserving the production app and accepted routing contract. Border seams,
+  fuel progress, repeated roads, profile semantics, limits/cancellation, and
+  full requested/reached destination reporting require replay and phone review.
+- Target: White iPhone only. Red and `com.mayday.dirt` are untouched.
+
+Build, installation and owner acceptance results will be appended when observed.
+
 ## Historical investigation (superseded as an app foundation)
 
 Worktree: `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/.build/engine-architecture`.

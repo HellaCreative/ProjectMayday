@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import SwiftUI
 import Testing
 @testable import Dirt
@@ -6,6 +7,28 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
+    @Test func profileRebuildReplacesDisplayedGeometryAtTheSameEndpoints() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.automaticPlanningEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        source.profileGeometry = [.dirt: [point(0), point(0.7), point(1)],
+                                  .balanced: [point(0), point(0.4), point(1)],
+                                  .cleanest: [point(0), point(1)]]
+        for profile: RouteProfile in [.dirt, .balanced, .cleanest] {
+            let priorGeneration = map.routeGeneration
+            model.apply(.replaceAll(waypoints: [point(0), point(1)], profile: profile,
+                allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+            await model.waitForCanonicalBuildForTesting()
+            #expect(source.routeRequests.last?.profile == profile)
+            #expect(model.activeResponses.first?.coordinates == source.profileGeometry[profile])
+            #expect(map.routeSegments.flatMap(\.coordinates) == source.profileGeometry[profile])
+            #expect(map.routeGeneration > priorGeneration)
+        }
+    }
+
     @Test func progressNotificationMatchesAutomaticFuelPlanningState() {
         let fuelOn = FuelRangePrefs.Snapshot(
             tankMeters: 260_000,
@@ -35,15 +58,25 @@ struct RoutePlannerModelItineraryTests {
     @Test func progressNotificationNumbersEachFuelStop() {
         #expect(RoutePlannerModel.progressToastContent(for: "Creating fuel stop 1")
             == RoutePlannerModel.ProgressToastContent(
-                title: "Routing to next fuel stop",
-                detail: "Building one legal fuel leg"
+                title: "Creating fuel stop 1",
+                detail: "Fuel stop required"
             ))
         #expect(RoutePlannerModel.progressToastContent(for: "Fuel stop 2 added")
             == RoutePlannerModel.ProgressToastContent(
-                title: "Fuel stop added",
-                detail: "Continuing toward the waypoint"
+                title: "Fuel stop 2 added",
+                detail: "Continuing the route"
             ))
         #expect(RoutePlannerModel.isPersistentProgressToast("Checking range after fuel stop 2"))
+    }
+
+    @Test func loopSearchUsesPersistentAnimatedProgressContent() {
+        for number in 1...6 {
+            let message = "Finding loop \(number) of 6"
+            #expect(RoutePlannerModel.isPersistentProgressToast(message))
+            #expect(RoutePlannerModel.progressToastContent(for: message)?.title == message)
+            #expect(RoutePlannerModel.progressToastContent(for: message)?.detail == "Comparing roads for your round trip")
+        }
+        #expect(!RoutePlannerModel.isPersistentProgressToast("Route overview"))
     }
 
     @Test func activeRouteProgressSurvivesUnrelatedTapFeedback() {
@@ -357,8 +390,12 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
 
         let riderLeg = try #require(model.itinerary.legs.first)
-        #expect(riderLeg.hopOverrides[riderLeg.from.uuidString] == .dirt)
+        // Returning the first section to the rider-leg default removes its
+        // redundant override, while the later section keeps its own profile.
+        #expect(riderLeg.profile == .dirt)
+        #expect(riderLeg.hopOverrides[riderLeg.from.uuidString] == nil)
         #expect(riderLeg.hopOverrides["irving"] == .balanced)
+        #expect(model.stages.map(\.profile) == [.dirt, .balanced, .dirt])
     }
 
     @Test func cleanFuelHopInsideDirtRouteOwnsItsHighwayPolicyAndPropagatesItToRequests() async throws {
@@ -537,6 +574,63 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.built?.legs.first?.endsAtFuelStop?.stationID == "alternate")
     }
 
+    @Test func addedWaypointWaitsForConfirmationAfterDragging() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 0
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.selectMode(.plan)
+        model.apply(.replaceAll(waypoints: [point(0), point(1)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "seed")
+        await model.waitForCanonicalBuildForTesting()
+        source.routeRequests.removeAll()
+        model.handleRouteTap(point(0).locationCoordinate, source: "longPress")
+        #expect(model.waypointPlacement != nil)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        #expect(model.itinerary.waypoints.count == 2)
+        #expect(source.routeRequests.isEmpty)
+        model.keepMovingWaypoint()
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.moveWaypoint(markerID: "waypoint-draft", to: CLLocationCoordinate2D(latitude: (point(0).latitude + point(1).latitude) / 2, longitude: (point(0).longitude + point(1).longitude) / 2))
+        #expect(model.showsWaypointPlacementConfirmation)
+        #expect(source.routeRequests.isEmpty)
+        model.confirmWaypointPlacement()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.waypointPlacement == nil)
+        #expect(model.itinerary.waypoints.count == 3)
+        #expect(!source.routeRequests.isEmpty)
+    }
+
+    @Test func existingWaypointMoveWaitsForYesAndNoAllowsRefinement() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 0
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.selectMode(.plan)
+        model.apply(.replaceAll(waypoints: [point(0), point(1)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "seed")
+        await model.waitForCanonicalBuildForTesting()
+        let waypoint = try #require(model.itinerary.waypoints.last)
+        source.routeRequests.removeAll()
+        let markerID = "wp:\(waypoint.id.uuidString)"
+        model.moveWaypoint(markerID: markerID, to: point(0.7).locationCoordinate)
+        #expect(model.showsWaypointPlacementConfirmation)
+        #expect(model.itinerary.waypoints.last?.coordinate == waypoint.coordinate)
+        #expect(source.routeRequests.isEmpty)
+        model.keepMovingWaypoint()
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.confirmWaypointPlacement()
+        #expect(source.routeRequests.isEmpty)
+        model.moveWaypoint(markerID: markerID, to: point(0.8).locationCoordinate)
+        model.confirmWaypointPlacement()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.waypointMove == nil)
+        #expect(model.itinerary.waypoints.last?.coordinate == point(0.8))
+        #expect(!source.routeRequests.isEmpty)
+    }
+
     @Test func failedRouteKeepsItsRiderLegVisible() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
@@ -669,6 +763,7 @@ private final class PlannerFakeRoutingSource: RoutingSource {
     var routeRequests: [RouteRequest] = []
     var fuelChainRequests: [FuelChainRequest] = []
     var distanceOverrides: [String: Double] = [:]
+    var profileGeometry: [RouteProfile: [RouteCoordinate]] = [:]
     var fuelStops: [FuelChainStop] = []
     var stationCandidates: [FuelStationCandidate] = []
     var routeError: Error?
@@ -687,7 +782,7 @@ private final class PlannerFakeRoutingSource: RoutingSource {
             status: "complete", error: nil, message: nil,
             distanceMeters: meters,
             estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
-            geometry: [endpoints.0, endpoints.1], segments: nil,
+            geometry: profileGeometry[req.profile] ?? [endpoints.0, endpoints.1], segments: nil,
             stats: RouteStats(dirtPercent: 80, pavedPercent: 20),
             maneuvers: nil, warnings: nil,
             dirtPercentValue: nil, pavedPercentValue: nil

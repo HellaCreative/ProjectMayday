@@ -79,9 +79,8 @@ struct OnboardingView: View {
                         app.unlockAsTester()
                     } label: {
                         Text("Continue as tester")
-                            .font(.dirtUI(14, weight: .heavy))
-                            .tracking(0.4)
-                            .foregroundStyle(.white)
+                            .font(DirtType.cta)
+                            .foregroundStyle(DirtTheme.onOrange)
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
                             .background(DirtTheme.orange)

@@ -183,6 +183,21 @@ struct RiderItineraryTests {
         #expect(!secondStageLeg.allowsUnknown(departingFrom: "fuel-b"))
     }
 
+    @Test func settingFuelHopToItsEffectiveProfileDoesNotRebuild() throws {
+        let initial = itinerary([point(0), point(1)], profile: .dirt)
+        let leg = try #require(initial.legs.first)
+
+        let unchanged = reduce(
+            initial,
+            .setHopProfile(legID: leg.id, stationID: "fuel-a", .dirt)
+        )
+
+        #expect(unchanged.itinerary.generation == initial.generation)
+        #expect(unchanged.rebuildFromLegIndex == nil)
+        #expect(unchanged.replanFromStationID == nil)
+        #expect(unchanged.itinerary.legs.first?.hopOverrides.isEmpty == true)
+    }
+
     @Test func fuelStageUnknownAccessStaysInsideItsPlannedRouteLeg() throws {
         let initial = itinerary([point(0), point(1), point(2)], profile: .dirt)
         let selectedLeg = initial.legs[1]

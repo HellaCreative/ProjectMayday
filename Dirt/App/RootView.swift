@@ -1,3 +1,4 @@
+import AuthenticationServices
 import CoreLocation
 import SwiftUI
 
@@ -76,6 +77,11 @@ enum POIActionPolicy {
 struct RootView: View {
     @Environment(AppEnvironment.self) private var app
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var dockDestination: DockTab?
+    @Namespace private var dockSelection
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dockTransitionTask: Task<Void, Never>?
+
     @State private var activeSheet: ActiveSheet? = {
         #if DEBUG
         if ProcessInfo.processInfo.environment["DIRT_UI_TEST_PROFILE"] == "1" {
@@ -89,6 +95,7 @@ struct RootView: View {
     @State private var portraitRouteSheetHeight: CGFloat = 0
     @State private var showRouteConfetti = false
     @State private var fuelControlsOpen = false
+    @State private var ridePreferencesOpen = false
     @State private var mapFuelRangeKm = FuelRangePrefs.kilometers
     @State private var mapFuelReservePercent = FuelRangePrefs.reservePercent
     @State private var mapAutomaticFuelPlanning = FuelRangePrefs.automaticPlanningEnabled
@@ -213,9 +220,12 @@ struct RootView: View {
 
     var body: some View {
         mapShell
-            .fullScreenCover(isPresented: profilePresented) {
-                ProfileSheet(onClose: dismissDockSheet)
-                    .environment(app)
+            .sheet(isPresented: $ridePreferencesOpen) {
+                RidePreferencesSheet(initial: app.planner.displayedRidePreferences) {
+                    app.planner.applyRidePreferences($0)
+                }
+                .presentationDetents([.height(420)])
+                .presentationBackground(DirtTheme.sheetMaterial)
             }
             .background { rootLifecycleHooks }
     }
@@ -274,6 +284,25 @@ struct RootView: View {
             }
         }
         .modifier(KeepAwakeLifecycle())
+        .overlay(alignment: .top) {
+            if app.planner.showsWaypointPlacementConfirmation, !navActive {
+                VStack(spacing: 12) {
+                    Text("Is this where you want to place this waypoint?")
+                        .font(.headline)
+                    HStack(spacing: 12) {
+                        Button("No") { app.planner.keepMovingWaypoint() }
+                            .buttonStyle(.bordered)
+                        Button("Yes") { app.planner.confirmWaypointPlacement() }
+                            .buttonStyle(.borderedProminent).tint(DirtTheme.orange)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: 280)
+                .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.top, 68)
+            }
+        }
+
         .overlay {
             if app.planner.activeRouteProgressMessage == nil,
                let toast = app.planner.toast {
@@ -496,6 +525,12 @@ struct RootView: View {
             )) { _ in
                 refreshLandscapeEdgeTicket()
                 RoutingDebugLog.shared.event("lifecycle scene active")
+                Task { await app.supabase.checkAppleCredential { app.groups.handleCredentialRevoked() } }
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: ASAuthorizationAppleIDProvider.credentialRevokedNotification
+            )) { _ in
+                Task { await app.supabase.checkAppleCredential { app.groups.handleCredentialRevoked() } }
             }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIScene.didEnterBackgroundNotification
@@ -529,6 +564,7 @@ struct RootView: View {
             .task {
                 app.location.requestWhenInUse()
                 await app.supabase.bootstrap()
+                await app.supabase.checkAppleCredential { app.groups.handleCredentialRevoked() }
                 await app.rideIntelligence.flushPendingIncidents()
                 if app.groups.groups.isEmpty {
                     await app.groups.refreshGroups()
@@ -539,6 +575,8 @@ struct RootView: View {
             .onChange(of: app.supabase.isSignedIn) { _, signedIn in
                 if signedIn {
                     Task {
+                        await app.supabase.checkAppleCredential { app.groups.handleCredentialRevoked() }
+                        guard app.supabase.isSignedIn else { return }
                         await app.rideIntelligence.flushPendingIncidents()
                         await app.groups.refreshGroups()
                     }
@@ -607,16 +645,19 @@ struct RootView: View {
                     .zIndex(1)
             }
 
-            if showsDock, let sheet = activeSheet, sheet != .profile, !navActive {
+            if showsDock, let sheet = activeSheet, !navActive {
                 dockSheet(sheet, landscapeDockLeading: nil)
                     .transition(DockSheetMotion.transition)
                     .zIndex(1)
             }
 
             // Fuel range (leading) + recenter / fit plan (trailing) above route sheet.
-            if showsDock, routeCardOpen, activeSheet == nil, !navActive {
+            if showsDock, (routeCardOpen || activeSheet != nil), activeSheet != .profile, activeSheet != .layers, !navActive {
                 HStack(alignment: .bottom, spacing: 10) {
-                    fuelRangeButton
+                    if routeCardOpen {
+                        fuelRangeButton
+                        if app.planner.mode != .saved { ridePreferencesButton }
+                    }
                     Spacer(minLength: 0)
                     mapControlStack
                 }
@@ -633,15 +674,12 @@ struct RootView: View {
 
             if showsDock {
                 dock
-                    .shadow(color: .black.opacity(0.32), radius: 18, y: -8)
                     .zIndex(2)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+
             }
         }
         .ignoresSafeArea(edges: navActive ? .bottom : [])
         .animation(.easeInOut(duration: 0.2), value: app.mapState.followUser)
-        .animation(DockSheetMotion.spring, value: activeSheet)
-        .animation(DockSheetMotion.spring, value: routeCardOpen)
         .animation(DockSheetMotion.spring, value: app.groups.sharingPanelOpen)
         .onPreferenceChange(PlannerSheetHeightKey.self) { height in
             portraitRouteSheetHeight = height
@@ -691,29 +729,36 @@ struct RootView: View {
         switch sheet {
         case .layers:
             DockSheetPanel(
-                heightFraction: 0.58,
+                heightFraction: 1,
                 landscapeDockLeading: landscapeDockLeading,
                 onDismiss: dismissDockSheet
             ) {
-                LayersSheet()
+                LayersSheet(onClose: dismissDockSheet)
             }
         case .group:
             DockSheetPanel(
-                heightFraction: 0.72,
+                heightFraction: 0.46,
                 fitsContent: true,
                 minContentHeight: 200,
                 landscapeDockLeading: landscapeDockLeading,
                 onDismiss: dismissDockSheet
             ) {
-                GroupsSheet(onClose: dismissDockSheet)
+                GroupsSheet(onClose: dismissDockSheet, onRoute: {
+                    activeSheet = nil
+                    routeCardOpen = true
+                })
             }
         case .profile:
-            EmptyView()
+            DockSheetPanel(heightFraction: 1, landscapeDockLeading: landscapeDockLeading, onDismiss: dismissDockSheet) {
+                ProfileSheet(onClose: dismissDockSheet)
+            }
         }
     }
 
     private func dismissDockSheet() {
-        withAnimation(DockSheetMotion.spring) {
+        dockTransitionTask?.cancel()
+        dockDestination = nil
+        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.21)) {
             activeSheet = nil
         }
     }
@@ -730,8 +775,6 @@ struct RootView: View {
             )
         }
         .ignoresSafeArea(edges: [.horizontal, .vertical])
-        .animation(DockSheetMotion.spring, value: activeSheet)
-        .animation(DockSheetMotion.spring, value: routeCardOpen)
         .animation(DockSheetMotion.spring, value: app.groups.sharingPanelOpen)
         .animation(.easeInOut(duration: 0.2), value: app.mapState.followUser)
         .animation(.easeInOut(duration: 0.2), value: landscapeEdgeTicket)
@@ -775,7 +818,7 @@ struct RootView: View {
                     .coachTarget(.routeCard)
                 .transition(DockSheetMotion.transition(dockLeading: dockLeading))
                 .zIndex(1)
-            } else if let sheet = activeSheet, sheet != .profile {
+            } else if let sheet = activeSheet {
                 dockSheet(sheet, landscapeDockLeading: dockLeading)
                     .transition(DockSheetMotion.transition(dockLeading: dockLeading))
                     .zIndex(1)
@@ -864,6 +907,7 @@ struct RootView: View {
         // Packs on the sheet-adjacent edge; fit + recenter on the far open-map edge.
         let controls = HStack(spacing: 10) {
             fuelRangeButton
+            if app.planner.mode != .saved { ridePreferencesButton }
             Spacer(minLength: 8)
             if app.planner.canFocusEntirePlannedRoute {
                 landscapeFitPlanButton
@@ -947,21 +991,17 @@ struct RootView: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(app.mapState.showRoutingGraphDebug ? "Hide routing graph" : "Show routing graph")
-        .accessibilityHint("Toggles the graph overlay and legend")
+        .accessibilityLabel(app.mapState.showRoutingGraphDebug ? "Hide surface network" : "Show surface network")
+        .accessibilityHint("Shows or hides nearby road surfaces")
     }
 
     @ViewBuilder
     private var idleBrandStack: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if BuildChannel.debugRoutingGraphOverlay {
-                graphBrandButton
-            } else {
-                BrandChip(minHeight: 48)
-            }
+            graphBrandButton
 
             if let progress = app.planner.activeRouteProgressMessage {
-                ToastView(text: progress)
+                ToastView(text: progress, isBuildingRoute: true)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
@@ -976,6 +1016,22 @@ struct RootView: View {
             }
         }
         .frame(maxWidth: 300, alignment: .leading)
+    }
+
+    private var ridePreferencesButton: some View {
+        Button {
+            fuelControlsOpen = false
+            ridePreferencesOpen = true
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 48, height: 48)
+                .background(DirtTheme.chrome, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ride settings")
+        .accessibilityHint("Adjust wander, cities and highways")
     }
 
     private var fuelRangeButton: some View {
@@ -1112,6 +1168,7 @@ struct RootView: View {
                     .frame(minHeight: 34)
                     .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
+                .dirtDropdownSurface()
                 .accessibilityLabel("Fuel safety reserve")
                 .accessibilityValue("\(Int(mapFuelReservePercent)) percent")
             }
@@ -1163,8 +1220,7 @@ struct RootView: View {
         .dirtDenseChrome()
         .background {
             ZStack {
-                Rectangle().fill(DirtTheme.chromeMaterial)
-                Rectangle().fill(DirtTheme.chromeScrim)
+                Rectangle().fill(DirtTheme.navigationSurface)
             }
         }
         .clipShape(
@@ -1467,13 +1523,13 @@ struct RootView: View {
                 dockButton(tab)
             }
         }
-        .padding(5)
-        .dirtChromeSurface(radius: 22)
-        .padding(.horizontal, 12)
-        // Measured from the physical bottom, not the safe-area edge: the bar hangs into
-        // the home-indicator strip so the sheet behind it reaches the screen edge.
-        .padding(.bottom, DockSheetMotion.dockBottomGap - homeIndicatorInset)
-        .dirtDenseChrome()
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
+        .padding(.bottom, max(homeIndicatorInset, 10))
+        .background(DirtTheme.navigationSurface)
+        .shadow(color: .black.opacity(0.14), radius: 16, y: -4)
+        .padding(.bottom, -homeIndicatorInset)
+
     }
 
     /// Bottom safe-area inset, read from the window. The chrome stack has already been
@@ -1506,16 +1562,16 @@ struct RootView: View {
         /// `onOrange` is 6.80:1 on the orange fill; white is 2.61:1 and fails.
         var foreground: Color {
             switch self {
-            case .open: DirtTheme.onOrange
-            case .armed: DirtTheme.orangeSoft
-            case .idle: .white.opacity(0.72)
+            case .open: .white
+            case .armed: DirtTheme.orange
+            case .idle: .white
             }
         }
 
         var fill: Color {
             switch self {
             case .open: DirtTheme.orange
-            case .armed: DirtTheme.orange.opacity(0.16)
+            case .armed: .clear
             case .idle: .clear
             }
         }
@@ -1532,27 +1588,38 @@ struct RootView: View {
     }
 
     private func dockState(_ tab: DockTab) -> DockItemState {
-        if isActive(tab) { return .open }
+        if let dockDestination {
+            if dockDestination == tab { return .open }
+        } else if isActive(tab) { return .open }
         if tab == .route, app.planner.hasRoute { return .armed }
         return .idle
     }
 
     private func toggleDockTab(_ tab: DockTab) {
-        withAnimation(DockSheetMotion.spring) {
-            // One tool at a time; tap again to close. Route clears other sheets.
-            switch tab {
-            case .route:
-                activeSheet = nil
-                routeCardOpen.toggle()
-            case .layers:
-                routeCardOpen = false
-                activeSheet = activeSheet == .layers ? nil : .layers
-            case .profile:
-                routeCardOpen = false
-                activeSheet = activeSheet == .profile ? nil : .profile
-            case .group:
-                routeCardOpen = false
-                activeSheet = activeSheet == .group ? nil : .group
+        let closing = dockDestination == tab || isActive(tab)
+        let hadSheet = routeCardOpen || activeSheet != nil
+        dockTransitionTask?.cancel()
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.32)) {
+            dockDestination = closing ? nil : tab
+        }
+        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.21)) {
+            activeSheet = nil
+            routeCardOpen = false
+        }
+        guard !closing else { return }
+        dockTransitionTask = Task { @MainActor in
+            if hadSheet && !reduceMotion {
+                try? await Task.sleep(for: .milliseconds(210))
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : DockSheetMotion.spring) {
+                dockDestination = nil
+                switch tab {
+                case .route: routeCardOpen = true
+                case .layers: activeSheet = .layers
+                case .profile: activeSheet = .profile
+                case .group: activeSheet = .group
+                }
             }
         }
     }
@@ -1567,17 +1634,16 @@ struct RootView: View {
 
     private func dockButton(_ tab: DockTab) -> some View {
         let state = dockState(tab)
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
         return Button {
             toggleDockTab(tab)
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 6) {
                 Image(systemName: tab.icon)
                     .font(.system(size: 23, weight: .semibold))
-                Text(tab.title.uppercased())
-                    .font(.dirtUI(12, weight: .heavy))
-                    .tracking(0.4)
+                Text(tab.title)
+                    .font(.dirtUI(12, weight: .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
@@ -1585,7 +1651,11 @@ struct RootView: View {
             .frame(maxWidth: .infinity)
             .frame(minHeight: DirtHit.min)
             .padding(.vertical, 6)
-            .background(state.fill, in: shape)
+            .background {
+                if state == .open {
+                    shape.fill(DirtTheme.orange).matchedGeometryEffect(id: "dock-selection", in: dockSelection)
+                }
+            }
             .overlay(shape.stroke(state.stroke, lineWidth: state.strokeWidth))
             .contentShape(Rectangle())
         }
@@ -1619,9 +1689,14 @@ private struct KeepAwakeLifecycle: ViewModifier {
 
 struct ToastView: View {
     let text: String
+    var isBuildingRoute = false
 
     private var progress: RoutePlannerModel.ProgressToastContent? {
         RoutePlannerModel.progressToastContent(for: text)
+            ?? (isBuildingRoute ? RoutePlannerModel.ProgressToastContent(
+                title: text,
+                detail: "Finding roads and checking your route"
+            ) : nil)
     }
 
     private var isSuccess: Bool {
@@ -1642,7 +1717,7 @@ struct ToastView: View {
                     RouteBuildPistonIndicator()
                         .accessibilityHidden(true)
                 }
-                .frame(minWidth: 240, maxWidth: 300, alignment: .leading)
+                .frame(minWidth: 200, maxWidth: 240, alignment: .leading)
                 .accessibilityElement(children: .ignore)
                 .accessibilityIdentifier("route-progress-toast")
                 .accessibilityLabel(progress.title)

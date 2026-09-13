@@ -4,8 +4,7 @@ import UIKit
 
 /// Cold-launch splash: wordmark lands → one throttle pop → three quick pops →
 /// wordmark surges at the camera with dirt flying off the bars → blackout into
-/// the intro. Engine audio rides the same beat when `SplashThrottle.wav` is in
-/// the bundle (swap that file anytime; keep the name).
+/// the intro. Engine audio uses the owner-provided `MyKTM.m4a`.
 ///
 /// Runs on a fixed timeline rather than waiting on bootstrap so the animation is
 /// never clipped mid-blip on a fast launch; `AppGateView` holds the splash until
@@ -46,6 +45,9 @@ struct AnimatedSplashView: View {
             .blendMode(.plusLighter)
 
             if !reduceMotion {
+                SparkBurstField(start: start, blips: Self.blipTimes, paused: roostPaused)
+                    .frame(height: 280)
+                    .opacity(surging ? 0 : 1)
                 RoostField(start: start, blips: Self.blipTimes, paused: roostPaused)
                     .frame(height: 280)
                     .opacity(surging ? 0 : 1)
@@ -130,6 +132,7 @@ struct AnimatedSplashView: View {
         guard !reduceMotion else {
             withAnimation(.easeOut(duration: 0.3)) { arrived = true }
             try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
             onFinished()
             return
         }
@@ -140,6 +143,7 @@ struct AnimatedSplashView: View {
 
         // Soft first pop.
         try? await Task.sleep(for: .milliseconds(Int(Self.blipTimes[0] * 1000)))
+        guard !Task.isCancelled else { return }
         audio.play()
         await throttleBlip(intensity: 0.7)
 
@@ -149,6 +153,7 @@ struct AnimatedSplashView: View {
             if remaining > 0 {
                 try? await Task.sleep(for: .milliseconds(Int(remaining * 1000)))
             }
+            guard !Task.isCancelled else { return }
             await throttleBlip(intensity: 0.9)
         }
 
@@ -157,6 +162,7 @@ struct AnimatedSplashView: View {
         if untilSurge > 0 {
             try? await Task.sleep(for: .milliseconds(Int(untilSurge * 1000)))
         }
+        guard !Task.isCancelled else { return }
         surgePaused = false
         roostPaused = true
         surgeHaptic.impactOccurred(intensity: 1.0)
@@ -166,6 +172,7 @@ struct AnimatedSplashView: View {
         withAnimation(.easeIn(duration: 0.22)) { blackout = true }
 
         try? await Task.sleep(for: .milliseconds(240))
+        guard !Task.isCancelled else { return }
         surgePaused = true
         audio.fadeOut()
         onFinished()
@@ -181,16 +188,14 @@ struct AnimatedSplashView: View {
 
 // MARK: - Audio
 
-/// Plays `SplashThrottle.wav` from the app bundle. Missing file is a soft no-op so
-/// a TestFlight build without the asset still launches; drop a real motorcycle
-/// recording in `Dirt/Resources/SplashThrottle.wav` to replace the synthetic placeholder.
+/// Plays the owner-provided motorcycle recording during the accepted splash timeline.
 @MainActor
 final class SplashThrottleAudio {
     private var player: AVAudioPlayer?
 
     func play() {
         guard !UIAccessibility.isReduceMotionEnabled else { return }
-        guard let url = Bundle.main.url(forResource: "SplashThrottle", withExtension: "wav") else {
+        guard let url = Bundle.main.url(forResource: "MyKTM", withExtension: "m4a") else {
             return
         }
 

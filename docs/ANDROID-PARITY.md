@@ -1161,3 +1161,16 @@ replay records all oracle cases, original settings, geometry and fuel outputs;
 remaining differences are not authorization to invent new costs or thresholds.
 No Android implementation or physical acceptance is claimed. See
 [the recovery report](experiments/engine-architecture-20260911/BASELINE-RECOVERY-20260913.md).
+
+
+## September 13 — production app foundation supersedes historical UI restoration
+
+The owner requires the current production app source (`91cc3cc`) as the app
+foundation for the on-device routing migration. Historical routing checkpoints
+are comparison evidence, not an approved replacement for onboarding, Loop,
+preferences, navigation, Groups, or other launch-ready functionality. DEV build
+40 restores that complete source with only DEV versioning and serial-test
+configuration changes. It retains the source's existing routing execution policy
+and is not an offline routing qualification. No new Android behavior is introduced;
+Android must retain product parity while moving equivalent route/fuel computation
+to local packs. See the baseline recovery report for source and acceptance status.

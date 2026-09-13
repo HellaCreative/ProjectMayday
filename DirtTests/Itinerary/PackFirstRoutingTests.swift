@@ -267,6 +267,21 @@ struct PackFirstRoutingTests {
         #expect(rows.first { $0.id == "pe" }?.revisionLabel.contains("installed") == true)
     }
 
+    @Test func packDeletionRemovesOldAndCurrentRevisionsOnlyForRequestedRegion() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for path in ["old/ns", "current/ns", "old/nb", "current/nb"] {
+            let directory = root.appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data([1, 2, 3]).write(to: directory.appendingPathComponent("graph.v4.bin"))
+        }
+        try GraphPackStore.removeInstalledRevisions(regionID: "ns", cacheRoot: root)
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("old/ns").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("current/ns").path))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("old/nb/graph.v4.bin").path))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("current/nb/graph.v4.bin").path))
+    }
+
     @Test func checksumMismatchHandlingRemainsFailClosed() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("dirt-pack-fail-closed-\(UUID().uuidString).bin")

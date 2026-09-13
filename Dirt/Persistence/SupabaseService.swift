@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import Observation
 import Supabase
@@ -100,6 +101,36 @@ final class SupabaseService {
             if !candidate.isEmpty {
                 try? await updateDisplayName(candidate)
             }
+        }
+    }
+
+    /// Reconcile Apple's credential with the current DIRT session. A failed
+    /// system lookup is not evidence of revocation. Never apply an old lookup
+    /// to an account that signed in while the request was in flight.
+    func checkAppleCredential(onRevoked: () -> Void) async {
+        guard let client, let session = client.auth.currentSession,
+              let identity = session.user.identities?.first(where: { $0.provider == "apple" }),
+              !identity.id.isEmpty else { return }
+        let state: ASAuthorizationAppleIDProvider.CredentialState
+        do {
+            state = try await ASAuthorizationAppleIDProvider().credentialState(forUserID: identity.id)
+        } catch {
+            return
+        }
+        guard AppleCredentialPolicy.shouldSignOut(
+            state: state,
+            checkedToken: session.accessToken,
+            currentToken: client.auth.currentSession?.accessToken
+        ), userID == session.user.id.uuidString.lowercased() else { return }
+
+        // Stop sharing synchronously before any suspension. The existing
+        // signed-out cleanup also closes private channels and removes peers.
+        onRevoked()
+        try? await client.auth.signOut(scope: .local)
+        // The auth stream handles the normal sign-out event. Avoid clearing
+        // a new session if another sign-in completed during SDK cleanup.
+        if client.auth.currentSession == nil {
+            apply(session: nil)
         }
     }
 

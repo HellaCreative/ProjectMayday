@@ -974,6 +974,15 @@ final class GroupsViewModel {
         clearSessionState()
     }
 
+    /// Credential revocation also revokes the rider's saved sharing opt-in.
+    /// Clear locally immediately, even when remote cleanup cannot authenticate.
+    func handleCredentialRevoked() {
+        if let userID = supabase.userID {
+            Self.setSharingPreference(false, userID: userID)
+        }
+        handleSignedOut()
+    }
+
     /// Fallback for token expiry or sign-out initiated outside Profile.
     func handleSignedOut() {
         clearSessionState()

@@ -112,4 +112,3 @@ nonisolated enum LoopPlan {
         abs(distance - target) / max(target, 1) + 8 * repeated / max(distance, 1) + 2 * (1 - fill) + Double(reusedStops) * 0.2
     }
 }
-

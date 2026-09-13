@@ -14,6 +14,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let localEdgeId: String
         let remoteEdgeId: String
         let gapMeters: Double
+        var componentPair: String? = nil
+        var networkSize: Int = 0
     }
 
     /// Resolved Graph-v3 leaf fields for one undirected edge (mirrors JS `edgeLeaves`).
@@ -46,6 +48,277 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let fromEdge: Int
     }
 
+    /// Finite search-state expansion for exact V4 via-way restrictions.
+    /// A restriction is active only after its own from-edge and ordered via
+    /// sequence have been followed; reaching the same final road another way
+    /// does not inherit that restriction.
+    struct V4TurnStateSpace: Sendable {
+        struct Progress: Hashable, Sendable {
+            let id: Int
+            let progress: Int
+        }
+
+        private struct Pattern: Sendable {
+            let fromEdge: Int
+            let toEdge: Int
+            let viaEdges: [Int]
+            let entryNode: Int
+            let only: Bool
+        }
+
+        private struct Record: Sendable {
+            let node: Int
+            let incomingEdge: Int
+            let active: [Progress]
+        }
+
+        private struct ArrivalKey: Hashable, Sendable {
+            let node: Int
+            let incomingEdge: Int
+            let active: [Progress]
+        }
+
+        private struct TransitionKey: Hashable, Sendable {
+            let state: Int
+            let edge: Int
+            let toNode: Int
+        }
+
+        let baseNodeCount: Int
+        let startNode: Int
+        let endNode: Int
+        let stateCount: Int
+        private let records: [Record]
+        private let stateByArrival: [ArrivalKey: Int]
+        private let transitionCache: [TransitionKey: Int]
+        private let statefulEdges: Set<Int>
+        private let blockedNode: [TurnKey: Set<Int>]
+        private let onlyNode: [TurnKey: Set<Int>]
+        private let patterns: [Pattern]
+        private let starters: [Int: [Int]]
+
+        static func build(pack: GraphV2Pack, startNode: Int, endNode: Int) -> Self {
+            let n = pack.nodeCount
+            guard pack.version >= 4, pack.legalTopology, !pack.restrictions.isEmpty else {
+                return Self(
+                    baseNodeCount: n, startNode: startNode, endNode: endNode,
+                    stateCount: n + 2, records: [], stateByArrival: [:],
+                    transitionCache: [:], statefulEdges: [], blockedNode: [:],
+                    onlyNode: [:], patterns: [], starters: [:]
+                )
+            }
+
+            var blockedNode: [TurnKey: Set<Int>] = [:]
+            var onlyNode: [TurnKey: Set<Int>] = [:]
+            var patterns: [Pattern] = []
+            var starters: [Int: [Int]] = [:]
+            var statefulEdges: Set<Int> = []
+            for restriction in pack.restrictions where (restriction.vehicleMask & 1) != 0 {
+                statefulEdges.insert(restriction.fromEdge)
+                if !restriction.viaEdges.isEmpty {
+                    let id = patterns.count
+                    patterns.append(Pattern(
+                        fromEdge: restriction.fromEdge,
+                        toEdge: restriction.toEdge,
+                        viaEdges: restriction.viaEdges,
+                        entryNode: restriction.viaNode,
+                        only: restriction.only
+                    ))
+                    starters[restriction.fromEdge, default: []].append(id)
+                } else {
+                    let key = TurnKey(viaNode: restriction.viaNode, fromEdge: restriction.fromEdge)
+                    if restriction.only {
+                        onlyNode[key, default: []].insert(restriction.toEdge)
+                    } else {
+                        blockedNode[key, default: []].insert(restriction.toEdge)
+                    }
+                }
+            }
+
+            func advance(
+                _ active: [Progress],
+                fromEdge: Int,
+                toEdge: Int,
+                viaNode: Int
+            ) -> (allowed: Bool, active: [Progress]) {
+                let key = TurnKey(viaNode: viaNode, fromEdge: fromEdge)
+                if let only = onlyNode[key], !only.contains(toEdge) { return (false, []) }
+                if blockedNode[key]?.contains(toEdge) == true { return (false, []) }
+
+                let activeOnly = active.filter { patterns.indices.contains($0.id) && patterns[$0.id].only }
+                if !activeOnly.isEmpty, !activeOnly.contains(where: { row in
+                    let pattern = patterns[row.id]
+                    let sequence = [pattern.fromEdge] + pattern.viaEdges + [pattern.toEdge]
+                    return row.progress + 1 < sequence.count && sequence[row.progress + 1] == toEdge
+                }) { return (false, []) }
+
+                var next: [Progress] = []
+                for row in active where patterns.indices.contains(row.id) {
+                    let pattern = patterns[row.id]
+                    let sequence = [pattern.fromEdge] + pattern.viaEdges + [pattern.toEdge]
+                    guard row.progress + 1 < sequence.count,
+                          sequence[row.progress + 1] == toEdge else { continue }
+                    if row.progress + 1 == sequence.count - 1 {
+                        if !pattern.only { return (false, []) }
+                    } else {
+                        next.append(Progress(id: row.id, progress: row.progress + 1))
+                    }
+                }
+
+                let starting = (starters[fromEdge] ?? []).filter { id in
+                    let entry = patterns[id].entryNode
+                    return entry < 0 || entry == viaNode
+                }
+                let startingOnly = starting.filter { patterns[$0].only }
+                if !startingOnly.isEmpty,
+                   !startingOnly.contains(where: { patterns[$0].viaEdges.first == toEdge }) {
+                    return (false, [])
+                }
+                for id in starting where patterns[id].viaEdges.first == toEdge {
+                    next.append(Progress(id: id, progress: 1))
+                }
+                return (true, Array(Set(next)).sorted {
+                    $0.id == $1.id ? $0.progress < $1.progress : $0.id < $1.id
+                })
+            }
+
+            var records: [Record] = []
+            var stateByArrival: [ArrivalKey: Int] = [:]
+            var queue: [Int] = []
+            func addState(node: Int, incomingEdge: Int, active: [Progress]) -> Int {
+                let key = ArrivalKey(node: node, incomingEdge: incomingEdge, active: active)
+                if let existing = stateByArrival[key] { return existing }
+                let state = n + 2 + records.count
+                stateByArrival[key] = state
+                records.append(Record(node: node, incomingEdge: incomingEdge, active: active))
+                queue.append(state)
+                return state
+            }
+            for source in 0..<n {
+                let arcStart = Int(pack.nodeOffsets[source])
+                let arcEnd = Int(pack.nodeOffsets[source + 1])
+                guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
+                for arc in arcStart..<arcEnd {
+                    let incoming = Int(pack.edgeUndirectedIndex[arc])
+                    if !statefulEdges.contains(incoming) { continue }
+                    _ = addState(node: Int(pack.edgeTargets[arc]), incomingEdge: incoming, active: [])
+                }
+            }
+
+            var transitionCache: [TransitionKey: Int] = [:]
+            var cursor = 0
+            while cursor < queue.count {
+                let state = queue[cursor]
+                cursor += 1
+                let record = records[state - (n + 2)]
+                let arcStart = Int(pack.nodeOffsets[record.node])
+                let arcEnd = Int(pack.nodeOffsets[record.node + 1])
+                guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
+                for arc in arcStart..<arcEnd {
+                    let edge = Int(pack.edgeUndirectedIndex[arc])
+                    let toNode = Int(pack.edgeTargets[arc])
+                    let result = advance(
+                        record.active, fromEdge: record.incomingEdge,
+                        toEdge: edge, viaNode: record.node
+                    )
+                    let key = TransitionKey(state: state, edge: edge, toNode: toNode)
+                    if !result.allowed {
+                        transitionCache[key] = -1
+                    } else if statefulEdges.contains(edge) || !result.active.isEmpty {
+                        transitionCache[key] = addState(
+                            node: toNode, incomingEdge: edge, active: result.active
+                        )
+                    } else {
+                        transitionCache[key] = toNode
+                    }
+                }
+            }
+
+            return Self(
+                baseNodeCount: n, startNode: startNode, endNode: endNode,
+                stateCount: n + 2 + records.count, records: records,
+                stateByArrival: stateByArrival, transitionCache: transitionCache,
+                statefulEdges: statefulEdges, blockedNode: blockedNode,
+                onlyNode: onlyNode, patterns: patterns, starters: starters
+            )
+        }
+
+        func graphNode(of state: Int) -> Int {
+            if state < baseNodeCount || state == startNode || state == endNode { return state }
+            let index = state - (baseNodeCount + 2)
+            return records.indices.contains(index) ? records[index].node : -1
+        }
+
+        func stateForArrival(node: Int, incomingEdge: Int) -> Int {
+            stateByArrival[ArrivalKey(node: node, incomingEdge: incomingEdge, active: [])] ?? node
+        }
+
+        func transition(state: Int, outgoingEdge: Int, toNode: Int) -> Int {
+            if state < baseNodeCount || state == startNode || state == endNode {
+                return statefulEdges.contains(outgoingEdge)
+                    ? stateForArrival(node: toNode, incomingEdge: outgoingEdge)
+                    : toNode
+            }
+            return transitionCache[
+                TransitionKey(state: state, edge: outgoingEdge, toNode: toNode)
+            ] ?? -1
+        }
+
+        func allowsExit(state: Int, outgoingEdge: Int) -> Bool {
+            if state < baseNodeCount || state == startNode || state == endNode { return true }
+            let index = state - (baseNodeCount + 2)
+            guard records.indices.contains(index) else { return false }
+            let record = records[index]
+            return advance(
+                record.active, fromEdge: record.incomingEdge,
+                toEdge: outgoingEdge, viaNode: record.node
+            ).allowed
+        }
+
+        private func advance(
+            _ active: [Progress],
+            fromEdge: Int,
+            toEdge: Int,
+            viaNode: Int
+        ) -> (allowed: Bool, active: [Progress]) {
+            let key = TurnKey(viaNode: viaNode, fromEdge: fromEdge)
+            if let only = onlyNode[key], !only.contains(toEdge) { return (false, []) }
+            if blockedNode[key]?.contains(toEdge) == true { return (false, []) }
+            let activeOnly = active.filter { patterns.indices.contains($0.id) && patterns[$0.id].only }
+            if !activeOnly.isEmpty, !activeOnly.contains(where: { row in
+                let pattern = patterns[row.id]
+                let sequence = [pattern.fromEdge] + pattern.viaEdges + [pattern.toEdge]
+                return row.progress + 1 < sequence.count && sequence[row.progress + 1] == toEdge
+            }) { return (false, []) }
+            var next: [Progress] = []
+            for row in active where patterns.indices.contains(row.id) {
+                let pattern = patterns[row.id]
+                let sequence = [pattern.fromEdge] + pattern.viaEdges + [pattern.toEdge]
+                guard row.progress + 1 < sequence.count,
+                      sequence[row.progress + 1] == toEdge else { continue }
+                if row.progress + 1 == sequence.count - 1 {
+                    if !pattern.only { return (false, []) }
+                } else {
+                    next.append(Progress(id: row.id, progress: row.progress + 1))
+                }
+            }
+            let starting = (starters[fromEdge] ?? []).filter { id in
+                patterns[id].entryNode < 0 || patterns[id].entryNode == viaNode
+            }
+            let startingOnly = starting.filter { patterns[$0].only }
+            if !startingOnly.isEmpty,
+               !startingOnly.contains(where: { patterns[$0].viaEdges.first == toEdge }) {
+                return (false, [])
+            }
+            for id in starting where patterns[id].viaEdges.first == toEdge {
+                next.append(Progress(id: id, progress: 1))
+            }
+            return (true, Array(Set(next)).sorted {
+                $0.id == $1.id ? $0.progress < $1.progress : $0.id < $1.id
+            })
+        }
+    }
+
     static let magic: UInt32 = 0x3247_3244
     static let magicV4: UInt32 = 0x3454_5244
     static let versionV2: UInt16 = 2
@@ -55,7 +328,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     static let headerSizeV3 = 100
     static let headerSizeV3Crossing = 104
     static let headerSizeV4 = 140
-    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections; bit2 = edgeCrossingSeconds; bit3 = V4 legal-topology.
+    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections; bit2 = edgeCrossingSeconds;
+    /// bit3 = V4 legal-topology; bit4 = derive edge ids from way/from/to.
     static let flagEdgeFromTo: UInt16 = 1
     static let flagV3Leaves: UInt16 = 2
     static let flagV3CrossingSeconds: UInt16 = 4
@@ -81,7 +355,6 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         }
     }
 
-    let data: Data
     let version: UInt16
     let flags: UInt16
     let hasLeaves: Bool
@@ -114,15 +387,14 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     let edgeFlags: [UInt8]?
     let edgeCrossingSeconds: [UInt32]?
     let hasCrossingSeconds: Bool
-    /// Build-proven border seams. V4 packs may carry these in graph metadata;
-    /// accepted phone packs also ship the same contract as a sidecar.
-    var crossPackSeams: [String: [CrossPackSeamAnchor]]
+    private(set) var crossPackSeams: [String: [CrossPackSeamAnchor]]
     let urbanCores: [UrbanCore.Box]
     let settlements: [UrbanCore.Box]
     private let idOffsets: [Int32]
     private let idBlob: Data
     let legalTopology: Bool
     let capabilities: [String]
+    let sourceEpoch: String?
     /// Per-direction motorcycle access: 2 bytes per undirected edge (forward, reverse).
     let edgeAccess: [UInt8]
     let restrictions: [TurnRestriction]
@@ -137,7 +409,6 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     var geometry: GeometryV1Pack?
 
     init(data: Data) throws {
-        self.data = data
         guard data.count >= Self.headerSizeV2 else { throw PackError.truncated }
         let magic: UInt32 = data.readUInt32LE(0)
         let isV4 = magic == Self.magicV4
@@ -332,9 +603,16 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
 
         if isV4 {
             legalTopology = true
+            let provenanceAt = Int(data.readUInt32LE(128))
             let capAt = Int(data.readUInt32LE(132))
             let shaAt = Int(data.readUInt32LE(136))
-            guard capAt < shaAt, shaAt + 32 <= data.count else { throw PackError.truncated }
+            guard provenanceAt < capAt, capAt < shaAt, shaAt + 32 <= data.count else {
+                throw PackError.truncated
+            }
+            let provenance = (try? JSONSerialization.jsonObject(
+                with: data.subdata(in: provenanceAt..<capAt)
+            ) as? [String: Any]) ?? [:]
+            sourceEpoch = provenance["sourceEpoch"] as? String
             let capData = data.subdata(in: capAt..<shaAt)
             let caps = (try? JSONSerialization.jsonObject(with: capData) as? [String]) ?? []
             guard caps.contains(Self.requiredV4Capability) else {
@@ -411,6 +689,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         } else {
             legalTopology = false
             capabilities = []
+            sourceEpoch = nil
             edgeAccess = []
             restrictions = []
             osmWayIds = []
@@ -419,6 +698,57 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             blockedViaWayExits = [:]
             onlyViaWayEntries = [:]
         }
+    }
+
+    /// Install the independently hash-verified V4 border proof downloaded with
+    /// this region. Keeping seams out of the graph lets the factory seal all
+    /// graphs first, prove the complete continent, then add borders without a
+    /// second graph rebuild.
+    func applyCrossPackSeams(data: Data) throws {
+        guard version >= Self.versionV4, legalTopology else { throw PackError.missingCapability }
+        guard let document = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              document["schemaVersion"] as? String == "dirt-cross-pack-seams.v2",
+              let sidecarRegion = document["regionId"] as? String,
+              sidecarRegion.lowercased() == regionId?.lowercased(),
+              let sidecarEpoch = document["sourceEpoch"] as? String,
+              sourceEpoch == sidecarEpoch,
+              let neighbors = document["neighbors"] as? [String: Any]
+        else { throw PackError.invalidSeamSidecar }
+
+        var decoded: [String: [CrossPackSeamAnchor]] = [:]
+        for (rawNeighbor, rawRows) in neighbors {
+            let neighbor = rawNeighbor.lowercased()
+            guard neighbor.range(of: "^[a-z]{2}$", options: .regularExpression) != nil,
+                  let rows = rawRows as? [[String: Any]] else {
+                throw PackError.invalidSeamSidecar
+            }
+            decoded[neighbor] = try rows.map { row in
+                guard let coordinate = row["coordinate"] as? [Any], coordinate.count >= 2,
+                      let lon = coordinate[0] as? NSNumber,
+                      let lat = coordinate[1] as? NSNumber,
+                      let gap = row["gapMeters"] as? NSNumber,
+                      gap.doubleValue >= 0, gap.doubleValue <= 2,
+                      let osmWayId = row["osmWayId"],
+                      let localEdgeId = row["localEdgeId"],
+                      let remoteEdgeId = row["remoteEdgeId"],
+                      !String(describing: osmWayId).isEmpty,
+                      !String(describing: localEdgeId).isEmpty,
+                      !String(describing: remoteEdgeId).isEmpty
+                else { throw PackError.invalidSeamSidecar }
+                return CrossPackSeamAnchor(
+                    neighborRegionId: neighbor,
+                    longitude: lon.doubleValue,
+                    latitude: lat.doubleValue,
+                    osmWayId: String(describing: osmWayId),
+                    localEdgeId: String(describing: localEdgeId),
+                    remoteEdgeId: String(describing: remoteEdgeId),
+                    gapMeters: gap.doubleValue,
+                    componentPair: row["componentPair"] as? String,
+                    networkSize: (row["networkSize"] as? NSNumber)?.intValue ?? 0
+                )
+            }
+        }
+        crossPackSeams = decoded
     }
 
     private static func stringArray(from value: Any?) -> [String]? {
@@ -548,6 +878,38 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         return edgeAccess[ei * 2 + (forward ? 0 : 1)]
     }
 
+    func makeV4TurnStateSpace(startNode: Int, endNode: Int) -> V4TurnStateSpace {
+        V4TurnStateSpace.build(pack: self, startNode: startNode, endNode: endNode)
+    }
+
+    func v4AccessAllowed(
+        ei: Int,
+        from: Int,
+        to: Int,
+        startEi: Int,
+        endEi: Int,
+        allowUnknown: Bool,
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil,
+        customerStartEdges: Set<Int> = [],
+        customerEndEdges: Set<Int> = []
+    ) -> Bool {
+        guard version >= 4, legalTopology else { return true }
+        let code = Int(v4AccessCode(ei: ei, from: from, to: to))
+        if code == 0 { return true }
+        if code == 1 { return allowUnknown }
+        if code == 2 || code == 5 { return false }
+        if code == 3 {
+            return (ei == startEi && startEndpointKind != "customers")
+                || (ei == endEi && endEndpointKind != "customers")
+        }
+        if code == 4 {
+            return ((ei == startEi || customerStartEdges.contains(ei)) && startEndpointKind == "customers")
+                || ((ei == endEi || customerEndEdges.contains(ei)) && endEndpointKind == "customers")
+        }
+        return false
+    }
+
     func turnAllowed(fromEdge: Int, toEdge: Int, viaNode: Int) -> Bool {
         let key = TurnKey(viaNode: viaNode, fromEdge: fromEdge)
         if let only = onlyNodeTurns[key], !only.contains(toEdge) { return false }
@@ -667,6 +1029,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         case unsupportedVersion(UInt16)
         case missingCapability
         case missingSafetySection
+        case invalidSeamSidecar
     }
 }
 
@@ -696,22 +1059,34 @@ private extension Data {
 
     nonisolated func readInt32Array(at offset: Int, count: Int) -> [Int32] {
         guard count > 0 else { return [] }
-        return (0..<count).map { readInt32LE(offset + $0 * 4) }
+        let byteCount = count * 4
+        return subdata(in: offset..<(offset + byteCount)).withUnsafeBytes { raw in
+            Array(raw.bindMemory(to: Int32.self).prefix(count)).map { Int32(littleEndian: $0) }
+        }
     }
 
     nonisolated func readUInt16Array(at offset: Int, count: Int) -> [UInt16] {
         guard count > 0 else { return [] }
-        return (0..<count).map { readUInt16LE(offset + $0 * 2) }
+        let byteCount = count * 2
+        return subdata(in: offset..<(offset + byteCount)).withUnsafeBytes { raw in
+            Array(raw.bindMemory(to: UInt16.self).prefix(count)).map { UInt16(littleEndian: $0) }
+        }
     }
 
     nonisolated func readUInt32Array(at offset: Int, count: Int) -> [UInt32] {
         guard count > 0 else { return [] }
-        return (0..<count).map { readUInt32LE(offset + $0 * 4) }
+        let byteCount = count * 4
+        return subdata(in: offset..<(offset + byteCount)).withUnsafeBytes { raw in
+            Array(raw.bindMemory(to: UInt32.self).prefix(count)).map { UInt32(littleEndian: $0) }
+        }
     }
 
     nonisolated func readFloat32Array(at offset: Int, count: Int) -> [Float] {
         guard count > 0 else { return [] }
-        return (0..<count).map { Float(bitPattern: readUInt32LE(offset + $0 * 4)) }
+        let byteCount = count * 4
+        return subdata(in: offset..<(offset + byteCount)).withUnsafeBytes { raw in
+            Array(raw.bindMemory(to: Float.self).prefix(count))
+        }
     }
 
     nonisolated func readUInt8Array(at offset: Int, count: Int) -> [UInt8] {

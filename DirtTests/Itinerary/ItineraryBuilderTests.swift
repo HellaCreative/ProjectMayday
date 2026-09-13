@@ -128,6 +128,22 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
     }
 
+    @Test func atlanticDevRequestsCombinedFuelGeometry() async throws {
+        #if DIRT_DEVELOPMENT
+        let start = RouteCoordinate(longitude: -63.340241, latitude: 44.764845)
+        let destination = RouteCoordinate(longitude: -65.856301, latitude: 47.762610)
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(start, destination)] = 250_000
+        let result = await build([start, destination], source: source, usable: 333_000)
+        #expect(result.legs.count == 1)
+        #expect(source.routeRequests.isEmpty)
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.fuelChainRequests[0].fuel.windowMaxStops == 12)
+        #expect(source.fuelChainRequests[0].fuel.forwardFeeler != true)
+        #endif
+    }
+
     @Test func crossProvinceFuelPlanAdvancesOnePumpPerFreshWindow() async throws {
         let start = RouteCoordinate(longitude: -63.340241, latitude: 44.764845)
         let destination = RouteCoordinate(longitude: -76.493059, latitude: 44.269080)
@@ -439,6 +455,24 @@ struct ItineraryBuilderTests {
             #expect(message == "Fuel coverage on this leg could not be verified. Route kept—carry extra fuel or adjust this section.")
         } else {
             Issue.record("Expected an honest unknown-fuel state")
+        }
+    }
+
+    @Test func incompleteFuelProofReusesFoundationWithoutASecondRouteRequest() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.fuelFailureFoundation = response(from: points[0], to: points[1], meters: 300_000)
+        let itinerary = makeItinerary(points)
+        let result = await ItineraryBuilder().build(itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(tankMeters: 150_000, usableMeters: 150_000, reservePercent: 0),
+            source: .fixed(source), onProgress: { _ in })
+        #expect(source.routeRequests.isEmpty)
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.response.distanceMeters == 300_000)
+        #expect(result.legs.compactMap(\.endsAtFuelStop).isEmpty)
+        if case .fuelUnknown = result.riderLegStatus[itinerary.legs[0].id] {} else {
+            Issue.record("A retained road foundation must not be presented as fuel-qualified")
         }
     }
 
@@ -1135,7 +1169,9 @@ struct ItineraryBuilderTests {
                 sourceName: "live", packRevision: "test",
                 cleanMetroMultiplier: nil,
                 avoidMotorways: false,
-                preferBackRoads: false
+                preferBackRoads: false,
+                startEndpointKind: nil,
+                endEndpointKind: nil
             )
             if index == 0 { firstKey = cacheKey }
             cache.insert(response(from: from, to: to, meters: Double(index + 1)), for: cacheKey)
@@ -1153,7 +1189,8 @@ struct ItineraryBuilderTests {
                 directExtraBudgetMeters: nil, regionalHopMinimumMeters: [],
                 sourceName: "live", packRevision: "test",
                 cleanMetroMultiplier: nil, avoidMotorways: false,
-                preferBackRoads: false
+                preferBackRoads: false, startEndpointKind: nil,
+                endEndpointKind: nil
             )
         }
         #expect(cacheKey(avoid: [], seed: 1) != cacheKey(avoid: ["blocked-edge"], seed: 1))
@@ -1316,6 +1353,7 @@ private final class FakeRoutingSource: RoutingSource {
     var firstReachableStationMeters: [String: Double] = [:]
     var gapWhenFirstLegMaxBelow: [String: Double] = [:]
     var failKey: String?
+    var fuelFailureFoundation: RouteResponse?
     var fuelChainError: Error?
     var fuelChainErrorAfterPlanCount: Int?
     var fuelChainPlanCount = 0
@@ -1357,6 +1395,11 @@ private final class FakeRoutingSource: RoutingSource {
                 ),
                 firstReachableStationMeters: scripted ?? defaultDestinationEscape
             )
+        }
+        if let fuelFailureFoundation {
+            return FuelChainResponse(status: "unknown", error: "window_time_budget",
+                message: "Fuel proof timed out", regionIds: ["test"], stops: [], graphMeters: [],
+                diagnostics: nil, foundationRoute: fuelFailureFoundation, windowComplete: false)
         }
         fuelChainPlanCount += 1
         if let limit = fuelChainErrorAfterPlanCount,
@@ -1515,4 +1558,23 @@ private func fuelStop(_ id: String, at point: RouteCoordinate) -> FuelChainStop 
         id: id, latitude: point.latitude, longitude: point.longitude,
         name: id, brand: nil, address: nil, graphMeters: nil
     )
+}
+
+@MainActor
+struct FuelPlanningWindowPolicyTests {
+    @Test func atlanticAndOfflineKeepExistingDeadline() {
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["ns", "nb", "pe", "nl"], live: true) == 20_000)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["wa"], live: false) == 20_000)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: [], live: true) == 20_000)
+        #expect(FuelPlanningWindowPolicy.transportSeconds(milliseconds: 20_000) == 23)
+    }
+    @Test func nationalAndMixedWindowsAllowColdPackPreparation() {
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["wa"], live: true) == 90_000)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["nb", "me"], live: true) == 90_000)
+        #expect(FuelPlanningWindowPolicy.transportSeconds(milliseconds: 90_000) == 100)
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        let watchdog = FuelPlanningProgressWatchdog(inactivityInterval: 105, now: start)
+        #expect(!watchdog.isExpired(at: start.addingTimeInterval(100)))
+        #expect(watchdog.isExpired(at: start.addingTimeInterval(105)))
+    }
 }

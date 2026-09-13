@@ -69,12 +69,12 @@ struct DisplayNameSetupView: View {
                     Task { await save() }
                 } label: {
                     if busy {
-                        ProgressView().tint(.white).frame(maxWidth: .infinity)
+                        ProgressView().tint(DirtTheme.onOrange).frame(maxWidth: .infinity)
                     } else {
                         Text("Continue").frame(maxWidth: .infinity)
                     }
                 }
-                .buttonStyle(DirtCTAStyle(fill: DirtTheme.orange))
+                .buttonStyle(DirtCTAStyle.brand())
                 .disabled(!isValid || busy)
                 .padding(.top, 4)
 

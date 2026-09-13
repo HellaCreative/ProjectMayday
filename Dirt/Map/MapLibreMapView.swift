@@ -17,7 +17,6 @@ struct MapLibreMapView: UIViewRepresentable {
         case unknown
 
         var sourceID: String { "dirt-route-\(rawValue)" }
-        var casingID: String { "\(sourceID)-casing" }
         var lineID: String { "\(sourceID)-line" }
 
         var color: Color {
@@ -48,7 +47,6 @@ struct MapLibreMapView: UIViewRepresentable {
     private enum RoutePaintMetrics {
         static let surfaceWidth: CGFloat = 8
         static let casingWidth: CGFloat = 10
-        static let accessHaloWidth: CGFloat = 13
     }
 
     func makeCoordinator() -> Coordinator {
@@ -605,8 +603,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private func addRouteLayers(to style: MLNStyle) {
             guard style.source(withIdentifier: RoutePaintBucket.paved.sourceID) == nil else { return }
 
-            // Draw unknown-access as a wider solid purple halo beneath the
-            // surface line. Surface and access remain independently legible.
+            // Unknown access replaces surface paint: one opaque stroke, not a halo.
             let accessSource = MLNShapeSource(
                 identifier: RouteAccessPaint.sourceID,
                 shape: nil,
@@ -618,8 +615,8 @@ struct MapLibreMapView: UIViewRepresentable {
                 source: accessSource
             )
             accessLine.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.routeAccess))
-            accessLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.accessHaloWidth)
-            accessLine.lineOpacity = NSExpression(forConstantValue: 0.88)
+            accessLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.surfaceWidth)
+            accessLine.lineOpacity = NSExpression(forConstantValue: 1)
             accessLine.lineCap = NSExpression(forConstantValue: "round")
             accessLine.lineJoin = NSExpression(forConstantValue: "round")
             addRouteLayer(accessLine, to: style)
@@ -628,23 +625,13 @@ struct MapLibreMapView: UIViewRepresentable {
                 let source = MLNShapeSource(identifier: bucket.sourceID, shape: nil, options: nil)
                 style.addSource(source)
 
-                let casing = MLNLineStyleLayer(identifier: bucket.casingID, source: source)
-                casing.lineColor = NSExpression(forConstantValue: UIColor.white)
-                // The route stack sits below street names, whose white halos
-                // preserve legibility across every surface color.
-                casing.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.casingWidth)
-                casing.lineOpacity = NSExpression(forConstantValue: 0.62)
-                casing.lineCap = NSExpression(forConstantValue: "round")
-                casing.lineJoin = NSExpression(forConstantValue: "round")
-
                 let line = MLNLineStyleLayer(identifier: bucket.lineID, source: source)
                 line.lineColor = NSExpression(forConstantValue: UIColor(bucket.color))
                 line.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.surfaceWidth)
-                line.lineOpacity = NSExpression(forConstantValue: 0.82)
+                line.lineOpacity = NSExpression(forConstantValue: 1)
                 line.lineCap = NSExpression(forConstantValue: "round")
                 line.lineJoin = NSExpression(forConstantValue: "round")
 
-                addRouteLayer(casing, to: style)
                 addRouteLayer(line, to: style)
             }
 
@@ -868,14 +855,14 @@ struct MapLibreMapView: UIViewRepresentable {
             appliedRouteGeneration = state.routeGeneration
             for bucket in RoutePaintBucket.allCases {
                 let segments = state.routeSegments.filter {
-                    !$0.isFerry && RoutePaintBucket.bucket(for: $0.surfaceKey) == bucket
+                    !$0.isFerry && !$0.accessUnknown && RoutePaintBucket.bucket(for: $0.surfaceKey) == bucket
                 }
                 (style.source(withIdentifier: bucket.sourceID) as? MLNShapeSource)?.shape = polylines(for: segments)
             }
             let ferries = state.routeSegments.filter(\.isFerry)
             (style.source(withIdentifier: RouteFerryPaint.sourceID) as? MLNShapeSource)?.shape =
                 polylines(for: ferries)
-            let unknownAccess = state.routeSegments.filter(\.accessUnknown)
+            let unknownAccess = state.routeSegments.filter { !$0.isFerry && $0.accessUnknown }
             (style.source(withIdentifier: RouteAccessPaint.sourceID) as? MLNShapeSource)?.shape =
                 polylines(for: unknownAccess)
         }
@@ -989,7 +976,7 @@ struct MapLibreMapView: UIViewRepresentable {
                         self?.state.onPlannerPinDragBegan?(markerID)
                     }
                     view.onDragEnded = { [weak self] markerID, coordinate in
-                        self?.state.onPlannerPinDragEnd?(markerID, coordinate)
+                        self?.finishPlannerPinMove(markerID, coordinate: coordinate)
                     }
                 }
             }
@@ -1005,6 +992,8 @@ struct MapLibreMapView: UIViewRepresentable {
                 mapView.userTrackingMode = .none
             }
             switch camera.command {
+            case let .zoom(level):
+                mapView.setZoomLevel(level, animated: !UIAccessibility.isReduceMotionEnabled)
             case let .center(latitude, longitude, zoom):
                 // Instant snap — never animate center while (re)engaging follow.
                 // An animated setCenter raced follow and produced zoom-then-scroll.
@@ -1351,10 +1340,20 @@ struct MapLibreMapView: UIViewRepresentable {
                     self?.state.onPlannerPinDragBegan?(markerID)
                 }
                 view.onDragEnded = { [weak self] markerID, coordinate in
-                    self?.state.onPlannerPinDragEnd?(markerID, coordinate)
+                    self?.finishPlannerPinMove(markerID, coordinate: coordinate)
                 }
             }
             return view
+        }
+
+        private func finishPlannerPinMove(_ markerID: String, coordinate: CLLocationCoordinate2D) {
+            guard let mapView else { return }
+            let point = mapView.convert(coordinate, toPointTo: mapView)
+            guard let snapped = snapToNearestRoad(coordinate, at: point, in: mapView) else {
+                state.onPlannerPinSnapFailed?()
+                return
+            }
+            state.onPlannerPinDragEnd?(markerID, snapped)
         }
 
         func mapView(_ mapView: MLNMapView, annotationCanShowCallout annotation: MLNAnnotation) -> Bool {
@@ -1374,6 +1373,8 @@ struct MapLibreMapView: UIViewRepresentable {
             guard !state.isNavigating else { return }
             // Tap pin → select (orange lift) so drag / second-tap relocate is obvious.
             state.selectPlannerPin(dirtAnnotation.markerID)
+            (mapView.view(for: dirtAnnotation) as? DirtPlannerPinView)?
+                .applySelectionChrome(!dirtAnnotation.isLocked, animated: true)
             if dirtAnnotation.kind == .fuel {
                 state.onPlannerPinDragBegan?(dirtAnnotation.markerID)
             }
@@ -1402,7 +1403,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 state.selectPlannerPin(dirtAnnotation.markerID)
             }
             guard newState == .ending else { return }
-            state.onPlannerPinDragEnd?(dirtAnnotation.markerID, annotation.coordinate)
+            finishPlannerPinMove(dirtAnnotation.markerID, coordinate: annotation.coordinate)
             // Keep selection so the rider can nudge again; chrome stays on.
         }
 
@@ -1464,21 +1465,6 @@ struct MapLibreMapView: UIViewRepresentable {
                 return
             }
 
-            // Selected pin + tap map → relocate (Plan / Saved). From here relocates
-            // B via long-press with road snap — never by dragging or short-tap.
-            if case .map = resolution,
-               let selectedID = state.selectedPlannerPinID,
-               !state.isNavigating,
-               !state.fromHereLongPressRelocatesDestination {
-                let locked = annotations.first(where: { $0.markerID == selectedID })?.isLocked == true
-                if !locked {
-                    logTouch(.map)
-                    let coordinate = mapView.convert(pt, toCoordinateFrom: mapView)
-                    state.onPlannerPinDragEnd?(selectedID, coordinate)
-                    return
-                }
-            }
-
             // POI wins over pin-drop: generous hit box so a near-miss still
             // opens the POI sheet instead of placing a From-here destination.
             if let cluster = fuelClusterFeature(at: pt, in: mapView, hitRadius: 32) {
@@ -1522,7 +1508,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 height: hitRadius * 2
             )
             let ids = Set(
-                RoutePaintBucket.allCases.flatMap { [$0.casingID, $0.lineID] }
+                RoutePaintBucket.allCases.map(\.lineID)
                     + [
                         RouteAccessPaint.lineID,
                         RouteFerryPaint.casingID,
@@ -1815,6 +1801,12 @@ final class DirtAnnotation: MLNPointAnnotation {
 
 /// Teardrop stage pin: dark body + orange circle + white number,
 /// bottom-anchored so the pin tip sits on the map coordinate.
+/// A selected, editable waypoint owns its one-finger pan. Map gestures must
+/// not cancel it after it has begun; system cancellation still ends the drag.
+private final class DirtPinPanGestureRecognizer: UIPanGestureRecognizer {
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+}
+
 final class DirtPlannerPinView: MLNAnnotationView {
     static let pinWidth: CGFloat = 36
     static let pinHeight: CGFloat = 44
@@ -1829,6 +1821,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
     private var isFuelCandidate = false
     private var isSelectedForEditing = false
     private var isCustomDragging = false
+    private var dragOrigin: CLLocationCoordinate2D?
     private var savedMapScrollEnabled = true
     private var savedMapRotateEnabled = true
 
@@ -1901,7 +1894,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
         candidateIconView.isHidden = true
         addSubview(candidateIconView)
 
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePinPan(_:)))
+        let pan = DirtPinPanGestureRecognizer(target: self, action: #selector(handlePinPan(_:)))
         pan.maximumNumberOfTouches = 1
         pan.delegate = self
         addGestureRecognizer(pan)
@@ -2009,6 +2002,11 @@ final class DirtPlannerPinView: MLNAnnotationView {
         }
     }
 
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let annotation = annotation as? DirtAnnotation else { return false }
+        return isSelectedForEditing && onDragEnded != nil && annotation.kind != .fuel
+    }
+
     @objc private func handlePinPan(_ gesture: UIPanGestureRecognizer) {
         // Terminal events must always release MapLibre, even when a state update
         // removed the annotation/callback while the finger was still down.
@@ -2021,6 +2019,10 @@ final class DirtPlannerPinView: MLNAnnotationView {
             let shouldNotify = gesture.state == .ended && isCustomDragging
             let markerID = dirtAnnotation?.markerID
             let coordinate = dirtAnnotation?.coordinate
+            if !shouldNotify, let origin = dragOrigin {
+                dirtAnnotation?.coordinate = origin
+            }
+            dragOrigin = nil
             restoreMapGestures(reason: "pinDrag\(gesture.state.rawValue)")
             if shouldNotify, let markerID, let coordinate {
                 RoutingDebugLog.shared.event("map pinPan end markerID=\(markerID)")
@@ -2046,6 +2048,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
         case .began:
             guard isSelectedForEditing else { return }
             RoutingDebugLog.shared.event("map pinPan begin markerID=\(dirtAnnotation.markerID)")
+            dragOrigin = dirtAnnotation.coordinate
             isCustomDragging = true
             savedMapScrollEnabled = mapView.isScrollEnabled
             savedMapRotateEnabled = mapView.isRotateEnabled
@@ -2130,6 +2133,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
 }
 
 extension DirtPlannerPinView: UIGestureRecognizerDelegate {
+
     func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer,
         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer

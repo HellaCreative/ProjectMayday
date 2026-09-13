@@ -33,6 +33,9 @@ final class RouteResponseCache {
         let cleanMetroMultiplier: Double?
         let avoidMotorways: Bool
         let preferBackRoads: Bool
+        var ridePreferences: RidePreferences? = nil
+        let startEndpointKind: String?
+        let endEndpointKind: String?
 
         var description: String {
             let recentPrior = priorEdgeIDs.suffix(4).joined(separator: ",")
@@ -47,6 +50,7 @@ final class RouteResponseCache {
                 "|regional=\(regionalHopMinimumMeters.map { String($0) }.joined(separator: ","))" +
                 "|metro=\(cleanMetroMultiplier.map { String(format: "%.0f", $0) } ?? "-")" +
                 "|avoidMwy=\(avoidMotorways ? 1 : 0)|back=\(preferBackRoads ? 1 : 0)" +
+                "|startKind=\(startEndpointKind ?? "-")|endKind=\(endEndpointKind ?? "-")" +
                 "|\(sourceName)|\(packRevision)"
         }
     }
@@ -195,6 +199,7 @@ final class PackRoutingSource: RoutingSource {
     }
 
     func route(_ req: RouteRequest) async throws -> RouteResponse {
+        guard req.options?.ridePreferences == nil else { throw RoutingError.server("Custom ride settings require online planning.") }
         let endpoints = try routeEndpoints(req)
         let key = RouteResponseCache.Key(
             from: endpoints.0,
@@ -212,7 +217,10 @@ final class PackRoutingSource: RoutingSource {
             packRevision: packs.lastManifestVersion,
             cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
             avoidMotorways: req.options?.avoidMotorways == true,
-            preferBackRoads: req.options?.preferBackRoads == true
+            preferBackRoads: req.options?.preferBackRoads == true,
+            ridePreferences: req.options?.ridePreferences,
+            startEndpointKind: req.options?.startEndpointKind,
+            endEndpointKind: req.options?.endEndpointKind
         )
         if req.options?.maxPathMeters == nil, let cached = cache.value(for: key) {
             return cached
@@ -234,18 +242,12 @@ final class PackRoutingSource: RoutingSource {
             avoidMotorways: req.options?.avoidMotorways == true,
             preferBackRoads: req.options?.preferBackRoads == true,
             mapZoom: req.options?.mapZoom,
-            matchLimitMeters: req.options?.matchLimitMeters
+            matchLimitMeters: req.options?.matchLimitMeters,
+            startEndpointKind: req.options?.startEndpointKind,
+            endEndpointKind: req.options?.endEndpointKind
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
-            let failure: OnDeviceRouter.Failure? = {
-                if case .failure(let reason) = result { return reason }
-                return nil
-            }()
-            let message = packs.onDeviceRouteFailureMessage(
-                for: [endpoints.0.locationCoordinate, endpoints.1.locationCoordinate],
-                reason: failure
-            )
-            throw RoutingError.server(message)
+            throw RoutingError.server("No route is available on the installed pack.")
         }
         var response = RouteResponse(
             onDevice: local,
@@ -292,6 +294,7 @@ final class PackRoutingSource: RoutingSource {
     /// Offline equivalent of the existing forward fuel-chain path: the pack's
     /// own reachability search proves each pump before it is committed.
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
+        guard req.options?.ridePreferences == nil else { throw RoutingError.server("Custom ride settings require online planning.") }
         guard req.locations.count == 2 else { throw RoutingError.invalidEndpoints }
         let start = coordinate(req.locations[0])
         let end = coordinate(req.locations[1])
@@ -374,7 +377,9 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    startEndpointKind: stops.isEmpty ? nil : "customers",
+                    endEndpointKind: nil
                 )
                 if case .success(let route) = routed, route.distanceMeters <= firstCap + 1 {
                     directFallback = route.distanceMeters
@@ -472,7 +477,9 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    startEndpointKind: stops.isEmpty ? nil : "customers",
+                    endEndpointKind: "customers"
                 )
                 guard case .success(let firstRoute) = firstResult,
                       firstRoute.distanceMeters <= firstCap + 1
@@ -507,7 +514,9 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    startEndpointKind: "customers",
+                    endEndpointKind: nil
                 )
                 let continuationRoute: OnDeviceRouter.Result?
                 if case .success(let route) = continuationResult,
@@ -763,17 +772,13 @@ struct RoutingSourcePolicy {
         network: NetworkPathMonitor,
         packs: GraphPackStore,
         live: any RoutingSource,
-        pack: any RoutingSource,
-        preferInstalledPacks: Bool = false,
-        onDeviceOnly: Bool = false
+        pack: any RoutingSource
     ) {
         self.init(
             isOnline: { network.isOnline },
             installedPacks: packs,
             live: live,
-            pack: pack,
-            preferInstalledPacks: preferInstalledPacks,
-            onDeviceOnly: onDeviceOnly
+            pack: pack
         )
     }
 
@@ -782,11 +787,8 @@ struct RoutingSourcePolicy {
         installedPacks: any RoutingInstalledPackRegistry,
         live: any RoutingSource,
         pack: any RoutingSource,
-        preferInstalledPacks: Bool = false,
-        onDeviceOnly: Bool = false,
         report: @escaping @MainActor (String) -> Void = { RoutingDebugLog.shared.event($0) }
     ) {
-        let useInstalled = preferInstalledPacks
         selector = { request in
             let locations = request.locations.map {
                 CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
@@ -796,27 +798,14 @@ struct RoutingSourcePolicy {
             let installed = needed.filter { installedPacks.isRoutingPackInstalled($0) }
             let packsCover = installedPacksCover(locations, registry: installedPacks)
             let singleRegion = provinces.count <= 1
-            let chosen: any RoutingSource
-            if useInstalled && (packsCover || onDeviceOnly) {
-                chosen = pack
-            } else {
-                chosen = isOnline() ? live : pack
-            }
-            let selectionReason: String
-            if onDeviceOnly {
-                selectionReason = "on-device-required-pack"
-            } else if useInstalled && packsCover {
-                selectionReason = "installed-packs"
-            } else {
-                selectionReason = "online-or-fallback"
-            }
+            let chosen = isOnline() ? live : pack
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
                     "provinces=[\(provinces.joined(separator: ","))] " +
                     "installed=[\(installed.joined(separator: ","))] " +
-                    "selectedPath=\(chosen.name == pack.name ? needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) } ?? "nil" : "nil") " +
+                    "path=\(needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) } ?? "nil") " +
                     "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline()) " +
-                    "selected=\(chosen.name) selectionReason=\(selectionReason)"
+                    "selected=\(chosen.name)"
             )
             return chosen
         }
@@ -870,7 +859,10 @@ private func cacheKey(
         sourceName: sourceName, packRevision: packRevision,
         cleanMetroMultiplier: request.options?.cleanMetroMultiplier,
         avoidMotorways: request.options?.avoidMotorways == true,
-        preferBackRoads: request.options?.preferBackRoads == true
+        preferBackRoads: request.options?.preferBackRoads == true,
+        ridePreferences: request.options?.ridePreferences,
+        startEndpointKind: request.options?.startEndpointKind,
+        endEndpointKind: request.options?.endEndpointKind
     )
 }
 

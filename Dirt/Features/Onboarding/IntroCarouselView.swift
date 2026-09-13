@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Three swipeable slides between the splash and the map. Sells *why* DIRT exists to
+/// Six swipeable slides between the splash and the map. Sells *why* DIRT exists to
 /// an adventure / dual-sport rider; the how-to lives in the coach marks over the real
 /// interface, not here.
 ///
@@ -15,12 +15,15 @@ struct IntroCarouselView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Slide: Int, CaseIterable {
-        case brand, dial, crew
+        case brand, dial, loop, fuel, offline, crew
 
         var title: String {
             switch self {
             case .brand: "Leave the pavement behind"
             case .dial: "Dial in how much dirt"
+            case .loop: "Take the long way home"
+            case .fuel: "Make room for the next stop"
+            case .offline: "Take your maps with you"
             case .crew: "Ride with your crew"
             }
         }
@@ -30,7 +33,13 @@ struct IntroCarouselView: View {
             case .brand:
                 "DIRT is built for dual-sport riders — the ones who'd rather log gravel, forest road and two-track than asphalt."
             case .dial:
-                "Set the mix of pavement to dirt, or go fully dirt. OSM tracks stay on. Allow unknown only opens unproven paths."
+                "Choose Clean, Balanced or Dirt. Adjust ride wander and your road preferences to shape the journey."
+            case .loop:
+                "Pick a direction, distance and surface. DIRT finds a round trip from where you are, with waypoints you can adjust."
+            case .fuel:
+                "Set your fuel range and reserve. DIRT plans mapped fuel stops along your ride—and lets you choose an alternative."
+            case .offline:
+                "Download regional maps before you leave coverage. Keep your packs up to date and prepare your route before heading out."
             case .crew:
                 "Share live locations with your riding group and send in-app status alerts while DIRT stays connected. Precise Location makes navigation and sharing dependable."
             }
@@ -124,6 +133,9 @@ struct IntroCarouselView: View {
         switch slide {
         case .brand: LogoBuildArt(isActive: isActive)
         case .dial: DirtDialArt(isActive: isActive)
+        case .loop: IntroFeatureArt(symbol: "arrow.triangle.2.circlepath", caption: "OUT THERE. BACK HERE.")
+        case .fuel: IntroFeatureArt(symbol: "fuelpump.fill", caption: "YOUR RANGE. YOUR RIDE.")
+        case .offline: IntroFeatureArt(symbol: "map.fill", caption: "PREPARE BEFORE YOU GO.")
         case .crew: CrewBeaconArt(isActive: isActive)
         }
     }
@@ -158,5 +170,25 @@ struct IntroCarouselView: View {
         }
         .buttonStyle(DirtCTAStyle.brand())
         .accessibilityHint(isLast ? "Finishes the intro" : "Shows the next slide")
+    }
+}
+
+/// Uses the same map-control icon vocabulary as the app, with no sample metrics.
+private struct IntroFeatureArt: View {
+    let symbol: String
+    let caption: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Image(systemName: symbol)
+                .font(.system(size: 76, weight: .medium))
+                .foregroundStyle(DirtTheme.orange)
+            Text(caption)
+                .font(.caption.weight(.bold))
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(0.55))
+        }
+        .frame(maxWidth: .infinity, minHeight: 190, alignment: .leading)
+        .accessibilityHidden(true)
     }
 }

@@ -106,6 +106,7 @@ final class MapState {
         case fit([RouteCoordinate])
         case applyViewMode
         case resetNorth
+        case zoom(Double)
     }
 
     enum RouteBuildCameraStep {
@@ -348,6 +349,7 @@ final class MapState {
     /// Called when the user drags a planner pin and releases it.
     /// Arguments: marker ID (e.g. "s0", "e0", "dest") + new map coordinate.
     var onPlannerPinDragEnd: ((String, CLLocationCoordinate2D) -> Void)?
+    var onPlannerPinSnapFailed: (() -> Void)?
 
     /// Currently selected planner pin (tap-to-select, then drag or tap map to move).
     var selectedPlannerPinID: String? {
@@ -430,6 +432,14 @@ final class MapState {
         groupMarkers = new.filter(\.kind.isGroupOverlay)
         groupMarkerGeneration += 1
         markerGeneration += 1
+    }
+
+    /// Button zoom keeps the current map centre, bearing, and follow intent.
+    func zoomBy(_ delta: Double) {
+        let target = min(20, max(2, mapZoom + delta))
+        mapZoom = target
+        if followMode != .off { followZoom = target }
+        camera = (UUID(), .zoom(target))
     }
 
     func fly(to coordinate: RouteCoordinate, zoom: Double = 13) {
