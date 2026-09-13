@@ -139,6 +139,39 @@ struct OnDevicePackBenchmarkTests {
         }
     }
 
+    @Test("Regional reuse preserves fuel caps and unfinished-search classification")
+    @MainActor
+    func boundedRegionalRouteReuse() async throws {
+        let (store, temp) = try fixtureStore()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let from = CLLocationCoordinate2D(latitude: 44.764919, longitude: -63.340350)
+        let to = CLLocationCoordinate2D(latitude: 44.755736, longitude: -63.301255)
+        func query(cap: Double = 20_000) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
+            await store.routeOnDeviceDetailed(from: from, to: to, profile: .balanced,
+                allowUnknown: false, avoidEdgeIds: [], sessionSeed: 3511091208, maxRouteMeters: cap)
+        }
+        guard case .success(let first) = await query(), case .success(let second) = await query() else {
+            Issue.record("Known short route must remain reachable"); return
+        }
+        #expect(store.regionalRouteCacheHits == 1)
+        #expect(first.edgeIds == second.edgeIds)
+        #expect(first.distanceMeters == second.distanceMeters)
+        let smallerCap = first.distanceMeters - 1
+        if case .success(let constrained) = await query(cap: smallerCap) {
+            #expect(constrained.distanceMeters <= smallerCap)
+        }
+        #expect(store.regionalRouteCacheHits == 1, "A changed fuel cap cannot reuse the previous route")
+        let expired = await RoutingWorkContext.$deadline.withValue(0) { await query() }
+        if case .failure(.searchLimit) = expired {} else {
+            Issue.record("An expired request must not return cached success or no-path")
+        }
+        #expect(store.regionalRouteCacheHits == 1)
+        guard case .success = await query() else {
+            Issue.record("An expired request must not poison a later valid request"); return
+        }
+        #expect(store.regionalRouteCacheHits == 2)
+    }
+
     @Test("Repeated fuel discovery keeps exact reachability distances")
     func repeatedFuelDiscovery() throws {
         let router = OnDeviceRouter(pack: try loadPack("ns"))

@@ -1322,3 +1322,12 @@ returned 1,141.214 m against a 1,107.875 m cap. Reserve the exact connector leng
 inside the cap before road search; do not change connector geometry or profile
 costs. The sufficient-budget route must remain reachable. The targeted iOS regression and itinerary tests pass; long cross-region fuel
 qualification remains incomplete.
+
+Regional execution reuse: iOS caches only completed bounded regional searches,
+keyed by the pack instance and every route constraint, including seed, snap
+controls, endpoint access and fuel cap. Cancelled/unfinished work is excluded,
+and expired requests remain search-limit failures even when a cache entry exists.
+Use equivalent invalidation and full-input identity on Android; no routing-rule
+change is implied. Native replay preserves all 32 previously completed shapes
+and adds completed owner Clean cross-province and Fundy requests. Eight long
+request assertions still fail. This optimization is excluded from phone build 42.

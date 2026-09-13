@@ -691,3 +691,26 @@ Target is White (`00008140-000414593A61801C`), development bundle
 `com.mayday.dirt.dev` only. Installation and launch verification are pending.
 The saved DEV 2 (40) application remains the phone foundation rollback artifact at
 `.build/accepted-foundation-40/Dirt.app`. Production and other devices are excluded.
+
+### Completed regional-search reuse (after phone build 42 snapshot)
+
+Bounded native regional searches now reuse completed success/no-path results for
+identical pack objects and all routing inputs, including snap controls, endpoint
+access, prior roads, seed, profile and fuel cap. Unfinished/cancelled work is not
+cached; expired callers cannot receive a cached success. Entries retain a weak
+pack reference and a bounded 64-entry LRU, so they do not keep retired pack data
+alive. Unbounded direct searches are unchanged. This is execution reuse, not a
+new profile, station threshold or border rule.
+
+`Dirt-Fuel-Regional-Reuse-20260913.xcresult` passes the cache/cap/deadline regression
+and completes 17/21 historical plus 17/21 owner fuel requests. All 32 routes that
+completed before and after reuse have identical actual geometries. New completed
+owner routes are Clean cross-province and Clean Fundy. The latter is 627.085 km,
+with the initial refill plus two later stations, four legs within 207 km, no join
+gaps and the correct final endpoint. The exact repeated-segment lower bound is
+303.757 m (reported backtrack 343.528 m); the route includes 544 m tagged as ferry.
+These remain review findings, not owner acceptance. Other long requests remain
+incomplete, with eight replay assertions failing. Evidence is retained in
+`.build/recovery-evidence/fuel-regional-reuse`. Part of this run overlapped the
+owner-requested phone compilation, so timing is not an isolated benchmark.
+This change is excluded from the already prepared phone build 42.

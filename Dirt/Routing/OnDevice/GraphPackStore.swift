@@ -118,6 +118,41 @@ final class GraphPackStore {
     }()
     private var decodedPackKeys: [String: NSString] = [:]
 
+    private struct RegionalRouteKey: Hashable {
+        let pack: ObjectIdentifier
+        let from: RouteCoordinate
+        let to: RouteCoordinate
+        let profile: RouteProfile
+        let allowUnknown: Bool
+        let avoid: Set<String>
+        let prior: Set<String>
+        let arrival: String?
+        let backtrackFactor: Double
+        let seed: UInt64
+        let cap: Double?
+        let metro: Double?
+        let avoidMotorways: Bool
+        let preferBackRoads: Bool
+        let zoom: Double?
+        let matchLimit: Double?
+        let startKind: String?
+        let endKind: String?
+        let initialFuelApproach: Bool
+    }
+    private final class RegionalRouteEntry {
+        weak var pack: GraphV2Pack?
+        let result: Result<OnDeviceRouter.Result, OnDeviceRouter.Failure>
+        init(pack: GraphV2Pack, result: Result<OnDeviceRouter.Result, OnDeviceRouter.Failure>) {
+            self.pack = pack
+            self.result = result
+        }
+    }
+    // Repeated station candidates often share identical regional approach
+    // searches. Keep only finished results and all execution inputs in the key.
+    private var regionalRoutes: [RegionalRouteKey: RegionalRouteEntry] = [:]
+    private var regionalRouteRecency: [RegionalRouteKey] = []
+    private(set) var regionalRouteCacheHits = 0
+
 
     /// When true, a checksum-valid installed revision is not replaced in place.
     var protectInstalledRevisions = false
@@ -1101,6 +1136,22 @@ final class GraphPackStore {
         }
         guard let pack = activePack else { return .failure(.noPath) }
         let avoid = Set(avoidEdgeIds)
+        if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
+        let key = RegionalRouteKey(pack: ObjectIdentifier(pack),
+            from: RouteCoordinate(longitude: from.longitude, latitude: from.latitude),
+            to: RouteCoordinate(longitude: to.longitude, latitude: to.latitude),
+            profile: profile, allowUnknown: allowUnknown, avoid: avoid, prior: priorEdgeIds,
+            arrival: arrivalEdgeId, backtrackFactor: backtrackFactor, seed: sessionSeed,
+            cap: maxRouteMeters, metro: cleanMetroMultiplier, avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads, zoom: mapZoom, matchLimit: matchLimitMeters,
+            startKind: startEndpointKind, endKind: endEndpointKind, initialFuelApproach: initialFuelApproach)
+        if maxRouteMeters != nil, let cached = regionalRoutes[key], cached.pack === pack {
+            regionalRouteCacheHits += 1
+            regionalRouteRecency.removeAll { $0 == key }
+            regionalRouteRecency.append(key)
+            RoutingDebugLog.shared.event("regional route cache hit region=\(pack.regionId ?? "unknown")")
+            return cached.result
+        }
         let packRef = pack
         let start = from
         let end = to
@@ -1112,7 +1163,7 @@ final class GraphPackStore {
         let matchLimit = matchLimitMeters
         let startKind = startEndpointKind
         let endKind = endEndpointKind
-        return await RoutingWorkContext.detachedSearch {
+        let computed = await RoutingWorkContext.detachedSearch {
             var router = OnDeviceRouter(pack: packRef)
             router.sessionSeed = seed
             router.mapZoom = zoom
@@ -1143,6 +1194,23 @@ final class GraphPackStore {
             route.backtrackReason = route.backtrackMeters > 0 ? "prior_road_retrace" : nil
             return .success(route)
         }
+        if maxRouteMeters != nil, RoutingWorkContext.stopReason == nil {
+            let complete: Bool
+            switch computed {
+            case .success(let route): complete = !route.searchMeta.timedOut
+            case .failure(.noPath): complete = true
+            case .failure: complete = false
+            }
+            if complete {
+                regionalRoutes[key] = RegionalRouteEntry(pack: pack, result: computed)
+                regionalRouteRecency.removeAll { $0 == key }
+                regionalRouteRecency.append(key)
+                while regionalRouteRecency.count > 64 {
+                    regionalRoutes.removeValue(forKey: regionalRouteRecency.removeFirst())
+                }
+            }
+        }
+        return computed
     }
 
     private func fuelDistancePacks(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) async -> [GraphV2Pack] {
