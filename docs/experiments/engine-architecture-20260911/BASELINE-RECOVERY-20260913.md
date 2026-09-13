@@ -641,3 +641,36 @@ percentages match all 19 saved direct routes; comparison evidence is retained
 in `.build/recovery-evidence/initial-approach-regression`.
 The cross-province failures, UI failures and remaining qualification list above
 remain open. This remains an unqualified DEV recovery checkpoint.
+
+### Cross-region fuel budget investigation
+
+Additional native diagnostics show Aulac candidate `osm:w548556836` has an
+approximate road distance of 202.663 km from the initial pump against a 207 km
+fuel budget. The regional planner spends approximately 207 km on the NS hop,
+then attempts the NB tail with no usable allowance. Repeating these seam attempts
+exhausts the planning deadline. An experiment now reserves a destination-directed
+road-graph lower bound at each recorded seam before planning the preceding hop.
+It excludes off-road snap offsets from the reserve. This changes bounded-leg
+allocation, not profile costs, seam identities or unbounded direct-route rules.
+The replay still completes only 17/21 historical requests and 15/21 owner
+requests. The experiment did not resolve the failures and adds calculation, so
+it has been removed from the candidate; its patch and evidence are retained in
+`.build/recovery-evidence/fuel-seam-reserve`. This is not a qualified fix.
+
+### Confirmed connector fuel-accounting regression
+
+`Dirt-Fuel-Connector-Cap-Red-20260913.xcresult` reproduces an over-budget success:
+1,141.214 m returned against a 1,107.875 m cap. Virtual-endpoint search added the
+visible tap-to-road connector lengths after enforcing its road-distance cap. The
+fix reserves their exact lengths before searching, using the existing connector
+geometry and thresholds. This corrects bounded route feasibility; unbounded
+profile costs are unchanged. The fixture also requires a sufficient-budget route
+to remain reachable. The regression passes after the fix.
+`Dirt-Fuel-Connector-Cap-R2-20260913.xcresult` passes 54 of 56 tests; the two
+failing aggregate tests retain four historical and six owner long-route failures.
+All 42 actual fuel outputs are retained in `.build/recovery-evidence/fuel-connector-cap`.
+Bounded route choices do change where the old search returned an over-cap leg:
+for example, Canso Dirt now completes 232.742 km through `osm:w547642605` rather
+than 379.457 km through a different station. This is not an unbounded-profile
+change or a claim that the shorter ride is more enjoyable. Long cross-region
+qualification remains open.

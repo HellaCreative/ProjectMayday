@@ -533,7 +533,7 @@ final class PackRoutingSource: RoutingSource {
                     latitude: candidate.latitude,
                     longitude: candidate.longitude
                 )
-                trace("leg-start-\(candidate.id)")
+                trace("leg-start-\(candidate.id)-road-\(Int(reachable[candidate.id] ?? 0))-cap-\(Int(firstCap))")
                 let firstResult = await packs.routeOnDeviceDetailed(
                     from: current.locationCoordinate,
                     to: candidateCoordinate,
@@ -553,6 +553,9 @@ final class PackRoutingSource: RoutingSource {
                     endEndpointKind: "customers"
                 )
                 try RoutingWorkContext.check()
+                if case .failure(let reason) = firstResult {
+                    RoutingDebugLog.shared.event("pack fuel leg-failed station=\(candidate.id) reason=\(reason)")
+                }
                 let firstUnverified: Bool
                 if case .failure(.searchLimit(let reason)) = firstResult {
                     incompleteSearchReason = reason

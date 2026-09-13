@@ -1310,3 +1310,15 @@ fill marker through prefix reuse. This is new initial-phase selection behavior;
 Android parity is required, not yet demonstrated. Owner replays complete 15/21;
 six cross-region requests still exhaust search budgets. Do not present those as
 proven fuel gaps or claim release qualification.
+
+Cross-region fuel budgets must cover the whole station-to-station leg. An iOS
+experiment reserving the connected graph distance beyond each border did not
+resolve the long-route failures and was removed. Preserve the distinction
+between a guidance lower bound and a legally proved complete route on Android.
+
+Fuel-cap accounting regression: the native search previously budgeted only road
+segments, then added visible tap-to-road connectors after the search. A fixture
+returned 1,141.214 m against a 1,107.875 m cap. Reserve the exact connector lengths
+inside the cap before road search; do not change connector geometry or profile
+costs. The sufficient-budget route must remain reachable. The targeted iOS regression and itinerary tests pass; long cross-region fuel
+qualification remains incomplete.

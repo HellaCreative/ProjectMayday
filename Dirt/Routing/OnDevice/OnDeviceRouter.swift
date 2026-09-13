@@ -1774,6 +1774,14 @@ nonisolated struct OnDeviceRouter {
         }
 
         var ctx = ctx
+        if let cap = ctx.maxPathMeters {
+            // The returned itinerary includes these approach connectors, so
+            // reserve their exact lengths before spending distance on roads.
+            let approachMeters = (softStitchStub(tap: from, snap: startSnap, idSuffix: "start")?.distanceMeters ?? 0)
+                + (softStitchStub(tap: to, snap: endSnap, idSuffix: "end")?.distanceMeters ?? 0)
+            guard cap >= approachMeters else { return .failure(.noPath) }
+            ctx.maxPathMeters = cap - approachMeters
+        }
         if startEndpointKind == "customers" {
             ctx.customerStartEdges = pack.customerEndpointEdges(edgeIndex: startEi,
                 seeds: (virtAdj[startVirt] ?? []).filter { $0.to < n }.map { ($0.to, virt[$0.id].meters) })

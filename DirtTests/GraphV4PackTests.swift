@@ -53,6 +53,33 @@ struct GraphV4PackTests {
         }
     }
 
+    @Test("fuel distance cap includes the approach connectors")
+    func fuelCapIncludesApproachConnectors() throws {
+        let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.graph.v4.bin")))
+        pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.geometry.v1.bin")))
+        var router = OnDeviceRouter(pack: pack)
+        router.matchLimitMeters = 80
+        router.initialFuelApproach = true
+        let from = CLLocationCoordinate2D(latitude: 44.9997, longitude: -64.004)
+        let to = CLLocationCoordinate2D(latitude: 44.9997, longitude: -63.996)
+        guard case .success(let reference) = router.routeDetailed(from: from, to: to,
+            profile: .cleanest, allowUnknown: false, sessionSeed: 0) else {
+            Issue.record("Fixture approach must be reachable"); return
+        }
+        let connectors = reference.legs.filter { $0.edgeId.hasPrefix("soft-stitch") }.reduce(0) { $0 + $1.distanceMeters }
+        #expect(connectors > 40)
+        let cap = reference.distanceMeters - connectors / 2
+        if case .success(let constrained) = router.routeDetailed(from: from, to: to,
+            profile: .cleanest, allowUnknown: false, sessionSeed: 0, maxRouteMeters: cap) {
+            #expect(constrained.distanceMeters <= cap)
+        }
+        guard case .success(let feasible) = router.routeDetailed(from: from, to: to,
+            profile: .cleanest, allowUnknown: false, sessionSeed: 0, maxRouteMeters: reference.distanceMeters + 1) else {
+            Issue.record("A sufficient budget must still reach the destination"); return
+        }
+        #expect(feasible.distanceMeters <= reference.distanceMeters + 1)
+    }
+
     @Test("forbidden forecourt entrance cannot resnap to the public road")
     func forbiddenForecourt() throws {
         let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt-blocked.graph.v4.bin")))
