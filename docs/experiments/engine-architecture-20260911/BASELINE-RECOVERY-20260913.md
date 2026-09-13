@@ -688,7 +688,11 @@ represented as phone route parity. The initial-refill and connector-cap tests pa
 long cross-region fuel planning, custom settings and variety remain incomplete.
 
 Target is White (`00008140-000414593A61801C`), development bundle
-`com.mayday.dirt.dev` only. Installation and launch verification are pending.
+`com.mayday.dirt.dev` only. Xcode build, development-environment checks and
+code-sign verification passed. CoreDevice installed and launched the app; its
+independent inventory confirms version 2, build 42. Installation, launch and
+binary-identity evidence is retained in `.build/recovery-evidence/phone-review-42`.
+Owner route review is pending; this is not route acceptance.
 The saved DEV 2 (40) application remains the phone foundation rollback artifact at
 `.build/accepted-foundation-40/Dirt.app`. Production and other devices are excluded.
 
