@@ -1194,3 +1194,106 @@ All 325 serial tests ran; eight assertions remain failed. Eleven oracle fuel
 workflows reached the destination, but geometric repeats still disqualify some
 completed routes. Custom preferences, matched production-pack replay and physical
 route acceptance remain open. This checkpoint is not Android or iOS qualification.
+
+
+## September 13 owner clarification: forward rides and geographic barriers
+
+The owner explicitly authorized forward fuel legs and fresh-ride variety while
+preserving the production-based UI and profile definitions. Fuel is part of the
+ride. Progress must follow connected roads around obstacles, not geographic
+closeness to the destination. The same rules must apply across regional borders;
+Halifax-area–St. Stephen is a regression case, not a location-specific exception.
+
+Current unqualified DEV changes after dfd9cbb:
+
+- Native fuel selection uses directed road-distance guidance across the existing
+  regional path and reciprocal recorded seams. Forward fuel discovery and the
+  destination distance check use the same cross-pack view. These distances are
+  lower bounds; exact riding legs still prove profile, turn, access and range.
+- A requested partial window returns its proven fuel leg immediately. The
+  itinerary builder reuses that route. It remains explicitly incomplete until
+  the requested destination is reached. Fuel planning no longer solves a full
+  destination ride for every distant pump candidate.
+- The first suitable non-urban leg in the existing fuel search zone can be
+  selected without comparing six complete itineraries. Explicit pump selection
+  precedes the automatic candidate limit. Existing range/forward/retrace limits
+  remain; no new location or percentage thresholds were added.
+- Actual replay exposed long fuel-station exit spurs. For a pump within a tank's
+  road distance of the destination, the final exit is checked against the
+  existing retrace limit before selecting that pump. This is bounded exit
+  validation, not a claim that an unbuilt continuation is complete.
+- Customer endpoint intent is carried when a new window departs a selected
+  fuel station. Ordinary rider pins retain their original endpoint intent.
+- Station matches retain two pack/geometry identities within 8192 total entries.
+  Spatial lookup retains two indexes, invalidates changed geometry, and uses
+  conservative full-geometry bounds to skip impossible snap candidates before
+  exact projection. Profile costs, snap radius and final matching remain intact.
+
+Evidence so far: 63 focused checks passed. The forward-window iteration completed
+15/21 fuel replays (all 18 historical oracle profile/case pairs plus three added
+Fundy cases); six cross-border requests still exhausted their time budget. Route
+geometry audit exposed about 4 km and 8 km of repeated roads on two completed
+rides, so completion was not treated as qualification. The direct cross-pack
+forward/reverse distance check agreed, but cold preparation took about 53 seconds,
+then 39 seconds with index retention. Conservative geometry filtering and fuel
+exit validation are now under a full serial simulator replay. Results are pending.
+
+The added Fundy case uses Porters Lake (44.764919, -63.340350) to the accepted
+sidecar's St. Stephen station osm:w682170844 (45.177074, -67.296103), with the
+historical oracle's profiles, seed, tank and reserve settings. The historical
+oracle file and its coordinates remain unchanged. Evidence is retained under
+.build/recovery-evidence; audit-native-fuel-replay.py reports exact repeated
+segments as a lower bound, endpoint gaps, hop lengths and completion separately.
+
+Fresh-ride seed plumbing, custom ride preferences, full route quality, candidate
+pack qualification and phone route acceptance remain open. The current regional
+path chooser is unchanged; arbitrary worldwide coverage has not been qualified.
+The live service remains a comparison reference, not the normal computation path.
+Production deployments, phone installation and approved UI are untouched. Android
+must implement the clarified outcomes; no Android qualification is claimed.
+
+### September 13 forward-fuel evidence update (unqualified)
+
+Native replay now completes 17/21 fuel scenarios on the accepted 20260908-02
+fixture. Cross-province Dirt and all three Fundy profiles still exhaust search
+budgets; do not present them as proven fuel gaps. Duplicate source-map station
+representations must not consume successive automatic candidate attempts ahead
+of distinct stations, while retaining explicit selection and mapped access
+records. Visited-station exclusion follows physical source identity. Across
+packs, road history must refer to global road identity, never reinterpret local
+node indices from another region. Rejected incoming fuel legs need no onward
+search. None of these findings qualifies Android or a phone build.
+
+The approved production UI is unchanged. Simulator paywall catalogue loading
+and Profile-to-Route navigation remain failing acceptance checks, documented
+with screenshots in the recovery report. They must not be waived as routing
+work proceeds.
+
+## Owner clarification — September 13 initial refill
+
+Every fuel-enabled ride starts by visiting the closest reachable fuel station.
+This applies even when that stop is only 500 metres away and the destination
+could otherwise fit within the tank range. The rider does not know the initial
+fuel level. Do not substitute an assumed full starting tank for this stop.
+
+Initial refill selection is separate from later forward-progress fuel selection:
+no minimum-distance/search-zone or destination-heading rule may suppress it.
+Use mapped, permitted access and road reachability, including nearby regional
+borders. A rider already at a mapped station can refill at the starting anchor.
+After the refill, build the selected-profile ride forward within usable range.
+Fuel replacement preserves the unaffected prefix. Fuel-off rides add no stop.
+Planning a refill does not claim the rider has physically filled the tank.
+
+This explicit owner instruction applies to all fuel-enabled rides and supersedes
+older loop-only first-fuel wording and tests that assume a full tank at an
+arbitrary origin. Production and approved UI remain unchanged during recovery.
+
+Initial-refill verification: the real accepted pack produces the initial approach
+for all three profiles, and the full short itinerary keeps the rider destination
+after that refill. The 500 m builder case passes; a mapped station at the origin
+satisfies the initial refill without inserting a duplicate stop. This is planning
+state, not a physical fuel sensor or confirmed refill. Fresh rider-leg identities
+now supply stable nonzero seeds, preserved across saving, retries and fuel edits.
+The old bounded native search still disables predecessor variety; do not claim
+variety output parity from seed plumbing alone. Full DEV qualification remains
+open; the four long historical fuel requests and two UI checks still fail.

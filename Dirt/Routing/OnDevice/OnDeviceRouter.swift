@@ -598,6 +598,122 @@ nonisolated struct OnDeviceRouter {
         return out
     }
 
+    /// A direction-aware distance field over installed packs and reciprocal
+    /// recorded seams. This is guidance: exact routes still prove turn legality.
+    static func fuelRoadDistances(packs: [GraphV2Pack], anchor: CLLocationCoordinate2D,
+                                  points: [CLLocationCoordinate2D], profile: RouteProfile,
+                                  allowUnknown: Bool, reverse: Bool) -> [Double]? {
+        let routers = packs.map { OnDeviceRouter(pack: $0) }
+        var offsets: [Int] = [], count = 0
+        for pack in packs { offsets.append(count); count += pack.nodeCount }
+        guard count > 0 else { return nil }
+        var extra: [Int: [RoadCompass.Arc]] = [:]
+        let policyUnknown = allowUnknown && profile != .cleanest
+        func permitted(_ pack: GraphV2Pack, from: Int, to: Int, edge: Int) -> Bool {
+            guard pack.hasDirectedArc(from: from, to: to, edge: edge) else { return false }
+            if pack.version >= 4, pack.legalTopology {
+                let code = Int(pack.v4AccessCode(ei: edge, from: from, to: to))
+                return code != 2 && code != 5 && (code != 1 || policyUnknown)
+            }
+            return true // Legacy snap eligibility already checks access.
+        }
+        func snaps(_ point: CLLocationCoordinate2D, _ index: Int) -> [EdgeSnap] {
+            let router = routers[index]
+            return Self.rangeSnapCache.snaps(pack: packs[index], point: point,
+                profile: profile, allowUnknown: allowUnknown) {
+                router.nearestEdgeSnaps(to: point, allowUnknown: allowUnknown,
+                    profile: profile, maxMeters: Self.preferredMatchMeters)
+            }
+        }
+        func attach(_ point: CLLocationCoordinate2D, index: Int, virtual: Int, edgeID: String? = nil) {
+            let pack = packs[index], offset = offsets[index]
+            for snap in snaps(point, index) where edgeID == nil
+                || (String(pack.osmWayIds[snap.edgeIndex]) == edgeID?.split(separator: ":").first.map(String.init)
+                    && snap.distanceMeters <= 2) {
+                let ei = snap.edgeIndex, a = offset + snap.nodeA, b = offset + snap.nodeB
+                let left = max(0, snap.distanceAlongM) + snap.distanceMeters
+                let right = max(0, Double(pack.edgeMeters[ei]) - snap.distanceAlongM) + snap.distanceMeters
+                if permitted(pack, from: snap.nodeA, to: snap.nodeB, edge: ei) {
+                    extra[a, default: []].append(.init(to: virtual, edge: ei, meters: left))
+                    extra[virtual, default: []].append(.init(to: b, edge: ei, meters: right))
+                }
+                if permitted(pack, from: snap.nodeB, to: snap.nodeA, edge: ei) {
+                    extra[b, default: []].append(.init(to: virtual, edge: ei, meters: right))
+                    extra[virtual, default: []].append(.init(to: a, edge: ei, meters: left))
+                }
+            }
+        }
+        let anchorNode = count; count += 1
+        for index in packs.indices { attach(anchor, index: index, virtual: anchorNode) }
+        for index in packs.indices {
+            guard RoutingWorkContext.stopReason == nil else { return nil }
+            let pack = packs[index]
+            for other in packs.indices where other > index {
+                let remote = packs[other]
+                guard let localID = pack.regionId?.lowercased(), let remoteID = remote.regionId?.lowercased() else { continue }
+                for seam in pack.crossPackSeams[remoteID] ?? [] {
+                    guard seam.gapMeters <= 2,
+                        let reciprocal = (remote.crossPackSeams[localID] ?? []).first(where: {
+                            $0.osmWayId == seam.osmWayId && $0.localEdgeId == seam.remoteEdgeId
+                                && $0.remoteEdgeId == seam.localEdgeId && $0.gapMeters <= 2
+                                && abs($0.latitude - seam.latitude) < 0.00002
+                                && abs($0.longitude - seam.longitude) < 0.00002
+                        }) else { continue }
+                    let virtual = count; count += 1
+                    attach(.init(latitude: seam.latitude, longitude: seam.longitude), index: index,
+                           virtual: virtual, edgeID: seam.localEdgeId)
+                    attach(.init(latitude: reciprocal.latitude, longitude: reciprocal.longitude), index: other,
+                           virtual: virtual, edgeID: reciprocal.localEdgeId)
+                }
+            }
+        }
+        let result = RoadCompass.build(stateCount: count, destination: anchorNode, reverse: reverse,
+            cancelled: { RoutingWorkContext.stopReason != nil }) { state, visit in
+            for arc in extra[state] ?? [] { visit(arc) }
+            guard let index = packs.indices.last(where: { offsets[$0] <= state }),
+                  state < offsets[index] + packs[index].nodeCount else { return }
+            let router = routers[index], pack = packs[index], node = state - offsets[index]
+            for arc in Int(pack.nodeOffsets[node])..<Int(pack.nodeOffsets[node + 1]) {
+                let ei = Int(pack.edgeUndirectedIndex[arc]), target = Int(pack.edgeTargets[arc])
+                if pack.version >= 4, pack.legalTopology {
+                    let code = Int(pack.v4AccessCode(ei: ei, from: node, to: target))
+                    if code == 2 || code == 5 || (code == 1 && !policyUnknown) { continue }
+                } else if !router.accessAllowed(GraphV2Pack.unpackAccess(pack.edgeAttrs[ei]),
+                    allowUnknown: policyUnknown, profile: profile) { continue }
+                visit(.init(to: offsets[index] + target, edge: ei, meters: Double(pack.edgeMeters[ei])))
+            }
+        }
+        guard result.status == "complete" else { return nil }
+        var distances: [Double] = []
+        for point in points {
+            guard RoutingWorkContext.stopReason == nil else { return nil }
+            var best = Double.infinity
+            for index in packs.indices {
+                let pack = packs[index], offset = offsets[index], anchorSnaps = snaps(anchor, index)
+                for snap in snaps(point, index) {
+                    let ei = snap.edgeIndex
+                    for end in anchorSnaps where end.edgeIndex == ei {
+                        let delta = reverse ? end.distanceAlongM - snap.distanceAlongM : snap.distanceAlongM - end.distanceAlongM
+                        if (delta >= 0 && permitted(pack, from: snap.nodeA, to: snap.nodeB, edge: ei))
+                            || (delta <= 0 && permitted(pack, from: snap.nodeB, to: snap.nodeA, edge: ei)) {
+                            best = min(best, snap.distanceMeters + abs(delta) + end.distanceMeters)
+                        }
+                    }
+                    let forward = permitted(pack, from: snap.nodeA, to: snap.nodeB, edge: ei)
+                    let backward = permitted(pack, from: snap.nodeB, to: snap.nodeA, edge: ei)
+                    if reverse ? backward : forward {
+                        best = min(best, snap.distanceMeters + snap.distanceAlongM + result.remaining[offset + snap.nodeA])
+                    }
+                    if reverse ? forward : backward {
+                        best = min(best, snap.distanceMeters + max(0, Double(pack.edgeMeters[ei]) - snap.distanceAlongM) + result.remaining[offset + snap.nodeB])
+                    }
+                }
+            }
+            distances.append(best)
+        }
+        return distances
+    }
+
     func shortestGraphMeters(
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
@@ -1727,7 +1843,19 @@ nonisolated struct OnDeviceRouter {
         }
         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
             guard pack.version >= 4, let span else { return false }
-            return PathRetrace.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
+            // Immutable array views last only for this synchronous query. This
+            // avoids dynamic exclusivity checks on captured mutable search
+            // arrays at every ancestor; no predecessor history is cached.
+            let parents = prev, kinds = prevKind, records = prevData
+            return PathRetrace.contains(node: label, span: span, previous: { parents[$0] }, record: { ancestor in
+                guard parents[ancestor] >= 0 else { return nil }
+                let entry = records[ancestor]
+                if kinds[ancestor] == 0 {
+                    guard entry == span.edge else { return nil }
+                    return .init(edge: entry, lower: 0, upper: Double(pack.edgeMeters[entry]))
+                }
+                return kinds[ancestor] == 1 ? virt[entry].roadSpan : nil
+            })
         }
         var slots = [UInt8](repeating: 0, count: total)
         var heap = MinHeap()
@@ -2281,7 +2409,19 @@ nonisolated struct OnDeviceRouter {
         }
         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
             guard pack.version >= 4, let span else { return false }
-            return PathRetrace.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
+            // Immutable array views last only for this synchronous query. This
+            // avoids dynamic exclusivity checks on captured mutable search
+            // arrays at every ancestor; no predecessor history is cached.
+            let parents = prev, kinds = prevKind, records = prevData
+            return PathRetrace.contains(node: label, span: span, previous: { parents[$0] }, record: { ancestor in
+                guard parents[ancestor] >= 0 else { return nil }
+                let entry = records[ancestor]
+                if kinds[ancestor] == 0 {
+                    guard entry == span.edge else { return nil }
+                    return .init(edge: entry, lower: 0, upper: Double(pack.edgeMeters[entry]))
+                }
+                return kinds[ancestor] == 1 ? virt[entry].roadSpan : nil
+            })
         }
         var slots = [UInt8](repeating: 0, count: labels)
         var heap = MinHeap()
@@ -3833,9 +3973,13 @@ nonisolated struct OnDeviceRouter {
             let allowUnknown: Bool
         }
         private let lock = NSLock()
-        private var owner: GraphV2Pack?
-        private var geometry: GeometryV1Pack?
-        private var values: [Key: [EdgeSnap]] = [:]
+        private final class Entry {
+            let owner: GraphV2Pack
+            let geometry: GeometryV1Pack?
+            var values: [Key: [EdgeSnap]] = [:]
+            init(_ pack: GraphV2Pack) { owner = pack; geometry = pack.geometry }
+        }
+        private var entries: [Entry] = []
 
         func snaps(pack: GraphV2Pack, point: CLLocationCoordinate2D,
                    profile: RouteProfile, allowUnknown: Bool,
@@ -3848,19 +3992,27 @@ nonisolated struct OnDeviceRouter {
                 profile: legalV4 ? "legal-v4" : profile.rawValue,
                 allowUnknown: allowUnknown && profile != .cleanest)
             lock.lock()
-            if owner === pack, geometry === pack.geometry, let cached = values[key] {
+            if let entry = entries.first(where: { $0.owner === pack && $0.geometry === pack.geometry }),
+               let cached = entry.values[key] {
                 lock.unlock()
                 return cached
             }
             lock.unlock()
             let result = make()
             lock.lock()
-            if owner !== pack || geometry !== pack.geometry || values.count >= 8192 {
-                values.removeAll(keepingCapacity: true)
-                owner = pack
-                geometry = pack.geometry
+            entries.removeAll { $0.owner === pack && $0.geometry !== pack.geometry }
+            let entry: Entry
+            if let existing = entries.first(where: { $0.owner === pack }) {
+                entry = existing
+            } else {
+                if entries.count >= 2 { entries.removeFirst() }
+                entry = Entry(pack)
+                entries.append(entry)
             }
-            values[key] = result
+            // Same aggregate match bound as before, shared across two packs.
+            // A border query must not evict every match when switching sides.
+            if entry.values.count >= 4096 { entry.values.removeAll(keepingCapacity: true) }
+            entry.values[key] = result
             lock.unlock()
             return result
         }
@@ -3961,6 +4113,7 @@ nonisolated struct OnDeviceRouter {
             for ei in grid.edgeIndices(nearLat: lat, lon: lon, radiusCells: radius) {
                 if checked.contains(ei) { continue }
                 checked.insert(ei)
+                guard grid.mayIntersect(edge: ei, latitude: lat, longitude: lon, meters: maxMeters) else { continue }
                 if pack.version < 4 || !pack.legalTopology {
                     let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
                     guard accessAllowed(access, allowUnknown: policyUnknown, profile: profile) else { continue }
@@ -4726,12 +4879,18 @@ private nonisolated final class PackEdgeSpatialIndex: @unchecked Sendable {
     static let shared = PackEdgeSpatialIndexCache()
     static let cellDegrees: Double = 0.05
 
+    private struct Bounds {
+        let minLon: Double, maxLon: Double, minLat: Double, maxLat: Double
+    }
     private let buckets: [Int64: [Int]]
+    private let bounds: [Bounds?]
 
     init(pack: GraphV2Pack) {
         var map: [Int64: [Int]] = [:]
+        var boxes = [Bounds?](repeating: nil, count: pack.undirectedEdgeCount)
         guard let fromArr = pack.edgeFrom, let toArr = pack.edgeTo else {
             buckets = [:]
+            bounds = boxes
             return
         }
         let cell = Self.cellDegrees
@@ -4743,6 +4902,17 @@ private nonisolated final class PackEdgeSpatialIndex: @unchecked Sendable {
             let aLat = Double(pack.nodeCoords[a * 2 + 1])
             let bLon = Double(pack.nodeCoords[b * 2])
             let bLat = Double(pack.nodeCoords[b * 2 + 1])
+            // Full geometry bounds only reject edges whose geometry cannot
+            // reach the requested radius. Existing grid membership and exact
+            // projection/snap ordering remain unchanged.
+            let polyline = pack.geometry?.polyline(edgeIndex: ei) ?? []
+            var minLon = min(aLon, bLon), maxLon = max(aLon, bLon)
+            var minLat = min(aLat, bLat), maxLat = max(aLat, bLat)
+            for point in polyline {
+                minLon = min(minLon, point.longitude); maxLon = max(maxLon, point.longitude)
+                minLat = min(minLat, point.latitude); maxLat = max(maxLat, point.latitude)
+            }
+            boxes[ei] = Bounds(minLon: minLon, maxLon: maxLon, minLat: minLat, maxLat: maxLat)
             let minX = Int(floor(min(aLon, bLon) / cell))
             let maxX = Int(floor(max(aLon, bLon) / cell))
             let minY = Int(floor(min(aLat, bLat) / cell))
@@ -4755,6 +4925,18 @@ private nonisolated final class PackEdgeSpatialIndex: @unchecked Sendable {
             }
         }
         buckets = map
+        bounds = boxes
+    }
+
+    func mayIntersect(edge: Int, latitude: Double, longitude: Double, meters: Double) -> Bool {
+        guard bounds.indices.contains(edge), let box = bounds[edge] else { return true }
+        // Conservative WGS84 envelope; exact geodesic projection still decides.
+        let latPad = max(0, meters) / 110_000
+        if box.maxLat < latitude - latPad || box.minLat > latitude + latPad { return false }
+        let polarLatitude = min(90, abs(latitude) + latPad)
+        let lonPad = latPad / max(0.000001, cos(polarLatitude * .pi / 180))
+        if lonPad >= 180 || abs(longitude) + lonPad >= 180 || box.maxLon - box.minLon >= 180 { return true }
+        return box.maxLon >= longitude - lonPad && box.minLon <= longitude + lonPad
     }
 
     func edgeIndices(nearLat lat: Double, lon: Double, radiusCells: Int) -> [Int] {
@@ -4785,31 +4967,31 @@ private nonisolated final class PackEdgeSpatialIndex: @unchecked Sendable {
 }
 
 private nonisolated final class PackEdgeSpatialIndexCache: @unchecked Sendable {
+    private final class Entry {
+        weak var pack: GraphV2Pack?
+        let grid: PackEdgeSpatialIndex
+        let geometry: GeometryV1Pack?
+        init(pack: GraphV2Pack, grid: PackEdgeSpatialIndex) {
+            self.pack = pack; self.grid = grid; self.geometry = pack.geometry
+        }
+    }
     private let lock = NSLock()
-    private weak var cachedPack: GraphV2Pack?
-    private var cachedKey: ObjectIdentifier?
-    private var cachedGrid: PackEdgeSpatialIndex?
+    private var entries: [Entry] = []
 
     func grid(for pack: GraphV2Pack) -> PackEdgeSpatialIndex {
-        let key = ObjectIdentifier(pack)
         lock.lock()
-        if cachedKey == key, cachedPack === pack, let existing = cachedGrid {
+        if let existing = entries.first(where: { $0.pack === pack && $0.geometry === pack.geometry }) {
             lock.unlock()
-            return existing
+            return existing.grid
         }
         lock.unlock()
-
         let built = PackEdgeSpatialIndex(pack: pack)
-
         lock.lock()
-        if cachedKey == key, cachedPack === pack, let existing = cachedGrid {
-            lock.unlock()
-            return existing
-        }
-        cachedPack = pack
-        cachedKey = key
-        cachedGrid = built
-        lock.unlock()
+        defer { lock.unlock() }
+        if let existing = entries.first(where: { $0.pack === pack && $0.geometry === pack.geometry }) { return existing.grid }
+        entries.removeAll { $0.pack == nil || ($0.pack === pack && $0.geometry !== pack.geometry) }
+        if entries.count >= 2 { entries.removeFirst() }
+        entries.append(Entry(pack: pack, grid: built))
         return built
     }
 }

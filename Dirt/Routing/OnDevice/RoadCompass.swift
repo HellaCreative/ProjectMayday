@@ -16,6 +16,7 @@ nonisolated enum RoadCompass {
         let meters: Double
     }
     static func build(stateCount: Int, destination: Int,
+                      reverse: Bool = true,
                       deadline: Date = .distantFuture,
                       cancelled: () -> Bool = { false },
                       outgoing: (Int, (Arc) -> Void) -> Void) -> Result {
@@ -26,7 +27,7 @@ nonisolated enum RoadCompass {
         for state in 0..<stateCount {
             if state & 255 == 0, expired() { return interrupted() }
             outgoing(state) { arc in
-                if arc.to >= 0, arc.to < stateCount, arc.meters.isFinite, arc.meters >= 0 { offsets[arc.to + 1] += 1 }
+                if arc.to >= 0, arc.to < stateCount, arc.meters.isFinite, arc.meters >= 0 { offsets[(reverse ? arc.to : state) + 1] += 1 }
             }
         }
         for state in 0..<stateCount { offsets[state + 1] += offsets[state] }
@@ -38,9 +39,10 @@ nonisolated enum RoadCompass {
             if state & 255 == 0, expired() { return interrupted() }
             outgoing(state) { arc in
                 guard arc.to >= 0, arc.to < stateCount, arc.meters.isFinite, arc.meters >= 0 else { return }
-                let index = cursors[arc.to]
-                cursors[arc.to] += 1
-                sources[index] = Int32(state); edges[index] = Int32(arc.edge); lengths[index] = arc.meters
+                let bucket = reverse ? arc.to : state
+                let index = cursors[bucket]
+                cursors[bucket] += 1
+                sources[index] = Int32(reverse ? state : arc.to); edges[index] = Int32(arc.edge); lengths[index] = arc.meters
             }
         }
         var remaining = [Double](repeating: .infinity, count: stateCount)

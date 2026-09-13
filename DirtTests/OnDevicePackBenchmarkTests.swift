@@ -63,6 +63,7 @@ struct OnDevicePackBenchmarkTests {
         let dir = root.appendingPathComponent(region, isDirectory: true)
         let pack = try GraphV2Pack(data: Data(contentsOf: dir.appendingPathComponent("graph.v4.bin")))
         pack.geometry = try GeometryV1Pack(data: Data(contentsOf: dir.appendingPathComponent("geometry.v1.bin")))
+        try pack.applyCrossPackSeams(data: Data(contentsOf: dir.appendingPathComponent("cross-pack-seams.v2.json")))
         let leafCount = (0..<pack.undirectedEdgeCount).reduce(into: 0) { count, edge in
             if pack.surfaceLeaf(edge) != nil { count += 1 }
         }
@@ -209,9 +210,9 @@ struct OnDevicePackBenchmarkTests {
         }
     }
 
-    @Test("Accepted short itinerary stays a single rider leg")
+    @Test("Short fuel-enabled itinerary begins with the required initial refill")
     @MainActor
-    func shortItineraryDoesNotInventFuelStops() async throws {
+    func shortItineraryStartsWithRefill() async throws {
         let (store, temp) = try fixtureStore()
         defer { try? FileManager.default.removeItem(at: temp) }
         let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
@@ -223,20 +224,84 @@ struct OnDevicePackBenchmarkTests {
             fuel: FuelRangePrefs.Snapshot(tankMeters: 200_000, usableMeters: 180_000, reservePercent: 10, automaticPlanningEnabled: true),
             source: .fixed(source), onFuelStatus: { _ in }, onProgress: { _ in }
         )
-        #expect(result.legs.count == 1)
-        #expect(result.legs.first?.endsAtFuelStop == nil)
+        #expect(result.legs.count == 2)
+        #expect(result.legs.first?.endsAtFuelStop?.stationID == "osm:w183099842")
+        #expect(result.legs.last?.endsAtFuelStop == nil)
+        #expect(result.legs.last?.toCoordinate == b.coordinate)
+        #expect(result.legs.allSatisfy { $0.riderLegID == itinerary.legs[0].id })
         #expect(result.riderLegStatus.values.allSatisfy {
             if case .built = $0 { return true }
             return false
         })
     }
+    @Test("Fuel distance guidance spans recorded regional seams in both directions")
+    @MainActor
+    func crossPackFuelDistances() async throws {
+        let (store, temp) = try fixtureStore()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let from = RouteCoordinate(longitude: -63.340350, latitude: 44.764919)
+        let to = RouteCoordinate(longitude: -64.7782, latitude: 46.0878)
+        let pumps = store.fuelStations(from: from, to: to)
+        let ns = try loadPack("ns"), nb = try loadPack("nb")
+        let anchor = try #require(ns.crossPackSeams["nb"]?.first)
+        let parts = anchor.localEdgeId.split(separator: ":")
+        let a = try #require(Int64(parts[1])), b = try #require(Int64(parts[2]))
+        let canonical = "w\(anchor.osmWayId):\(min(a, b)):\(max(a, b))"
+        let localIDs = ns.localRoadIDs(matching: [canonical])
+        let remoteIDs = nb.localRoadIDs(matching: [canonical])
+        #expect(!localIDs.isEmpty && !remoteIDs.isEmpty)
+        #expect(localIDs.allSatisfy { ns.canonicalRoadID($0) == canonical })
+        #expect(remoteIDs.allSatisfy { nb.canonicalRoadID($0) == canonical })
+        let began = ProcessInfo.processInfo.systemUptime
+        let guidance = try #require(await store.fuelRoadProgress(from: from.locationCoordinate,
+            to: to.locationCoordinate, pumps: pumps, profile: .cleanest, allowUnknown: false))
+        let forward = try #require(await store.shortestGraphMeters(from: from.locationCoordinate,
+            to: to.locationCoordinate, maxMeters: 1_000_000, profile: .cleanest, allowUnknown: false))
+        #expect(abs(forward - guidance.originRemainingMeters) < 0.001)
+        #expect(guidance.originRemainingMeters > GeoMath.meters(from, to))
+        #expect(!guidance.stationRemainingMeters.isEmpty)
+        print("[accepted-fuel-field] seconds=\(ProcessInfo.processInfo.systemUptime - began) meters=\(forward) stations=\(guidance.stationRemainingMeters.count)")
+    }
+
+    @Test("Initial refill precedes the ride on the accepted real packs")
+    @MainActor
+    func initialRefillOnAcceptedPacks() async throws {
+        let (store, temp) = try fixtureStore()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let start = RouteCoordinate(longitude: -63.340350, latitude: 44.764919)
+        let destination = RouteCoordinate(longitude: -67.296103, latitude: 45.177074)
+        for profile in [RouteProfile.cleanest, .balanced, .dirt] {
+            let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+            let request = FuelChainRequest(profile: profile, from: start, to: destination,
+                allowUnknown: false, usableRangeMeters: 207_000, firstLegMaxMeters: 207_000,
+                requireFuelStopBeforeEnd: false, minimumFuelStops: 0, profileMeters: 0,
+                riderLegId: "initial-refill", initialFillUp: true, sessionSeed: 3511091208,
+                windowMaxStops: 1, allowPartialWindow: true, windowTimeBudgetMs: 15_000)
+            let chain = try await source.fuelChain(request)
+            let stop = try #require(chain.stops?.first)
+            let route = try #require(chain.routes?.first)
+            #expect(chain.windowComplete == false)
+            #expect(route.isComplete)
+            #expect(route.distanceMeters != nil && route.distanceMeters! < 207_000)
+            #expect(request.locations.last?.longitude == destination.longitude)
+            try saveEvidence(["request": try object(request), "response": try object(chain)],
+                name: "initial-refill-\(profile.rawValue)")
+            print("[initial-refill] profile=\(profile.rawValue) station=\(stop.id) meters=\(route.distanceMeters ?? -1)")
+        }
+    }
+
     @Test("All historical oracle requests replay through the real pack source")
     @MainActor
     func allOracleFuelWorkflows() async throws {
         let casesURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("scripts/pack-fabric/bench/routing-oracle-cases.json")
         let fixture = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: casesURL)) as? [String: Any])
-        let cases = try #require(fixture["scenarios"] as? [[String: Any]])
+        var cases = try #require(fixture["scenarios"] as? [[String: Any]])
+        // Additional owner regression; historical oracle coordinates remain unchanged.
+        // Destination is the accepted NB sidecar's St. Stephen Irving (osm:w682170844).
+        cases.append(["id": "fundy-barrier", "label": "Porters Lake to St. Stephen",
+            "from": ["lat": 44.764919, "lon": -63.340350],
+            "to": ["lat": 45.177074, "lon": -67.296103]])
         let seed = UInt64(try #require(fixture["sessionSeed"] as? Int))
         let tank = Double(try #require(fixture["tankRangeKm"] as? Int)) * 1000
         let usable = tank * (1 - Double(try #require(fixture["reservePercent"] as? Int)) / 100)
@@ -263,7 +328,9 @@ struct OnDevicePackBenchmarkTests {
                         backtrackFactor: 4, excludedStationIds: excluded, windowMaxStops: 1,
                         allowPartialWindow: true, windowTimeBudgetMs: 15000, forwardFeeler: false)
                     var options = request.options ?? RouteRequestOptions()
-                    options.sessionSeed = seed; request.options = options
+                    options.sessionSeed = seed
+                    options.startEndpointKind = stops.isEmpty ? nil : "customers"
+                    request.options = options
                     do {
                         let chain = try await source.fuelChain(request)
                         windows.append(["request": try object(request), "response": try object(chain)])
@@ -276,12 +343,19 @@ struct OnDevicePackBenchmarkTests {
                             allowUnknown: false, priorEdgeIds: prior, arrivalEdgeId: arrival, backtrackFactor: 4,
                             sessionSeed: seed, maxPathMeters: usable, regionalHopMinimumMeters: chain.graphMeters ?? [], avoidMotorways: profile == .cleanest)
                         let route: RouteResponse
-                        do { route = try await source.route(routeRequest) }
+                        do {
+                            if let planned = chain.routes?.first { route = planned }
+                            else { route = try await source.route(routeRequest) }
+                        }
                         catch {
                             windows.append(["routeRequest": try object(routeRequest), "error": error.localizedDescription])
                             if let stop { excluded.append(stop.id); continue }
                             if !force { force = true; continue }
                             throw error
+                        }
+                        if stop != nil || !stops.isEmpty {
+                            #expect((route.backtrackMeters ?? 0) <= 1_000,
+                                "Fuel leg repeats more than the existing one-kilometre retrace allowance")
                         }
                         routes.append(route)
                         for segment in route.segments ?? [] {

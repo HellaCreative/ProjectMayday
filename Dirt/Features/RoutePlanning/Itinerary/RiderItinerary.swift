@@ -60,6 +60,15 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         self.fuelStopOverrides = fuelStopOverrides
     }
 
+    /// Stable for retries, profile changes and fuel replacements within this
+    /// rider leg. Newly placed waypoint identities produce a fresh ride seed.
+    /// Keep the value exactly representable by the JavaScript comparison tool.
+    var routingSessionSeed: UInt64 {
+        var value: UInt64 = 14_695_981_039_346_656_037
+        for byte in id.uuidString.utf8 { value = (value ^ UInt64(byte)) &* 1_099_511_628_211 }
+        return max(1, value & ((UInt64(1) << 53) - 1))
+    }
+
     func effectiveProfile(departingFrom anchorID: String) -> RouteProfile {
         hopOverrides[anchorID] ?? profile
     }

@@ -28,6 +28,20 @@ struct RoadCompassTests {
         #expect(result.nextState == [2,0,3,-1])
     }
 
+    @Test("forward discovery respects one-way arcs instead of reversing access")
+    func forwardDistances() {
+        let arcs: [[RoadCompass.Arc]] = [
+            [.init(to: 1, edge: 0, meters: 10)], [.init(to: 2, edge: 1, meters: 20)], []]
+        let forward = RoadCompass.build(stateCount: 3, destination: 0, reverse: false) { state, visit in
+            arcs[state].forEach(visit)
+        }
+        let unreachable = RoadCompass.build(stateCount: 3, destination: 2, reverse: false) { state, visit in
+            arcs[state].forEach(visit)
+        }
+        #expect(forward.remaining == [0, 10, 30])
+        #expect(unreachable.remaining[0] == .infinity)
+    }
+
     @Test("incoming via-way state changes remaining legal road metres")
     func turnState() throws {
         let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures")

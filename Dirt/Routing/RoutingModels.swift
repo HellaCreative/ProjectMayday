@@ -238,6 +238,8 @@ struct FuelChainConstraint: Codable, Sendable {
     let destinationFuelUsedLimitMeters: Double?
     let profileMeters: Double
     let riderLegId: String
+    /// Owner-required first refill before the recreational ride begins.
+    var initialFillUp: Bool? = nil
     var probeFirstReachableStation: Bool? = nil
     var excludedStationIds: [String]? = nil
     var windowMaxStops: Int? = nil
@@ -279,6 +281,8 @@ struct FuelChainRequest: Codable, Sendable {
         destinationFuelUsedLimitMeters: Double? = nil,
         profileMeters: Double,
         riderLegId: String,
+        initialFillUp: Bool = false,
+        sessionSeed: UInt64 = 0,
         avoidEdgeIds: [String] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
@@ -295,7 +299,8 @@ struct FuelChainRequest: Codable, Sendable {
         forwardFeeler: Bool = false,
         routeFirstPlan: Bool = false,
         ensureDestinationFuelEscape: Bool = false,
-        mapZoom: Double? = nil
+        mapZoom: Double? = nil,
+        startEndpointKind: String? = nil
     ) {
         self.profile = profile
         locations = [
@@ -311,16 +316,18 @@ struct FuelChainRequest: Codable, Sendable {
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
         options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
-            && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil && RidePreferenceContext.current == nil
+            && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil && RidePreferenceContext.current == nil && startEndpointKind == nil && sessionSeed == 0
             ? nil
             : RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
+                sessionSeed: sessionSeed == 0 ? nil : sessionSeed,
                 cleanMetroMultiplier: metro,
                 avoidMotorways: scopedAvoid,
-                mapZoom: zoom
+                mapZoom: zoom,
+                startEndpointKind: startEndpointKind
             )
         fuel = FuelChainConstraint(
             usableRangeMeters: usableRangeMeters,
@@ -330,6 +337,7 @@ struct FuelChainRequest: Codable, Sendable {
             destinationFuelUsedLimitMeters: destinationFuelUsedLimitMeters,
             profileMeters: profileMeters,
             riderLegId: riderLegId,
+            initialFillUp: initialFillUp ? true : nil,
             probeFirstReachableStation: probeFirstReachableStation ? true : nil,
             excludedStationIds: excludedStationIds.isEmpty ? nil : excludedStationIds,
             windowMaxStops: windowMaxStops,

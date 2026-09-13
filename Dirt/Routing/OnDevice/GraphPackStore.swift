@@ -923,14 +923,25 @@ final class GraphPackStore {
             hops: [OnDeviceRouter.Result],
             usedEdges: Set<String>,
             incomingEdgeId: String?,
+            canonicalHistory: Set<String>,
+            canonicalArrival: String?,
             completedMeters: Double
         ) async -> OnDeviceRouter.Result? {
             let regionId = regions[regionIndex]
+            await activateInstalledPack(regionId: regionId)
+            guard let historyPack = activePack, historyPack.regionId?.lowercased() == regionId else { return nil }
+            let localHistory = regionIndex == 0 ? usedEdges : historyPack.localRoadIDs(matching: canonicalHistory)
+            let localArrival = canonicalArrival.flatMap {
+                historyPack.localRoadIDs(matching: [$0]).sorted().first
+            } ?? incomingEdgeId
+            let knownHistory = regionIndex == 0
+                ? canonicalHistory.union(localHistory.compactMap { historyPack.canonicalRoadID($0) })
+                : canonicalHistory
             if regionIndex == regions.count - 1 {
                 let final = await routeOnDeviceInRegion(
                     from: current, to: to, regionId: regionId,
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-                    priorEdgeIds: usedEdges, arrivalEdgeId: incomingEdgeId,
+                    priorEdgeIds: localHistory, arrivalEdgeId: localArrival,
                     backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
                     maxRouteMeters: Self.reservedChainHopCap(
                         totalCapMeters: maxRouteMeters,
@@ -985,7 +996,7 @@ final class GraphPackStore {
                 let hop = await routeOnDeviceInRegion(
                     from: current, to: seam, regionId: regionId,
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-                    priorEdgeIds: usedEdges, arrivalEdgeId: incomingEdgeId,
+                    priorEdgeIds: localHistory, arrivalEdgeId: localArrival,
                     backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
                     maxRouteMeters: Self.reservedChainHopCap(
                         totalCapMeters: maxRouteMeters,
@@ -1010,6 +1021,8 @@ final class GraphPackStore {
                     hops: hops + [routed],
                     usedEdges: usedEdges.union(routed.edgeIds),
                     incomingEdgeId: routed.edgeIds.last ?? incomingEdgeId,
+                    canonicalHistory: knownHistory.union(routed.edgeIds.compactMap { historyPack.canonicalRoadID($0) }),
+                    canonicalArrival: routed.edgeIds.reversed().compactMap { historyPack.canonicalRoadID($0) }.first ?? canonicalArrival,
                     completedMeters: completedMeters + routed.distanceMeters
                 ) {
                     return result
@@ -1024,6 +1037,8 @@ final class GraphPackStore {
             hops: [],
             usedEdges: priorEdgeIds,
             incomingEdgeId: arrivalEdgeId,
+            canonicalHistory: [],
+            canonicalArrival: nil,
             completedMeters: 0
         ) {
             return .success(result)
@@ -1097,7 +1112,7 @@ final class GraphPackStore {
             router.matchLimitMeters = matchLimit
             router.startEndpointKind = startKind
             router.endEndpointKind = endKind
-            return router.routeDetailed(
+            let result = router.routeDetailed(
                 from: start,
                 to: end,
                 profile: routeProfile,
@@ -1112,6 +1127,42 @@ final class GraphPackStore {
                 avoidMotorways: avoidMotorways,
                 preferBackRoads: preferBackRoads
             )
+            guard case .success(var route) = result else { return result }
+            route.backtrackMeters = max(route.backtrackMeters, route.legs.reduce(0) {
+                $0 + (priorEdgeIds.contains($1.edgeId) ? $1.distanceMeters : 0)
+            })
+            route.backtrackPct = route.distanceMeters > 0 ? route.backtrackMeters / route.distanceMeters * 100 : 0
+            route.backtrackReason = route.backtrackMeters > 0 ? "prior_road_retrace" : nil
+            return .success(route)
+        }
+    }
+
+    private func fuelDistancePacks(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) async -> [GraphV2Pack] {
+        guard let start = Self.primaryRegionId(containing: from), let end = Self.primaryRegionId(containing: to) else { return [] }
+        let installed = Set(Self.roadReachableNeighbours.keys.filter { isInstalled($0) })
+        guard let path = Self.shortestRegionPath(from: start, to: end, allowedRegionIds: installed) else { return [] }
+        var result: [GraphV2Pack] = []
+        for region in path {
+            await activateInstalledPack(regionId: region)
+            guard let pack = activePack, pack.regionId?.lowercased() == region else { return [] }
+            result.append(pack)
+        }
+        return result
+    }
+
+    func fuelRoadProgress(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D,
+                          pumps: [POIFeature], profile: RouteProfile,
+                          allowUnknown: Bool) async -> FuelItinerary.RoadProgress? {
+        let packs = await fuelDistancePacks(from: from, to: to)
+        guard !packs.isEmpty else { return nil }
+        return await RoutingWorkContext.detachedSearch {
+            let points = [from] + pumps.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+            guard let distances = OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: to,
+                points: points, profile: profile, allowUnknown: allowUnknown, reverse: true),
+                let origin = distances.first, origin.isFinite else { return nil }
+            return FuelItinerary.RoadProgress(originRemainingMeters: origin,
+                stationRemainingMeters: Dictionary(zip(pumps.map(\.id), distances.dropFirst()).filter { $0.1.isFinite },
+                    uniquingKeysWith: min))
         }
     }
 
@@ -1122,6 +1173,15 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool
     ) async -> Double? {
+        if Self.primaryRegionId(containing: from) != Self.primaryRegionId(containing: to) {
+            let packs = await fuelDistancePacks(from: from, to: to)
+            return await RoutingWorkContext.detachedSearch {
+                guard let distance = OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
+                    points: [to], profile: profile, allowUnknown: allowUnknown, reverse: false)?.first,
+                    distance.isFinite, distance <= maxMeters else { return nil }
+                return distance
+            }
+        }
         await ensureActivePackAsync(for: [from, to])
         guard let pack = activePack else { return nil }
         let packRef = pack
@@ -1141,6 +1201,16 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool
     ) async -> [String: Double] {
+        if Self.primaryRegionId(containing: from) != Self.primaryRegionId(containing: toward) {
+            let packs = await fuelDistancePacks(from: from, to: toward)
+            return await RoutingWorkContext.detachedSearch {
+                let points = pumps.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+                guard let distances = OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
+                    points: points, profile: profile, allowUnknown: allowUnknown, reverse: false) else { return [:] }
+                return Dictionary(zip(pumps.map(\.id), distances).filter { $0.1.isFinite && $0.1 <= maxMeters },
+                    uniquingKeysWith: min)
+            }
+        }
         await ensureActivePackAsync(for: [from, toward])
         guard let pack = activePack else { return [:] }
         let packRef = pack
@@ -1520,18 +1590,24 @@ final class GraphPackStore {
         return regionDir(regionId: id).appendingPathComponent("cross-pack-seams.v2.json")
     }
 
+    /// Initial refill discovery has no destination heading. Only read installed
+    /// sidecars; a nearby station across a border remains a candidate.
+    func installedFuelStations() -> [POIFeature] {
+        var seen = Set<String>()
+        return Self.roadReachableNeighbours.keys.sorted().filter { isInstalled($0) }
+            .flatMap { loadedFuel(regionId: $0) }.filter { seen.insert($0.id).inserted }
+    }
+
     /// Fuel stations from installed pack sidecars in the A→B box. Offline.
     func fuelStations(from start: RouteCoordinate, to end: RouteCoordinate) -> [POIFeature] {
-        // This is only a cheap prefilter. The graph search below proves actual
-        // reachability. Mountain road corridors can sit far outside a straight
-        // A→B box, so a 40 km pad was deleting valid onward pumps.
-        let padDeg = 150_000.0 / 111_000.0
-        return fuelStations(
-            minLat: min(start.latitude, end.latitude) - padDeg,
-            maxLat: max(start.latitude, end.latitude) + padDeg,
-            minLon: min(start.longitude, end.longitude) - padDeg,
-            maxLon: max(start.longitude, end.longitude) + padDeg
-        )
+        guard let from = Self.primaryRegionId(containing: start.locationCoordinate),
+              let to = Self.primaryRegionId(containing: end.locationCoordinate) else { return [] }
+        let installed = Set(Self.roadReachableNeighbours.keys.filter { isInstalled($0) })
+        guard let regions = Self.shortestRegionPath(from: from, to: to, allowedRegionIds: installed) else { return [] }
+        // The connected regional path owns discovery. A rectangle around the
+        // straight start/destination line cannot bound a ride around a barrier.
+        var seen = Set<String>()
+        return regions.flatMap { loadedFuel(regionId: $0) }.filter { seen.insert($0.id).inserted }
     }
 
     func fuelStations(

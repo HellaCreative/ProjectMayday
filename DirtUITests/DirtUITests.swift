@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import StoreKitTest
 
 final class DirtUITests: XCTestCase {
 
@@ -190,6 +191,10 @@ final class DirtUITests: XCTestCase {
 
     @MainActor
     func testPaywallKeepsPurchaseControlsReachable() throws {
+        let catalog = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Dirt/Dirt.storekit")
+        let storeKit = try SKTestSession(contentsOf: catalog)
+        defer { storeKit.resetToDefaultState() }
         let app = XCUIApplication()
         app.launchEnvironment["DIRT_UI_TEST_PAYWALL"] = "1"
         app.launch()
@@ -198,11 +203,14 @@ final class DirtUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Dirt-first routes"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["paywall-purchase-panel"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["paywall-primary-action"].exists)
-        XCTAssertTrue(
-            app.descendants(matching: .any)["paywall-plan-com.mayday.dirt.pro.yearly"]
-                .waitForExistence(timeout: 8),
-            "The DEV StoreKit catalogue must publish the yearly plan"
-        )
+        let yearlyAvailable = app.descendants(matching: .any)["paywall-plan-com.mayday.dirt.pro.yearly"]
+            .waitForExistence(timeout: 8)
+        let catalogueState = XCTAttachment(screenshot: app.screenshot())
+        catalogueState.name = "Paywall catalogue state"
+        catalogueState.lifetime = .keepAlways
+        add(catalogueState)
+        add(XCTAttachment(string: app.debugDescription))
+        XCTAssertTrue(yearlyAvailable, "The DEV StoreKit catalogue must publish the yearly plan")
         XCTAssertTrue(
             app.descendants(matching: .any)["paywall-plan-com.mayday.dirt.pro.monthly"].exists,
             "The DEV StoreKit catalogue must publish the monthly plan"
@@ -218,7 +226,7 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
-    func testProfileIsAFullScreenDestination() throws {
+    func testProfilePreservesProductionDockNavigation() throws {
         let app = XCUIApplication()
         app.launchEnvironment["DIRT_UI_TEST_PROFILE"] = "1"
         app.launch()
@@ -227,10 +235,21 @@ final class DirtUITests: XCTestCase {
         let close = app.buttons["Close"]
         XCTAssertTrue(close.exists)
         let route = app.buttons["Route"]
-        XCTAssertFalse(route.isHittable, "The full-screen Profile destination must block interaction with the map dock")
+        // The owner-accepted production foundation presents panels behind its
+        // persistent dock. Preserve that behavior rather than restoring old UI.
+        XCTAssertTrue(route.isHittable, "The production dock remains usable above the Profile panel")
+        route.tap()
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: route)
+        let navigationResult = XCTWaiter.wait(for: [selected], timeout: 3)
+        let navigationState = XCTAttachment(screenshot: app.screenshot())
+        navigationState.name = "Profile dock navigation state"
+        navigationState.lifetime = .keepAlways
+        add(navigationState)
+        add(XCTAttachment(string: app.debugDescription))
+        XCTAssertEqual(navigationResult, .completed)
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Profile — Full-screen Destination"
+        attachment.name = "Profile — Production Dock Navigation"
         attachment.lifetime = .keepAlways
         add(attachment)
     }

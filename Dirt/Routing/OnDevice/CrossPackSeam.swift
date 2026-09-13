@@ -144,6 +144,8 @@ extension OnDeviceRouter.Result {
             reportedPavedPercent: reported.pavedPercent,
             unknownSurfacePercent: reported.unknownSurfacePercent,
             hasSurfaceLeaves: hasLeaves,
+            backtrackMeters: hops.reduce(0) { $0 + $1.backtrackMeters },
+            backtrackPct: hops.reduce(0) { $0 + $1.backtrackMeters } / meters * 100,
             searchMeta: OnDeviceRouter.SearchMeta(
                 urbanCoreFallbackUsed: hops.contains { $0.searchMeta.urbanCoreFallbackUsed },
                 cleanUnpavedFallbackUsed: hops.contains { $0.searchMeta.cleanUnpavedFallbackUsed },

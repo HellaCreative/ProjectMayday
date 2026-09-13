@@ -399,6 +399,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     let edgeAccess: [UInt8]
     let restrictions: [TurnRestriction]
     let osmWayIds: [Int64]
+    let osmNodeIds: [Int64]
     private let blockedNodeTurns: [TurnKey: Set<Int>]
     private let onlyNodeTurns: [TurnKey: Set<Int>]
     private let blockedViaWayExits: [Int: Set<Int>]
@@ -490,6 +491,11 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         edgeFrom = offEdgeFrom > 0 ? data.readInt32Array(at: offEdgeFrom, count: undirectedEdgeCount) : nil
         edgeTo = offEdgeTo > 0 ? data.readInt32Array(at: offEdgeTo, count: undirectedEdgeCount) : nil
         nodeCoords = data.readFloat32Array(at: offNodeCoords, count: nodeCount * 2)
+        if isV4 {
+            let nodeAt = Int(data.readUInt32LE(104))
+            guard nodeAt + nodeCount * 8 <= data.count else { throw PackError.missingSafetySection }
+            osmNodeIds = (0..<nodeCount).map { data.readInt64LE(nodeAt + $0 * 8) }
+        } else { osmNodeIds = [] }
         if isV4, (flags & Self.flagV4DerivedEdgeIDs) != 0 {
             idOffsets = []
             idBlob = Data()
@@ -780,6 +786,29 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let b = Int(idOffsets[ei + 1])
         guard a >= 0, b >= a, b <= idBlob.count else { return "" }
         return String(data: idBlob.subdata(in: a..<b), encoding: .utf8) ?? ""
+    }
+
+    /// Private cross-pack translation. Keep published/local edge IDs unchanged,
+    /// but carry road history across different regional node-number tables.
+    func canonicalRoadID(_ localID: String) -> String? {
+        let parts = localID.split(separator: ":")
+        guard parts.count == 3, parts[0].first == "w",
+              let a = Int(parts[1]), let b = Int(parts[2]),
+              osmNodeIds.indices.contains(a), osmNodeIds.indices.contains(b) else { return nil }
+        return "\(parts[0]):\(min(osmNodeIds[a], osmNodeIds[b])):\(max(osmNodeIds[a], osmNodeIds[b]))"
+    }
+
+    func localRoadIDs(matching canonical: Set<String>) -> Set<String> {
+        guard !canonical.isEmpty, !osmNodeIds.isEmpty, let from = edgeFrom, let to = edgeTo else { return [] }
+        let ways = Set(canonical.compactMap { $0.split(separator: ":").first.flatMap { Int64($0.dropFirst()) } })
+        var result = Set<String>()
+        for ei in osmWayIds.indices where ways.contains(osmWayIds[ei]) {
+            let a = Int(from[ei]), b = Int(to[ei])
+            guard osmNodeIds.indices.contains(a), osmNodeIds.indices.contains(b) else { continue }
+            let id = "w\(osmWayIds[ei]):\(min(osmNodeIds[a], osmNodeIds[b])):\(max(osmNodeIds[a], osmNodeIds[b]))"
+            if canonical.contains(id) { result.insert(edgeId(ei)) }
+        }
+        return result
     }
 
     /// True when the packed CSR contains a legal travel arc `from → to` on `edge`.

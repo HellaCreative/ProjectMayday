@@ -106,3 +106,22 @@ Rules:
   re-verify on top of the hardened engine, don't rebuild.
 - Auto-download-the-area pack on drop-pin (the "download your area" flow).
 - Hardened/baked Clean spine (pre-computed connectivity + fuel skeleton).
+
+## Owner clarification — September 13 initial refill
+
+Every fuel-enabled ride starts by visiting the closest reachable fuel station.
+This applies even when that stop is only 500 metres away and the destination
+could otherwise fit within the tank range. The rider does not know the initial
+fuel level. Do not substitute an assumed full starting tank for this stop.
+
+Initial refill selection is separate from later forward-progress fuel selection:
+no minimum-distance/search-zone or destination-heading rule may suppress it.
+Use mapped, permitted access and road reachability, including nearby regional
+borders. A rider already at a mapped station can refill at the starting anchor.
+After the refill, build the selected-profile ride forward within usable range.
+Fuel replacement preserves the unaffected prefix. Fuel-off rides add no stop.
+Planning a refill does not claim the rider has physically filled the tank.
+
+This explicit owner instruction applies to all fuel-enabled rides and supersedes
+older loop-only first-fuel wording and tests that assume a full tank at an
+arbitrary origin. Production and approved UI remain unchanged during recovery.

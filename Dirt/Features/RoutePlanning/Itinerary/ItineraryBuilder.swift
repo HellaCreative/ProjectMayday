@@ -352,6 +352,7 @@ final class ItineraryBuilder {
                     minimumFuelStops: 0,
                     profileMeters: meters,
                     riderLegId: riderLeg.id.uuidString,
+                    sessionSeed: riderLeg.routingSessionSeed,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                     cleanMetroMultiplier: nil,
                     avoidMotorways: riderLeg.avoidsMajorHighways(
@@ -728,6 +729,14 @@ final class ItineraryBuilder {
             statuses[itinerary.legs[startIndex].id] = .pending
         }
         var waypointFuelStops = preservedWaypointFuelStops
+        if startIndex == 0, resume == nil, kept.isEmpty,
+           let first = itinerary.waypoints.first, let leg = itinerary.legs.first {
+            if let station = try? await source.fuelStation(near: first.coordinate,
+                within: HopSearchPolicy.fuelWaypointSnapMeters) {
+                waypointFuelStops[first.id] = FuelStop(coordinate: station.coordinate,
+                    stationID: station.id, name: station.displayName, afterRiderLegID: leg.id)
+            } else { waypointFuelStops[first.id] = nil }
+        }
         let firstWaypointToProbe = min(itinerary.waypoints.count, startIndex + 1)
         let waypointProbeEnd = min(itinerary.waypoints.count, endIndex + 1)
         if firstWaypointToProbe < waypointProbeEnd {
@@ -934,6 +943,7 @@ final class ItineraryBuilder {
                         minimumFuelStops: 0,
                         profileMeters: straightLineMeters(nextFrom, nextTo),
                         riderLegId: nextLeg.id.uuidString,
+                        sessionSeed: nextLeg.routingSessionSeed,
                         avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                         cleanMetroMultiplier: nil,
                         avoidMotorways: nextLeg.avoidsMajorHighways(
@@ -966,6 +976,7 @@ final class ItineraryBuilder {
                                       departingFrom: nextDepartureID,
                                       effectiveProfile: nextLeg.profile
                                   ),
+                                  sessionSeed: nextLeg.routingSessionSeed,
                                   preferBackRoads: nextLeg.preferBackRoads
                               )),
                               let meters = try? responseMeters(response) {
@@ -1072,6 +1083,8 @@ final class ItineraryBuilder {
                 // hard range ceiling; the comfort window must not manufacture
                 // an earlier automatic stop before a chosen refuel waypoint.
                 if !source.supportsCombinedFuelPlanning,
+                   !(index == 0 && startIndex == 0 && resume == nil && kept.isEmpty && builtLegs.isEmpty
+                     && waypointFuelStops[itinerary.waypoints[0].id] == nil),
                    waypointFuelStops[riderDestination.id] != nil,
                    requiredStationID == nil,
                    let response = try? await source.route(routeRequest(
@@ -1083,6 +1096,7 @@ final class ItineraryBuilder {
                        maxPathMeters: remaining,
                        history: history,
                        avoidMotorways: activeAvoidMotorways,
+                       sessionSeed: riderLeg.routingSessionSeed,
                        preferBackRoads: riderLeg.preferBackRoads
                    )),
                    let meters = try? responseMeters(response),
@@ -1140,6 +1154,9 @@ final class ItineraryBuilder {
                     && riderLeg.hopAllowUnknown.isEmpty
                     && (!crossesProvinceBoundary || integratedAtlantic)
                 let requestedWindowStops = canConsumeCombinedWindow ? (integratedAtlantic ? 12 : 4) : 1
+                let initialFillUp = index == 0 && startIndex == 0 && resume == nil
+                    && kept.isEmpty && builtLegs.isEmpty
+                    && waypointFuelStops[itinerary.waypoints[0].id] == nil
                 let chain: FuelChainResponse
                 let requestBudgetMs = min(
                     FuelPlanningWindowPolicy.milliseconds(
@@ -1174,6 +1191,8 @@ final class ItineraryBuilder {
                         destinationFuelUsedLimitMeters: arrivalFuelLimit,
                         profileMeters: straightLineMeters(current, riderDestination.coordinate),
                         riderLegId: riderLeg.id.uuidString,
+                        initialFillUp: initialFillUp,
+                        sessionSeed: riderLeg.routingSessionSeed,
                         avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                         cleanMetroMultiplier: nil,
                         avoidMotorways: activeAvoidMotorways,
@@ -1189,7 +1208,8 @@ final class ItineraryBuilder {
                         routeFirstPlan: source.supportsCombinedFuelPlanning,
                         ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
                             && index == itinerary.legs.count - 1
-                            && !finalWaypointIsFuel
+                            && !finalWaypointIsFuel,
+                        startEndpointKind: departureID == riderLeg.from.uuidString ? nil : "customers"
                     ), zoom: DirtSnapRequestContext.mapZoom))
                 } catch is CancellationError {
                     return dropped(itinerary, committed: committed, cancelled: true)
@@ -1272,6 +1292,11 @@ final class ItineraryBuilder {
                 }
 
                 let selectedStop = chain.stops?.first
+                if initialFillUp && selectedStop == nil {
+                    return await finishWithFuelAdvisory(.unknown(
+                        "The initial fuel stop has not been established."
+                    ))
+                }
                 guard selectedStop != nil || chain.reachesDestination else {
                     return await finishWithFuelAdvisory(.unknown(
                         "Fuel planning returned no forward anchor."
@@ -1475,6 +1500,7 @@ final class ItineraryBuilder {
                                 regionalHopMinimumMeters: option.regionalMeters,
                                 history: history,
                                 avoidMotorways: activeAvoidMotorways,
+                                sessionSeed: riderLeg.routingSessionSeed,
                                 preferBackRoads: riderLeg.preferBackRoads,
                                 startEndpointKind: builtLegs.last?.endsAtFuelStop == nil ? nil : "customers",
                                 endEndpointKind: option.stop == nil ? nil : "customers"
@@ -1699,6 +1725,7 @@ final class ItineraryBuilder {
                     maxPathMeters: nil,
                     history: history,
                     avoidMotorways: avoidMotorways,
+                    sessionSeed: riderLeg.routingSessionSeed,
                     preferBackRoads: riderLeg.preferBackRoads
                 ))
                 }
@@ -1839,6 +1866,7 @@ final class ItineraryBuilder {
                     departingFrom: initialDepartureID,
                     effectiveProfile: activeProfile
                 ),
+                sessionSeed: riderLeg.routingSessionSeed,
                 preferBackRoads: riderLeg.preferBackRoads
             ))
         } else {
@@ -1863,6 +1891,7 @@ final class ItineraryBuilder {
                         departingFrom: initialDepartureID,
                         effectiveProfile: activeProfile
                     ),
+                    sessionSeed: riderLeg.routingSessionSeed,
                     preferBackRoads: riderLeg.preferBackRoads
                 ))
             guard active(itinerary) else { throw CancellationError() }
@@ -1979,6 +2008,7 @@ final class ItineraryBuilder {
                         : nil,
                     profileMeters: remainingProfileMeters,
                     riderLegId: riderLeg.id.uuidString,
+                    sessionSeed: riderLeg.routingSessionSeed,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                     cleanMetroMultiplier: nil,
                     avoidMotorways: activeAvoidMotorways,
@@ -2060,6 +2090,7 @@ final class ItineraryBuilder {
                         departingFrom: hopDepartureID,
                         effectiveProfile: hopProfile
                     ),
+                    sessionSeed: riderLeg.routingSessionSeed,
                     preferBackRoads: riderLeg.preferBackRoads,
                     startEndpointKind: subIndex > 0 || departureAnchorID != riderDepartureID
                         ? "customers" : nil,
@@ -2506,6 +2537,7 @@ private func routeRequest(
             departingFrom: departureID,
             effectiveProfile: profile
         ),
+        sessionSeed: leg.routingSessionSeed,
         preferBackRoads: leg.preferBackRoads,
         mapZoom: DirtSnapRequestContext.mapZoom
     )
@@ -2528,6 +2560,7 @@ private func routeRequest(
     regionalHopMinimumMeters: [Double] = [],
     history: EdgeHistory = EdgeHistory(),
     avoidMotorways: Bool = false,
+    sessionSeed: UInt64 = 0,
     preferBackRoads: Bool = false,
     mapZoom: Double? = nil,
     startEndpointKind: String? = nil,
@@ -2544,6 +2577,7 @@ private func routeRequest(
         priorEdgeIds: history.edgeIDs,
         arrivalEdgeId: history.arrivalEdgeID,
         backtrackFactor: 4,
+        sessionSeed: sessionSeed,
         maxPathMeters: maxPathMeters,
         directExtraBudgetMeters: directExtraBudgetMeters,
         regionalHopMinimumMeters: regionalHopMinimumMeters,

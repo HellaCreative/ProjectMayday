@@ -302,6 +302,28 @@ struct HopSearchPolicyTests {
 }
 
 struct FuelItineraryTests {
+    @Test func sourceAreaAliasesDoNotConsumeAllCandidateAttempts() {
+        let point = RouteCoordinate(longitude: -63, latitude: 45)
+        let rows = ["w548551676", "a1097103352", "n5298601799"].map { poi($0, point) }
+        #expect(FuelItinerary.distinctStationsFirst(rows).map(\.id)
+            == ["osm:w548551676", "osm:n5298601799", "osm:a1097103352"])
+        #expect(FuelItinerary.physicalStationID("osm:a3") == "osm:r1")
+        #expect(FuelItinerary.physicalStationID("osm:n1") != FuelItinerary.physicalStationID("osm:w1"))
+    }
+
+    @Test func roadProgressGoesAroundBarrierInsteadOfChoosingNearerDeadEnd() {
+        let start = RouteCoordinate(longitude: -63, latitude: 45)
+        let end = RouteCoordinate(longitude: -66, latitude: 45)
+        let fuels = [poi("dead-end", .init(longitude: -64, latitude: 45)),
+                     poi("around", .init(longitude: -62.5, latitude: 46))]
+        let ranked = FuelItinerary.rankedProgressFuel(fuels: fuels, from: start, to: end,
+            reachableMeters: ["osm:dead-end": 100_000, "osm:around": 110_000],
+            tankMeters: 200_000, sessionSeed: 1,
+            roadProgress: .init(originRemainingMeters: 500_000,
+                stationRemainingMeters: ["osm:dead-end": 600_000, "osm:around": 390_000]))
+        #expect(ranked.map(\.id) == ["osm:around"])
+    }
+
     @Test func progressPickPrefersTowardBNotASidewaysSpur() {
         let start = RouteCoordinate(longitude: -123.2, latitude: 50.0)
         let end = RouteCoordinate(longitude: -119.7, latitude: 50.0)

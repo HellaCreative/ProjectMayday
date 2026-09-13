@@ -380,6 +380,28 @@ nonisolated enum FuelItinerary {
         ).first
     }
 
+    /// Osmium area IDs encode the source way (2*w) or relation (2*r+1).
+    /// Keep every original record/coordinate, but try another physical station
+    /// before spending the window on duplicate representations of the same one.
+    static func physicalStationID(_ id: String) -> String {
+        guard id.hasPrefix("osm:a"), let area = UInt64(id.dropFirst(5)) else { return id }
+        return "osm:\(area % 2 == 0 ? "w" : "r")\(area / 2)"
+    }
+
+    static func distinctStationsFirst(_ stations: [POIFeature]) -> [POIFeature] {
+        var seen = Set<String>(), first: [POIFeature] = [], aliases: [POIFeature] = []
+        for station in stations {
+            if seen.insert(physicalStationID(station.id)).inserted { first.append(station) }
+            else { aliases.append(station) }
+        }
+        return first + aliases
+    }
+
+    struct RoadProgress: Sendable {
+        let originRemainingMeters: Double
+        let stationRemainingMeters: [String: Double]
+    }
+
     /// Ranked pumps toward B. Tank-band first, then more progress, then seed.
     static func rankedProgressFuel(
         fuels: [POIFeature],
@@ -389,10 +411,11 @@ nonisolated enum FuelItinerary {
         tankMeters: Double,
         usableRangeMeters: Double? = nil,
         sessionSeed: UInt64,
-        excluding: Set<String> = []
+        excluding: Set<String> = [],
+        roadProgress: RoadProgress? = nil
     ) -> [POIFeature] {
         guard tankMeters > 0, !fuels.isEmpty else { return [] }
-        let ab = GeoMath.meters(from, to)
+        let ab = roadProgress?.originRemainingMeters ?? GeoMath.meters(from, to)
         guard ab > HopSearchPolicy.fuelMinimumForwardMeters else { return [] }
 
         struct Cand {
@@ -402,28 +425,31 @@ nonisolated enum FuelItinerary {
             var crossTrack: Double
             var coherent: Bool
         }
+        let excludedStations = Set(excluding.map(physicalStationID))
         var cands: [Cand] = []
         cands.reserveCapacity(fuels.count)
         for fuel in fuels {
-            if excluding.contains(fuel.id) { continue }
+            if excludedStations.contains(physicalStationID(fuel.id)) { continue }
             guard let graph = reachableMeters[fuel.id], graph.isFinite,
                   graph > HopSearchPolicy.fuelMinimumForwardMeters
             else { continue }
             guard graph <= tankMeters * HopSearchPolicy.fuelMaxTank else { continue }
             let at = RouteCoordinate(longitude: fuel.longitude, latitude: fuel.latitude)
-            let progress = GeoMath.progressAlongAB(from: from, to: to, point: at)
+            if let roadProgress, roadProgress.stationRemainingMeters[fuel.id] == nil { continue }
+            let progress = roadProgress.map { $0.originRemainingMeters - $0.stationRemainingMeters[fuel.id]! }
+                ?? GeoMath.progressAlongAB(from: from, to: to, point: at)
             // Graph reachability is the route corridor. A straight A→B cross-track
             // gate rejects legitimate mountain/highway detours and can erase the
             // only usable fuel chain. Require real progress toward B instead.
             guard progress > HopSearchPolicy.fuelMinimumForwardMeters,
                   progress < ab - HopSearchPolicy.fuelDestinationClearanceMeters
             else { continue }
-            let crossTrack = abs(GeoMath.crossTrackMeters(
+            let crossTrack = roadProgress == nil ? abs(GeoMath.crossTrackMeters(
                 point: at.locationCoordinate,
                 lineFrom: from.locationCoordinate,
                 to: to.locationCoordinate
-            ))
-            let coherent = !(
+            )) : max(0, graph - progress)
+            let coherent = roadProgress != nil || !(
                 (crossTrack > 50_000 && crossTrack > progress * 0.75)
                     || (progress < max(10_000, ab * 0.18) && crossTrack > 25_000)
             )

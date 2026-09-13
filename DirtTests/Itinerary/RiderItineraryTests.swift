@@ -3,6 +3,20 @@ import Testing
 @testable import Dirt
 
 struct RiderItineraryTests {
+    @Test func rideSeedSurvivesSavingAndFuelEditsButFreshPinsGetVariety() throws {
+        let original = itinerary([point(0), point(1)])
+        let saved = try JSONDecoder().decode(RiderItinerary.self, from: JSONEncoder().encode(original))
+        var edited = saved.legs[0]
+        edited.fuelStopOverrides[edited.from.uuidString] = "replacement-pump"
+        edited.profile = .dirt
+        let seed = original.legs[0].routingSessionSeed
+        #expect(seed > 0 && seed < (UInt64(1) << 53))
+        #expect(saved.legs[0].routingSessionSeed == seed)
+        #expect(edited.routingSessionSeed == seed)
+        let fresh = itinerary([point(0), point(1)])
+        #expect(fresh.legs[0].routingSessionSeed != seed)
+    }
+
     @Test func appendThreeBuildsOrderedChain() {
         var itinerary = RiderItinerary()
         itinerary = reduce(itinerary, .append(coordinate: point(0))).itinerary
