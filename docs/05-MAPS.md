@@ -164,11 +164,11 @@ BC network lens is parked (`if false` in Layers). Overlay paint is the installed
 
 ### Province network overlays
 
-`NetworkOverlayManager` paints nearby edges from the **installed graph pack**. Honest Layers: when Allow is off, `motorized_unknown` / `motorized_excluded` are omitted. Routing laws: [00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](./00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+`NetworkOverlayManager` paints nearby edges for display. Display feature caps and lens/corridor sizes below are not routing search horizons or memory budgets. Honest Layers: when Allow is off, `motorized_unknown` / `motorized_excluded` are omitted. Routing laws: [ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md).
 
 | | |
 |---|---|
-| **Data source** | Installed `graph.v2` + `geometry.v1` for the province under the map |
+| **Data source** | Compatible installed graph and paired geometry for the displayed area |
 | **Corridor mode** | Lines within 2–3 km of map focus + route anchors, or at zoom ≥ 12.5 |
 | **Lens mode** | Show one province at a time, ~20 km circle |
 | **Feature caps** | Corridor 1600; lens 5000 |

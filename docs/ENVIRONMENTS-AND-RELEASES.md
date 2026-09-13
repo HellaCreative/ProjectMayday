@@ -5,13 +5,19 @@ automated security evidence reconciled 2026-09-05.
 
 ## Decision
 
-DIRT uses three operational lanes and two hosted backends:
+DIRT separates local testing, development, and production. This document governs
+non-routing environment isolation, account data, secrets, and database/release
+operations. Routing architecture, source selection, pack delivery, qualification,
+and routing promotion are defined only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 
-| Lane | App build | Supabase | Routing / tiles / packs | Data |
+The hosted names below are an inventory of existing integrations, not a rule
+requiring the routing candidate to execute on a hosted service:
+
+| Lane | App build | Supabase | Existing hosted integrations | Data |
 | --- | --- | --- | --- | --- |
 | Local / CI | Unit tests and simulator | Local Supabase | Fixtures and local server tests | Synthetic, resettable |
-| Development / QA | `Dirt Dev` Debug or internal Release | Separate `dirt-mayday-dev` project | `pack-fabric.vercel.app`; candidate pack prefixes when testing pack changes | Synthetic test accounts only |
-| Production | App Store `Dirt` Release | Current `dirt-mayday` project | Production Vercel URL and promoted immutable R2 manifest | Real riders |
+| Development / QA | `Dirt Dev` Debug or internal Release | Separate `dirt-mayday-dev` project | `pack-fabric.vercel.app`; routing/pack policy is in the sole routing authority | Synthetic test accounts only |
+| Production | App Store `Dirt` Release | Current `dirt-mayday` project | Existing production Vercel and R2 services | Real riders |
 
 Supabase Branching is not the launch path. The current organization is on the
 Free plan, while persistent branches require Pro. A separate development
@@ -47,9 +53,8 @@ not a production promotion or a substitute for hosted multi-account app tests.
   automated and multi-account acceptance passes.
 - Development and production have different project URLs, publishable keys,
   Auth redirect URLs, users, secrets, and API domains.
-- Promoted map and routing packs are immutable public artifacts and may be read
-  by both lanes. Unpromoted pack work uses candidate R2 prefixes and the
-  development routing deployment; production never points at a candidate.
+- Map and routing artifact identity, delivery, isolation, and publication are
+  defined only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
 - Service-role keys, database passwords, Apple private keys, and deployment
   tokens never enter either mobile app or source control.
 - iOS and Android select the same named environment and backend contract.
@@ -79,20 +84,23 @@ Required values:
 
 - environment name and build identity;
 - Supabase URL and publishable key;
-- routing API base URL and routing contract;
+- routing configuration as specified by [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md);
 - rider-services `/api/poi` URL derived from that same environment base;
 - Shortbread manifest URL;
-- pack CDN base URL and manifest URL; and
+- map-delivery configuration and routing-pack configuration as specified by their respective authorities; and
 - public legal/support URLs where environment-specific testing is required.
 
 Publishable Supabase keys may ship in clients; privileged secrets may not.
 
-## Hosted routing services
+## Existing hosted-service inventory
 
-| Environment | Project | Stable URL | Source identity |
+| Environment | Project | Existing URL | Scope |
 | --- | --- | --- | --- |
-| Development / QA | `pack-fabric` (non-live) | `https://pack-fabric.vercel.app` | Every response carries the tested commit in `serviceBuild` |
-| Production | `dirt-mayday` | `https://dirt-mayday.vercel.app` | Promoted only after development acceptance |
+| Development / QA | `pack-fabric` | `https://pack-fabric.vercel.app` | Existing hosted implementation |
+| Production | `dirt-mayday` | `https://dirt-mayday.vercel.app` | Existing hosted implementation |
+
+The following dated Rider Services receipt is historical acceptance evidence,
+not the current routing implementation or its qualification.
 
 Rider Services source `9808936c1cdad627c1b55c2cb3ca23925345ee7d`
 was deployed on 2026-09-05 as development deployment
@@ -106,25 +114,31 @@ Promoted data identities for that acceptance are pack/fuel catalog
 `9f11c79e6a103329d83184eb1d5b440ae70671529dfcdb0b17aa1533d8d46ff1`
 and separate Rider Services catalog
 `e17d1e485c986a0ebab994cd49e5637a44f6aa49fffdc19a6d6c1dbbc8117770`.
-Neither deployment changed the frozen route engine or road/geometry objects.
+This dated receipt does not qualify the current route engine or select its road artifacts.
 
-## Promotion flow
+## Database and non-routing release flow
 
-1. Create a feature branch and migration.
-2. Reset and replay the complete migration chain locally.
-3. Run unit, API-contract, RLS/private-Realtime, deletion/atomicity, and migration
-   tests with synthetic users.
-4. Merge to the development branch and deploy to development Supabase/Vercel/R2.
-5. Install `DIRT Dev` on devices; run route, Auth, Groups, subscription sandbox,
-   offline, and failure-path acceptance.
-6. Freeze the candidate commit and immutable pack release IDs.
-7. Promote the exact migration and server commit to production.
-8. Build the App Store Release from that same commit and verify its embedded
-   environment identity before TestFlight/App Store submission.
-9. Record commit, database migration versions, Vercel deployment, R2 manifest,
-   app build number, and acceptance evidence together.
+1. Preserve a reviewable source checkpoint and create a versioned migration for
+   database changes.
+2. Reset only the authorized disposable local database and replay its migration
+   chain. Run unit, API-contract, RLS/private-Realtime, deletion/atomicity, and
+   migration checks with synthetic users.
+3. Apply the tested changes to the isolated development environment. Complete
+   the relevant real-client Auth, Groups, subscription, and failure-path checks.
+4. Record the accepted source and migration identities. Promote only the tested
+   artifacts within the owner's current production authorization.
+5. Build a mobile release when the change affects the client; verify its embedded
+   environment identity before an authorized TestFlight/App Store submission.
+   A server-only correction does not itself require another mobile build.
+6. Record the applicable source, migration, deployment, mobile-build, and
+   acceptance identities together. Promote tested artifacts without rebuilding
+   them during promotion.
 
-Never rebuild an artifact during promotion. Promote the tested bytes.
+Routing acceptance and promotion are governed only by
+[the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md). This database workflow
+does not require simultaneous native and hosted routing implementation or a
+mobile archive for every routing-service correction. App Store submission and
+public release remain separate owner-authorized actions.
 
 ## Immediate setup sequence
 
@@ -138,8 +152,8 @@ Never rebuild an artifact during promotion. Promote the tested bytes.
    acceptance.
 7. Created and smoke-tested the stable development Vercel deployment without
    changing the production service.
-8. Use a candidate R2 prefix and development-only override whenever a pack is
-   under evaluation; promoted immutable packs remain the shared read-only baseline.
+8. Consult [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md) for routing artifacts and
+   release boundaries; this setup history does not set pack policy.
 9. Seed disposable development test users/data after Auth providers are configured.
 10. Added deterministic bundle/archive verification that rejects production
     Supabase identity in development and development identity/tester unlocks in

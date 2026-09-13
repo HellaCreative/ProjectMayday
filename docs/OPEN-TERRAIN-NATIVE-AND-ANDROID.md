@@ -1,5 +1,7 @@
 # Open Terrain — iPhone and Android implementation contract
 
+Routing behavior is maintained only in [ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md). This document describes presentation, not routing architecture or computation policy.
+
 Approved September 9, 2026. Visual authority: `experiments/ui-directions-20260909/open-terrain.html` and its CSS, ending with commit `c8877ff`. The HTML is interactive sample data, not a backend implementation. Native functional truth remains existing product/routing/navigation contracts. Do not remove a control or state merely because the comp omits it.
 
 ## Shared visual vocabulary
@@ -53,7 +55,7 @@ Two levels: membership library (owned/joined groups, member count, sharing count
 
 Rider rows group sharing dot, name/You, Current location and colored status. Tap whole row to expand inline View on Map and Route to Rider. Tap again to collapse; opening another row closes the prior row. No row chevron suggesting another screen. Own row provides status selection and Start sharing (orange) / Stop sharing (black). Preserve account-wide sharing semantics, waiting-for-GPS indication, error display, owner Delete Group and member Leave Group.
 
-Only live, valid coordinates enable peer actions. Offline must not be labelled current. Resolve actual locality from coordinates where available; never use sample Porters Lake text. Unavailable geocoding needs an honest coordinate/unavailable fallback. Routing uses existing GroupMemberRouteTarget with original timestamp, accuracy and live state; it must still apply existing safety checks. Do not create another route engine or bypass stale-location guards.
+Only live, valid coordinates enable peer actions. Offline must not be labelled current. Resolve actual locality from coordinates where available; never use sample Porters Lake text. Unavailable geocoding needs an honest coordinate/unavailable fallback. Routing uses existing GroupMemberRouteTarget with original timestamp, accuracy and live state; it must still apply existing safety checks. Preserve stale-location guards; routing implementation follows the routing source of truth.
 
 ## Icon mapping for Android
 

@@ -1,16 +1,11 @@
 # DIRT iOS — App Store launch checklist
 
-**Purpose:** one operational source of truth for taking the frozen routing
-release candidate through TestFlight and public App Store review.
+**Purpose:** operational preparation for TestFlight and App Store review.
 
-**Routing baseline:** `routing-rc1-2026-09-03`
-(`94b467a11375e3ea3233c127b07af2ef039d0658`). Do not reopen routing to clear a
-launch item. See [ROUTING-FREEZE-2026-09-03.md](ROUTING-FREEZE-2026-09-03.md).
-
-**Navigation-preparation candidate:** build `2 (14)` has automated hardening but
-still needs the focused White pass in
-[NAVIGATION-PREP-REQUALIFICATION-2026-09-04.md](NAVIGATION-PREP-REQUALIFICATION-2026-09-04.md).
-The routing/fuel engine remains on the unchanged baseline above.
+**Routing release dependency:** qualify the actual candidate against
+[ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md). This checklist does not
+freeze a routing commit, prescribe an engine, or restrict an authorized repair.
+Navigation presentation follows [the navigation document](00-NAVIGATION-SOURCE-OF-TRUTH.md).
 
 **Deferred:** CarPlay is parked. Native GPX-to-DIRT conversion and subjective
 visual redesign are separate product milestones, not hidden launch work.
@@ -68,8 +63,8 @@ commit, TestFlight build, server contract, and test evidence together.
 
 ### B. Navigation safety
 
-- [x] Start is code- and unit-verified to prepare only the first visible route stage and current rider
-      region; later stages/regions roll forward during the ride.
+- [ ] Verify the candidate's data readiness and progressive navigation preparation
+      against the routing source of truth; historical passes do not qualify a new architecture.
 - [x] Duplicate Start and Begin Ride transitions are one-shot; cancel/retry and
       fresh-session reroute throttling have automated coverage.
 - [ ] Start, cancel, begin ride, end ride, and immediate second ride pass on a

@@ -1,8 +1,9 @@
 # DIRT — iOS TestFlight guide
 
-Fully native SwiftUI app. **Develop only in** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`.
+Fully native SwiftUI app. Use the checkout assigned to the current task;
+workspace and simulator guidance is in [AGENTS.md](AGENTS.md).
 
-- Routing: on-device `graph.v2` packs (R2) when installed; live `/api/route` when online without that pack
+- Routing, fuel, pack selection, and qualification: [routing source of truth](docs/ROUTING-SOURCE-OF-TRUTH.md)
 - Accounts: Supabase (baked publishable config)
 - Map style: bundled Shortbread JSON + local sprites
 
@@ -39,7 +40,8 @@ Public-release gates and the App Store Connect owner checklist live in
 ## Open in Xcode
 
 ```bash
-open /Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/Dirt.xcodeproj
+# From the assigned checkout:
+open Dirt.xcodeproj
 ```
 
 Select **DIRT Dev** for ordinary development and device testing. Select
@@ -62,12 +64,16 @@ tester surface, and does not attach the local StoreKit catalogue.
 
 ## Command-line build / test
 
+Use one existing simulator selected by UDID; the example does not authorize
+creating or cloning a device. Follow the simulator policy in [AGENTS.md](AGENTS.md).
+
 ```bash
-cd /Users/richardsmith/SandBox01/MAYDAYiOS/Dirt
+# Run from the assigned checkout.
 
 # Unit tests on Simulator
 xcodebuild test -project Dirt.xcodeproj -scheme 'DIRT Dev' \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -destination 'platform=iOS Simulator,id=<existing-simulator-UDID>' \
+  -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
   CODE_SIGNING_ALLOWED=NO
 
 # Device build (generic)
@@ -81,7 +87,7 @@ xcodebuild -project Dirt.xcodeproj -scheme 'DIRT Dev' \
 `34XM6B4G7A`, automatic signing).
 
 ```bash
-cd /Users/richardsmith/SandBox01/MAYDAYiOS/Dirt
+# Run from the assigned checkout.
 
 # 1. Archive (already succeeds locally → build/Dirt.xcarchive)
 xcodebuild -project Dirt.xcodeproj -scheme 'DIRT Production' \
@@ -144,7 +150,7 @@ ASC prerequisites before the first upload succeeds:
 | Area | Status |
 | --- | --- |
 | Map idle (Shortbread + NS overview + brand + dock + locate) | Shipped |
-| From here / Plan stages / Saved routes | Shipped |
+| From here / Plan stages / Saved routes | Routing qualification is recorded only in [the routing source of truth](docs/ROUTING-SOURCE-OF-TRUTH.md) |
 | Save + Export GPX + Start/End nav HUD | Shipped |
 | Offline tile prefetch on Start (45s cap, skip) | Shipped |
 | Email OTP auth + profile | Shipped |
