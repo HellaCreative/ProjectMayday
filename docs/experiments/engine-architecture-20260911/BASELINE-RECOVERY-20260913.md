@@ -714,3 +714,7 @@ incomplete, with eight replay assertions failing. Evidence is retained in
 `.build/recovery-evidence/fuel-regional-reuse`. Part of this run overlapped the
 owner-requested phone compilation, so timing is not an isolated benchmark.
 This change is excluded from the already prepared phone build 42.
+
+The development worktree advances to DEV 2 (43) for the search-reuse verification.
+Phone review build 42 is preserved separately at `c3bacf7`; its compiled app is
+`.build/phone-review-42-derived/Build/Products/Debug-iphoneos/Dirt.app`.
