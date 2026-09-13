@@ -1297,3 +1297,16 @@ now supply stable nonzero seeds, preserved across saving, retries and fuel edits
 The old bounded native search still disables predecessor variety; do not claim
 variety output parity from seed plumbing alone. Full DEV qualification remains
 open; the four long historical fuel requests and two UI checks still fail.
+
+### 2026-09-13 initial fuel approach phase
+
+Owner clarification: fuel-enabled rides first visit the closest reachable pump,
+even 500 m away; an origin already at a mapped pump satisfies that phase. iOS now
+uses the existing distance objective for this pre-ride approach, then starts the
+selected recreational objective at the pump. Preserve permitted access, legal
+turns, original destination and visible approach geometry. Reset recreational
+road history at this first fill, retaining arrival orientation. Carry the initial
+fill marker through prefix reuse. This is new initial-phase selection behavior;
+Android parity is required, not yet demonstrated. Owner replays complete 15/21;
+six cross-region requests still exhaust search budgets. Do not present those as
+proven fuel gaps or claim release qualification.

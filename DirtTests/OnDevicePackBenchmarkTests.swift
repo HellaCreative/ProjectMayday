@@ -293,6 +293,17 @@ struct OnDevicePackBenchmarkTests {
     @Test("All historical oracle requests replay through the real pack source")
     @MainActor
     func allOracleFuelWorkflows() async throws {
+        try await replayOracleFuelWorkflows(initialFillUp: false)
+    }
+
+    @Test("Owner fuel rides start with a refill and preserve the destination")
+    @MainActor
+    func ownerFuelWorkflows() async throws {
+        try await replayOracleFuelWorkflows(initialFillUp: true)
+    }
+
+    @MainActor
+    private func replayOracleFuelWorkflows(initialFillUp: Bool) async throws {
         let casesURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("scripts/pack-fabric/bench/routing-oracle-cases.json")
         let fixture = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: casesURL)) as? [String: Any])
@@ -315,6 +326,9 @@ struct OnDevicePackBenchmarkTests {
             let to = RouteCoordinate(longitude: try #require(b["lon"]), latitude: try #require(b["lat"]))
             for profile in [RouteProfile.cleanest, .balanced, .dirt] {
                 let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+                let originStation = initialFillUp ? try await source.fuelStation(near: from,
+                    within: HopSearchPolicy.fuelWaypointSnapMeters) : nil
+                var needsInitialFillUp = initialFillUp && originStation == nil
                 var current = from, prior: [String] = [], arrival: String?
                 var excluded: [String] = [], force = false, reached = false
                 var routes: [RouteResponse] = [], stops: [FuelChainStop] = [], windows: [Any] = []
@@ -324,12 +338,13 @@ struct OnDevicePackBenchmarkTests {
                     var request = FuelChainRequest(profile: profile, from: current, to: to, allowUnknown: false,
                         usableRangeMeters: usable, firstLegMaxMeters: usable, requireFuelStopBeforeEnd: force,
                         minimumFuelStops: force ? 1 : 0, profileMeters: 0, riderLegId: "\(id):\(profile.rawValue)",
+                        initialFillUp: needsInitialFillUp,
                         avoidMotorways: profile == .cleanest, priorEdgeIds: prior, arrivalEdgeId: arrival,
                         backtrackFactor: 4, excludedStationIds: excluded, windowMaxStops: 1,
                         allowPartialWindow: true, windowTimeBudgetMs: 15000, forwardFeeler: false)
                     var options = request.options ?? RouteRequestOptions()
                     options.sessionSeed = seed
-                    options.startEndpointKind = stops.isEmpty ? nil : "customers"
+                    options.startEndpointKind = stops.isEmpty && originStation == nil ? nil : "customers"
                     request.options = options
                     do {
                         let chain = try await source.fuelChain(request)
@@ -363,6 +378,11 @@ struct OnDevicePackBenchmarkTests {
                                 if !prior.contains(edge) { prior.append(edge) }; arrival = edge
                             }
                         }
+                        if needsInitialFillUp {
+                            prior.removeAll()
+                            arrival = route.segments?.last(where: { !($0.edgeId ?? "").isEmpty && !($0.edgeId ?? "").hasPrefix("soft-stitch") })?.edgeId
+                            needsInitialFillUp = false
+                        }
                         guard let stop else { reached = true; break }
                         stops.append(stop); current = target; excluded.append(stop.id); force = false
                         if attempt == 16 { failure = "forward-attempt-limit" }
@@ -377,8 +397,8 @@ struct OnDevicePackBenchmarkTests {
                     "seed": seed, "tankMeters": tank, "usableMeters": usable,
                     "reachedDestination": reached, "requestedDestination": try object(to), "reachedEndpoint": try object(routes.last?.coordinates.last ?? from),
                     "failure": failure as Any? ?? NSNull(), "routes": try object(routes), "stops": try object(stops), "windows": windows]
-                try saveEvidence(evidence, name: "oracle-\(id)-\(profile.rawValue)")
-                print("[accepted-oracle] case=\(id) profile=\(profile.rawValue) reached=\(reached) seconds=\(ProcessInfo.processInfo.systemUptime-began) meters=\(routes.reduce(0) { $0 + ($1.distanceMeters ?? 0) }) stops=\(stops.map(\.id)) failure=\(failure ?? "none")")
+                try saveEvidence(evidence, name: "oracle-\(initialFillUp ? "initial-" : "")\(id)-\(profile.rawValue)")
+                print("[\(initialFillUp ? "owner-oracle" : "accepted-oracle")] case=\(id) profile=\(profile.rawValue) reached=\(reached) seconds=\(ProcessInfo.processInfo.systemUptime-began) meters=\(routes.reduce(0) { $0 + ($1.distanceMeters ?? 0) }) stops=\(stops.map(\.id)) failure=\(failure ?? "none")")
                 #expect(reached, "Oracle did not reach requested destination: \(id)/\(profile.rawValue): \(failure ?? "unknown")")
             }
         }

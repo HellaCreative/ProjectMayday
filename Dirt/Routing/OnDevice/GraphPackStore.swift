@@ -832,7 +832,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        initialFuelApproach: Bool = false
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
@@ -863,7 +864,8 @@ final class GraphPackStore {
                 mapZoom: mapZoom,
                 matchLimitMeters: matchLimitMeters,
                 startEndpointKind: startEndpointKind,
-                endEndpointKind: endEndpointKind
+                endEndpointKind: endEndpointKind,
+                initialFuelApproach: initialFuelApproach
             )
         }
         return await routeOnDeviceInRegion(
@@ -884,7 +886,8 @@ final class GraphPackStore {
             mapZoom: mapZoom,
             matchLimitMeters: matchLimitMeters,
             startEndpointKind: startEndpointKind,
-            endEndpointKind: endEndpointKind
+            endEndpointKind: endEndpointKind,
+            initialFuelApproach: initialFuelApproach
         )
     }
 
@@ -910,7 +913,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        initialFuelApproach: Bool = false
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         guard regions.count >= 2 else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
@@ -954,7 +958,8 @@ final class GraphPackStore {
                     avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
-                    endEndpointKind: endEndpointKind
+                    endEndpointKind: endEndpointKind,
+                    initialFuelApproach: initialFuelApproach
                 )
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
                     if case .failure(let reason) = final { lastFailure = reason }
@@ -1009,7 +1014,8 @@ final class GraphPackStore {
                     avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
-                    endEndpointKind: nil
+                    endEndpointKind: nil,
+                    initialFuelApproach: initialFuelApproach
                 )
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
                     if case .failure(let reason) = hop { lastFailure = reason }
@@ -1085,7 +1091,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        initialFuelApproach: Bool = false
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -1112,6 +1119,7 @@ final class GraphPackStore {
             router.matchLimitMeters = matchLimit
             router.startEndpointKind = startKind
             router.endEndpointKind = endKind
+            router.initialFuelApproach = initialFuelApproach
             let result = router.routeDetailed(
                 from: start,
                 to: end,

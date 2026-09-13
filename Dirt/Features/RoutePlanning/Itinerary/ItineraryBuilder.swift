@@ -1209,7 +1209,7 @@ final class ItineraryBuilder {
                         ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
                             && index == itinerary.legs.count - 1
                             && !finalWaypointIsFuel,
-                        startEndpointKind: departureID == riderLeg.from.uuidString ? nil : "customers"
+                        startEndpointKind: departureID == riderLeg.from.uuidString && waypointFuelStops[riderLeg.from] == nil ? nil : "customers"
                     ), zoom: DirtSnapRequestContext.mapZoom))
                 } catch is CancellationError {
                     return dropped(itinerary, committed: committed, cancelled: true)
@@ -1348,7 +1348,8 @@ final class ItineraryBuilder {
                                     coordinate: $0.coordinate,
                                     stationID: $0.id,
                                     name: $0.displayName,
-                                    afterRiderLegID: riderLeg.id
+                                    afterRiderLegID: riderLeg.id,
+                                    isInitialFillUp: initialFillUp && hopIndex == 0
                                 )
                             }
                             let resetsAtWaypoint = planned.stop == nil
@@ -1373,7 +1374,7 @@ final class ItineraryBuilder {
                                 validFuelTargets: validFuelTargets
                             )
                             builtLegs.append(built)
-                            history.append(response)
+                            history.append(response, beginsRide: fuelStop?.isInitialFillUp == true)
                             fuelUsed = arrivalFuel
                             current = planned.coordinate
                             statuses[riderLeg.id] = planned.stop == nil ? .built : .pending
@@ -1573,7 +1574,8 @@ final class ItineraryBuilder {
                         coordinate: $0.coordinate,
                         stationID: $0.id,
                         name: $0.displayName,
-                        afterRiderLegID: riderLeg.id
+                        afterRiderLegID: riderLeg.id,
+                        isInitialFillUp: initialFillUp
                     )
                 }
                 let resetsAtWaypoint = chosenStop == nil
@@ -1599,7 +1601,7 @@ final class ItineraryBuilder {
                     validFuelTargets: validFuelTargets
                 )
                 builtLegs.append(built)
-                history.append(response)
+                history.append(response, beginsRide: fuelStop?.isInitialFillUp == true)
                 fuelUsed = arrivalFuel
                 current = target
                 let completedWithUnknownDestinationFuel = chosenStop == nil
@@ -2611,10 +2613,18 @@ private struct EdgeHistory: Equatable {
     init() {}
 
     init(legs: [BuiltLeg]) {
-        for leg in legs { append(leg.response) }
+        for leg in legs { append(leg.response, beginsRide: leg.endsAtFuelStop?.isInitialFillUp == true) }
     }
 
-    mutating func append(_ response: RouteResponse) {
+    mutating func append(_ response: RouteResponse, beginsRide: Bool = false) {
+        if beginsRide {
+            recent.removeAll()
+            recentMeters = 0
+            // Retain arrival orientation for legal turns at the pump while
+            // excluding the pre-ride approach from recreational road history.
+            arrivalEdgeID = response.segments?.last(where: { !($0.edgeId ?? "").isEmpty && !($0.edgeId ?? "").hasPrefix("soft-stitch") })?.edgeId
+            return
+        }
         for segment in response.segments ?? [] {
             guard let id = segment.edgeId, !id.isEmpty else { continue }
             if let duplicate = recent.firstIndex(where: { $0.id == id }) {

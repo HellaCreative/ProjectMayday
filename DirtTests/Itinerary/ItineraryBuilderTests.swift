@@ -44,11 +44,15 @@ struct ItineraryBuilderTests {
         source.distances[key(start, pump)] = 500
         source.distances[key(pump, destination)] = 9_500
         source.fuelStops = [fuelStop("starting-fill", at: pump)]
+        source.includeEdgeSegments = true
         let result = await build([start, destination], source: source, usable: 200_000)
         #expect(result.legs.count == 2)
         #expect(result.legs.first?.endsAtFuelStop?.stationID == "starting-fill")
         #expect(result.legs.first?.response.distanceMeters == 500)
         #expect(result.legs.first?.fuelUsedOnArrivalMeters == 0)
+        #expect(result.legs.first?.endsAtFuelStop?.isInitialFillUp == true)
+        #expect(source.routeRequests.last?.options?.priorEdgeIds?.isEmpty != false)
+        #expect(source.routeRequests.last?.options?.arrivalEdgeId == key(start, pump))
         #expect(result.legs.last?.toCoordinate == destination)
         let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
         #expect(plans.first?.fuel.initialFillUp == true)
@@ -1375,6 +1379,7 @@ struct IncrementalItineraryRebuildTests {
 private final class FakeRoutingSource: RoutingSource {
     let name: String
     var supportsCombinedFuelPlanning = false
+    var includeEdgeSegments = false
     var distances: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []
     var fuelStopResponses: [[FuelChainStop]] = []
@@ -1408,7 +1413,7 @@ private final class FakeRoutingSource: RoutingSource {
         guard let meters = distances[routeKey] else {
             throw RoutingError.server("missing scripted route \(routeKey)")
         }
-        return response(from: pair.0, to: pair.1, meters: meters)
+        return response(from: pair.0, to: pair.1, meters: meters, edgeID: includeEdgeSegments ? routeKey : nil)
     }
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
@@ -1575,13 +1580,14 @@ private func endpoints(_ req: RouteRequest) throws -> (RouteCoordinate, RouteCoo
 private func response(
     from: RouteCoordinate,
     to: RouteCoordinate,
-    meters: Double
+    meters: Double,
+    edgeID: String? = nil
 ) -> RouteResponse {
     RouteResponse(
         status: "complete", error: nil, message: nil,
         distanceMeters: meters,
         estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
-        geometry: [from, to], segments: nil,
+        geometry: [from, to], segments: edgeID.map { [RouteSegment(surfaceClass: "gravel", trackClass: nil, distanceMeters: meters, geometry: [from, to], coords: nil, edgeId: $0)] },
         stats: RouteStats(dirtPercent: 80, pavedPercent: 20),
         maneuvers: nil, warnings: nil,
         dirtPercentValue: nil, pavedPercentValue: nil

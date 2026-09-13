@@ -843,7 +843,8 @@ final class PackRoutingSource: RoutingSource {
                 avoidMotorways: req.options?.avoidMotorways == true,
                 preferBackRoads: req.options?.preferBackRoads == true,
                 mapZoom: req.options?.mapZoom, matchLimitMeters: req.options?.matchLimitMeters,
-                startEndpointKind: req.options?.startEndpointKind, endEndpointKind: "customers")
+                startEndpointKind: req.options?.startEndpointKind, endEndpointKind: "customers",
+                initialFuelApproach: true)
             try RoutingWorkContext.check()
             switch result {
             case .success(let native):
@@ -857,7 +858,8 @@ final class PackRoutingSource: RoutingSource {
                         dijkstraPops: nil, matchedFuel: distances.count, elapsedMs: nil),
                     routes: [route], windowComplete: false)
             case .failure(.noPath): continue
-            case .failure:
+            case .failure(let reason):
+                RoutingDebugLog.shared.event("initial fuel candidate=\(station.id) failure=\(reason)")
                 // An unfinished search cannot eliminate a nearer station.
                 throw RoutingError.fuelUnknown("The closest fuel station has not been verified yet.")
             }

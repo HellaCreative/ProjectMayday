@@ -606,3 +606,38 @@ windows; selected-stop replacement; UI failures; custom ride settings; candidate
 but bounded native fuel searches currently disable the old predecessor-variety
 mechanism, so varied output is not yet qualified. The pre-change code rollback
 point remains `dfd9cbb`; the accepted phone foundation remains DEV 2 (40).
+
+### Initial approach is a separate phase (owner follow-up)
+
+The first complete owner-refill replay exposed a 129 km recreational approach to
+the nearest station and approach-road history blocking the subsequent ride. The
+initial approach now uses the existing distance objective with legal graph
+connections, retains the selected profile's access/snap constraints, and records
+`initial-fuel-approach` in search metadata. Ordinary ride objectives are unchanged.
+This is a route-selection change for the owner-required initial phase, not merely
+a performance optimization. After refuelling, recent recreational road history
+starts afresh; the incoming edge remains available for legal departure turns.
+The full initial approach stays visible in the itinerary. Reused prefixes retain
+the initial-fill marker. Starting at a mapped station counts as the initial fill.
+
+`Dirt-Initial-Approach-20260913.xcresult` exercised 21 owner requests: 15 complete,
+six incomplete (all three cross-province and all three Fundy profiles). Their
+failures explicitly report an exhausted planning budget, not a proven fuel gap.
+Short, rural, one-stop, multi-stop and Canso requests complete in all profiles.
+The rural initial approach is now 13.24 km instead of 129 km. Multi-stop initial
+approaches are 931 m; short/Porters Lake approaches are 7.155 km. All recorded
+joins are continuous. Exact repeated-segment lower bounds across entire completed
+itineraries range from 2 m to 1.814 km, including permitted overlap with the
+initial approach; this is not a claim of no repeated roads. Evidence is retained
+in `.build/recovery-evidence/owner-initial-approach`, including actual geometries
+and an audit. Historical oracle settings remain separate and unchanged.
+
+The run also exposed a test fixture with no edge segments despite an assertion
+about arrival-edge preservation. The fixture now supplies explicit segments and
+checks the exact retained arrival edge. Focused itinerary and incremental tests
+and all 19 direct replays passed in
+`Dirt-Initial-Approach-Regression-20260913.xcresult`. Actual geometry and dirt
+percentages match all 19 saved direct routes; comparison evidence is retained
+in `.build/recovery-evidence/initial-approach-regression`.
+The cross-province failures, UI failures and remaining qualification list above
+remain open. This remains an unqualified DEV recovery checkpoint.

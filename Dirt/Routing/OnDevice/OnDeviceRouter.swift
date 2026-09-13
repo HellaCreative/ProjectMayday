@@ -182,6 +182,9 @@ nonisolated struct OnDeviceRouter {
     let pack: GraphV2Pack
     /// Balanced ratio-seeking: scale paved km cost. Dirt/Clean stay 1.
     var pavedBias: Double = 1
+    /// The owner-required refill approach precedes the recreational ride.
+    var initialFuelApproach = false
+
     /// Planning-session seed for controlled variety. New process → new seed.
     var sessionSeed: UInt64 = 0
     /// MapLibre zoom for V4 tap radius. Nil falls back to 550 m, capped at 2000 m.
@@ -917,6 +920,18 @@ nonisolated struct OnDeviceRouter {
         )
         ctx.avoidMotorways = e4.avoidMotorways
         ctx.preferBackRoads = e4.preferBackRoads
+
+        if initialFuelApproach {
+            ctx.costMode = .distance
+            ctx.variety = false
+            ctx.maxPathMeters = maxRouteMeters
+            var result = runProfile(ctx)
+            if case .success(var route) = result {
+                route.searchMeta.rideObjective = "initial-fuel-approach"
+                result = .success(route)
+            }
+            return result
+        }
 
         if profile == .dirt {
             let base = HopSearchPolicy.dirtCorridorMeters

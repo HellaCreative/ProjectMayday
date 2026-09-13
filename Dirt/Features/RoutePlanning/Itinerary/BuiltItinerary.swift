@@ -6,19 +6,22 @@ struct FuelStop: Equatable, Sendable {
     let name: String?
     let afterRiderLegID: UUID
     let resetsTank: Bool
+    let isInitialFillUp: Bool
 
     init(
         coordinate: RouteCoordinate,
         stationID: String?,
         name: String?,
         afterRiderLegID: UUID,
-        resetsTank: Bool = true
+        resetsTank: Bool = true,
+        isInitialFillUp: Bool = false
     ) {
         self.coordinate = coordinate
         self.stationID = stationID
         self.name = name
         self.afterRiderLegID = afterRiderLegID
         self.resetsTank = resetsTank
+        self.isInitialFillUp = isInitialFillUp
     }
 }
 
