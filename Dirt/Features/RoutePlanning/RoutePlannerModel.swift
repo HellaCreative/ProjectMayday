@@ -3082,7 +3082,8 @@ final class RoutePlannerModel {
         surfaceFamilyMode: String? = nil,
         maneuvers: [RouteManeuver]? = nil,
         warnings: [RouteWarning]? = nil,
-        terminalContinuation: NativeRoutingContinuation? = nil
+        terminalContinuation: NativeRoutingContinuation? = nil,
+        localSurfaceContribution: NativeRideSurfaceContext? = nil
     ) -> RouteResponse {
         let segments: [RouteSegment]?
         if let networkSegments, !networkSegments.isEmpty {
@@ -3121,7 +3122,8 @@ final class RoutePlannerModel {
             warnings: warnings,
             dirtPercentValue: nil,
             pavedPercentValue: nil,
-            terminalContinuation: terminalContinuation
+            terminalContinuation: terminalContinuation,
+            localSurfaceContribution: localSurfaceContribution
         )
     }
 
@@ -3160,7 +3162,8 @@ final class RoutePlannerModel {
             surfaceFamilyMode: local.hasSurfaceLeaves ? "leaf-v3" : nil,
             maneuvers: local.maneuvers,
             warnings: local.searchMeta.routeWarnings(),
-            terminalContinuation: local.terminalContinuation
+            terminalContinuation: local.terminalContinuation,
+            localSurfaceContribution: local.localSurfaceContribution
         )
         response.debug = local.searchMeta.responseDebug
         return response

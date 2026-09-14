@@ -130,6 +130,7 @@ final class GraphPackStore {
         let prior: Set<String>
         let arrival: String?
         let arrivalContinuation: NativeRoutingContinuation?
+        let owningRideSurfacePrefix: OwningRideSurfacePrefix?
         let backtrackFactor: Double
         let seed: UInt64
         let cap: Double?
@@ -883,6 +884,7 @@ final class GraphPackStore {
         priorEdgeIds: Set<String> = [],
         arrivalEdgeId: String? = nil,
         arrivalContinuation: NativeRoutingContinuation? = nil,
+        owningRideSurfacePrefix: OwningRideSurfacePrefix? = nil,
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil,
@@ -899,6 +901,7 @@ final class GraphPackStore {
             priorEdgeIds: priorEdgeIds,
             arrivalEdgeId: arrivalEdgeId,
             arrivalContinuation: arrivalContinuation,
+            owningRideSurfacePrefix: owningRideSurfacePrefix,
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters,
@@ -920,6 +923,7 @@ final class GraphPackStore {
         priorEdgeIds: Set<String> = [],
         arrivalEdgeId: String? = nil,
         arrivalContinuation: NativeRoutingContinuation? = nil,
+        owningRideSurfacePrefix: OwningRideSurfacePrefix? = nil,
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil,
@@ -953,6 +957,7 @@ final class GraphPackStore {
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
                 arrivalContinuation: arrivalContinuation,
+                owningRideSurfacePrefix: owningRideSurfacePrefix,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters,
@@ -977,6 +982,7 @@ final class GraphPackStore {
             priorEdgeIds: priorEdgeIds,
             arrivalEdgeId: arrivalEdgeId,
             arrivalContinuation: arrivalContinuation,
+            owningRideSurfacePrefix: owningRideSurfacePrefix,
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters,
@@ -1004,6 +1010,7 @@ final class GraphPackStore {
         priorEdgeIds: Set<String>,
         arrivalEdgeId: String?,
         arrivalContinuation: NativeRoutingContinuation? = nil,
+        owningRideSurfacePrefix: OwningRideSurfacePrefix? = nil,
         backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double?,
@@ -1069,6 +1076,7 @@ final class GraphPackStore {
             usedEdges: Set<String>,
             incomingEdgeId: String?,
             incomingContinuation: NativeRoutingContinuation?,
+            currentSurfacePrefix: OwningRideSurfacePrefix?,
             canonicalHistory: Set<String>,
             canonicalArrival: String?,
             completedMeters: Double
@@ -1091,6 +1099,7 @@ final class GraphPackStore {
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
                     priorEdgeIds: localHistory, arrivalEdgeId: localArrival,
                     arrivalContinuation: incomingContinuation,
+                    owningRideSurfacePrefix: currentSurfacePrefix,
                     backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
                     maxRouteMeters: Self.reservedChainHopCap(
                         totalCapMeters: maxRouteMeters,
@@ -1215,6 +1224,7 @@ final class GraphPackStore {
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
                     priorEdgeIds: localHistory, arrivalEdgeId: localArrival,
                     arrivalContinuation: incomingContinuation,
+                    owningRideSurfacePrefix: currentSurfacePrefix,
                     backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
                     maxRouteMeters: cap,
                     cleanMetroMultiplier: cleanMetroMultiplier,
@@ -1245,6 +1255,7 @@ final class GraphPackStore {
                     usedEdges: usedEdges.union(routed.edgeIds),
                     incomingEdgeId: routed.edgeIds.last ?? incomingEdgeId,
                     incomingContinuation: routed.terminalContinuation,
+                    currentSurfacePrefix: currentSurfacePrefix?.appending(routed.localSurfaceContribution),
                     canonicalHistory: knownHistory.union(routed.edgeIds.compactMap { historyPack.canonicalRoadID($0) }),
                     canonicalArrival: routed.edgeIds.reversed().compactMap { historyPack.canonicalRoadID($0) }.first ?? canonicalArrival,
                     completedMeters: completedMeters + routed.distanceMeters
@@ -1298,6 +1309,7 @@ final class GraphPackStore {
                                     usedEdges: usedEdges.union(prefix.edgeIds),
                                     incomingEdgeId: prefix.edgeIds.last ?? incomingEdgeId,
                                     incomingContinuation: prefix.terminalContinuation,
+                                    currentSurfacePrefix: currentSurfacePrefix?.appending(prefix.localSurfaceContribution),
                                     canonicalHistory: knownHistory.union(prefix.edgeIds.compactMap { historyPack.canonicalRoadID($0) }),
                                     canonicalArrival: prefix.edgeIds.reversed().compactMap { historyPack.canonicalRoadID($0) }.first ?? canonicalArrival,
                                     // Counterfactual budget only while probing;
@@ -1343,6 +1355,7 @@ final class GraphPackStore {
             usedEdges: priorEdgeIds,
             incomingEdgeId: arrivalEdgeId,
             incomingContinuation: arrivalContinuation,
+            currentSurfacePrefix: owningRideSurfacePrefix,
             canonicalHistory: [],
             canonicalArrival: nil,
             completedMeters: 0
@@ -1390,6 +1403,7 @@ final class GraphPackStore {
         priorEdgeIds: Set<String>,
         arrivalEdgeId: String?,
         arrivalContinuation: NativeRoutingContinuation? = nil,
+        owningRideSurfacePrefix: OwningRideSurfacePrefix? = nil,
         backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double? = nil,
@@ -1425,7 +1439,8 @@ final class GraphPackStore {
             from: RouteCoordinate(longitude: from.longitude, latitude: from.latitude),
             to: RouteCoordinate(longitude: to.longitude, latitude: to.latitude),
             profile: profile, allowUnknown: allowUnknown, avoid: avoid, prior: priorEdgeIds,
-            arrival: arrivalEdgeId, arrivalContinuation: arrivalContinuation, backtrackFactor: backtrackFactor, seed: sessionSeed,
+            arrival: arrivalEdgeId, arrivalContinuation: arrivalContinuation,
+            owningRideSurfacePrefix: owningRideSurfacePrefix, backtrackFactor: backtrackFactor, seed: sessionSeed,
             cap: maxRouteMeters, metro: cleanMetroMultiplier, avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads, zoom: mapZoom, matchLimit: matchLimitMeters,
             startKind: startEndpointKind, endKind: endEndpointKind, initialFuelApproach: initialFuelApproach,
@@ -1453,6 +1468,7 @@ final class GraphPackStore {
         let computed = await RoutingWorkContext.detachedSearch {
             var router = OnDeviceRouter(pack: packRef)
             router.ridePreferences = preferences
+            router.owningRideSurfacePrefix = owningRideSurfacePrefix
             router.sessionSeed = seed
             router.mapZoom = zoom
             router.matchLimitMeters = matchLimit

@@ -232,8 +232,9 @@ final class ItineraryBuilder {
         var baselineFailure: (index: Int, message: String)?
         for index in 0..<requestedEndIndex {
             do {
-                baselineHistory[index] = discoveryHistory
                 let riderLeg = itinerary.legs[index]
+                discoveryHistory.beginRiderLeg(riderLeg.id)
+                baselineHistory[index] = discoveryHistory
                 let from = itinerary.waypoints[index].coordinate
                 let to = itinerary.waypoints[index + 1].coordinate
                 let straightMeters = straightLineMeters(from, to)
@@ -918,6 +919,7 @@ final class ItineraryBuilder {
 
         for index in startIndex..<endIndex {
             let riderLeg = itinerary.legs[index]
+            history.beginRiderLeg(riderLeg.id)
             let riderDestination = itinerary.waypoints[index + 1]
             // A scoped option edit inherits the old arrival-fuel ceiling at
             // its boundary. Meeting or improving that ceiling proves the
@@ -1235,6 +1237,7 @@ final class ItineraryBuilder {
                         priorEdgeIds: history.edgeIDs,
                         arrivalEdgeId: history.arrivalEdgeID,
                         arrivalContinuation: history.legalContinuation,
+                        owningRideSurfacePrefix: history.surfacePrefix,
                         backtrackFactor: 4,
                         excludedStationIds: Array(excludedStations),
                         windowMaxStops: requestedWindowStops,
@@ -1846,6 +1849,7 @@ final class ItineraryBuilder {
                 return dropped(itinerary, committed: committed, cancelled: Task.isCancelled)
             }
             let riderLeg = itinerary.legs[index]
+            history.beginRiderLeg(riderLeg.id)
             let destination = itinerary.waypoints[index + 1].coordinate
             let departureID = firstPrefix.last?.endsAtFuelStop?.stationID
                 ?? riderLeg.from.uuidString
@@ -1989,6 +1993,8 @@ final class ItineraryBuilder {
         onHop: @MainActor ([BuiltLeg]) -> Void
     ) async throws -> [BuiltLeg] {
         let riderLeg = itinerary.legs[index]
+        var history = history
+        history.beginRiderLeg(riderLeg.id)
         let from = resumeAfterStation?.coordinate ?? itinerary.waypoints[index].coordinate
         let to = itinerary.waypoints[index + 1].coordinate
         let riderDepartureID = riderLeg.from.uuidString
@@ -2165,6 +2171,7 @@ final class ItineraryBuilder {
                     priorEdgeIds: sublegHistory.edgeIDs,
                     arrivalEdgeId: sublegHistory.arrivalEdgeID,
                     arrivalContinuation: sublegHistory.legalContinuation,
+                    owningRideSurfacePrefix: sublegHistory.surfacePrefix,
                     backtrackFactor: 4,
                     excludedStationIds: Array(excluded),
                     // A stage-specific access policy must stop at the next
@@ -2740,6 +2747,7 @@ private func routeRequest(
         priorEdgeIds: history.edgeIDs,
         arrivalEdgeId: history.arrivalEdgeID,
         arrivalContinuation: history.legalContinuation,
+        owningRideSurfacePrefix: history.surfacePrefix,
         backtrackFactor: 4,
         sessionSeed: sessionSeed,
         maxPathMeters: maxPathMeters,
@@ -2770,6 +2778,7 @@ private struct EdgeHistory: Equatable {
     private var recentMeters = 0.0
     private(set) var arrivalEdgeID: String?
     private(set) var legalContinuation: NativeRoutingContinuation?
+    private(set) var surfacePrefix: OwningRideSurfacePrefix?
 
     var edgeIDs: [String] { recent.map(\.id) }
 
@@ -2780,10 +2789,18 @@ private struct EdgeHistory: Equatable {
     }
 
     init(legs: [BuiltLeg]) {
-        for leg in legs { append(leg.response, beginsRide: leg.endsAtFuelStop?.isInitialFillUp == true) }
+        for leg in legs {
+            beginRiderLeg(leg.riderLegID)
+            append(leg.response, beginsRide: leg.endsAtFuelStop?.isInitialFillUp == true)
+        }
+    }
+
+    mutating func beginRiderLeg(_ owner: UUID) {
+        surfacePrefix = surfacePrefix?.beginning(owner) ?? OwningRideSurfacePrefix(riderLegID: owner)
     }
 
     mutating func append(_ response: RouteResponse, beginsRide: Bool = false) {
+        surfacePrefix = surfacePrefix?.appending(response.localSurfaceContribution, initialApproach: beginsRide)
         // Legal arrival belongs to the actual last response, independently of
         // recreational history. Nil must not retain a token at an older place.
         legalContinuation = response.terminalContinuation

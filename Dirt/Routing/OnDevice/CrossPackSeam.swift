@@ -190,6 +190,15 @@ extension OnDeviceRouter.Result {
             )
         )
         combined.terminalContinuation = hops.last?.terminalContinuation
+        var contribution: NativeRideSurfaceContext? = .zero
+        for hop in hops {
+            guard let accumulated = contribution, let local = hop.localSurfaceContribution else {
+                contribution = nil
+                break
+            }
+            contribution = accumulated.adding(local)
+        }
+        combined.aggregatedSurfaceContribution = contribution.map(NativeRideSurfaceAggregation.available) ?? .unavailable
         combined.matchedStart = first.matchedStart
         combined.matchedEnd = hops.last?.matchedEnd
         return combined

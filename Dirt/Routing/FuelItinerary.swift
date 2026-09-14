@@ -120,25 +120,22 @@ nonisolated enum FuelItinerary {
         )
     }
 
-    /// Watching begins at 75% consumed. An early pump remains a sparse-corridor
-    /// fallback, and an explicit rider pump always remains selectable.
+    /// A proved earlier refill remains eligible. Range and required station
+    /// identity are gates; a preferred consumption band is only ranking advice.
     static func eligibleProfileFuelCandidates(
         _ candidates: [ProfileFuelCandidate],
         firstLegMaxMeters: Double,
         usableRangeMeters: Double,
         requiredFirstStationID: String?
     ) -> [ProfileFuelCandidate] {
-        let valid = candidates.filter {
-            $0.validForward
+        guard firstLegMaxMeters.isFinite, usableRangeMeters.isFinite,
+              firstLegMaxMeters >= 0, usableRangeMeters > 0 else { return [] }
+        let cap = min(firstLegMaxMeters, usableRangeMeters)
+        return candidates.filter {
+            $0.validForward && $0.routedMeters.isFinite && $0.routedMeters >= 0
+                && $0.routedMeters <= cap + 1
                 && (requiredFirstStationID == nil || $0.fuel.id == requiredFirstStationID)
         }
-        guard requiredFirstStationID == nil else { return valid }
-        let searchStart = fuelSearchStartMeters(
-            firstLegMaxMeters: firstLegMaxMeters,
-            usableRangeMeters: usableRangeMeters
-        )
-        let watched = valid.filter { $0.routedMeters >= searchStart }
-        return watched.isEmpty ? valid : watched
     }
 
     /// Remaining usable fuel is the hard first-leg ceiling.
@@ -150,18 +147,8 @@ nonisolated enum FuelItinerary {
         return min(firstLegMaxMeters, usableRangeMeters)
     }
 
-    /// Distance from the current departure at which fuel candidate search opens.
-    /// Reserve is already reflected in `usableRangeMeters`; partial-tank use is
-    /// reflected by a smaller `firstLegMaxMeters`.
-    static func fuelSearchStartMeters(
-        firstLegMaxMeters: Double,
-        usableRangeMeters: Double
-    ) -> Double {
-        guard usableRangeMeters > 0, firstLegMaxMeters >= 0 else { return 0 }
-        let used = max(0, usableRangeMeters - min(firstLegMaxMeters, usableRangeMeters))
-        return max(0, usableRangeMeters * HopSearchPolicy.fuelComfortLo - used)
-    }
-
+    /// A preference for ranking candidate distances, never an eligibility gate
+    /// or a requirement to continue searching after a useful leg is proved.
     static func fuelPreferredStartMeters(
         firstLegMaxMeters: Double,
         usableRangeMeters: Double

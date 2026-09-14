@@ -603,7 +603,7 @@ struct FuelItineraryTests {
         ))
     }
 
-    @Test func automaticFuelChoiceExcludesEarlyPumpWhenSearchWindowPumpIsValid() {
+    @Test func automaticFuelChoiceKeepsProvedEarlyPumpEligible() {
         let point = RouteCoordinate(longitude: -63, latitude: 45)
         let earlyFuel = poi("early", point)
         let windowFuel = poi("window", point)
@@ -633,7 +633,7 @@ struct FuelItineraryTests {
             usableRangeMeters: 247_000,
             requiredFirstStationID: nil
         )
-        #expect(automatic.map(\.fuel.id) == [windowFuel.id])
+        #expect(automatic.map(\.fuel.id) == [earlyFuel.id, windowFuel.id])
 
         let sparseFallback = FuelItinerary.eligibleProfileFuelCandidates(
             [early],
@@ -650,6 +650,12 @@ struct FuelItineraryTests {
             requiredFirstStationID: earlyFuel.id
         )
         #expect(explicit.map(\.fuel.id) == [earlyFuel.id])
+        let beyond = candidate(poi("beyond", point), meters: 247_002)
+        let malformed = candidate(poi("malformed", point), meters: .nan)
+        #expect(FuelItinerary.eligibleProfileFuelCandidates(
+            [early, beyond, malformed], firstLegMaxMeters: 247_000,
+            usableRangeMeters: 247_000, requiredFirstStationID: nil).map(\.fuel.id) == [earlyFuel.id])
+
     }
 
 
@@ -676,15 +682,7 @@ struct FuelItineraryTests {
         ) == 1)
     }
 
-    @Test func reserveAdjustedSearchBeginsAfterHalfTheUsableRange() {
-        #expect(FuelItinerary.fuelSearchStartMeters(
-            firstLegMaxMeters: 140_000,
-            usableRangeMeters: 140_000
-        ) == 105_000)
-        #expect(FuelItinerary.fuelSearchStartMeters(
-            firstLegMaxMeters: 100_000,
-            usableRangeMeters: 140_000
-        ) == 65_000)
+    @Test func reserveAdjustedDistancePreferenceDoesNotDefineEligibility() {
         #expect(FuelItinerary.fuelPreferredStartMeters(
             firstLegMaxMeters: 140_000,
             usableRangeMeters: 140_000

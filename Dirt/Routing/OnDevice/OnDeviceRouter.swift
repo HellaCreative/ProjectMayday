@@ -56,6 +56,8 @@ nonisolated enum TapRadius {
 /// Opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` so search can run on
 /// `Task.detached` without freezing toast paint / map gestures.
 nonisolated struct OnDeviceRouter {
+    /// Carrier only: no ranking, bucket or termination changes in this stage.
+    var owningRideSurfacePrefix: OwningRideSurfacePrefix? = nil
     struct Leg: Sendable {
         var coordinates: [CLLocationCoordinate2D]
         var distanceMeters: Double
@@ -107,6 +109,8 @@ nonisolated struct OnDeviceRouter {
         var coordinates: [CLLocationCoordinate2D]
         var distanceMeters: Double
         var terminalContinuation: NativeRoutingContinuation? = nil
+        /// Preserves per-hop leaf availability when concatenating mixed pack formats.
+        var aggregatedSurfaceContribution: NativeRideSurfaceAggregation? = nil
         var edgeIds: [String]
         var legs: [Leg]
         /// Coarse adventure Dirt% — used for path selection / ranking (unchanged E1).
