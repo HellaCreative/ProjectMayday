@@ -29,4 +29,21 @@ struct V4TurnBudgetDiagnosticTests {
             #expect(report.counters["turnPreparationTransitions"] == (reason == "transitions" ? 1 : 0))
         }
     }
+    @Test func repeatedPublicationCountsOnlyNewWorkAndNewFailures() throws {
+        let measurement = RoutingMeasurement(metadata: ["workload":"turn-budget-delta"])
+        try RoutingWorkContext.$measurement.withValue(measurement) {
+            var limits = V4TurnPreparationLimits(); limits.maximumTransitions = 2
+            let budget = try V4TurnPreparationBudget(limits: limits)
+            try budget.state(progress: 0); try budget.transition()
+            budget.publishDiagnostics(); budget.publishDiagnostics()
+            try budget.transition()
+            #expect(throws: V4TurnPreparationError.resourceLimit) { try budget.transition() }
+            budget.publishDiagnostics(); budget.publishDiagnostics()
+        }
+        let report = measurement.finish(outcome: "expected-limit")
+        #expect(report.counters["turnPreparationStates"] == 1)
+        #expect(report.counters["turnPreparationTransitions"] == 2)
+        #expect(report.counters["turnPreparationTransitionLimitHits"] == 1)
+    }
+
 }

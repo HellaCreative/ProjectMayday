@@ -122,6 +122,9 @@ nonisolated final class ConnectedPackStageView {
         return !(portals[.init(pack: cursor.pack, node: node)] ?? []).isEmpty
     }
 
+    /// Diagnostic teardown does not read source files or mask the route failure.
+    func publishDiagnostics() { for source in topology { source.publishDiagnostics() } }
+
     func validateSources() throws {
         for source in topology { try RoutingWorkContext.check(); try source.validate() }
     }

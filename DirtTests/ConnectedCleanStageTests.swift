@@ -139,4 +139,54 @@ struct ConnectedCleanStageTests {
         }
     }
 
+    @Test func displacedMiddleJunctionCannotPassWithCorrectOverallEndpoints() throws {
+        let (view,pack,start,_,end) = try fixture()
+        var context = HopSearchContext.forProfile(.cleanest,seed: 17);context.pavedOnly = true
+        func calculate() throws -> ConnectedCleanStage.Result {
+            try ConnectedCleanStage.calculate(view: view,origin: .init(pack: 0,node: start,matchedEdge: 0),
+                destination: .init(pack: 1,node: end,matchedEdge: 1),profile: .cleanest,maxMeters: 207_000,context: context)
+        }
+        let original = try calculate()
+        #expect(original.roads.map { $0.road.edge } == [0,3,4,1])
+        let junction = try #require(original.roads.first).to
+        try #require(junction != start && junction != end)
+        let x = pack.nodeCoords[junction*2],y = pack.nodeCoords[junction*2+1]
+        let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/native-preferences-variety.geometry.v1.bin")
+        var geometry = try Data(contentsOf: base)
+        func u32(_ at: Int) -> Int { geometry.withUnsafeBytes { Int(UInt32(littleEndian: $0.loadUnaligned(fromByteOffset: at,as: UInt32.self))) } }
+        func scalar(_ at: Int) -> Float { geometry.withUnsafeBytes { Float(bitPattern: UInt32(littleEndian: $0.loadUnaligned(fromByteOffset: at,as: UInt32.self))) } }
+        let count = u32(12),coordinateStart = 16+(u32(8)+1)*4
+        var replaced = 0
+        // Move every occurrence of this interior junction together: adjoining
+        // shapes still meet exactly, and the overall requested endpoints remain.
+        for i in stride(from: 0,to: count,by: 2) {
+            let at = coordinateStart+i*4
+            if scalar(at) == x && scalar(at+4) == y {
+                var bits = (x+0.001).bitPattern.littleEndian
+                Swift.withUnsafeBytes(of: &bits) { geometry.replaceSubrange(at..<at+4,with: $0) }
+                replaced += 1
+            }
+        }
+        try #require(replaced >= 2)
+        let changed = try GeometryV1Pack(data: geometry)
+        for index in 0..<view.sourceCount { let source = try view.sourcePack(index);source.geometry = changed }
+        // Confirm this is the formerly missed shape: its two first selected
+        // roads still join, while the global route's endpoints did not move.
+        let first = original.roads[0],second = original.roads[1],last = try #require(original.roads.last)
+        let firstShape = try OnDeviceRouter(pack: view.sourcePack(first.road.pack)).connectedRoadCoordinates(edge: first.road.edge,fromNode: first.from)
+        let secondShape = try OnDeviceRouter(pack: view.sourcePack(second.road.pack)).connectedRoadCoordinates(edge: second.road.edge,fromNode: second.from)
+        let lastShape = try OnDeviceRouter(pack: view.sourcePack(last.road.pack)).connectedRoadCoordinates(edge: last.road.edge,fromNode: last.from)
+        #expect(firstShape.last?.longitude == secondShape.first?.longitude)
+        #expect(firstShape.last?.latitude == secondShape.first?.latitude)
+        #expect(firstShape.first?.longitude == original.coordinates.first?.longitude)
+        #expect(firstShape.first?.latitude == original.coordinates.first?.latitude)
+        #expect(lastShape.last?.longitude == original.coordinates.last?.longitude)
+        #expect(lastShape.last?.latitude == original.coordinates.last?.latitude)
+        do { _ = try calculate();Issue.record("Displaced interior junction was accepted") }
+        catch ConnectedCleanStage.Failure.incomplete(let reason) {
+            #expect(reason == "Road geometry does not reach recorded edge endpoints")
+        }
+    }
+
 }

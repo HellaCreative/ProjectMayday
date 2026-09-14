@@ -39,6 +39,7 @@ nonisolated final class PagedV4Core: @unchecked Sendable {
     private struct Layout {
         let nodes: Int, edges: Int, arcs: Int
         let legal: LegalLayout
+        let derivedIDs: Bool, idOffsets: Int, idBlob: Range<Int>
         let offsets: Int, targets: Int, arcEdges: Int, attrs: Int, meters: Int
         let coords: Int, from: Int, to: Int, osmNodes: Int, osmWays: Int, access: Int
         init(_ raw: UnsafeRawBufferPointer, fileBytes: Int) throws {
@@ -55,6 +56,11 @@ nonisolated final class PagedV4Core: @unchecked Sendable {
             from = Int(UInt32.routingDecode(raw,at: 64)); to = Int(UInt32.routingDecode(raw,at: 68))
             osmNodes = Int(UInt32.routingDecode(raw,at: 104)); osmWays = Int(UInt32.routingDecode(raw,at: 108))
             access = Int(UInt32.routingDecode(raw,at: 112))
+            derivedIDs = UInt16.routingDecode(raw,at: 6) & 16 != 0
+            idOffsets = Int(UInt32.routingDecode(raw,at: 48))
+            let blobStart = Int(UInt32.routingDecode(raw,at: 52)),blobEnd = Int(UInt32.routingDecode(raw,at: 56))
+            guard derivedIDs || (blobStart >= 140 && blobEnd >= blobStart && blobEnd <= fileBytes) else { throw Failure.invalidLayout }
+            idBlob = derivedIDs ? 0..<0 : blobStart..<blobEnd
             var ranges: [Range<Int>] = [] // Exactly eleven descriptors, never per-road.
             for (at,count,width) in [(offsets,nodes+1,4),(targets,arcs,4),(arcEdges,arcs,4),
                 (attrs,edges,2),(meters,edges,4),(coords,nodes,8),(from,edges,4),(to,edges,4),
@@ -63,6 +69,14 @@ nonisolated final class PagedV4Core: @unchecked Sendable {
                 let range = at..<(at+count*width)
                 guard !ranges.contains(where: { $0.overlaps(range) }) else { throw Failure.invalidLayout }
                 ranges.append(range)
+            }
+            if !derivedIDs {
+                guard idOffsets >= 140,idOffsets <= fileBytes,edges+1 <= (fileBytes-idOffsets)/4 else { throw Failure.invalidLayout }
+                let offsetsRange = idOffsets..<(idOffsets+(edges+1)*4)
+                for range in [offsetsRange,idBlob] {
+                    guard !ranges.contains(where: { $0.overlaps(range) }) else { throw Failure.invalidLayout }
+                    ranges.append(range)
+                }
             }
             legal = try LegalLayout(raw,fileBytes: fileBytes,coreRanges: ranges)
         }
@@ -202,6 +216,34 @@ nonisolated final class PagedV4Core: @unchecked Sendable {
             guard forward <= 5, reverse <= 5 else { throw Failure.invalidLegalMetadata }
             owner.count(edges: 1)
             return .init(from: a,to: b,meters: meters,attributes: attr,osmWayID: way,forwardAccess: forward,reverseAccess: reverse)
+        }
+        /// Reads one published local identity. Never decodes the whole ID blob
+        /// and never converts malformed or unavailable identity into an empty ID.
+        func edgeID(_ edge: Int,maximumBytes: Int = 65_536) throws -> String {
+            let owner = try get(),l = owner.layout
+            guard (0..<l.edges).contains(edge) else { throw Failure.invalidRow }
+            guard maximumBytes > 0,maximumBytes <= 65_536 else { throw Failure.invalidLimits }
+            try owner.pages.validate(cancelled: cancelled)
+            let result: String
+            if l.derivedIDs {
+                let row = try self.edge(edge)
+                guard (0..<l.nodes).contains(row.from),(0..<l.nodes).contains(row.to) else { throw Failure.invalidTopology }
+                result = "w\(row.osmWayID):\(row.from):\(row.to)"
+                guard result.utf8.count <= maximumBytes else { throw Failure.metadataLimit }
+            } else {
+                let a = Int(try owner.scalar(Int32.self,at: l.idOffsets+edge*4,cancelled: cancelled))
+                let b = Int(try owner.scalar(Int32.self,at: l.idOffsets+(edge+1)*4,cancelled: cancelled))
+                guard a >= 0,b >= a,b <= l.idBlob.count else { throw Failure.invalidRow }
+                guard b-a <= maximumBytes else { throw Failure.metadataLimit }
+                if a == b { result = "" }
+                else {
+                    let lease = try owner.pages.read(at: l.idBlob.lowerBound+a,count: b-a,cancelled: cancelled)
+                    guard let text = lease.withUnsafeBytes({ String(bytes: $0,encoding: .utf8) }) else { throw Failure.invalidRow }
+                    result = text
+                }
+            }
+            try owner.pages.validate(cancelled: cancelled)
+            return result
         }
         func outgoing(_ node: Int, _ visit: (Arc) throws -> Void) throws {
             let owner = try get(), l = owner.layout

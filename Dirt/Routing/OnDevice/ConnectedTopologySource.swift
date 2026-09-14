@@ -4,6 +4,7 @@ import Foundation
 /// Paged implementations must remain inside their creating query scopes.
 nonisolated protocol ConnectedTopologySource: ExactSeamTopologySource {
     var arrayPack: GraphV2Pack? { get }
+    func publishDiagnostics()
     func graphNode(of state: Int) throws -> Int
     func startState(node: Int) throws -> Int
     func transition(state: Int,edge: Int,to: Int) throws -> Int
@@ -30,6 +31,7 @@ nonisolated struct ArrayConnectedTopology: ConnectedTopologySource {
         turns = pack.makeV4TurnStateSpace(startNode: pack.nodeCount,endNode: pack.nodeCount+1)
         try validate()
     }
+    func publishDiagnostics() {} // Eager preparation already published at creation.
     var arrayPack: GraphV2Pack? { pack }
     var nodeCount: Int { seam.nodeCount }
     var edgeCount: Int { seam.edgeCount }
@@ -82,6 +84,7 @@ nonisolated struct PagedConnectedTopology: ConnectedTopologySource {
         turns = try PagedV4ContinuationSpace.prepare(core: core,query: query,legal: legal,index: index)
         try seam.validate()
     }
+    func publishDiagnostics() { turns.publishDiagnostics() }
     var arrayPack: GraphV2Pack? { nil }
     var nodeCount: Int { core.nodeCount }
     var edgeCount: Int { core.edgeCount }

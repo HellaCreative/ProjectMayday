@@ -27,18 +27,22 @@ nonisolated final class V4TurnPreparationBudget {
     let limits: V4TurnPreparationLimits
     private(set) var reservedBytes: Int = 0
     private(set) var states = 0, transitions = 0
-    private var byteLimitHit = false, stateLimitHit = false, transitionLimitHit = false
+    private var byteLimitHits = 0, stateLimitHits = 0, transitionLimitHits = 0
+    private var publishedStates = 0, publishedTransitions = 0
+    private var publishedByteHits = 0, publishedStateHits = 0, publishedTransitionHits = 0
     func publishDiagnostics() {
         guard let measurement = RoutingWorkContext.measurement else { return }
-        measurement.increment(.turnPreparationStates, by: UInt64(states))
-        measurement.increment(.turnPreparationTransitions, by: UInt64(transitions))
+        measurement.increment(.turnPreparationStates, by: UInt64(states-publishedStates))
+        measurement.increment(.turnPreparationTransitions, by: UInt64(transitions-publishedTransitions))
         measurement.set(.turnPreparationReservedBytes, to: UInt64(reservedBytes))
         measurement.set(.turnPreparationByteLimit, to: UInt64(limits.maximumReservedBytes))
         measurement.set(.turnPreparationStateLimit, to: UInt64(limits.maximumStates))
         measurement.set(.turnPreparationTransitionLimit, to: UInt64(limits.maximumTransitions))
-        if byteLimitHit { measurement.increment(.turnPreparationByteLimitHits) }
-        if stateLimitHit { measurement.increment(.turnPreparationStateLimitHits) }
-        if transitionLimitHit { measurement.increment(.turnPreparationTransitionLimitHits) }
+        measurement.increment(.turnPreparationByteLimitHits, by: UInt64(byteLimitHits-publishedByteHits))
+        measurement.increment(.turnPreparationStateLimitHits, by: UInt64(stateLimitHits-publishedStateHits))
+        measurement.increment(.turnPreparationTransitionLimitHits, by: UInt64(transitionLimitHits-publishedTransitionHits))
+        publishedStates = states; publishedTransitions = transitions
+        publishedByteHits = byteLimitHits; publishedStateHits = stateLimitHits; publishedTransitionHits = transitionLimitHits
     }
     init(limits: V4TurnPreparationLimits) throws {
         guard limits.maximumConditionalMetadataBytes >= 0, limits.maximumConditionalMetadataBytes <= 1_048_576,
@@ -51,16 +55,16 @@ nonisolated final class V4TurnPreparationBudget {
     }
     func reserve(_ bytes: Int) throws {
         try RoutingWorkContext.check()
-        guard bytes >= 0, bytes <= limits.maximumReservedBytes-reservedBytes else { byteLimitHit = true; throw V4TurnPreparationError.resourceLimit }
+        guard bytes >= 0, bytes <= limits.maximumReservedBytes-reservedBytes else { byteLimitHits += 1; throw V4TurnPreparationError.resourceLimit }
         reservedBytes += bytes
     }
     func state(progress: Int) throws {
-        guard states < limits.maximumStates, progress <= limits.maximumViaMembers else { stateLimitHit = true; throw V4TurnPreparationError.resourceLimit }
+        guard states < limits.maximumStates, progress <= limits.maximumViaMembers else { stateLimitHits += 1; throw V4TurnPreparationError.resourceLimit }
         // Record/key/queue/dictionary slots and duplicated active-array capacity.
         try reserve(512 + progress * 64); states += 1
     }
     func transition() throws {
-        guard transitions < limits.maximumTransitions else { transitionLimitHit = true; throw V4TurnPreparationError.resourceLimit }
+        guard transitions < limits.maximumTransitions else { transitionLimitHits += 1; throw V4TurnPreparationError.resourceLimit }
         try reserve(256); transitions += 1
     }
 }
