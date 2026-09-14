@@ -811,12 +811,15 @@ nonisolated struct OnDeviceRouter {
         ctx.variety = usesVariety(seed: sessionSeed, profile: profile)
         ctx.corridorMeters = HopSearchPolicy.corridorMeters(for: profile, wander: activeWander)
 
-        // JS: on device there is no HTTP request deadline. The adaptive
-        // budget (profileSearchBudgetMs) scales with profile, straight-line
-        // distance, and graph node count — identical to the JS fallback when
-        // no caller deadline exists. Individual candidate caps (7 s dirt
-        // comparison, 18 s pass-2) do the real limiting; the outer deadline
-        // is a safety net that prevents runaway searches.
+        // JS live routing receives a ~90 s HTTP timeout as its outer
+        // deadline. The adaptive budget (profileSearchBudgetMs) is only the
+        // JS fallback when no caller deadline exists — it is too tight for
+        // full corridor orchestration which runs multiple candidates
+        // (dirt: 5 × 7 s, balanced: 6 × 18 s).  On device there is no HTTP
+        // timeout, so we supply a generous outer ceiling that gives every
+        // corridor width its full per-candidate time cap. Individual caps
+        // (7 s dirt comparison, 18 s pass-2) do the real limiting; this
+        // outer deadline is a safety net that prevents runaway searches.
         let straightLineMeters = meters(from, to)
         let nodeCount = pack.nodeCount
         let adaptiveBudgetSeconds = HopSearchPolicy.profileSearchBudgetSeconds(
@@ -824,7 +827,7 @@ nonisolated struct OnDeviceRouter {
             straightLineMeters: straightLineMeters,
             nodeCount: nodeCount
         )
-        let outerDeadline = CFAbsoluteTimeGetCurrent() + adaptiveBudgetSeconds
+        let outerDeadline = CFAbsoluteTimeGetCurrent() + 90
 
         func remainingBudgetSeconds() -> Double {
             max(0.25, outerDeadline - CFAbsoluteTimeGetCurrent())
@@ -966,7 +969,7 @@ nonisolated struct OnDeviceRouter {
             let candidateSummary = candidates.map {
                 "\($0.objective)@\(Int($0.width / 1000))km:\($0.route.dirtPercent)%"
             }.joined(separator: ",")
-            let elapsed = Int((CFAbsoluteTimeGetCurrent() - (outerDeadline - adaptiveBudgetSeconds)) * 1000)
+            let elapsed = Int((CFAbsoluteTimeGetCurrent() - (outerDeadline - 90)) * 1000)
             let note = "objective=earned-dirt-detour corridor=\(Int(selected.width))m elapsed=\(elapsed)ms candidates=[\(candidateSummary)]"
             route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
             return .success(route)
