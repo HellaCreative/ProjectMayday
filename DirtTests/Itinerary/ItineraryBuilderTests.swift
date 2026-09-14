@@ -148,6 +148,45 @@ struct ItineraryBuilderTests {
         })
     }
 
+    @Test func downstreamGapPreservesClosestInitialApproachAndItsArrival() async throws {
+        let start = point(0), initial = point(0.01), via = point(1), end = point(2)
+        let source = FakeRoutingSource(name: "pack")
+        source.includeEdgeSegments = true
+        source.fuelStops = [fuelStop("closest-initial",at: initial)]
+        let arrival = transportToken(1)
+        source.terminalContinuations[key(start,initial)] = arrival
+        source.distances[key(start,initial)] = 500
+        source.distances[key(initial,via)] = 7_000
+        source.distances[key(via,end)] = 300_000
+        source.firstReachableStationMeters[key(via,end)] = 8_000
+        source.gapWhenFirstLegMaxBelow[key(via,end)] = 180_001
+        // After a downstream gap, the forced retry at the preserved initial
+        // pump also cannot prove fuel. Its legal road remainder stays visible.
+        source.fuelChainErrorAfterPlanCount = 3
+        source.fuelChainError = RoutingError.fuelUnknown("Continuation remains unverified")
+        let result = await build([start,via,end],source: source,usable: 180_000)
+        let first = try #require(result.legs.first)
+        #expect(first.fromCoordinate == start && first.toCoordinate == initial)
+        #expect(first.endsAtFuelStop?.stationID == "closest-initial")
+        #expect(first.endsAtFuelStop?.isInitialFillUp == true)
+        #expect(first.response.terminalContinuation == arrival)
+        #expect(first.fuelUsedOnArrivalMeters == 0)
+        #expect(result.legs.last?.toCoordinate == end)
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["closest-initial"])
+        let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
+        #expect(plans.filter { $0.fuel.initialFillUp == true }.count == 1)
+        #expect(plans.filter { $0.fuel.initialFillUp == true }.allSatisfy {
+            !($0.fuel.excludedStationIds ?? []).contains("closest-initial")
+        })
+        let retry = try #require(plans.last)
+        #expect(retry.locations.first?.longitude == initial.longitude)
+        #expect(retry.locations.first?.latitude == initial.latitude)
+        #expect(retry.options?.arrivalContinuation == arrival)
+        #expect(result.riderLegStatus.values.contains {
+            if case .fuelUnknown = $0 { return true }; return false
+        })
+    }
+
     @Test func sameLegDeadEndPumpRewindsToAlternativeAndPreservesInitialFill() async throws {
         let start = point(0), initial = point(0.01), bad = point(0.5), good = point(1), end = point(2)
         let source = FakeRoutingSource(name: "pack")

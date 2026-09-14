@@ -86,8 +86,8 @@ struct OnDevicePackBenchmarkTests {
         let pack = try GraphV2Pack(data: Data(contentsOf: dir.appendingPathComponent("graph.v4.bin")))
         pack.geometry = try GeometryV1Pack(data: Data(contentsOf: dir.appendingPathComponent("geometry.v1.bin")))
         try pack.applyCrossPackSeams(data: Data(contentsOf: dir.appendingPathComponent("cross-pack-seams.v2.json")))
-        let leafCount = (0..<pack.undirectedEdgeCount).reduce(into: 0) { count, edge in
-            if pack.surfaceLeaf(edge) != nil { count += 1 }
+        let leafCount = try (0..<pack.undirectedEdgeCount).reduce(into: 0) { count, edge in
+            if try pack.surfaceLeaf(edge) != nil { count += 1 }
         }
         print("[accepted-replay] pack region=\(region) version=\(pack.version) leaves=\(pack.hasLeaves) surfaces=\(pack.surfaceLeafNames.count) mappedFamilies=\(pack.surfaceFamilyMap.count) taggedEdges=\(leafCount) edges=\(pack.undirectedEdgeCount)")
         let ids = (0..<pack.undirectedEdgeCount).map { pack.edgeId($0) }

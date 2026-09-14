@@ -371,12 +371,40 @@ struct FuelItineraryTests {
         #expect(next.map(\.id) == ["osm:near"])
     }
 
-    @Test func rankedLeavesTheFinalFiveKilometresForTheDestination() {
+    @Test func carriedRangeKeepsNecessaryShortForwardStages() {
+        let start = RouteCoordinate(longitude: -63, latitude: 45)
+        let end = RouteCoordinate(longitude: -62, latitude: 45)
+        for remaining in [500.0, 7_999.0, 8_000.0] {
+            let next = poi("next", start)
+            let ranked = FuelItinerary.rankedProgressFuel(fuels: [next], from: start, to: end,
+                reachableMeters: [next.id: remaining], tankMeters: 11_000,
+                usableRangeMeters: 18_000, sessionSeed: 1,
+                roadProgress: .init(originRemainingMeters: 100_000,
+                    stationRemainingMeters: [next.id: 100_000 - remaining]))
+            #expect(ranked.map(\.id) == [next.id])
+        }
+    }
+
+    @Test func nearbyEligibilityDoesNotPreferTinyStopsOrAcceptNoProgress() {
+        let start = RouteCoordinate(longitude: -63, latitude: 45)
+        let end = RouteCoordinate(longitude: -62, latitude: 45)
+        let rows = ["near", "forward", "same", "back", "outside"].map { poi($0, start) }
+        let ranked = FuelItinerary.rankedProgressFuel(fuels: rows, from: start, to: end,
+            reachableMeters: ["osm:near": 500, "osm:forward": 16_000,
+                "osm:same": 100, "osm:back": 500, "osm:outside": 18_001],
+            tankMeters: 18_000, sessionSeed: 1,
+            roadProgress: .init(originRemainingMeters: 100_000,
+                stationRemainingMeters: ["osm:near": 99_500, "osm:forward": 84_000,
+                    "osm:same": 100_000, "osm:back": 100_500, "osm:outside": 81_999]))
+        #expect(ranked.map(\.id) == ["osm:forward", "osm:near"])
+    }
+
+    @Test func rankedRetainsReachableFuelNearTheDestination() {
         let start = RouteCoordinate(longitude: -63.20, latitude: 45)
         let end = RouteCoordinate(longitude: -63.00, latitude: 45)
-        let tooClose = GeoMath.interpolate(start, end, fraction: 0.80)
+        let nearDestination = GeoMath.interpolate(start, end, fraction: 0.80)
         let ranked = FuelItinerary.rankedProgressFuel(
-            fuels: [poi("city-hop", tooClose)],
+            fuels: [poi("city-hop", nearDestination)],
             from: start,
             to: end,
             reachableMeters: ["osm:city-hop": 20_000],
@@ -384,7 +412,7 @@ struct FuelItineraryTests {
             sessionSeed: 1
         )
 
-        #expect(ranked.isEmpty)
+        #expect(ranked.map(\.id) == ["osm:city-hop"])
     }
 
     @Test func rankedKeepsShortRangeFallbackAndOffAxisPump() {

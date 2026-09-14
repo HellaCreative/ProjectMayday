@@ -18,12 +18,12 @@ nonisolated final class DirectedStepMemo {
         rows.initialize(repeating: .init(key: 0,cost: 0),count: count)
     }
     deinit { rows.deinitialize(count: count);rows.deallocate() }
-    func value(arc: Int,make: () -> Double) -> Double {
-        guard arc >= 0,arc < Int(UInt32.max) else { return make() }
+    func value(arc: Int,make: () throws -> Double) rethrows -> Double {
+        guard arc >= 0,arc < Int(UInt32.max) else { return try make() }
         let key=UInt32(arc)+1,slot=arc&(count-1)
         if rows[slot].key == key { hits += 1;return rows[slot].cost }
         misses += 1
-        let cost=make()
+        let cost=try make()
         if rows[slot].key != 0 { evictions += 1 }
         rows[slot] = .init(key: key,cost: cost)
         return cost

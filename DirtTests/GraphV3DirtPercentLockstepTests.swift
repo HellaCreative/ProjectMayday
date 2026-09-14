@@ -49,8 +49,8 @@ struct GraphV3DirtPercentLockstepTests {
                 Issue.record("missing edgeIndexes for \(id)")
                 continue
             }
-            let rows: [(meters: Double, surfaceLeaf: String?)] = indexes.map { ei in
-                (Double(pack.edgeMeters[ei]), pack.surfaceLeaf(ei))
+            let rows: [(meters: Double, surfaceLeaf: String?)] = try indexes.map { ei in
+                (Double(pack.edgeMeters[ei]), try pack.surfaceLeaf(ei))
             }
             let got = SurfaceFamilyStats.honestPercents(
                 rows: rows,
@@ -83,7 +83,7 @@ struct GraphV3DirtPercentLockstepTests {
         let pack = try GraphV2Pack(data: Data(contentsOf: v2))
         #expect(pack.version == 2)
         #expect(!pack.hasLeaves)
-        #expect(pack.surfaceLeaf(0) == nil)
+        #expect(try pack.surfaceLeaf(0) == nil)
         let rows: [(meters: Double, surfaceLeaf: String?)] = [(1000, nil)]
         // Without leaves, callers must use coarse adventure stats — honest helper
         // treats nil leaf as Unknown, not known dirt. Confirm family map still loads empty→default.

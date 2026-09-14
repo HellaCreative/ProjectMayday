@@ -122,7 +122,7 @@ struct GraphV3CleanPathLockstepTests {
 
             // No residential/living_street through-hops except endpoints.
             for (idx, ei) in (route["edgeIndexes"] as? [Int] ?? []).enumerated() {
-                let tier = pack.roadTier(ei)
+                let tier = try pack.roadTier(ei)
                 if tier == .destination {
                     let isEnd = idx == 0 || idx == gotIds.count - 1 || ei == startEi || ei == endEi
                     #expect(isEnd, "destination through-route at \(idx) route=\(id)")

@@ -595,6 +595,7 @@ final class PackRoutingSource: RoutingSource {
         var carriedArrival = req.options?.arrivalEdgeId
         var carriedContinuation = req.options?.arrivalContinuation
         var roadProgress: FuelItinerary.RoadProgress?
+        var roadProgressSourceIdentity: String?
         let exitReuse = FuelExitReuseScope.current ?? FuelExitReuseHolder()
         let fuelBegan = ProcessInfo.processInfo.systemUptime
         func trace(_ phase: String) {
@@ -808,9 +809,18 @@ final class PackRoutingSource: RoutingSource {
                 reachable[$0.id] != nil && roadProgress?.stationRemainingMeters[$0.id] == nil
             }
             if roadProgress == nil || !newlyReachable.isEmpty {
+                let sourceIdentity = packs.routingCacheIdentity()
+                if let priorIdentity = roadProgressSourceIdentity, priorIdentity != sourceIdentity {
+                    throw FuelOnwardGuidance.Failure.sourceChanged
+                }
                 if let fresh = try await packs.fuelRoadProgress(from: current.locationCoordinate,
                     to: end.locationCoordinate, pumps: newlyReachable, profile: req.profile,
                     allowUnknown: req.accessPolicy.motorizedUnknown) {
+                    try RoutingWorkContext.check()
+                    guard packs.routingCacheIdentity() == sourceIdentity else {
+                        throw FuelOnwardGuidance.Failure.sourceChanged
+                    }
+                    roadProgressSourceIdentity = sourceIdentity
                     var combined = roadProgress?.stationRemainingMeters ?? [:]
                     combined.merge(fresh.stationRemainingMeters,uniquingKeysWith: min)
                     if let departure = stops.last { combined[departure.id] = fresh.originRemainingMeters }
@@ -1016,6 +1026,37 @@ final class PackRoutingSource: RoutingSource {
                         allowUnknown: req.accessPolicy.motorizedUnknown
                     )
                 }
+                // The first reverse field deliberately covered only pumps
+                // within the current tank. A refill can expose a new frontier.
+                // Extend that frontier before deciding it has no onward pump.
+                var onwardGuidance = roadProgress ?? guidance
+                if !onward.isEmpty {
+                    do {
+                        guard let sourceIdentity = roadProgressSourceIdentity else {
+                            throw FuelOnwardGuidance.Failure.unavailable
+                        }
+                        onwardGuidance = try await FuelOnwardGuidance.extending(onwardGuidance,
+                            candidateID: candidate.id, reachable: onward, stations: stations,
+                            sourceIdentity: sourceIdentity, currentIdentity: { packs.routingCacheIdentity() },
+                            check: { try RoutingWorkContext.check() },
+                            load: { missing in
+                                try await packs.fuelRoadProgress(from: candidateCoordinate,
+                                    to: end.locationCoordinate, pumps: missing, profile: req.profile,
+                                    allowUnknown: req.accessPolicy.motorizedUnknown)
+                            })
+                        roadProgress = onwardGuidance
+                    } catch FuelOnwardGuidance.Failure.sourceChanged {
+                        // No following candidate may consume the old source's
+                        // guidance, even when its direct destination leg fits.
+                        throw FuelOnwardGuidance.Failure.sourceChanged
+                    } catch {
+                        try Task.checkCancellation()
+                        try RoutingWorkContext.check()
+                        incompleteSearchReason = "onward_road_progress_unavailable"
+                        trace("onward-guidance-incomplete-\(candidate.id)")
+                        continue
+                    }
+                }
                 var onwardExclusions = visited
                 onwardExclusions.insert(candidate.id)
                 let hasOnwardPump = !destinationMayFit && !FuelItinerary.rankedProgressFuel(
@@ -1031,8 +1072,8 @@ final class PackRoutingSource: RoutingSource {
                     sessionSeed: req.options?.sessionSeed ?? 0,
                     excluding: onwardExclusions,
                     roadProgress: FuelItinerary.RoadProgress(
-                        originRemainingMeters: guidance.stationRemainingMeters[candidate.id] ?? .infinity,
-                        stationRemainingMeters: guidance.stationRemainingMeters)
+                        originRemainingMeters: onwardGuidance.stationRemainingMeters[candidate.id] ?? .infinity,
+                        stationRemainingMeters: onwardGuidance.stationRemainingMeters)
                 ).isEmpty
                 // A forecourt connector may repeat briefly; a meaningful
                 // down-and-back fuel stem is never a valid chain anchor.

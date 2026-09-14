@@ -49,7 +49,7 @@ struct GraphV3DecodeLockstepTests {
         #expect(atvKm > 350.0 && atvKm < 360.0)
 
         var atvMeters: UInt64 = 0
-        for ei in 0..<pack.undirectedEdgeCount where pack.atvDesignated(ei) {
+        for ei in 0..<pack.undirectedEdgeCount where try pack.atvDesignated(ei) {
             atvMeters += UInt64(pack.edgeMeters[ei])
         }
         let swiftAtvKm = Double(atvMeters) / 1000.0
@@ -78,27 +78,27 @@ struct GraphV3DecodeLockstepTests {
             #expect(ei >= 0 && ei < pack.undirectedEdgeCount)
 
             let expSurface = sample["surfaceLeaf"] as? String
-            let gotSurface = pack.surfaceLeaf(ei)
+            let gotSurface = try pack.surfaceLeaf(ei)
             #expect(gotSurface == expSurface, "surfaceLeaf ei=\(ei)")
 
             let expRoad = sample["roadClassLeaf"] as? String ?? "unknown"
-            let gotRoad = pack.roadClassLeaf(ei) ?? "unknown"
+            let gotRoad = try pack.roadClassLeaf(ei) ?? "unknown"
             #expect(gotRoad == expRoad, "roadClassLeaf ei=\(ei)")
 
             let expTt = sample["tracktype"] as? Int ?? 0
-            #expect(pack.tracktype(ei) == expTt, "tracktype ei=\(ei)")
+            #expect(try pack.tracktype(ei) == expTt, "tracktype ei=\(ei)")
 
             let expSm = sample["smoothness"] as? Int ?? 0
-            #expect(pack.smoothness(ei) == expSm, "smoothness ei=\(ei)")
+            #expect(try pack.smoothness(ei) == expSm, "smoothness ei=\(ei)")
 
             let expLayer = sample["layer"] as? Int ?? 0
-            #expect(pack.layer(ei) == expLayer, "layer ei=\(ei)")
+            #expect(try pack.layer(ei) == expLayer, "layer ei=\(ei)")
 
             let expStruct = sample["structureLeaf"] as? String
-            #expect(pack.structureLeaf(ei) == expStruct, "structureLeaf ei=\(ei)")
+            #expect(try pack.structureLeaf(ei) == expStruct, "structureLeaf ei=\(ei)")
 
             let expAccess = sample["accessLeaf"] as? String
-            #expect(pack.accessLeaf(ei) == expAccess, "accessLeaf ei=\(ei)")
+            #expect(try pack.accessLeaf(ei) == expAccess, "accessLeaf ei=\(ei)")
 
             let expAccessClass = sample["accessClass"] as? String ?? "unknown"
             let accessCode = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
@@ -108,7 +108,7 @@ struct GraphV3DecodeLockstepTests {
             #expect(gotAccessClass == expAccessClass, "accessClass ei=\(ei)")
 
             let expAtv = sample["atvDesignated"] as? Bool ?? false
-            #expect(pack.atvDesignated(ei) == expAtv, "atvDesignated ei=\(ei)")
+            #expect(try pack.atvDesignated(ei) == expAtv, "atvDesignated ei=\(ei)")
         }
     }
 
@@ -131,11 +131,11 @@ struct GraphV3DecodeLockstepTests {
         #expect(pack.version == 2)
         #expect(!pack.hasLeaves)
         #expect(pack.undirectedEdgeCount > 100_000)
-        let leaf = pack.edgeLeaves(0)
+        let leaf = try pack.edgeLeaves(0)
         #expect(!leaf.fromLeaves)
         #expect(leaf.surfaceLeaf == nil)
         #expect(leaf.atvDesignated == false)
-        #expect(pack.tracktype(0) == 0)
+        #expect(try pack.tracktype(0) == 0)
     }
 }
 

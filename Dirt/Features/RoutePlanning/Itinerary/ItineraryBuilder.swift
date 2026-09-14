@@ -1324,14 +1324,22 @@ final class ItineraryBuilder {
                        index > 0,
                        recoveryDepth < min(16, itinerary.legs.count) {
                         let priorIndex = index - 1
-                        let priorStops = committed.legs
+                        let priorLegs = committed.legs
                             .filter { $0.riderLegID == itinerary.legs[priorIndex].id }
-                            .compactMap(\.endsAtFuelStop?.stationID)
+                        // The initial approach proves the closest mapped pump;
+                        // it is not an optional recreational fuel choice.
+                        let initialStop = priorLegs.first { $0.endsAtFuelStop?.isInitialFillUp == true }?.endsAtFuelStop
+                        let priorStops = priorLegs.compactMap { leg -> String? in
+                            guard leg.endsAtFuelStop?.isInitialFillUp != true else { return nil }
+                            return leg.endsAtFuelStop?.stationID
+                        }
+                        let recoveryResume = fuelResume(stationID: initialStop?.stationID,
+                            riderLegIndex: priorIndex,itinerary: itinerary,reuse: committed)
                         var recoveryExclusions = excludedFuelStationsByLeg
                         if let latestStop = priorStops.last {
                             recoveryExclusions[priorIndex, default: []].insert(latestStop)
                         }
-                        let repairedPrefix = builtPrefix(
+                        let repairedPrefix = recoveryResume?.kept ?? builtPrefix(
                             before: priorIndex,
                             from: committed.legs,
                             itinerary: itinerary
@@ -1345,7 +1353,7 @@ final class ItineraryBuilder {
                             itinerary,
                             startIndex: priorIndex,
                             endIndex: endIndex,
-                            resume: nil,
+                            resume: recoveryResume,
                             kept: repairedPrefix,
                             preservedSuffix: preservedSuffix,
                             preservedStatuses: preservedStatuses,

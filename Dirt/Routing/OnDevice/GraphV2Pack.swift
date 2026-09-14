@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// Decoded `graph.v2.bin` / `graph.v3.bin` / `graph.v4.bin` (CSR).
 /// V4 adds legal-topology sections; V2/V3 readers still reject V4-only safety
@@ -574,7 +575,45 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     /// Prepared from this exact immutable graph/geometry pair before routing.
     var exactSnapIndex: ExactSnapIndex?
 
-    init(data: Data) throws {
+    let edgeDetailReader: PagedEdgeDetail?
+    /// Array payload omitted by the verified-file path, before allocation.
+    var nonresidentEdgeDetailBytes: Int {
+        edgeDetailReader == nil ? 0 : undirectedEdgeCount * (hasCrossingSeconds ? 11 : 7)
+    }
+    var residentEdgeDetailArrayBytes: Int {
+        (edgeSurfaceLeaf?.count ?? 0) + (edgeRoadClassLeaf?.count ?? 0)
+            + (edgeGrade?.count ?? 0) + (edgeLayer?.count ?? 0)
+            + (edgeStructureLeaf?.count ?? 0) + (edgeAccessLeaf?.count ?? 0)
+            + (edgeFlags?.count ?? 0) + (edgeCrossingSeconds?.count ?? 0) * 4
+    }
+    convenience init(data: Data) throws { try self.init(data: data, edgeDetails: nil) }
+
+    /// First partial resident-data migration. Remaining columns still decode
+    /// eagerly, and hashing touches source bytes; this is not a whole-graph
+    /// selective-loading claim. Both readers must match the same exact identity.
+    convenience init(url: URL, identity: PagedEdgeDetail.Identity,
+        cancelled: () -> Bool = { RoutingWorkContext.stopReason != nil }) throws {
+        let details = try PagedEdgeDetail(url: url,identity: identity,cancelled: cancelled)
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        RoutingWorkContext.measurement?.increment(.fileBytesAccessed,by: UInt64(data.count))
+        guard !cancelled() else { throw RoutingPageError.cancelled }
+        guard data.count == identity.bytes else { throw PagedEdgeDetail.Failure.identityMismatch }
+        // The paged descriptor and mapped decoder are distinct readers. Until
+        // the remaining decoder accepts the descriptor directly, verify BOTH
+        // byte streams and report both logical hash passes rather than reusing
+        // a proof for another descriptor opened by pathname.
+        let decodedHash = SHA256.hash(data: data).map({ String(format: "%02x",$0) }).joined()
+        RoutingWorkContext.measurement?.increment(.fileBytesHashed,by: UInt64(data.count))
+        guard decodedHash == identity.sha256 else {
+            throw PagedEdgeDetail.Failure.identityMismatch
+        }
+        guard !cancelled() else { throw RoutingPageError.cancelled }
+        try self.init(data: data,edgeDetails: details)
+        try details.withQuery(cancelled: cancelled) { _ in () }
+    }
+
+    private init(data: Data, edgeDetails: PagedEdgeDetail?) throws {
+        edgeDetailReader = edgeDetails
         let measurement = RoutingWorkContext.measurement
         let decodePhase = measurement?.begin(.decode)
         defer { measurement?.end(decodePhase) }
@@ -691,7 +730,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         surfaceFamilyMap = SurfaceFamilyStats.parseFamilyMap(enums["surfaceFamilyMap"])
         roadTierMap = RoadTierStats.parseTierMap(enums["roadTierMap"])
 
-        if hasLeaves {
+        if hasLeaves && edgeDetails == nil {
             edgeSurfaceLeaf = data.readUInt8Array(at: offEdgeSurfaceLeaf, count: undirectedEdgeCount)
             edgeRoadClassLeaf = data.readUInt8Array(at: offEdgeRoadClassLeaf, count: undirectedEdgeCount)
             edgeGrade = data.readUInt8Array(at: offEdgeGrade, count: undirectedEdgeCount)
@@ -1005,74 +1044,75 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
 
     // MARK: - Graph-v3 leaf accessors (JS lockstep)
 
-    func surfaceLeaf(_ ei: Int) -> String? {
-        guard hasLeaves, let arr = edgeSurfaceLeaf, ei >= 0, ei < arr.count else { return nil }
-        let idx = Int(arr[ei])
-        if idx == 0 { return nil }
-        return Self.nameAt(surfaceLeafNames, idx, fallback: nil)
+    private func detailRow(_ ei: Int, query: PagedEdgeDetail.Query?) throws -> PagedEdgeDetail.Row? {
+        guard hasLeaves, ei >= 0, ei < undirectedEdgeCount else { return nil }
+        if let edgeDetailReader { return try edgeDetailReader.row(at: ei,using: query) }
+        guard let surface = edgeSurfaceLeaf, let road = edgeRoadClassLeaf,
+              let grade = edgeGrade, let layer = edgeLayer, let structure = edgeStructureLeaf,
+              let access = edgeAccessLeaf, let flags = edgeFlags else { throw PackError.missingSafetySection }
+        return .init(surface: surface[ei],roadClass: road[ei],grade: grade[ei],layer: layer[ei],
+            structure: structure[ei],accessLeaf: access[ei],flags: flags[ei],
+            crossingSeconds: edgeCrossingSeconds?[ei])
     }
-
-    func surfaceFamily(_ ei: Int) -> SurfaceFamily {
-        guard hasLeaves else { return .unknown }
-        return SurfaceFamilyStats.family(of: surfaceLeaf(ei), map: surfaceFamilyMap)
-    }
-
-    func roadClassLeaf(_ ei: Int) -> String? {
-        guard hasLeaves, let arr = edgeRoadClassLeaf, ei >= 0, ei < arr.count else { return nil }
-        return Self.nameAt(roadClassLeafNames, Int(arr[ei]), fallback: "unknown")
-    }
-
-    func roadTier(_ ei: Int) -> RoadTier {
-        guard hasLeaves else { return .unknown }
-        return RoadTierStats.tier(of: roadClassLeaf(ei), map: roadTierMap)
-    }
-
-    func structureLeaf(_ ei: Int) -> String? {
-        guard hasLeaves, let arr = edgeStructureLeaf, ei >= 0, ei < arr.count else { return nil }
-        let idx = Int(arr[ei])
-        if idx == 0 { return nil }
-        return Self.nameAt(structureLeafNames, idx, fallback: nil)
-    }
-
-    func accessLeaf(_ ei: Int) -> String? {
-        guard hasLeaves, let arr = edgeAccessLeaf, ei >= 0, ei < arr.count else { return nil }
-        let idx = Int(arr[ei])
-        if idx == 0 { return nil }
-        return Self.nameAt(accessLeafNames, idx, fallback: nil)
-    }
-
-    /// Tracktype nibble from `edgeGrade` bits 0–3 (0 = none).
-    func tracktype(_ ei: Int) -> Int {
-        guard hasLeaves, let arr = edgeGrade, ei >= 0, ei < arr.count else { return 0 }
-        return Int(arr[ei] & 0x0F)
-    }
-
-    /// Smoothness nibble from `edgeGrade` bits 4–7 (0 = missing).
-    func smoothness(_ ei: Int) -> Int {
-        guard hasLeaves, let arr = edgeGrade, ei >= 0, ei < arr.count else { return 0 }
-        return Int((arr[ei] >> 4) & 0x0F)
-    }
-
-    func layer(_ ei: Int) -> Int {
-        guard hasLeaves, let arr = edgeLayer, ei >= 0, ei < arr.count else { return 0 }
-        return Int(arr[ei])
-    }
-
-    func atvDesignated(_ ei: Int) -> Bool {
-        guard hasLeaves, let arr = edgeFlags, ei >= 0, ei < arr.count else { return false }
-        return (arr[ei] & 0x1) != 0
-    }
-
-    func seasonalFlag(_ ei: Int) -> Bool {
-        guard hasLeaves, let arr = edgeFlags, ei >= 0, ei < arr.count else {
-            return Self.unpackSeasonal(edgeAttrs[safe: ei] ?? 0)
+    private func detailValue(_ field: PagedEdgeDetail.Field, _ ei: Int,
+                             query: PagedEdgeDetail.Query?) throws -> UInt32? {
+        guard hasLeaves, ei >= 0, ei < undirectedEdgeCount else { return nil }
+        if let edgeDetailReader { return try edgeDetailReader.value(field,at: ei,using: query) }
+        guard let row = try detailRow(ei,query: query) else { return nil }
+        switch field {
+        case .surface: return UInt32(row.surface)
+        case .roadClass: return UInt32(row.roadClass)
+        case .grade: return UInt32(row.grade)
+        case .layer: return UInt32(UInt8(bitPattern: row.layer))
+        case .structure: return UInt32(row.structure)
+        case .accessLeaf: return UInt32(row.accessLeaf)
+        case .flags: return UInt32(row.flags)
+        case .crossingSeconds: return row.crossingSeconds
         }
-        return ((arr[ei] >> 1) & 0x1) != 0 || Self.unpackSeasonal(edgeAttrs[ei])
     }
-
-    func crossingSeconds(_ ei: Int) -> UInt32 {
-        guard hasCrossingSeconds, let arr = edgeCrossingSeconds, ei >= 0, ei < arr.count else { return 0 }
-        return arr[ei]
+    func surfaceLeaf(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> String? {
+        guard let value = try detailValue(.surface,ei,query: query), value != 0 else { return nil }
+        return Self.nameAt(surfaceLeafNames,Int(value),fallback: nil)
+    }
+    func surfaceFamily(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> SurfaceFamily {
+        guard hasLeaves else { return .unknown }
+        return try SurfaceFamilyStats.family(of: surfaceLeaf(ei,query: query),map: surfaceFamilyMap)
+    }
+    func roadClassLeaf(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> String? {
+        guard let value = try detailValue(.roadClass,ei,query: query) else { return nil }
+        return Self.nameAt(roadClassLeafNames,Int(value),fallback: "unknown")
+    }
+    func roadTier(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> RoadTier {
+        guard hasLeaves else { return .unknown }
+        return try RoadTierStats.tier(of: roadClassLeaf(ei,query: query),map: roadTierMap)
+    }
+    func structureLeaf(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> String? {
+        guard let value = try detailValue(.structure,ei,query: query), value != 0 else { return nil }
+        return Self.nameAt(structureLeafNames,Int(value),fallback: nil)
+    }
+    func accessLeaf(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> String? {
+        guard let value = try detailValue(.accessLeaf,ei,query: query), value != 0 else { return nil }
+        return Self.nameAt(accessLeafNames,Int(value),fallback: nil)
+    }
+    func tracktype(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> Int {
+        Int(try detailValue(.grade,ei,query: query) ?? 0) & 15
+    }
+    func smoothness(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> Int {
+        (Int(try detailValue(.grade,ei,query: query) ?? 0) >> 4) & 15
+    }
+    func layer(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> Int {
+        Int(Int8(bitPattern: UInt8(try detailValue(.layer,ei,query: query) ?? 0)))
+    }
+    func atvDesignated(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> Bool {
+        (try detailValue(.flags,ei,query: query) ?? 0) & 1 != 0
+    }
+    func seasonalFlag(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> Bool {
+        ((try detailValue(.flags,ei,query: query) ?? 0) >> 1) & 1 != 0
+            || Self.unpackSeasonal(edgeAttrs[safe: ei] ?? 0)
+    }
+    func crossingSeconds(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> UInt32 {
+        guard hasCrossingSeconds else { return 0 }
+        return try detailValue(.crossingSeconds,ei,query: query) ?? 0
     }
 
     /// Per-direction motorcycle access code (0 allowed … 2/5 deny, 3/4 endpoint-only).
@@ -1148,7 +1188,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     }
 
     /// Full leaf snapshot matching JS `edgeLeaves(ei)`.
-    func edgeLeaves(_ ei: Int) -> EdgeLeaves {
+    func edgeLeaves(_ ei: Int, query: PagedEdgeDetail.Query? = nil) throws -> EdgeLeaves {
         guard hasLeaves else {
             return EdgeLeaves(
                 surfaceLeaf: nil,
@@ -1164,15 +1204,15 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             )
         }
         return EdgeLeaves(
-            surfaceLeaf: surfaceLeaf(ei),
-            roadClassLeaf: roadClassLeaf(ei),
-            tracktype: tracktype(ei),
-            smoothness: smoothness(ei),
-            layer: layer(ei),
-            structureLeaf: structureLeaf(ei),
-            accessLeaf: accessLeaf(ei),
-            atvDesignated: atvDesignated(ei),
-            seasonal: seasonalFlag(ei),
+            surfaceLeaf: try surfaceLeaf(ei,query: query),
+            roadClassLeaf: try roadClassLeaf(ei,query: query),
+            tracktype: try tracktype(ei,query: query),
+            smoothness: try smoothness(ei,query: query),
+            layer: try layer(ei,query: query),
+            structureLeaf: try structureLeaf(ei,query: query),
+            accessLeaf: try accessLeaf(ei,query: query),
+            atvDesignated: try atvDesignated(ei,query: query),
+            seasonal: try seasonalFlag(ei,query: query),
             fromLeaves: true
         )
     }

@@ -27,10 +27,6 @@ nonisolated enum HopSearchPolicy {
     /// At 75%, take the first sensible forward pump instead of searching for
     /// marginally more progress. This is not a mandatory stop distance.
     static let fuelComfortHi: Double = 0.75
-    /// A generated stop must make a useful hop and leave a real final leg.
-    /// Lockstep: fuel-chain.js MIN_FORWARD_PROGRESS_M / MIN_DESTINATION_FUEL_CLEARANCE_M.
-    static let fuelMinimumForwardMeters: Double = 8_000
-    static let fuelDestinationClearanceMeters: Double = 5_000
     /// Too-early below this. Dijkstra reachability still uses fuelMaxTank = 1.0.
     static let fuelMinTank: Double = 0.75
     /// Preferred refuelling zone begins with the final quarter of usable range.

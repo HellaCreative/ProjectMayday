@@ -229,10 +229,13 @@ nonisolated struct OnDeviceRouter {
     var balancedLabelReadCacheSlots = 4096
     var balancedEnvelopeTimeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
     private var balancedCalculationDeadline: Double?
+    /// Temporary same-binary qualification switch; both paths preserve existing policy.
+    var useExtractedFullRoadCost = true
     var useLabelReadPointerCache = true
     var useScopedRoadBounds = true
     // Confined to one synchronous request; never copied into returned route data.
     private var roadBoundsQuery: ExactSnapIndex.BoundsQuery?
+    private var edgeDetailQuery: PagedEdgeDetail.Query?
     /// Qualification only: both walkers preserve the exact predecessor law.
     var useCombinedRetraceCallback = true
     var useReachableCachedMatchesBeforeCoverage = true
@@ -398,6 +401,23 @@ nonisolated struct OnDeviceRouter {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
     ) -> Swift.Result<Result, Failure> {
+        if edgeDetailQuery == nil, let reader = pack.edgeDetailReader {
+            do {
+                return try reader.withQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { query in
+                    var worker = self
+                    worker.edgeDetailQuery = query
+                    defer { worker.edgeDetailQuery = nil }
+                    return worker.routeDetailed(from: from,to: to,profile: profile,
+                        allowUnknown: allowUnknown,avoidEdgeIds: avoidEdgeIds,priorEdgeIds: priorEdgeIds,
+                        arrivalEdgeId: arrivalEdgeId,arrivalContinuation: arrivalContinuation,
+                        backtrackFactor: backtrackFactor,sessionSeed: sessionSeed,maxRouteMeters: maxRouteMeters,
+                        cleanMetroMultiplier: cleanMetroMultiplier,avoidMotorways: avoidMotorways,
+                        preferBackRoads: preferBackRoads)
+                }
+            } catch {
+                return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "routingDataUnavailable"))
+            }
+        }
         let calculationStarted = ProcessInfo.processInfo.systemUptime
         let outcome: Swift.Result<Result, Failure> = {
         var worker = self
@@ -1861,7 +1881,7 @@ nonisolated struct OnDeviceRouter {
                     lastBoundedFailure = failure
                 }
             }
-            guard let selected = chooseDirtEnvelopeCandidate(candidates) else {
+            guard let selected = try chooseDirtEnvelopeCandidate(candidates) else {
                 return .failure(lastBoundedFailure)
             }
             var route = selected.route
@@ -2065,7 +2085,7 @@ nonisolated struct OnDeviceRouter {
     /// intentionally not an objective.
     private func chooseDirtEnvelopeCandidate(
         _ candidates: [(route: Result, width: Double, objective: String)]
-    ) -> (route: Result, width: Double, objective: String)? {
+    ) throws -> (route: Result, width: Double, objective: String)? {
         let summaries = candidates.map { candidate in
             let shape = HopSearchPolicy.routeShape(
                 coordinates: candidate.route.coordinates,
@@ -2082,12 +2102,12 @@ nonisolated struct OnDeviceRouter {
         let pool = !coherent.isEmpty && bestDirt - bestCoherentDirt < 10
             ? coherent
             : summaries
-        return pool.min { lhs, rhs in
+        return try pool.min { lhs, rhs in
             let a = lhs.candidate
             let b = rhs.candidate
             if let preferences = activeRidePreferences, preferences.wander < 1 || preferences.avoidHighways {
-                let costA = preferenceRouteCost(a.route, preferences: preferences)
-                let costB = preferenceRouteCost(b.route, preferences: preferences)
+                let costA = (try preferenceRouteCost(a.route, preferences: preferences))
+                let costB = (try preferenceRouteCost(b.route, preferences: preferences))
                 if costA != costB { return costA < costB }
             }
             let dirtDelta = a.route.dirtPercent - b.route.dirtPercent
@@ -2347,10 +2367,10 @@ nonisolated struct OnDeviceRouter {
                 endEndpointKind: endEndpointKind
             ) { return .failure(.noPath) }
             // Snapped A/B edge is always traversable under Clean law.
-            if edgeBlockedByPavedOnly(
+            if (try edgeBlockedByPavedOnly(
                 startSnap.edgeIndex, ctx: ctx,
                 allowSnapEdges: startSnap.edgeIndex, endEi: endSnap.edgeIndex
-            ) {
+            )) {
                 return .failure(.noPath)
             }
             if pack.version >= 4,
@@ -2395,7 +2415,7 @@ nonisolated struct OnDeviceRouter {
             ctx: ctx
         )
         } catch {
-            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "geometryUnavailable"))
+            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "routingDataUnavailable"))
         }
     }
 
@@ -2449,12 +2469,12 @@ nonisolated struct OnDeviceRouter {
                 from: alongForward ? startSnap.nodeA : startSnap.nodeB,
                 to: alongForward ? startSnap.nodeB : startSnap.nodeA),
             roadClassName: roadClassNameForEdge(ei),
-            surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
+            surfaceLeaf: pack.hasLeaves ? (try pack.surfaceLeaf(ei,query: edgeDetailQuery)) : nil,
             structureType: structureTypeForEdge(ei),
-            structureLeaf: structureLeafForEdge(ei),
-            layer: layerForEdge(ei),
-            crossingLabel: crossingLabelForEdge(ei),
-            waterCrossing: waterCrossingForEdge(ei),
+            structureLeaf: (try structureLeafForEdge(ei)),
+            layer: (try layerForEdge(ei)),
+            crossingLabel: (try crossingLabelForEdge(ei)),
+            waterCrossing: (try waterCrossingForEdge(ei)),
             edgeIndex: ei, fromNode: alongForward ? startSnap.nodeA : startSnap.nodeB,
             toNode: alongForward ? startSnap.nodeB : startSnap.nodeA
         ))
@@ -2526,8 +2546,8 @@ nonisolated struct OnDeviceRouter {
         let edgeMetersEnd = Double(pack.edgeMeters[endEi])
         let endLL = endSnap.projected
         let abMeters = meters(startSnap.projected, endLL)
-        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap, profile: profile)
-        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap, profile: profile)
+        let startOnMajorHighway = (try snapIsMajorHighwayPin(startSnap, profile: profile))
+        let endOnMajorHighway = (try snapIsMajorHighwayPin(endSnap, profile: profile))
 
 
         var virt: [VirtEdge] = []
@@ -2936,7 +2956,7 @@ nonisolated struct OnDeviceRouter {
                        !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) {
                         continue
                     }
-                    if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
+                    if (try edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi)) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
 
@@ -2955,75 +2975,91 @@ nonisolated struct OnDeviceRouter {
                     let surface = GraphV2Pack.unpackSurface(attr)
                     let roadClass = GraphV2Pack.unpackRoadClass(attr)
                     let confidence = GraphV2Pack.unpackConfidence(attr)
-                    var step = hopCostStep(
-                        meters: edgeM,
-                        edgeIndex: ei,
-                        surface: surface,
-                        roadClass: roadClass,
-                        access: access,
-                        confidence: confidence,
-                        profile: profile,
-                        ctx: ctx,
-                        toLL: toLL,
-                        endLL: endLL,
-                        abMeters: abMeters,
-                        startSnap: startSnap,
-                        startOnMajorHighway: startOnMajorHighway,
-                        endOnMajorHighway: endOnMajorHighway,
-                        policyUnknown: policyUnknown
-                    )
-                    step *= UrbanCore.fallbackMultiplier(
-                        point: toLL,
-                        start: from,
-                        end: to,
-                        boxes: packUrbanCores,
-                        edgeFrom: coordinate(forNode: graphNode),
-                        penalty: UrbanCore.resolveCleanMetroPenalty(
+                    let step: Double
+                    if useExtractedFullRoadCost {
+                        step = try fullRealRoadStep(meters: edgeM, edgeIndex: ei, attributes: attr,
+                            edgeID: eid, surface: surface, roadClass: roadClass, access: access, confidence: confidence,
+                            profile: profile, ctx: ctx, toLL: toLL, edgeFrom: coordinate(forNode: graphNode),
+                            from: from, to: to, endLL: endLL, projectedOrigin: startSnap.projected, abMeters: abMeters,
+                            startOnMajorHighway: startOnMajorHighway, endOnMajorHighway: endOnMajorHighway,
+                            policyUnknown: policyUnknown,
+                            awayExtraMeters: applyAway ? awayExtra(fromNode: cur.node, toNode: toState) : nil,
+                            applySoftCorridor: applySoftCorridor, predecessorTier: {
+                                guard let previous = predecessorGraphEdgeIndex(at: cur.node) else { return nil }
+                                return try pack.roadTier(previous,query: edgeDetailQuery)
+                            })
+                    } else {
+                        var referenceStep = (try hopCostStep(
+                            meters: edgeM,
+                            edgeIndex: ei,
+                            surface: surface,
+                            roadClass: roadClass,
+                            access: access,
+                            confidence: confidence,
                             profile: profile,
-                            override: ctx.cleanMetroMultiplier,
-                            avoidMajorHighways: ctx.avoidMotorways
-                        )
-                    )
-                    if ctx.settlementFallback {
-                        step *= UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
-                            penalty: UrbanCore.resolveSettlementPenalty(
+                            ctx: ctx,
+                            toLL: toLL,
+                            endLL: endLL,
+                            abMeters: abMeters,
+                            projectedOrigin: startSnap.projected,
+                            startOnMajorHighway: startOnMajorHighway,
+                            endOnMajorHighway: endOnMajorHighway,
+                            policyUnknown: policyUnknown
+                        ))
+                        referenceStep *= UrbanCore.fallbackMultiplier(
+                            point: toLL,
+                            start: from,
+                            end: to,
+                            boxes: packUrbanCores,
+                            edgeFrom: coordinate(forNode: graphNode),
+                            penalty: UrbanCore.resolveCleanMetroPenalty(
                                 profile: profile,
                                 override: ctx.cleanMetroMultiplier,
                                 avoidMajorHighways: ctx.avoidMotorways
                             )
                         )
-                    }
-                    if applyAway {
-                        let away = awayExtra(fromNode: cur.node, toNode: toState)
-                        step += ctx.costMode == .pavement ? away * 10 : away
-                        if applySoftCorridor {
-                            step += OnDeviceProfileCosts.corridorCrossTrackExtra(
-                                profile: profile,
-                                point: toLL,
-                                lineFrom: startSnap.projected,
-                                lineTo: endLL,
-                                edgeMeters: edgeM
+                        if ctx.settlementFallback {
+                            referenceStep *= UrbanCore.settlementFallbackMultiplier(
+                                point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
+                                penalty: UrbanCore.resolveSettlementPenalty(
+                                    profile: profile,
+                                    override: ctx.cleanMetroMultiplier,
+                                    avoidMajorHighways: ctx.avoidMotorways
+                                )
                             )
                         }
+                        if applyAway {
+                            let away = awayExtra(fromNode: cur.node, toNode: toState)
+                            referenceStep += ctx.costMode == .pavement ? away * 10 : away
+                            if applySoftCorridor {
+                                referenceStep += OnDeviceProfileCosts.corridorCrossTrackExtra(
+                                    profile: profile,
+                                    point: toLL,
+                                    lineFrom: startSnap.projected,
+                                    lineTo: endLL,
+                                    edgeMeters: edgeM
+                                )
+                            }
+                        }
+                        referenceStep = backtrackPenalized(referenceStep, edgeID: eid, ctx: ctx)
+                        let isFerry = GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(attr))
+                        if !isFerry, profile == .cleanest, pack.hasLeaves, ctx.avoidMotorways,
+                           let fromEI = predecessorGraphEdgeIndex(at: cur.node) {
+                            referenceStep += RoadTierStats.e4MajorHighwayEntryCost(
+                                fromTier: (try pack.roadTier(fromEI,query: edgeDetailQuery)),
+                                toTier: (try pack.roadTier(ei,query: edgeDetailQuery)),
+                                enabled: true,
+                                metersFromStart: meters(toLL, startSnap.projected),
+                                metersToDestination: meters(toLL, endLL),
+                                startOnHighway: startOnMajorHighway,
+                                endOnHighway: endOnMajorHighway
+                            )
+                        }
+                        // Initial refill ranks physical routed metres. Override all
+                        // recreational penalties, including ferry-time pricing.
+                        if initialFuelApproach { referenceStep = edgeM / 1_000 }
+                        step = referenceStep
                     }
-                    step = backtrackPenalized(step, edgeID: eid, ctx: ctx)
-                    let isFerry = GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(attr))
-                    if !isFerry, profile == .cleanest, pack.hasLeaves, ctx.avoidMotorways,
-                       let fromEI = predecessorGraphEdgeIndex(at: cur.node) {
-                        step += RoadTierStats.e4MajorHighwayEntryCost(
-                            fromTier: pack.roadTier(fromEI),
-                            toTier: pack.roadTier(ei),
-                            enabled: true,
-                            metersFromStart: meters(toLL, startSnap.projected),
-                            metersToDestination: meters(toLL, endLL),
-                            startOnHighway: startOnMajorHighway,
-                            endOnHighway: endOnMajorHighway
-                        )
-                    }
-                    // Initial refill ranks physical routed metres. Override all
-                    // recreational penalties, including ferry-time pricing.
-                    if initialFuelApproach { step = edgeM / 1_000 }
                     let cost = cur.cost + step
                     let newDirt = edgeIsDirt(ei)
                     let previousLabel = labels[toState]
@@ -3145,7 +3181,7 @@ nonisolated struct OnDeviceRouter {
                     if ctx.pavedOnly {
                         if v.junctionStitch { continue }
                         if v.ei >= 0,
-                           edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) {
+                           (try edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi)) {
                             continue
                         }
                     }
@@ -3181,16 +3217,16 @@ nonisolated struct OnDeviceRouter {
                         GraphV2Pack.unpackStructure(pack.edgeAttrs[v.ei]))
                     var step: Double
                     if isFerry {
-                        step = preferenceStep(fractionalFerryCost(edge: v.ei, meters: v.meters), meters: v.meters, edge: v.ei)
+                        step = (try preferenceStep((try fractionalFerryCost(edge: v.ei, meters: v.meters)), meters: v.meters, edge: v.ei))
                     } else if activeRidePreferences != nil, v.ei >= 0, !v.junctionStitch {
                         let attr = pack.edgeAttrs[v.ei]
-                        step = hopCostStep(meters: v.meters, edgeIndex: v.ei,
+                        step = (try hopCostStep(meters: v.meters, edgeIndex: v.ei,
                             surface: GraphV2Pack.unpackSurface(attr), roadClass: GraphV2Pack.unpackRoadClass(attr),
                             access: GraphV2Pack.unpackAccess(attr), confidence: GraphV2Pack.unpackConfidence(attr),
                             profile: profile, ctx: ctx, toLL: toLL, endLL: endLL, abMeters: abMeters,
-                            startSnap: startSnap, startOnMajorHighway: startOnMajorHighway,
-                            endOnMajorHighway: endOnMajorHighway, policyUnknown: policyUnknown)
-                    } else { step = preferenceStep(v.meters / 1_000, meters: v.meters, edge: v.ei) }
+                            projectedOrigin: startSnap.projected, startOnMajorHighway: startOnMajorHighway,
+                            endOnMajorHighway: endOnMajorHighway, policyUnknown: policyUnknown))
+                    } else { step = (try preferenceStep(v.meters / 1_000, meters: v.meters, edge: v.ei)) }
                     if v.junctionStitch { step *= Self.junctionStitchCostPremium }
                     step *= UrbanCore.fallbackMultiplier(
                         point: toLL,
@@ -3315,12 +3351,12 @@ nonisolated struct OnDeviceRouter {
                         accessName: accessNameForVirtualTraversal(v, forward: forward,
                             startSnap: startSnap, endSnap: endSnap),
                         roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei),
-                        surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : pack.surfaceLeaf(v.ei),
+                        surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : (try pack.surfaceLeaf(v.ei,query: edgeDetailQuery)),
                         structureType: v.junctionStitch ? nil : structureTypeForEdge(v.ei),
-                        structureLeaf: v.junctionStitch ? nil : structureLeafForEdge(v.ei),
-                        layer: v.junctionStitch ? 0 : layerForEdge(v.ei),
-                        crossingLabel: v.junctionStitch ? nil : crossingLabelForEdge(v.ei),
-                        waterCrossing: v.junctionStitch ? false : waterCrossingForEdge(v.ei),
+                        structureLeaf: v.junctionStitch ? nil : (try structureLeafForEdge(v.ei)),
+                        layer: v.junctionStitch ? 0 : (try layerForEdge(v.ei)),
+                        crossingLabel: v.junctionStitch ? nil : (try crossingLabelForEdge(v.ei)),
+                        waterCrossing: v.junctionStitch ? false : (try waterCrossingForEdge(v.ei)),
                         edgeIndex: v.junctionStitch ? nil : v.ei,
                         fromNode: v.junctionStitch ? nil : virtualTraversalNodes(v, forward: forward, startSnap: startSnap, endSnap: endSnap).from,
                         toNode: v.junctionStitch ? nil : virtualTraversalNodes(v, forward: forward, startSnap: startSnap, endSnap: endSnap).to
@@ -3350,12 +3386,12 @@ nonisolated struct OnDeviceRouter {
                     edgeId: id,
                     accessName: accessNameForTraversal(ei, from: aNode, to: bNode),
                     roadClassName: roadClassNameForEdge(ei),
-                    surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
+                    surfaceLeaf: pack.hasLeaves ? (try pack.surfaceLeaf(ei,query: edgeDetailQuery)) : nil,
                     structureType: structureTypeForEdge(ei),
-                    structureLeaf: structureLeafForEdge(ei),
-                    layer: layerForEdge(ei),
-                    crossingLabel: crossingLabelForEdge(ei),
-                    waterCrossing: waterCrossingForEdge(ei),
+                    structureLeaf: (try structureLeafForEdge(ei)),
+                    layer: (try layerForEdge(ei)),
+                    crossingLabel: (try crossingLabelForEdge(ei)),
+                    waterCrossing: (try waterCrossingForEdge(ei)),
                     edgeIndex: ei,
                     fromNode: aNode,
                     toNode: bNode
@@ -3393,7 +3429,7 @@ nonisolated struct OnDeviceRouter {
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
         } catch {
-            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "geometryUnavailable"))
+            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "routingDataUnavailable"))
         }
     }
 
@@ -3430,8 +3466,8 @@ nonisolated struct OnDeviceRouter {
         let endEi = endSnap.edgeIndex
         let endLL = endSnap.projected
         let abMeters = meters(startSnap.projected, endLL)
-        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap, profile: profile)
-        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap, profile: profile)
+        let startOnMajorHighway = (try snapIsMajorHighwayPin(startSnap, profile: profile))
+        let endOnMajorHighway = (try snapIsMajorHighwayPin(endSnap, profile: profile))
         let B = HopSearchPolicy.balancedBuckets
         let turnState = legalTurnState ?? pack.makeV4TurnStateSpace(startNode: startVirt, endNode: endVirt)
         let totalNodes = turnState.stateCount
@@ -3684,7 +3720,7 @@ nonisolated struct OnDeviceRouter {
                        !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) {
                         continue
                     }
-                    if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
+                    if (try edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi)) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     let toLL = coordinate(forNode: toNode)
@@ -3704,7 +3740,7 @@ nonisolated struct OnDeviceRouter {
                     let newDirt = dirtSoFar + addDirt
                     let b = HopSearchPolicy.dirtBucket(dirtMeters: newDirt, pathMeters: newMeters)
                     let toLab = lab(toState, b)
-                    func staticDirectedStep() -> Double {
+                    func staticDirectedStep() throws -> Double {
                     let settlementMult = ctx.settlementFallback
                         ? UrbanCore.settlementFallbackMultiplier(
                             point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
@@ -3728,7 +3764,7 @@ nonisolated struct OnDeviceRouter {
                         )
                     )
                     let isFerry = GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(attr))
-                    var step = hopCostStep(
+                    var step = (try hopCostStep(
                         meters: edgeM,
                         edgeIndex: ei,
                         surface: GraphV2Pack.unpackSurface(attr),
@@ -3740,11 +3776,11 @@ nonisolated struct OnDeviceRouter {
                         toLL: toLL,
                         endLL: endLL,
                         abMeters: abMeters,
-                        startSnap: startSnap,
+                        projectedOrigin: startSnap.projected,
                         startOnMajorHighway: startOnMajorHighway,
                         endOnMajorHighway: endOnMajorHighway,
                         policyUnknown: policyUnknown
-                    )
+                    ))
                     if shortDirtPenalized {
                         step *= HopSearchPolicy.dirtRidePavedPerKm
                     }
@@ -3753,7 +3789,7 @@ nonisolated struct OnDeviceRouter {
                     }
                     return backtrackPenalized(step,edgeID: eid,ctx: ctx)
                     }
-                    let directedStep = directedStepMemo?.value(arc: i,make: staticDirectedStep) ?? staticDirectedStep()
+                    let directedStep = try directedStepMemo?.value(arc: i,make: staticDirectedStep) ?? (try staticDirectedStep())
                     let newScore = cur.cost + directedStep
                     let previousLabel = labelStore[toLab]
                     var action = HopSearchPolicy.considerRelax(
@@ -3870,7 +3906,7 @@ nonisolated struct OnDeviceRouter {
                     if ctx.pavedOnly {
                         if v.junctionStitch { continue }
                         if v.ei >= 0,
-                           edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) {
+                           (try edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi)) {
                             continue
                         }
                     }
@@ -3926,13 +3962,13 @@ nonisolated struct OnDeviceRouter {
                     )
                     let virtualStep: Double
                     if isFerry {
-                        virtualStep = fractionalFerryCost(edge: v.ei, meters: v.meters)
+                        virtualStep = (try fractionalFerryCost(edge: v.ei, meters: v.meters))
                     } else {
                         virtualStep = (v.meters / 1_000) * settlementMult * urbanMult
                             * (shortDirtPenalized ? HopSearchPolicy.dirtRidePavedPerKm : 1)
                     }
                     let newScore = cur.cost + backtrackPenalized(
-                        preferenceStep(virtualStep, meters: v.meters, edge: v.ei),
+                        (try preferenceStep(virtualStep, meters: v.meters, edge: v.ei)),
                         edgeID: virtualEdgeID,
                         ctx: ctx
                     )
@@ -4003,12 +4039,12 @@ nonisolated struct OnDeviceRouter {
                         accessName: accessNameForVirtualTraversal(v, forward: forward,
                             startSnap: startSnap, endSnap: endSnap),
                         roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei),
-                        surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : pack.surfaceLeaf(v.ei),
+                        surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : (try pack.surfaceLeaf(v.ei,query: edgeDetailQuery)),
                         structureType: v.junctionStitch ? nil : structureTypeForEdge(v.ei),
-                        structureLeaf: v.junctionStitch ? nil : structureLeafForEdge(v.ei),
-                        layer: v.junctionStitch ? 0 : layerForEdge(v.ei),
-                        crossingLabel: v.junctionStitch ? nil : crossingLabelForEdge(v.ei),
-                        waterCrossing: v.junctionStitch ? false : waterCrossingForEdge(v.ei),
+                        structureLeaf: v.junctionStitch ? nil : (try structureLeafForEdge(v.ei)),
+                        layer: v.junctionStitch ? 0 : (try layerForEdge(v.ei)),
+                        crossingLabel: v.junctionStitch ? nil : (try crossingLabelForEdge(v.ei)),
+                        waterCrossing: v.junctionStitch ? false : (try waterCrossingForEdge(v.ei)),
                         edgeIndex: v.junctionStitch ? nil : v.ei,
                         fromNode: v.junctionStitch ? nil : virtualTraversalNodes(v, forward: forward, startSnap: startSnap, endSnap: endSnap).from,
                         toNode: v.junctionStitch ? nil : virtualTraversalNodes(v, forward: forward, startSnap: startSnap, endSnap: endSnap).to
@@ -4039,12 +4075,12 @@ nonisolated struct OnDeviceRouter {
                     edgeId: id,
                     accessName: accessNameForTraversal(ei, from: aNode, to: bNode),
                     roadClassName: roadClassNameForEdge(ei),
-                    surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
+                    surfaceLeaf: pack.hasLeaves ? (try pack.surfaceLeaf(ei,query: edgeDetailQuery)) : nil,
                     structureType: structureTypeForEdge(ei),
-                    structureLeaf: structureLeafForEdge(ei),
-                    layer: layerForEdge(ei),
-                    crossingLabel: crossingLabelForEdge(ei),
-                    waterCrossing: waterCrossingForEdge(ei),
+                    structureLeaf: (try structureLeafForEdge(ei)),
+                    layer: (try layerForEdge(ei)),
+                    crossingLabel: (try crossingLabelForEdge(ei)),
+                    waterCrossing: (try waterCrossingForEdge(ei)),
                     edgeIndex: ei,
                     fromNode: aNode,
                     toNode: bNode
@@ -4087,7 +4123,7 @@ nonisolated struct OnDeviceRouter {
         result.searchMeta.resourceSelectionDirtMeters = labelStore[bestLab].dirtMeters
         return .success(result)
         } catch {
-            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "geometryUnavailable"))
+            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "routingDataUnavailable"))
         }
     }
 
@@ -4171,7 +4207,7 @@ nonisolated struct OnDeviceRouter {
                     ) {
                         continue
                     }
-                    if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
+                    if (try edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi)) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     let toLL = coordinate(forNode: toNode)
@@ -4195,7 +4231,7 @@ nonisolated struct OnDeviceRouter {
                 for item in vlist {
                     let v = virt[item.id]
                     if ctx.pavedOnly {
-                        if v.junctionStitch || (v.ei >= 0 && edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi)) { continue }
+                        if try v.junctionStitch || (v.ei >= 0 && (try edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi))) { continue }
                     }
                     let edgeFrom = cur.node < n
                         ? coordinate(forNode: cur.node)
@@ -4533,8 +4569,8 @@ nonisolated struct OnDeviceRouter {
         let policyUnknown = allowUnknown && profile != .cleanest
         let endLL = endSnap.projected
         let abMeters = meters(startSnap.projected, endLL)
-        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap, profile: profile)
-        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap, profile: profile)
+        let startOnMajorHighway = (try snapIsMajorHighwayPin(startSnap, profile: profile))
+        let endOnMajorHighway = (try snapIsMajorHighwayPin(endSnap, profile: profile))
         let stitches = junctionStitches(
             near: from, and: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds
@@ -4560,7 +4596,7 @@ nonisolated struct OnDeviceRouter {
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                    if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
+                    if (try edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi)) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     if ctx.noBacktrack, prevEdge[cur.node] == ei { continue }
@@ -4577,7 +4613,7 @@ nonisolated struct OnDeviceRouter {
                     let surface = GraphV2Pack.unpackSurface(attr)
                     let roadClass = GraphV2Pack.unpackRoadClass(attr)
                     let confidence = GraphV2Pack.unpackConfidence(attr)
-                    var step = hopCostStep(
+                    var step = (try hopCostStep(
                         meters: Double(pack.edgeMeters[ei]),
                         edgeIndex: ei,
                         surface: surface,
@@ -4589,11 +4625,11 @@ nonisolated struct OnDeviceRouter {
                         toLL: toLL,
                         endLL: endLL,
                         abMeters: abMeters,
-                        startSnap: startSnap,
+                        projectedOrigin: startSnap.projected,
                         startOnMajorHighway: startOnMajorHighway,
                         endOnMajorHighway: endOnMajorHighway,
                         policyUnknown: policyUnknown
-                    )
+                    ))
                     step *= UrbanCore.fallbackMultiplier(
                         point: toLL,
                         start: from,
@@ -4738,12 +4774,12 @@ nonisolated struct OnDeviceRouter {
                     edgeId: id,
                     accessName: accessNameForTraversal(ei, from: parent, to: node),
                     roadClassName: roadClassNameForEdge(ei),
-                    surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
+                    surfaceLeaf: pack.hasLeaves ? (try pack.surfaceLeaf(ei,query: edgeDetailQuery)) : nil,
                     structureType: structureTypeForEdge(ei),
-                    structureLeaf: structureLeafForEdge(ei),
-                    layer: layerForEdge(ei),
-                    crossingLabel: crossingLabelForEdge(ei),
-                    waterCrossing: waterCrossingForEdge(ei),
+                    structureLeaf: (try structureLeafForEdge(ei)),
+                    layer: (try layerForEdge(ei)),
+                    crossingLabel: (try crossingLabelForEdge(ei)),
+                    waterCrossing: (try waterCrossingForEdge(ei)),
                     edgeIndex: ei,
                     fromNode: parent,
                     toNode: node
@@ -4767,7 +4803,7 @@ nonisolated struct OnDeviceRouter {
             allowUnknown: allowUnknown && profile != .cleanest
         ))
         } catch {
-            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "geometryUnavailable"))
+            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "routingDataUnavailable"))
         }
     }
 
@@ -5995,10 +6031,10 @@ nonisolated struct OnDeviceRouter {
         return name.isEmpty ? "motorized_unknown" : name
     }
 
-    private func snapIsMajorHighwayPin(_ snap: EdgeSnap, profile: RouteProfile) -> Bool {
+    private func snapIsMajorHighwayPin(_ snap: EdgeSnap, profile: RouteProfile) throws -> Bool {
         guard snap.distanceMeters < OnDeviceProfileCosts.majorHighwayPinMeters else { return false }
         if profile == .cleanest, pack.hasLeaves {
-            let tier = pack.roadTier(snap.edgeIndex)
+            let tier = (try pack.roadTier(snap.edgeIndex,query: edgeDetailQuery))
             return tier == .motorway || tier == .trunk || tier == .arterial
         }
         return OnDeviceProfileCosts.isMajorHighway(
@@ -6018,34 +6054,34 @@ nonisolated struct OnDeviceRouter {
         return name == "none" ? nil : name
     }
 
-    private func structureLeafForEdge(_ ei: Int) -> String? {
+    private func structureLeafForEdge(_ ei: Int) throws -> String? {
         guard ei >= 0, ei < pack.undirectedEdgeCount, pack.hasLeaves else { return nil }
-        if let leaf = pack.structureLeaf(ei), leaf != "n/a", !leaf.isEmpty {
+        if let leaf = (try pack.structureLeaf(ei,query: edgeDetailQuery)), leaf != "n/a", !leaf.isEmpty {
             return leaf
         }
         return nil
     }
 
-    private func layerForEdge(_ ei: Int) -> Int {
+    private func layerForEdge(_ ei: Int) throws -> Int {
         guard ei >= 0, ei < pack.undirectedEdgeCount, pack.hasLeaves else { return 0 }
-        return pack.layer(ei)
+        return (try pack.layer(ei,query: edgeDetailQuery))
     }
 
-    private func crossingLabelForEdge(_ ei: Int) -> String? {
+    private func crossingLabelForEdge(_ ei: Int) throws -> String? {
         guard ei >= 0, ei < pack.undirectedEdgeCount else { return nil }
         let code = GraphV2Pack.unpackStructure(pack.edgeAttrs[ei])
         return OnDeviceProfileCosts.structureCrossingLabel(
             structureCode: code,
-            structureLeaf: structureLeafForEdge(ei),
-            layer: layerForEdge(ei)
+            structureLeaf: (try structureLeafForEdge(ei)),
+            layer: (try layerForEdge(ei))
         )
     }
 
-    private func waterCrossingForEdge(_ ei: Int) -> Bool {
+    private func waterCrossingForEdge(_ ei: Int) throws -> Bool {
         guard ei >= 0, ei < pack.undirectedEdgeCount else { return false }
         return OnDeviceProfileCosts.isWaterCrossing(
             structureCode: GraphV2Pack.unpackStructure(pack.edgeAttrs[ei]),
-            structureLeaf: structureLeafForEdge(ei)
+            structureLeaf: (try structureLeafForEdge(ei))
         )
     }
 
@@ -6060,12 +6096,12 @@ nonisolated struct OnDeviceRouter {
     }
 
     /// Clean paved-only: leaf law when pack has leaves; else coarse gate.
-    private func edgeBlockedForCleanPavement(_ ei: Int) -> Bool {
+    private func edgeBlockedForCleanPavement(_ ei: Int) throws -> Bool {
         guard ei >= 0, ei < pack.undirectedEdgeCount else { return true }
         if pack.hasLeaves {
             return RoadTierStats.isBlockedForCleanLeaf(
-                family: pack.surfaceFamily(ei),
-                tier: pack.roadTier(ei),
+                family: (try pack.surfaceFamily(ei,query: edgeDetailQuery)),
+                tier: (try pack.roadTier(ei,query: edgeDetailQuery)),
                 pavedOnly: true,
                 isEndpointEdge: false
             )
@@ -6082,18 +6118,18 @@ nonisolated struct OnDeviceRouter {
         ctx: HopSearchContext,
         allowSnapEdges startEi: Int = -1,
         endEi: Int = -1
-    ) -> Bool {
+    ) throws -> Bool {
         if ei == startEi || ei == endEi || ctx.customerStartEdges.contains(ei) || ctx.customerEndEdges.contains(ei) { return false }
         if pack.hasLeaves, ctx.profile == .cleanest {
             return RoadTierStats.isBlockedForCleanLeaf(
-                family: pack.surfaceFamily(ei),
-                tier: pack.roadTier(ei),
+                family: (try pack.surfaceFamily(ei,query: edgeDetailQuery)),
+                tier: (try pack.roadTier(ei,query: edgeDetailQuery)),
                 pavedOnly: ctx.pavedOnly,
                 isEndpointEdge: false
             )
         }
         guard ctx.pavedOnly else { return false }
-        return edgeBlockedForCleanPavement(ei)
+        return (try edgeBlockedForCleanPavement(ei))
     }
 
     /// Pack duplicate nodes within `cleanCoincidentNodeMeters` share a place.
@@ -6233,18 +6269,18 @@ nonisolated struct OnDeviceRouter {
         return false
     }
 
-    private func preferenceStep(_ base: Double, meters: Double, edge: Int) -> Double {
+    private func preferenceStep(_ base: Double, meters: Double, edge: Int) throws -> Double {
         guard let preferences = activeRidePreferences else { return base }
-        let roadClass = edge >= 0 ? (pack.roadClassLeaf(edge) ?? roadClassNameForEdge(edge)) : "unknown"
+        let roadClass = edge >= 0 ? ((try pack.roadClassLeaf(edge,query: edgeDetailQuery)) ?? roadClassNameForEdge(edge)) : "unknown"
         return NativeRidePreferenceCosts.edgeCost(base: base, meters: meters,
             roadClass: roadClass, preferences: preferences)
     }
 
-    private func preferenceRouteCost(_ route: Result, preferences: RidePreferences) -> Double {
-        route.legs.reduce(0) { sum, leg in
+    private func preferenceRouteCost(_ route: Result, preferences: RidePreferences) throws -> Double {
+        try route.legs.reduce(0) { sum, leg in
             let base: Double
             if leg.structureType == "ferry", let edge = leg.edgeIndex {
-                base = fractionalFerryCost(edge: edge, meters: leg.distanceMeters)
+                base = (try fractionalFerryCost(edge: edge, meters: leg.distanceMeters))
             } else {
                 let surface = leg.surfaceName
                 let knownDirt = leg.edgeIndex.map { edgeIsDirt($0) } ?? false
@@ -6255,7 +6291,7 @@ nonisolated struct OnDeviceRouter {
                 base = leg.distanceMeters / 1_000 * factor
             }
             return sum + NativeRidePreferenceCosts.edgeCost(base: base, meters: leg.distanceMeters,
-                roadClass: leg.edgeIndex.flatMap { pack.roadClassLeaf($0) } ?? leg.roadClassName,
+                roadClass: try leg.edgeIndex.flatMap { (try pack.roadClassLeaf($0,query: edgeDetailQuery)) } ?? leg.roadClassName,
                 preferences: preferences)
         }
     }
@@ -6273,10 +6309,93 @@ nonisolated struct OnDeviceRouter {
         return cost
     }
 
-    private func fractionalFerryCost(edge: Int, meters: Double) -> Double {
+    private func fractionalFerryCost(edge: Int, meters: Double) throws -> Double {
         OnDeviceProfileCosts.fractionalFerryRelaxStepCost(
             traversedMeters: meters, parentMeters: Double(pack.edgeMeters[edge]),
-            storedSeconds: pack.crossingSeconds(edge))
+            storedSeconds: (try pack.crossingSeconds(edge,query: edgeDetailQuery)))
+    }
+
+    /// Full-real-road pricing shared with a future connected-pack consumer.
+    /// Legality, turns, virtual stubs, length feasibility and label relaxation
+    /// stay in the caller. Lazy predecessor tier resolution preserves the exact
+    /// throwing-read order and can resolve a predecessor owned by another pack.
+    func fullRealRoadStep(meters edgeM: Double, edgeIndex ei: Int, attributes attr: UInt16,
+        edgeID eid: String, surface: Int, roadClass: Int, access: Int, confidence: Int,
+        profile: RouteProfile, ctx: HopSearchContext, toLL: CLLocationCoordinate2D,
+        edgeFrom: CLLocationCoordinate2D, from: CLLocationCoordinate2D, to: CLLocationCoordinate2D,
+        endLL: CLLocationCoordinate2D, projectedOrigin: CLLocationCoordinate2D, abMeters: Double,
+        startOnMajorHighway: Bool, endOnMajorHighway: Bool, policyUnknown: Bool,
+        awayExtraMeters: Double?, applySoftCorridor: Bool,
+        predecessorTier: () throws -> RoadTier?) throws -> Double {
+        var step = (try hopCostStep(
+            meters: edgeM,
+            edgeIndex: ei,
+            surface: surface,
+            roadClass: roadClass,
+            access: access,
+            confidence: confidence,
+            profile: profile,
+            ctx: ctx,
+            toLL: toLL,
+            endLL: endLL,
+            abMeters: abMeters,
+            projectedOrigin: projectedOrigin,
+            startOnMajorHighway: startOnMajorHighway,
+            endOnMajorHighway: endOnMajorHighway,
+            policyUnknown: policyUnknown
+        ))
+        step *= UrbanCore.fallbackMultiplier(
+            point: toLL,
+            start: from,
+            end: to,
+            boxes: packUrbanCores,
+            edgeFrom: edgeFrom,
+            penalty: UrbanCore.resolveCleanMetroPenalty(
+                profile: profile,
+                override: ctx.cleanMetroMultiplier,
+                avoidMajorHighways: ctx.avoidMotorways
+            )
+        )
+        if ctx.settlementFallback {
+            step *= UrbanCore.settlementFallbackMultiplier(
+                point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
+                penalty: UrbanCore.resolveSettlementPenalty(
+                    profile: profile,
+                    override: ctx.cleanMetroMultiplier,
+                    avoidMajorHighways: ctx.avoidMotorways
+                )
+            )
+        }
+        if let away = awayExtraMeters {
+            step += ctx.costMode == .pavement ? away * 10 : away
+            if applySoftCorridor {
+                step += OnDeviceProfileCosts.corridorCrossTrackExtra(
+                    profile: profile,
+                    point: toLL,
+                    lineFrom: projectedOrigin,
+                    lineTo: endLL,
+                    edgeMeters: edgeM
+                )
+            }
+        }
+        step = backtrackPenalized(step, edgeID: eid, ctx: ctx)
+        let isFerry = GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(attr))
+        if !isFerry, profile == .cleanest, pack.hasLeaves, ctx.avoidMotorways,
+           let resolvedPredecessorTier = try predecessorTier() {
+            step += RoadTierStats.e4MajorHighwayEntryCost(
+                fromTier: resolvedPredecessorTier,
+                toTier: (try pack.roadTier(ei,query: edgeDetailQuery)),
+                enabled: true,
+                metersFromStart: meters(toLL, projectedOrigin),
+                metersToDestination: meters(toLL, endLL),
+                startOnHighway: startOnMajorHighway,
+                endOnHighway: endOnMajorHighway
+            )
+        }
+        // Initial refill ranks physical routed metres. Override all
+        // recreational penalties, including ferry-time pricing.
+        if initialFuelApproach { step = edgeM / 1_000 }
+        return step
     }
 
     private func hopCostStep(
@@ -6291,22 +6410,22 @@ nonisolated struct OnDeviceRouter {
         toLL: CLLocationCoordinate2D,
         endLL: CLLocationCoordinate2D,
         abMeters: Double,
-        startSnap: EdgeSnap,
+        projectedOrigin: CLLocationCoordinate2D,
         startOnMajorHighway: Bool,
         endOnMajorHighway: Bool,
         policyUnknown: Bool
-    ) -> Double {
+    ) throws -> Double {
         if ei >= 0, GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(pack.edgeAttrs[ei])) {
             let sec = OnDeviceProfileCosts.ferryCrossingSeconds(
                 distanceMeters: edgeMeters,
-                storedSeconds: pack.crossingSeconds(ei)
+                storedSeconds: (try pack.crossingSeconds(ei,query: edgeDetailQuery))
             )
-            return preferenceStep(OnDeviceProfileCosts.ferryRelaxStepCost(crossingSeconds: sec), meters: edgeMeters, edge: ei)
+            return (try preferenceStep(OnDeviceProfileCosts.ferryRelaxStepCost(crossingSeconds: sec), meters: edgeMeters, edge: ei))
         }
         let km = edgeMeters / 1000.0
         switch ctx.costMode {
         case .distance, .balancedResource:
-            return preferenceStep(km, meters: edgeMeters, edge: ei)
+            return (try preferenceStep(km, meters: edgeMeters, edge: ei))
         case .pavement:
             let paint = OnDeviceProfileCosts.riderPaintSurface(
                 surfaceName: OnDeviceProfileCosts.surfaceName(code: surface),
@@ -6329,7 +6448,7 @@ nonisolated struct OnDeviceRouter {
             step *= OnDeviceProfileCosts.majorHighwayAvoidMult(
                 profile: profile,
                 roadClassCode: roadClass,
-                metersFromStart: meters(toLL, startSnap.projected),
+                metersFromStart: meters(toLL, projectedOrigin),
                 metersToDestination: meters(toLL, endLL),
                 startOnMajorHighway: startOnMajorHighway,
                 endOnMajorHighway: endOnMajorHighway,
@@ -6337,32 +6456,32 @@ nonisolated struct OnDeviceRouter {
             )
             if profile == .cleanest, pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
                 step *= RoadTierStats.e4LeafCostMult(
-                    tier: pack.roadTier(ei),
+                    tier: (try pack.roadTier(ei,query: edgeDetailQuery)),
                     avoidMotorways: ctx.avoidMotorways,
                     preferBackRoads: ctx.preferBackRoads,
-                    metersFromStart: meters(toLL, startSnap.projected),
+                    metersFromStart: meters(toLL, projectedOrigin),
                     metersToDestination: meters(toLL, endLL),
                     startOnHighway: startOnMajorHighway,
                     endOnHighway: endOnMajorHighway
                 )
             }
-            return preferenceStep(step, meters: edgeMeters, edge: ei)
+            return (try preferenceStep(step, meters: edgeMeters, edge: ei))
         case .profile:
             // Phase E2: Clean + leaves → road-tier × surface-family costs only.
             if profile == .cleanest, pack.hasLeaves, ei >= 0 {
-                let tier = pack.roadTier(ei)
-                let family = pack.surfaceFamily(ei)
+                let tier = (try pack.roadTier(ei,query: edgeDetailQuery))
+                let family = (try pack.surfaceFamily(ei,query: edgeDetailQuery))
                 var step = km * RoadTierStats.cleanLeafCostMult(tier: tier, family: family)
                 step *= RoadTierStats.e4LeafCostMult(
                     tier: tier,
                     avoidMotorways: ctx.avoidMotorways,
                     preferBackRoads: ctx.preferBackRoads,
-                    metersFromStart: meters(toLL, startSnap.projected),
+                    metersFromStart: meters(toLL, projectedOrigin),
                     metersToDestination: meters(toLL, endLL),
                     startOnHighway: startOnMajorHighway,
                     endOnHighway: endOnMajorHighway
                 )
-                return preferenceStep(step, meters: edgeMeters, edge: ei)
+                return (try preferenceStep(step, meters: edgeMeters, edge: ei))
             }
             var step = km * OnDeviceProfileCosts.edgeCostPerKm(
                 profile: profile,
@@ -6387,7 +6506,7 @@ nonisolated struct OnDeviceRouter {
             step *= OnDeviceProfileCosts.majorHighwayAvoidMult(
                 profile: profile,
                 roadClassCode: roadClass,
-                metersFromStart: meters(toLL, startSnap.projected),
+                metersFromStart: meters(toLL, projectedOrigin),
                 metersToDestination: meters(toLL, endLL),
                 startOnMajorHighway: startOnMajorHighway,
                 endOnMajorHighway: endOnMajorHighway,
@@ -6395,16 +6514,16 @@ nonisolated struct OnDeviceRouter {
             )
             if profile == .cleanest, pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
                 step *= RoadTierStats.e4LeafCostMult(
-                    tier: pack.roadTier(ei),
+                    tier: (try pack.roadTier(ei,query: edgeDetailQuery)),
                     avoidMotorways: ctx.avoidMotorways,
                     preferBackRoads: ctx.preferBackRoads,
-                    metersFromStart: meters(toLL, startSnap.projected),
+                    metersFromStart: meters(toLL, projectedOrigin),
                     metersToDestination: meters(toLL, endLL),
                     startOnHighway: startOnMajorHighway,
                     endOnHighway: endOnMajorHighway
                 )
             }
-            return preferenceStep(step, meters: edgeMeters, edge: ei)
+            return (try preferenceStep(step, meters: edgeMeters, edge: ei))
         }
     }
 
@@ -6611,5 +6730,52 @@ private nonisolated final class PackEdgeSpatialIndexCache: @unchecked Sendable {
         if entries.count >= 2 { entries.removeFirst() }
         entries.append(Entry(pack: pack, grid: built))
         return built
+    }
+}
+
+// Unactivated exact-recorded-node Clean-pass bridge. Matching/customer scopes
+// and fallback orchestration remain explicit unsupported prototype inputs.
+extension OnDeviceRouter {
+    func connectedCleanRoadAllowed(edge: Int, fromNode: Int, toNode: Int,
+        originEdge: Int, destinationEdge: Int, origin: CLLocationCoordinate2D,
+        destination: CLLocationCoordinate2D, avoidEdgeIDs: Set<String>, context: HopSearchContext) throws -> Bool {
+        guard pack.version >= 4, pack.legalTopology, pack.hasLeaves else {
+            throw ConnectedCleanStage.Failure.unsupported("V4 leaf policy required")
+        }
+        if !pack.v4AccessAllowed(ei: edge, from: fromNode, to: toNode,
+            startEi: originEdge, endEi: destinationEdge, allowUnknown: false,
+            startEndpointKind: nil, endEndpointKind: nil,
+            customerStartEdges: context.customerStartEdges, customerEndEdges: context.customerEndEdges) { return false }
+        if try edgeBlockedByPavedOnly(edge, ctx: context, allowSnapEdges: originEdge, endEi: destinationEdge) { return false }
+        let edgeID = pack.edgeId(edge)
+        if !edgeID.isEmpty, avoidEdgeIDs.contains(edgeID) { return false }
+        return try !hopBlocked(coordinate(forNode: toNode), edgeFrom: coordinate(forNode: fromNode),
+            edgeIndex: edge, from: origin, to: destination, ctx: context)
+    }
+    func connectedCleanRoadCost(edge: Int, fromNode: Int, toNode: Int,
+        origin: CLLocationCoordinate2D, destination: CLLocationCoordinate2D,
+        originOnHighway: Bool, destinationOnHighway: Bool,
+        predecessorTier: () throws -> RoadTier?, context: HopSearchContext) throws -> Double {
+        let attr = pack.edgeAttrs[edge], toLL = coordinate(forNode: toNode)
+        let ab = meters(origin, destination)
+        let applyAway = context.costMode == .profile || context.costMode == .pavement
+        let away = applyAway ? OnDeviceProfileCosts.approachAwayExtra(profile: .cleanest,
+            dFromMeters: meters(coordinate(forNode: fromNode),destination), dToMeters: meters(toLL,destination),
+            abMeters: ab, regionId: pack.regionId) : nil
+        return try fullRealRoadStep(meters: Double(pack.edgeMeters[edge]), edgeIndex: edge,
+            attributes: attr, edgeID: pack.edgeId(edge), surface: GraphV2Pack.unpackSurface(attr),
+            roadClass: GraphV2Pack.unpackRoadClass(attr), access: GraphV2Pack.unpackAccess(attr),
+            confidence: GraphV2Pack.unpackConfidence(attr), profile: .cleanest, ctx: context,
+            toLL: toLL, edgeFrom: coordinate(forNode: fromNode), from: origin, to: destination,
+            endLL: destination, projectedOrigin: origin, abMeters: ab,
+            startOnMajorHighway: originOnHighway, endOnMajorHighway: destinationOnHighway,
+            policyUnknown: false, awayExtraMeters: away, applySoftCorridor: false,
+            predecessorTier: predecessorTier)
+    }
+    func connectedRoadCoordinates(edge: Int, fromNode: Int) throws -> [CLLocationCoordinate2D] {
+        guard let geometry = try edgeGeometry(edge), geometry.count >= 2 else {
+            throw ConnectedCleanStage.Failure.incomplete("geometryUnavailable")
+        }
+        return Int(pack.edgeFrom?[edge] ?? -1) == fromNode ? geometry : Array(geometry.reversed())
     }
 }

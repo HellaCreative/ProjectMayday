@@ -414,9 +414,9 @@ nonisolated enum FuelItinerary {
         excluding: Set<String> = [],
         roadProgress: RoadProgress? = nil
     ) -> [POIFeature] {
-        guard tankMeters > 0, !fuels.isEmpty else { return [] }
+        guard tankMeters.isFinite, tankMeters > 0, !fuels.isEmpty else { return [] }
         let ab = roadProgress?.originRemainingMeters ?? GeoMath.meters(from, to)
-        guard ab > HopSearchPolicy.fuelMinimumForwardMeters else { return [] }
+        guard ab.isFinite, ab > 0 else { return [] }
 
         struct Cand {
             var fuel: POIFeature
@@ -431,7 +431,7 @@ nonisolated enum FuelItinerary {
         for fuel in fuels {
             if excludedStations.contains(physicalStationID(fuel.id)) { continue }
             guard let graph = reachableMeters[fuel.id], graph.isFinite,
-                  graph > HopSearchPolicy.fuelMinimumForwardMeters
+                  graph > 0
             else { continue }
             guard graph <= tankMeters * HopSearchPolicy.fuelMaxTank else { continue }
             let at = RouteCoordinate(longitude: fuel.longitude, latitude: fuel.latitude)
@@ -441,8 +441,11 @@ nonisolated enum FuelItinerary {
             // Graph reachability is the route corridor. A straight A→B cross-track
             // gate rejects legitimate mountain/highway detours and can erase the
             // only usable fuel chain. Require real progress toward B instead.
-            guard progress > HopSearchPolicy.fuelMinimumForwardMeters,
-                  progress < ab - HopSearchPolicy.fuelDestinationClearanceMeters
+            // Range is carried across rider points. A necessary next pump may
+            // be nearby or close to the destination; neither creates a new
+            // minimum stage length. Ranking still favors useful onward riding,
+            // and the caller must prove the actual approach and continuation.
+            guard progress.isFinite, progress > 0, progress <= ab
             else { continue }
             let crossTrack = roadProgress == nil ? abs(GeoMath.crossTrackMeters(
                 point: at.locationCoordinate,

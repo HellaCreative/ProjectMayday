@@ -22,10 +22,10 @@ import Testing
         for leg in result.legs {
             if leg.structureType == "ferry" {
                 let edge = try #require(leg.edgeIndex)
-                #expect(pack.crossingSeconds(edge) == 600)
+                #expect(try pack.crossingSeconds(edge) == 600)
                 expected += OnDeviceProfileCosts.fractionalFerryRelaxStepCost(
                     traversedMeters: leg.distanceMeters, parentMeters: Double(pack.edgeMeters[edge]),
-                    storedSeconds: pack.crossingSeconds(edge))
+                    storedSeconds: try pack.crossingSeconds(edge))
             } else { expected += leg.distanceMeters / 1_000 }
         }
         #expect(abs((try #require(result.searchMeta.resourceSelectionCost)) - expected) < 0.02)

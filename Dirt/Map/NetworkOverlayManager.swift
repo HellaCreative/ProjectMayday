@@ -324,8 +324,15 @@ nonisolated enum PackNetworkOverlay {
         maxLon: Double,
         maxLat: Double,
         province: String,
-        cap: Int
+        cap: Int,
+        detailQuery: PagedEdgeDetail.Query? = nil
     ) throws -> [NetworkLineFeature] {
+        if detailQuery == nil, let reader = pack.edgeDetailReader {
+            return try reader.withQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { query in
+                try features(from: pack,minLon: minLon,minLat: minLat,maxLon: maxLon,maxLat: maxLat,
+                    province: province,cap: cap,detailQuery: query)
+            }
+        }
         var out: [NetworkLineFeature] = []
         out.reserveCapacity(min(cap, 512))
         let from = pack.edgeFrom
@@ -364,7 +371,7 @@ nonisolated enum PackNetworkOverlay {
             let access = (accessCode >= 0 && accessCode < pack.accessNames.count)
                 ? pack.accessNames[accessCode]
                 : "motorized_unknown"
-            let leaves = pack.edgeLeaves(ei)
+            let leaves = (try pack.edgeLeaves(ei,query: detailQuery))
             out.append(
                 NetworkLineFeature(
                     edgeId: pack.edgeId(ei),
@@ -376,11 +383,11 @@ nonisolated enum PackNetworkOverlay {
                     roadClass: GraphV2Pack.roadClassName(GraphV2Pack.unpackRoadClass(attr)),
                     surfaceLeaf: leaves.surfaceLeaf ?? "",
                     surfaceFamily: PackDebugPaint.surfaceFamilyKey(
-                        pack.hasLeaves ? pack.surfaceFamily(ei) : nil
+                        pack.hasLeaves ? (try pack.surfaceFamily(ei,query: detailQuery)) : nil
                     ),
                     roadClassLeaf: leaves.roadClassLeaf ?? "",
                     roadTier: PackDebugPaint.roadTierKey(
-                        pack.hasLeaves ? pack.roadTier(ei) : nil
+                        pack.hasLeaves ? (try pack.roadTier(ei,query: detailQuery)) : nil
                     ),
                     accessLeaf: leaves.accessLeaf ?? "",
                     atvDesignated: leaves.atvDesignated

@@ -179,12 +179,13 @@ final class GraphPackStore {
     private var manifestFilesByRegion: [String: [PackManifest.File]] = [:]
     @ObservationIgnored private var navigationRegionRequirementCache = NavigationRegionRequirementCache()
 
-    private let session: URLSession = {
+    nonisolated private static func defaultSession() -> URLSession {
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 120
         cfg.timeoutIntervalForResource = 600
         return URLSession(configuration: cfg)
-    }()
+    }
+    private let session: URLSession
 
     private let explicitCacheRoot: URL?
 
@@ -200,7 +201,8 @@ final class GraphPackStore {
     /// True while any quiet auto-download is in flight (one region at a time).
     var isQuietDownloadInFlight: Bool { !quietDownloadIds.isEmpty }
 
-    init(cacheRoot: URL? = nil, refreshCatalogOnInit: Bool = true) {
+    init(cacheRoot: URL? = nil, refreshCatalogOnInit: Bool = true, session: URLSession? = nil) {
+        self.session = session ?? Self.defaultSession()
         self.explicitCacheRoot = cacheRoot
         if cacheRoot == nil { seedLocalV3PacksFromDocumentsIfPresent() }
         refreshInstalledFromDisk()
@@ -2247,15 +2249,29 @@ final class GraphPackStore {
                 identity: matchingIdentity,
                 cancelled: { RoutingWorkContext.stopReason != nil })
         }
-        let data = try Data(contentsOf: graphURL, options: [.mappedIfSafe])
-        measurement?.increment(.fileBytesAccessed, by: UInt64(data.count))
-        if let matchingIdentity = sourceIdentity {
-            measurement?.increment(.fileBytesHashed, by: UInt64(data.count))
-            guard data.count == matchingIdentity.graphBytes,
-                  SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == matchingIdentity.graphSHA256
-            else { throw ExactSnapIndex.Failure.identityMismatch }
+        let pack: GraphV2Pack
+        if let matchingIdentity = sourceIdentity, prefix.count >= 6,
+            (Int(prefix[4]) | Int(prefix[5]) << 8) == 4 {
+            let handle = try FileHandle(forReadingFrom: graphURL)
+            defer { try? handle.close() }
+            let header = try handle.read(upToCount: 16) ?? Data()
+            guard header.count == 16 else { throw PagedEdgeDetail.Failure.invalidLayout }
+            let count = header.withUnsafeBytes { Int(UInt32.routingDecode($0,at: 12)) }
+            pack = try GraphV2Pack(url: graphURL,
+                identity: .init(sha256: matchingIdentity.graphSHA256,bytes: matchingIdentity.graphBytes,edgeCount: count),
+                cancelled: { RoutingWorkContext.stopReason != nil })
+        } else {
+            let data = try Data(contentsOf: graphURL,options: [.mappedIfSafe])
+            measurement?.increment(.fileBytesAccessed,by: UInt64(data.count))
+            if let matchingIdentity = sourceIdentity {
+                measurement?.increment(.fileBytesHashed,by: UInt64(data.count))
+                guard data.count == matchingIdentity.graphBytes,
+                    SHA256.hash(data: data).map({ String(format: "%02x",$0) }).joined() == matchingIdentity.graphSHA256 else {
+                    throw ExactSnapIndex.Failure.identityMismatch
+                }
+            }
+            pack = try GraphV2Pack(data: data)
         }
-        let pack = try GraphV2Pack(data: data)
         if let embedded = pack.regionId, embedded.lowercased() != regionId.lowercased() {
             throw ExactSnapIndex.Failure.identityMismatch
         }
