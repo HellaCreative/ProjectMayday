@@ -811,14 +811,20 @@ nonisolated struct OnDeviceRouter {
         ctx.variety = usesVariety(seed: sessionSeed, profile: profile)
         ctx.corridorMeters = HopSearchPolicy.corridorMeters(for: profile, wander: activeWander)
 
-        // On device there is no HTTP request deadline. Give the corridor
-        // ladder a generous overall ceiling so each individual candidate
-        // gets its full per-candidate time cap (7 s dirt comparison,
-        // 18 s pass-2). The outer deadline is a safety net, not the
-        // primary budget — individual caps do the real limiting.
+        // JS: on device there is no HTTP request deadline. The adaptive
+        // budget (profileSearchBudgetMs) scales with profile, straight-line
+        // distance, and graph node count — identical to the JS fallback when
+        // no caller deadline exists. Individual candidate caps (7 s dirt
+        // comparison, 18 s pass-2) do the real limiting; the outer deadline
+        // is a safety net that prevents runaway searches.
         let straightLineMeters = meters(from, to)
         let nodeCount = pack.nodeCount
-        let outerDeadline = CFAbsoluteTimeGetCurrent() + 60
+        let adaptiveBudgetSeconds = HopSearchPolicy.profileSearchBudgetSeconds(
+            profile: profile,
+            straightLineMeters: straightLineMeters,
+            nodeCount: nodeCount
+        )
+        let outerDeadline = CFAbsoluteTimeGetCurrent() + adaptiveBudgetSeconds
 
         func remainingBudgetSeconds() -> Double {
             max(0.25, outerDeadline - CFAbsoluteTimeGetCurrent())
@@ -960,7 +966,7 @@ nonisolated struct OnDeviceRouter {
             let candidateSummary = candidates.map {
                 "\($0.objective)@\(Int($0.width / 1000))km:\($0.route.dirtPercent)%"
             }.joined(separator: ",")
-            let elapsed = Int((CFAbsoluteTimeGetCurrent() - (outerDeadline - 60)) * 1000)
+            let elapsed = Int((CFAbsoluteTimeGetCurrent() - (outerDeadline - adaptiveBudgetSeconds)) * 1000)
             let note = "objective=earned-dirt-detour corridor=\(Int(selected.width))m elapsed=\(elapsed)ms candidates=[\(candidateSummary)]"
             route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
             return .success(route)
