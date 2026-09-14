@@ -439,7 +439,7 @@ struct PaywallView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(DirtCTAStyle.brand(isLoading: subscription.purchaseInFlight))
-            .disabled(subscription.storeOperationInFlight || (!subscription.hasProducts && !BuildChannel.showsTesterUnlock))
+            .disabled(subscription.storeOperationInFlight || !subscription.hasProducts)
             .accessibilityIdentifier("paywall-primary-action")
             .accessibilityHint(primaryActionHint)
 
@@ -523,12 +523,7 @@ struct PaywallView: View {
     private func subscribe() async {
         errorMessage = nil
         guard let product = subscription.product(for: selectedPlan) else {
-            if BuildChannel.showsTesterUnlock {
-                app.trial.markSubscribed()
-                onSubscribed()
-            } else {
-                errorMessage = "Subscriptions are unavailable right now. Try again shortly."
-            }
+            errorMessage = "Subscriptions are unavailable right now. Try again shortly."
             return
         }
         switch await subscription.purchase(product) {

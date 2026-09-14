@@ -34,43 +34,6 @@ final class AppEnvironment {
     /// Pending opt-in contribute sheet after End navigation.
     var pendingTrackContribution: RideContributionCandidate?
 
-    private enum TesterKey {
-        static let bypassAuth = "dirt_debug_bypass_auth_v1"
-        static let bypassSubscription = "dirt_debug_bypass_subscription_v1"
-    }
-
-    /// Skip Sign in with Apple for pre-release map testing. Persists across launches.
-    var debugBypassAuth: Bool {
-        didSet { UserDefaults.standard.set(debugBypassAuth, forKey: TesterKey.bypassAuth) }
-    }
-
-    /// Treat the rider as subscribed so Export / Start gates never fire.
-    var debugBypassSubscription: Bool {
-        didSet {
-            UserDefaults.standard.set(debugBypassSubscription, forKey: TesterKey.bypassSubscription)
-            syncTrialEntitlement()
-        }
-    }
-
-    /// One-tap unlock used on the onboarding screen: map + no paywall.
-    func unlockAsTester() {
-        guard BuildChannel.showsTesterUnlock else { return }
-        debugBypassAuth = true
-        debugBypassSubscription = true
-        trial.resetForTesting()
-        trial.markSubscribed()
-    }
-
-    func syncTrialEntitlement() {
-        let entitled = subscription.isSubscribed
-            || (BuildChannel.showsTesterUnlock && debugBypassSubscription)
-        if entitled {
-            trial.markSubscribed()
-        } else {
-            trial.isSubscribed = false
-        }
-    }
-
     /// Resolve Dirt's tile release once per launch. The map starts on public
     /// Shortbread, so manifest or edge failures never block launch or routing.
     func bootstrapShortbreadTileDelivery() async {
@@ -80,17 +43,11 @@ final class AppEnvironment {
     }
 
     init() {
-        let storedAuth = UserDefaults.standard.bool(forKey: TesterKey.bypassAuth)
-        let storedSub = UserDefaults.standard.bool(forKey: TesterKey.bypassSubscription)
-        if BuildChannel.showsTesterUnlock {
-            debugBypassAuth = storedAuth
-            debugBypassSubscription = storedSub
-        } else {
-            debugBypassAuth = false
-            debugBypassSubscription = false
-            UserDefaults.standard.removeObject(forKey: TesterKey.bypassAuth)
-            UserDefaults.standard.removeObject(forKey: TesterKey.bypassSubscription)
-        }
+        // The legacy tester bypass has been removed — testers sign in and hit the
+        // paywall like production. Clear any persisted bypass so a device that used
+        // the old "Continue as tester" path is no longer silently unlocked.
+        UserDefaults.standard.removeObject(forKey: "dirt_debug_bypass_auth_v1")
+        UserDefaults.standard.removeObject(forKey: "dirt_debug_bypass_subscription_v1")
 
         planner = RoutePlannerModel(
             routing: routing,
@@ -215,10 +172,6 @@ final class AppEnvironment {
             Task {
                 await graphPacks.warmupActivePack(near: seed)
             }
-        }
-
-        if debugBypassSubscription {
-            syncTrialEntitlement()
         }
 
 #if DEBUG

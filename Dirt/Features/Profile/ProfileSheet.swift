@@ -546,30 +546,6 @@ struct ProfileSheet: View {
 
     private var testerTools: some View {
         VStack(alignment: .leading, spacing: DirtSpace.tight) {
-            VStack(alignment: .leading, spacing: 0) {
-                testerRow(
-                    app.debugBypassSubscription ? "Paywall skipped — turn back on" : "Skip as tester",
-                    tint: app.debugBypassSubscription ? DirtTheme.orange : DirtTheme.muted
-                ) {
-                    app.debugBypassSubscription.toggle()
-                    app.planner.toast = app.debugBypassSubscription
-                        ? "Paywall skipped until reinstall"
-                        : "Paywall armed"
-                }
-
-                testerRow("Replay first run", tint: DirtTheme.muted) {
-                    OnboardingPrefs.resetAll()
-                    app.trial.resetForTesting()
-                    app.debugBypassSubscription = false
-                    app.planner.toast = "Relaunch to replay the tour"
-                }
-
-                testerRow("Reset free Starts", tint: DirtTheme.muted) {
-                    app.trial.resetForTesting()
-                    app.planner.toast = "Two free Starts restored"
-                }
-            }
-
             routeSessionDiagnosticsCard
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -642,14 +618,6 @@ struct ProfileSheet: View {
         routeDebugBusy = false
     }
 
-    private func testerRow(_ title: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .font(.dirtUI(13, weight: .semibold))
-            .foregroundStyle(tint)
-            .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
-            .contentShape(Rectangle())
-            .buttonStyle(.plain)
-    }
 }
 
 /// Share sheet for diagnostic report files (AirDrop / Messages / Files).

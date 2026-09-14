@@ -137,10 +137,9 @@ struct RootView: View {
         return parts.joined(separator: " · ")
     }
 
-    /// StoreKit entitlement, or pre-release / Debug tester unlock (no fake receipt).
+    /// StoreKit entitlement.
     private var effectiveSubscribed: Bool {
         app.subscription.isSubscribed
-            || (BuildChannel.showsTesterUnlock && app.debugBypassSubscription)
     }
 
     private var softPaywallPresented: Binding<Bool> {
@@ -556,9 +555,6 @@ struct RootView: View {
                 }
             }
             .onChange(of: app.subscription.isSubscribed) { _, _ in
-                app.trial.isSubscribed = effectiveSubscribed
-            }
-            .onChange(of: app.debugBypassSubscription) { _, _ in
                 app.trial.isSubscribed = effectiveSubscribed
             }
             .task {

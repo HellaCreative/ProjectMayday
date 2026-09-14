@@ -74,25 +74,6 @@ struct OnboardingView: View {
                         .padding(.bottom, 8)
                 }
 
-                if BuildChannel.showsTesterUnlock {
-                    Button {
-                        app.unlockAsTester()
-                    } label: {
-                        Text("Continue as tester")
-                            .font(DirtType.cta)
-                            .foregroundStyle(DirtTheme.onOrange)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(DirtTheme.orange)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    Text("Pre-release unlock — map + no paywall. Sign in with Apple still preferred when it works.")
-                        .font(.dirtUI(10))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 8)
-                        .padding(.bottom, 14)
-                }
 
                 ZStack {
                     AppleSignInButton(onFinished: handle)
