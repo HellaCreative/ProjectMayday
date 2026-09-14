@@ -1036,3 +1036,34 @@ enum RoutingError: LocalizedError {
         }
     }
 }
+
+
+/// A completed legal line may still have bounded, unfinished comparison of
+/// riding alternatives. This is independent of road completion and fuel proof.
+extension RouteResponse {
+    static let searchLimitedMessage = "Route found. The search reached its limit before finishing comparison of alternatives."
+
+    var hasLimitedRouteSearch: Bool {
+        debug?.searchMeta?.timedOut == true ||
+            warnings?.contains { $0.code == "route_search_limited" } == true
+    }
+}
+
+extension OnDeviceRouter.SearchMeta {
+    var limitedSearchWarning: RouteWarning? {
+        timedOut ? RouteWarning(code: "route_search_limited", message: RouteResponse.searchLimitedMessage) : nil
+    }
+
+    var responseDebug: RouteResponseDebug {
+        RouteResponseDebug(routingRevision: nil, graphMode: "on-device",
+            searchMeta: RouteResponseSearchMeta(
+                pass2Outcome: pass2Outcome, pops: pops, timedOut: timedOut,
+                rideObjective: rideObjective, corridorMeters: corridorMeters,
+                maxCrossTrackMeters: maxCrossTrackMeters, corridorWidened: corridorWidened,
+                shortestMeters: shortestMeters, extraUsedMeters: extraUsedMeters,
+                extraBudgetMeters: extraBudgetMeters, urbanCoreFallbackUsed: urbanCoreFallbackUsed,
+                cleanUnpavedFallbackUsed: cleanUnpavedFallbackUsed,
+                settlementFallbackUsed: settlementFallbackUsed),
+            fallback: nil, searchMs: elapsedMs, pops: pops)
+    }
+}

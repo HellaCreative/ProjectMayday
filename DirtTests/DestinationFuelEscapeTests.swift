@@ -7,7 +7,7 @@ import Testing
 struct DestinationFuelEscapeTests {
     @Test func reachableFreshExitIsNotProofAfterRestrictedArrival() async throws {
         let pack = try packFixture()
-        var approachRouter = OnDeviceRouter(pack: pack)
+        var approachRouter = try fixtureRouter(pack: pack)
         approachRouter.recordedStartNode = try node(pack, 1)
         approachRouter.recordedEndNode = try node(pack, 3)
         let start = coordinate(pack, try node(pack, 1)), arrival = coordinate(pack, try node(pack, 3))
@@ -17,7 +17,7 @@ struct DestinationFuelEscapeTests {
             Issue.record("Expected legal arrival before prohibited exit"); return
         }
         let token = try #require(approach.terminalContinuation)
-        var escapeRouter = OnDeviceRouter(pack: pack)
+        var escapeRouter = try fixtureRouter(pack: pack)
         escapeRouter.recordedStartNode = try node(pack, 3)
         escapeRouter.recordedEndNode = try node(pack, 5)
         guard case .success = escapeRouter.routeDetailed(from: arrival, to: end,
@@ -34,7 +34,7 @@ struct DestinationFuelEscapeTests {
 
     @Test func selectedEscapeDistanceMustFitActualRemainingFuel() async throws {
         let pack = try packFixture()
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.recordedStartNode = try node(pack, 5)
         router.recordedEndNode = try node(pack, 4)
         let start = coordinate(pack, try node(pack, 5)), end = coordinate(pack, try node(pack, 4))
@@ -106,7 +106,7 @@ struct DestinationFuelEscapeTests {
 
     @Test func destinationDistanceOrdersCandidatesAndFailedNearestDoesNotEndProof() async throws {
         let pack = try packFixture()
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.recordedStartNode = try node(pack, 5)
         router.recordedEndNode = try node(pack, 4)
         let a = coordinate(pack, try node(pack, 5)), b = coordinate(pack, try node(pack, 4))

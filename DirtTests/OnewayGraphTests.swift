@@ -32,7 +32,7 @@ struct OnewayGraphTests {
 
     @Test func onDeviceRouterRefusesIllegalOneWayReversal() throws {
         let pack = try loadCanary()
-        let router = OnDeviceRouter(pack: pack)
+        let router = try fixtureRouter(pack: pack)
         let east = CLLocationCoordinate2D(latitude: 45.8071, longitude: -64.1882)
         let west = CLLocationCoordinate2D(latitude: 45.8071, longitude: -64.1888)
         switch router.routeDetailed(

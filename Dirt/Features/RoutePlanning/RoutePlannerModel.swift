@@ -121,6 +121,7 @@ final class RoutePlannerModel {
         enum Kind: Equatable {
             case gap
             case unverified
+            case searchLimited
         }
 
         let id: String
@@ -1548,6 +1549,28 @@ final class RoutePlannerModel {
         }
     }
 
+    /// Uses the existing notice row while retaining distinct route/fuel meaning.
+    var routeSearchNotices: [FuelCoverageNotice] {
+        // Direct native responses (for example a navigation replacement) may
+        // not have canonical planner stages, but still need honest disclosure.
+        if stages.isEmpty, hasLimitedRouteSearch {
+            return [FuelCoverageNotice(id: "route:search-limited", stageIndex: 0,
+                kind: .searchLimited, title: "Route comparison incomplete",
+                scope: "Ride", message: RouteResponse.searchLimitedMessage)]
+        }
+        return stages.enumerated().compactMap { index, stage in
+            guard stage.response?.hasLimitedRouteSearch == true else { return nil }
+            return FuelCoverageNotice(id: "\(stage.id):search-limited", stageIndex: index,
+                kind: .searchLimited, title: "Route comparison incomplete",
+                scope: "Leg \(index + 1) · \(stageEndpointTitle(at: index))",
+                message: RouteResponse.searchLimitedMessage)
+        }
+    }
+
+    var planningNotices: [FuelCoverageNotice] { fuelCoverageNotices + routeSearchNotices }
+
+    var hasLimitedRouteSearch: Bool { activeResponses.contains { $0.hasLimitedRouteSearch } }
+
     func prepareToMoveWaypoint(for riderLegID: UUID) {
         guard let index = itinerary.legs.firstIndex(where: { $0.id == riderLegID }),
               itinerary.waypoints.indices.contains(index + 1)
@@ -1640,11 +1663,18 @@ final class RoutePlannerModel {
             let cl = CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude)
             if Self.installedPacksCover(ends: [cl], store: graphPacks) {
                 await graphPacks.ensureRoadShapes(for: [cl])
-                let distance = await graphPacks.distanceToNearestRoad(
-                    from: cl,
-                    allowUnknown: allowUnknown,
-                    profile: profile
-                )
+                let distance: Double?
+                do {
+                    distance = try await graphPacks.distanceToNearestRoad(
+                        from: cl, allowUnknown: allowUnknown, profile: profile)
+                } catch {
+                    guard intentGeneration == fromHereIntentGeneration,
+                          destination == requestedDest, fromHereStartOverride == requestedStart else { return }
+                    isAssemblingRoute = false
+                    errorMessage = "The routing data could not be prepared. Your points are kept; retry when the data is ready."
+                    toast = nil
+                    return
+                }
                 guard intentGeneration == fromHereIntentGeneration,
                       destination == requestedDest,
                       fromHereStartOverride == requestedStart
@@ -1696,12 +1726,14 @@ final class RoutePlannerModel {
         let cl = CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude)
         guard Self.installedPacksCover(ends: [cl], store: graphPacks) else { return false }
         await graphPacks.ensureRoadShapes(for: [cl])
-        guard let distance = await graphPacks.distanceToNearestRoad(
-            from: cl,
-            allowUnknown: allowUnknown,
-            profile: profile
-        ) else { return true }
-        return distance > OnDeviceRouter.preferredMatchMeters
+        do {
+            guard let distance = try await graphPacks.distanceToNearestRoad(
+                from: cl, allowUnknown: allowUnknown, profile: profile) else { return true }
+            return distance > OnDeviceRouter.preferredMatchMeters
+        } catch {
+            // Failed preparation is not evidence that the rider is off-road.
+            return false
+        }
     }
 
     private func shouldEnterFromHereStartRecovery(
@@ -3116,7 +3148,7 @@ final class RoutePlannerModel {
                 surfaceLeaf: leg.surfaceLeaf
             )
         }
-        return makeStoredRouteResponse(
+        var response = makeStoredRouteResponse(
             coordinates: coords,
             distanceMeters: local.distanceMeters,
             dirtPercent: local.reportedDirtPercent,
@@ -3128,7 +3160,7 @@ final class RoutePlannerModel {
             surfaceFamilyMode: local.hasSurfaceLeaves ? "leaf-v3" : nil,
             maneuvers: local.maneuvers,
             warnings: {
-                var warnings: [RouteWarning] = []
+                var warnings: [RouteWarning] = local.searchMeta.limitedSearchWarning.map { [$0] } ?? []
                 if local.searchMeta.urbanCoreFallbackUsed {
                     warnings.append(RouteWarning(
                     code: "urban_core_fallback",
@@ -3151,6 +3183,8 @@ final class RoutePlannerModel {
             }(),
             terminalContinuation: local.terminalContinuation
         )
+        response.debug = local.searchMeta.responseDebug
+        return response
     }
 
     /// Show only this generated stage and frame its start + end points. The
@@ -4476,6 +4510,7 @@ final class RoutePlannerModel {
     private func announceRouteReadyIfComplete() {
         guard !isAssemblingRoute,
               fuelPlanningStatus == nil,
+              !hasLimitedRouteSearch,
               routePlanIsCompleteSuccess else {
             if toast == Self.calculatingRouteToast {
                 toast = nil

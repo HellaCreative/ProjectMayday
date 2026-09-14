@@ -278,6 +278,7 @@ nonisolated enum HopSearchPolicy {
 }
 
 nonisolated struct HopSearchContext: Sendable {
+    var urbanEdgeMemo: UrbanEdgeMemo? = nil
     var roadRemaining: [Double]? = nil
     var customerStartEdges: Set<Int> = []
     var customerEndEdges: Set<Int> = []

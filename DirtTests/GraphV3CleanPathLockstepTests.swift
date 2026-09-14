@@ -68,7 +68,7 @@ struct GraphV3CleanPathLockstepTests {
     @Test func swiftCleanPathMatchesJsLockstepFixture() throws {
         let pack = try loadNsV3()
         #expect(pack.hasLeaves)
-        let router = OnDeviceRouter(pack: pack)
+        let router = try fixtureRouter(pack: pack)
 
         let fixtureData = try Data(contentsOf: try fixtureURL("ns-graph.v3.clean-path.lockstep.json"))
         guard let root = try JSONSerialization.jsonObject(with: fixtureData) as? [String: Any],
@@ -134,7 +134,7 @@ struct GraphV3CleanPathLockstepTests {
     /// Regression: balanced search must not reference undefined Clean-only metro vars.
     @Test func balancedRouteCompletesWithBothPinsInsideHalifaxMetro() throws {
         let pack = try loadNsV3()
-        let router = OnDeviceRouter(pack: pack)
+        let router = try fixtureRouter(pack: pack)
         let a = CLLocationCoordinate2D(latitude: 44.6488, longitude: -63.5752)
         let b = CLLocationCoordinate2D(latitude: 44.672, longitude: -63.601)
         guard let result = router.route(

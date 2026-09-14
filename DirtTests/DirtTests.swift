@@ -351,7 +351,7 @@ struct DirtTests {
         #expect(SurfaceFamilyStats.family(of: "mystery_mix") == .unknown)
     }
 
-    @Test @MainActor func routeCompositionKeepsFourFamiliesAndTwoTotalsConsistent() throws {
+    @Test @MainActor func routeCompositionKeepsKnownDirtAndUnknownSeparate() throws {
         let json = """
         {
           "status":"complete",
@@ -373,7 +373,7 @@ struct DirtTests {
         #expect(mix.gravelMeters == 300)
         #expect(mix.looseMeters == 200)
         #expect(mix.unknownMeters == 100)
-        #expect(mix.dirtPercent == 60)
+        #expect(mix.dirtPercent == 50)
         #expect(mix.pavedPercent == 40)
         #expect(mix.gravelPercent == 30)
         #expect(mix.loosePercent == 20)
@@ -483,14 +483,14 @@ struct DirtTests {
         #expect(route.segments?.first?.edgeId == "edge-1")
     }
 
-    @Test @MainActor func legacySummaryPreservesTotalsButNamesNonPavedUnknown() throws {
+    @Test @MainActor func legacySummaryDoesNotInventKnownDirtFromNonPavedRemainder() throws {
         let json = """
         {"status":"complete","distanceMeters":1000,"geometry":[[-63.00,44.00],[-63.01,44.01]],"stats":{"dirtPercent":65,"pavedPercent":35}}
         """
         let response = try JSONDecoder().decode(RouteResponse.self, from: Data(json.utf8))
         let mix = RouteSurfaceComposition.from(responses: [response])
 
-        #expect(mix.dirtPercent == 65)
+        #expect(mix.dirtPercent == 0)
         #expect(mix.pavedPercent == 35)
         #expect(mix.unknownPercent == 65)
         #expect(mix.gravelPercent == 0)

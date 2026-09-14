@@ -2,7 +2,8 @@ import Foundation
 import Testing
 @testable import Dirt
 
-/// Phase E1: honest Dirt% from surfaceLeaf must match the JS surface-family lockstep fixture.
+/// Immutable leaf facts retain fixture parity; known dirt excludes unknown
+/// under the current routing contract, unlike the legacy aggregate metric.
 struct GraphV3DirtPercentLockstepTests {
     private func fixtureURL(_ name: String) throws -> URL {
         let src = URL(fileURLWithPath: #filePath)
@@ -29,7 +30,7 @@ struct GraphV3DirtPercentLockstepTests {
         return seed
     }
 
-    @Test func honestDirtPercentMatchesJsLockstep() throws {
+    @Test func knownDirtPercentUsesFixtureSurfaceFacts() throws {
         let pack = try GraphV2Pack(data: Data(contentsOf: try nsV3PackURL()))
         #expect(pack.version == 3)
         #expect(pack.hasLeaves)
@@ -55,7 +56,13 @@ struct GraphV3DirtPercentLockstepTests {
                 rows: rows,
                 distanceMeters: rows.reduce(0) { $0 + $1.meters }
             )
-            let expDirt = route["dirtPercent"] as? Int ?? -1
+            let fixtureFamilies = try #require(fixture["surfaceFamilyMap"] as? [String: String])
+            let knownMeters = rows.reduce(0.0) { total, row in
+                let family = fixtureFamilies[(row.surfaceLeaf ?? "").lowercased()]
+                return total + ((family == "gravel" || family == "loose") ? row.meters : 0)
+            }
+            let totalMeters = rows.reduce(0.0) { $0 + $1.meters }
+            let expDirt = totalMeters > 0 ? Int((100 * knownMeters / totalMeters).rounded()) : 0
             let expPaved = route["pavedPercent"] as? Int ?? -1
             let expUnknown = route["unknownSurfacePercent"] as? Int ?? -1
             #expect(got.dirtPercent == expDirt, "dirtPercent route=\(id)")
@@ -79,7 +86,7 @@ struct GraphV3DirtPercentLockstepTests {
         #expect(pack.surfaceLeaf(0) == nil)
         let rows: [(meters: Double, surfaceLeaf: String?)] = [(1000, nil)]
         // Without leaves, callers must use coarse adventure stats — honest helper
-        // treats nil leaf as Unknown (dirt). Confirm family map still loads empty→default.
+        // treats nil leaf as Unknown, not known dirt. Confirm family map still loads empty→default.
         #expect(SurfaceFamilyStats.family(of: nil) == .unknown)
         #expect(SurfaceFamilyStats.family(of: "gravel") == .gravel)
         #expect(SurfaceFamilyStats.family(of: "unpaved") == .gravel)
@@ -101,7 +108,7 @@ struct GraphV3DirtPercentLockstepTests {
         )
         #expect(got.pavedPercent == 33)
         #expect(got.gravelPercent == 33)
-        #expect(got.dirtPercent == 67)
+        #expect(got.dirtPercent == 50)
         #expect(got.unknownSurfacePercent == 17)
     }
 }

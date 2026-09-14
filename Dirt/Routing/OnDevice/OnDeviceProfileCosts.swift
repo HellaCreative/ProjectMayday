@@ -425,6 +425,15 @@ nonisolated enum OnDeviceProfileCosts {
         return max(60, (distanceMeters / 1000.0) / ferrySpeedKmh * 3600.0)
     }
 
+    /// Charge a fractional traversal its fraction of the same parent crossing
+    /// objective. In particular, do not reapply the fallback minimum per slice.
+    static func fractionalFerryRelaxStepCost(traversedMeters: Double, parentMeters: Double,
+                                            storedSeconds: UInt32) -> Double {
+        guard parentMeters > 0, traversedMeters > 0 else { return 0 }
+        let seconds = ferryCrossingSeconds(distanceMeters: parentMeters, storedSeconds: storedSeconds)
+        return ferryRelaxStepCost(crossingSeconds: seconds) * min(1, traversedMeters / parentMeters)
+    }
+
     static func ferryRelaxStepCost(crossingSeconds: Double) -> Double {
         guard crossingSeconds > 0 else { return 0 }
         return (crossingSeconds / 3600.0) * ferryCostReferenceKmh

@@ -983,14 +983,15 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder private var fuelCoverageNotices: some View {
-        ForEach(planner.fuelCoverageNotices) { notice in
+        ForEach(planner.planningNotices) { notice in
             Button {
-                planner.focusStage(at: notice.stageIndex)
+                if planner.stages.isEmpty { planner.focusEntirePlannedRoute() }
+                else { planner.focusStage(at: notice.stageIndex) }
             } label: {
                 HStack(alignment: .top, spacing: DirtSpace.inner) {
                     Image(systemName: notice.kind == .gap
                           ? "fuelpump.slash.fill"
-                          : "fuelpump.fill")
+                          : notice.kind == .searchLimited ? "exclamationmark.triangle.fill" : "fuelpump.fill")
                         .font(.system(.headline, weight: .bold))
                         .foregroundStyle(DirtTheme.action)
                         .frame(width: 24, height: 24)
@@ -1024,7 +1025,7 @@ struct RoutePlannerCard: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("fuel-coverage-notice-\(notice.stageIndex + 1)")
+            .accessibilityIdentifier("\(notice.kind == .searchLimited ? "route-search-notice" : "fuel-coverage-notice")-\(notice.stageIndex + 1)")
             .accessibilityHint("Shows only \(notice.scope) on the map")
         }
     }

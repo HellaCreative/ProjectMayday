@@ -141,6 +141,7 @@ final class GraphPackStore {
         let initialFuelApproach: Bool
         let recordedStartNode: Int64?
         let recordedEndNode: Int64?
+        let ridePreferences: RidePreferences?
     }
     private final class RegionalRouteEntry {
         weak var pack: GraphV2Pack?
@@ -456,7 +457,7 @@ final class GraphPackStore {
         let id = regionId.lowercased()
         if activePack?.regionId?.lowercased() == id { return activePack }
         guard let graphURL = findGraphFileURL(regionId: id) else { return nil }
-        return Self.decodePack(
+        return try? Self.decodePack(
             regionId: id,
             graphURL: graphURL,
             geometryURL: geometryFileURL(regionId: id),
@@ -1255,7 +1256,10 @@ final class GraphPackStore {
         } else {
             await ensureActivePackAsync(for: [from, to])
         }
-        guard let pack = activePack else { return .failure(.searchLimit("routingPackUnavailable")) }
+        let expectedRegion = regionId ?? Self.preferredRegionOrder(for: [from, to]).first(where: { isInstalled($0) })
+        guard let pack = activePack, pack.regionId?.lowercased() == expectedRegion?.lowercased() else {
+            return .failure(.searchLimit("routingPackUnavailable"))
+        }
         let startNode = recordedStartNode.flatMap { pack.osmNodeIds.firstIndex(of: $0) }
         let endNode = recordedEndNode.flatMap { pack.osmNodeIds.firstIndex(of: $0) }
         guard (recordedStartNode == nil || startNode != nil),
@@ -1272,7 +1276,8 @@ final class GraphPackStore {
             cap: maxRouteMeters, metro: cleanMetroMultiplier, avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads, zoom: mapZoom, matchLimit: matchLimitMeters,
             startKind: startEndpointKind, endKind: endEndpointKind, initialFuelApproach: initialFuelApproach,
-            recordedStartNode: recordedStartNode, recordedEndNode: recordedEndNode)
+            recordedStartNode: recordedStartNode, recordedEndNode: recordedEndNode,
+            ridePreferences: RidePreferenceContext.current)
         if maxRouteMeters != nil, let cached = regionalRoutes[key], cached.pack === pack {
             regionalRouteCacheHits += 1
             regionalRouteRecency.removeAll { $0 == key }
@@ -1291,8 +1296,10 @@ final class GraphPackStore {
         let matchLimit = matchLimitMeters
         let startKind = startEndpointKind
         let endKind = endEndpointKind
+        let preferences = RidePreferenceContext.current
         let computed = await RoutingWorkContext.detachedSearch {
             var router = OnDeviceRouter(pack: packRef)
+            router.ridePreferences = preferences
             router.sessionSeed = seed
             router.mapZoom = zoom
             router.matchLimitMeters = matchLimit
@@ -1344,8 +1351,10 @@ final class GraphPackStore {
         return computed
     }
 
-    private func fuelDistancePacks(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) async -> [GraphV2Pack] {
-        guard let start = Self.primaryRegionId(containing: from), let end = Self.primaryRegionId(containing: to) else { return [] }
+    private func fuelDistancePacks(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D,
+                                   stationSourceRegionID: String? = nil) async -> [GraphV2Pack] {
+        guard let start = Self.primaryRegionId(containing: from),
+              let end = stationSourceRegionID ?? Self.primaryRegionId(containing: to) else { return [] }
         let installed = Set(Self.roadReachableNeighbours.keys.filter { isInstalled($0) })
         guard let path = Self.shortestRegionPath(from: start, to: end, allowedRegionIds: installed) else { return [] }
         var result: [GraphV2Pack] = []
@@ -1359,12 +1368,12 @@ final class GraphPackStore {
 
     func fuelRoadProgress(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D,
                           pumps: [POIFeature], profile: RouteProfile,
-                          allowUnknown: Bool) async -> FuelItinerary.RoadProgress? {
+                          allowUnknown: Bool) async throws -> FuelItinerary.RoadProgress? {
         let packs = await fuelDistancePacks(from: from, to: to)
-        guard !packs.isEmpty else { return nil }
-        return await RoutingWorkContext.detachedSearch {
+        guard !packs.isEmpty else { throw RoutingError.fuelUnknown("Required routing data is unavailable; road connectivity has not been checked.") }
+        return try await RoutingWorkContext.detachedThrowingSearch {
             let points = [from] + pumps.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-            guard let distances = OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: to,
+            guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: to,
                 points: points, profile: profile, allowUnknown: allowUnknown, reverse: true),
                 let origin = distances.first, origin.isFinite else { return nil }
             return FuelItinerary.RoadProgress(originRemainingMeters: origin,
@@ -1379,24 +1388,108 @@ final class GraphPackStore {
         maxMeters: Double,
         profile: RouteProfile,
         allowUnknown: Bool
-    ) async -> Double? {
+    ) async throws -> Double? {
         if Self.primaryRegionId(containing: from) != Self.primaryRegionId(containing: to) {
             let packs = await fuelDistancePacks(from: from, to: to)
-            return await RoutingWorkContext.detachedSearch {
-                guard let distance = OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
+            guard !packs.isEmpty else { throw RoutingError.fuelUnknown("Required regional data could not be prepared; reachability has not been checked.") }
+            return try await RoutingWorkContext.detachedThrowingSearch {
+                guard let distance = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
                     points: [to], profile: profile, allowUnknown: allowUnknown, reverse: false)?.first,
                     distance.isFinite, distance <= maxMeters else { return nil }
                 return distance
             }
         }
         await ensureActivePackAsync(for: [from, to])
-        guard let pack = activePack else { return nil }
+        guard let expected = Self.primaryRegionId(containing: from),
+              let pack = activePack, pack.regionId?.lowercased() == expected else { throw RoutingError.fuelUnknown("Required routing data could not be prepared; road connectivity has not been checked.") }
         let packRef = pack
-        return await RoutingWorkContext.detachedSearch {
-            OnDeviceRouter(pack: packRef).shortestGraphMeters(
+        return try await RoutingWorkContext.detachedThrowingSearch {
+            try OnDeviceRouter(pack: packRef).shortestGraphMeters(
                 from: from, to: to, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
+        }
+    }
+
+    private func verifiedSeamSourceIdentity(region: String) throws -> PackManifest.File? {
+        try RoutingWorkContext.check()
+        if let identity = manifestFilesByRegion[region]?.first(where: { $0.name == "cross-pack-seams.v2.json" }),
+           let bytes = identity.bytes, bytes > 0, let hash = identity.sha256, hash.count == 64 {
+            return identity
+        }
+        let url = graphFileURL(regionId: region).deletingLastPathComponent()
+            .appendingPathComponent("pack-manifest.v2.json")
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              size > 0, size <= 65_536,
+              let data = try? Data(contentsOf: url), data.count == size,
+              let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              manifest["schema"] as? String == "pack-manifest.v2",
+              manifest["regionId"] as? String == region,
+              let seam = manifest["seams"] as? [String: Any],
+              seam["name"] as? String == "cross-pack-seams.v2.json",
+              let bytes = seam["bytes"] as? Int, bytes > 0,
+              let hash = seam["sha256"] as? String, hash.count == 64 else { return nil }
+        try RoutingWorkContext.check()
+        return .init(name: "cross-pack-seams.v2.json", bytes: bytes, sha256: hash)
+    }
+
+    /// Filter only when the complete relaxed arrival field cannot leave this
+    /// verified pack. A missing/incompatible context preserves all candidates.
+    func destinationEscapeCandidates(from: CLLocationCoordinate2D,
+        arrival: NativeRoutingContinuation?, remainingMeters: Double,
+        stations: [POIFeature], mapZoom: Double?, matchLimitMeters: Double?) async throws -> [POIFeature] {
+        guard let arrival, let region = Self.primaryRegionId(containing: from),
+              isInstalled(region),
+              let seamIdentity = try verifiedSeamSourceIdentity(region: region)
+        else { return stations }
+        await activateInstalledPack(regionId: region)
+        guard let pack = activePack, pack.regionId?.lowercased() == region,
+              pack.exactSnapIndex?.isReusable == true,
+              let seamData = try Self.verifiedSeamData(at: seamsFileURL(regionId: region),
+                  expectedBytes: seamIdentity.bytes, expectedSHA256: seamIdentity.sha256),
+              (try? pack.applyCrossPackSeams(data: seamData)) != nil else { return stations }
+        try RoutingWorkContext.check()
+        let filtered = try await RoutingWorkContext.detachedThrowingSearch {
+            let router = OnDeviceRouter(pack: pack)
+            guard let field = try router.relaxedArrivalFuelField(arrival: arrival, remainingMeters: remainingMeters),
+                  !field.reachesRecordedBorder else { return (stations, 0) }
+            var retained: [POIFeature] = []
+            for station in stations {
+                try RoutingWorkContext.check()
+                let cap = TapRadius.meters(zoom: mapZoom, latitude: station.latitude,
+                    requestedMeters: matchLimitMeters, graphBinaryVersion: Int(pack.version))
+                if try !router.stationOutsideRelaxedArrivalField(
+                    .init(latitude: station.latitude, longitude: station.longitude),
+                    field: field, maxMeters: cap) { retained.append(station) }
+            }
+            return (retained, field.reachedNodes.count)
+        }
+        RoutingDebugLog.shared.event("destination escape relaxed candidates=\(stations.count) retained=\(filtered.0.count) nodes=\(filtered.1)")
+        return filtered.0
+    }
+
+    /// Nil is an incomplete nearest-station proof, including a reachable
+    /// regional portal. It must never be interpreted as no station exists.
+    func initialStationLowerBounds(from: CLLocationCoordinate2D, stations: [POIFeature],
+        incumbentMeters: Double, mapZoom: Double?, matchLimitMeters: Double?) async throws -> [String: Double]? {
+        guard let region = Self.primaryRegionId(containing: from), isInstalled(region),
+              let identity = try verifiedSeamSourceIdentity(region: region) else { return nil }
+        await activateInstalledPack(regionId: region)
+        guard let pack = activePack, pack.regionId?.lowercased() == region,
+              pack.exactSnapIndex?.isReusable == true,
+              let data = try Self.verifiedSeamData(at: seamsFileURL(regionId: region),
+                  expectedBytes: identity.bytes, expectedSHA256: identity.sha256),
+              (try? pack.applyCrossPackSeams(data: data)) != nil else { return nil }
+        try RoutingWorkContext.check()
+        return try await RoutingWorkContext.detachedThrowingSearch {
+            let points = stations.map { station in
+                (point: CLLocationCoordinate2D(latitude: station.latitude, longitude: station.longitude),
+                 matchMeters: TapRadius.meters(zoom: mapZoom, latitude: station.latitude,
+                    requestedMeters: matchLimitMeters, graphBinaryVersion: Int(pack.version)))
+            }
+            guard let bounds = try OnDeviceRouter(pack: pack).initialStationLowerBounds(from: from,
+                stations: points, incumbentMeters: incumbentMeters) else { return nil }
+            return Dictionary(zip(stations.map(\.id), bounds), uniquingKeysWith: min)
         }
     }
 
@@ -1406,23 +1499,28 @@ final class GraphPackStore {
         pumps: [POIFeature],
         maxMeters: Double,
         profile: RouteProfile,
-        allowUnknown: Bool
-    ) async -> [String: Double] {
-        if Self.primaryRegionId(containing: from) != Self.primaryRegionId(containing: toward) {
-            let packs = await fuelDistancePacks(from: from, to: toward)
-            return await RoutingWorkContext.detachedSearch {
+        allowUnknown: Bool,
+        stationSourceRegionID: String? = nil
+    ) async throws -> [String: Double] {
+        let sourceRegion = stationSourceRegionID ?? Self.primaryRegionId(containing: toward)
+        if Self.primaryRegionId(containing: from) != sourceRegion {
+            let packs = await fuelDistancePacks(from: from, to: toward, stationSourceRegionID: stationSourceRegionID)
+            guard !packs.isEmpty else { throw RoutingError.fuelUnknown("Required regional data could not be prepared; reachability has not been checked.") }
+            return try await RoutingWorkContext.detachedThrowingSearch {
                 let points = pumps.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-                guard let distances = OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
+                guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
                     points: points, profile: profile, allowUnknown: allowUnknown, reverse: false) else { return [:] }
                 return Dictionary(zip(pumps.map(\.id), distances).filter { $0.1.isFinite && $0.1 <= maxMeters },
                     uniquingKeysWith: min)
             }
         }
-        await ensureActivePackAsync(for: [from, toward])
-        guard let pack = activePack else { return [:] }
+        if let stationSourceRegionID { await activateInstalledPack(regionId: stationSourceRegionID) }
+        else { await ensureActivePackAsync(for: [from, toward]) }
+        guard let expected = Self.primaryRegionId(containing: from),
+              let pack = activePack, pack.regionId?.lowercased() == expected else { throw RoutingError.fuelUnknown("Required routing data could not be prepared; fuel reachability has not been checked.") }
         let packRef = pack
-        return await RoutingWorkContext.detachedSearch {
-            OnDeviceRouter(pack: packRef).reachableGraphMeters(
+        return try await RoutingWorkContext.detachedThrowingSearch {
+            try OnDeviceRouter(pack: packRef).reachableGraphMeters(
                 from: from, toward: toward, pumps: pumps, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )
@@ -1578,15 +1676,16 @@ final class GraphPackStore {
         from coordinate: CLLocationCoordinate2D,
         allowUnknown: Bool = false,
         profile: RouteProfile = .balanced
-    ) async -> Double? {
+    ) async throws -> Double? {
         await ensureActivePackAsync(for: [coordinate])
-        guard let pack = activePack else { return nil }
+        guard let expected = Self.primaryRegionId(containing: coordinate),
+              let pack = activePack, pack.regionId?.lowercased() == expected else { throw RoutingError.fuelUnknown("Required routing data could not be prepared; road connectivity has not been checked.") }
         let packRef = pack
         let allow = allowUnknown
         let routeProfile = profile
         let point = coordinate
-        return await RoutingWorkContext.detachedSearch {
-            OnDeviceRouter(pack: packRef).distanceToNearestRoad(
+        return try await RoutingWorkContext.detachedThrowingSearch {
+            try OnDeviceRouter(pack: packRef).distanceToNearestRoad(
                 from: point,
                 allowUnknown: allow,
                 profile: routeProfile
@@ -1821,6 +1920,13 @@ final class GraphPackStore {
         return regionDir(regionId: id).appendingPathComponent("cross-pack-seams.v2.json")
     }
 
+    /// Preserve the pack that supplied a station. Halo POI coordinates can
+    /// lie outside that pack's administrative region and are not ownership.
+    func installedFuelStationsByRegion() -> [String: [POIFeature]] {
+        Dictionary(uniqueKeysWithValues: Self.roadReachableNeighbours.keys.sorted()
+            .filter { isInstalled($0) }.map { ($0, loadedFuel(regionId: $0)) })
+    }
+
     /// Initial refill discovery has no destination heading. Only read installed
     /// sidecars; a nearby station across a border remains a candidate.
     func installedFuelStations() -> [POIFeature] {
@@ -1897,25 +2003,82 @@ final class GraphPackStore {
         regionId: String,
         graphURL: URL,
         geometryURL: URL,
-        seamsURL: URL
-    ) -> GraphV2Pack? {
+        seamsURL: URL,
+        matchingIdentity: ExactSnapIndex.Identity? = nil,
+        requireMatchingIndex: Bool = false
+    ) throws -> GraphV2Pack {
         let measurement = RoutingWorkContext.measurement
         let phase = measurement?.begin(.graphAccess)
         defer { measurement?.end(phase) }
-        guard let data = try? Data(contentsOf: graphURL, options: [.mappedIfSafe]) else { return nil }
-        measurement?.increment(.fileBytesAccessed, by: UInt64(data.count))
-        guard let pack = try? GraphV2Pack(data: data) else { return nil }
-        if pack.regionId == nil { pack.regionId = regionId }
-        if FileManager.default.fileExists(atPath: geometryURL.path),
-           let geomData = try? Data(contentsOf: geometryURL, options: [.mappedIfSafe]) {
-            measurement?.increment(.fileBytesAccessed, by: UInt64(geomData.count))
-            if let geom = try? GeometryV1Pack(data: geomData) { pack.geometry = geom }
+        var exactIndex: ExactSnapIndex?
+        let headerFile = try FileHandle(forReadingFrom: graphURL)
+        let prefix: Data
+        do { prefix = try headerFile.read(upToCount: 8) ?? Data(); try headerFile.close() }
+        catch { try? headerFile.close(); throw error }
+        let needsExactIndex = requireMatchingIndex && prefix.count >= 6
+            && (Int(prefix[4]) | Int(prefix[5]) << 8) >= 4
+        var sourceIdentity = matchingIdentity
+        if needsExactIndex, sourceIdentity == nil {
+            // Offline installations retain their immutable per-pack manifest.
+            // Catalog absence is not absence of compatible downloaded data.
+            let manifestURL = graphURL.deletingLastPathComponent().appendingPathComponent("pack-manifest.v2.json")
+            let manifestSize = try manifestURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            guard let manifestSize, manifestSize > 0, manifestSize <= 65_536 else {
+                throw ExactSnapIndex.Failure.invalidFormat
+            }
+            let manifestData = try Data(contentsOf: manifestURL)
+            guard manifestData.count == manifestSize,
+                  let manifest = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any],
+                  manifest["schema"] as? String == "pack-manifest.v2",
+                  manifest["regionId"] as? String == regionId,
+                  let graph = manifest["graph"] as? [String: Any],
+                  let geometry = manifest["geometry"] as? [String: Any],
+                  graph["name"] as? String == graphURL.lastPathComponent,
+                  geometry["name"] as? String == geometryURL.lastPathComponent,
+                  let graphHash = graph["sha256"] as? String, let graphBytes = graph["bytes"] as? Int,
+                  let geometryHash = geometry["sha256"] as? String, let geometryBytes = geometry["bytes"] as? Int
+            else { throw ExactSnapIndex.Failure.identityMismatch }
+            sourceIdentity = .init(graphSHA256: graphHash, graphBytes: graphBytes,
+                geometrySHA256: geometryHash, geometryBytes: geometryBytes)
         }
-        if pack.version >= 4,
-           FileManager.default.fileExists(atPath: seamsURL.path),
-           let seamData = try? Data(contentsOf: seamsURL) {
+        if needsExactIndex {
+            guard let matchingIdentity = sourceIdentity else { throw ExactSnapIndex.Failure.identityMismatch }
+            let preparation = measurement?.begin(.indexing)
+            defer { measurement?.end(preparation) }
+            exactIndex = try ExactSnapIndexPreparation.prepare(graphURL: graphURL,
+                geometryURL: geometryURL,
+                destination: graphURL.deletingLastPathComponent()
+                    .appendingPathComponent(".runtime-index/snap.v1.bin"),
+                identity: matchingIdentity,
+                cancelled: { RoutingWorkContext.stopReason != nil })
+        }
+        let data = try Data(contentsOf: graphURL, options: [.mappedIfSafe])
+        measurement?.increment(.fileBytesAccessed, by: UInt64(data.count))
+        if let matchingIdentity = sourceIdentity {
+            measurement?.increment(.fileBytesHashed, by: UInt64(data.count))
+            guard data.count == matchingIdentity.graphBytes,
+                  SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == matchingIdentity.graphSHA256
+            else { throw ExactSnapIndex.Failure.identityMismatch }
+        }
+        let pack = try GraphV2Pack(data: data)
+        if let embedded = pack.regionId, embedded.lowercased() != regionId.lowercased() {
+            throw ExactSnapIndex.Failure.identityMismatch
+        }
+        if pack.regionId == nil { pack.regionId = regionId }
+        if let identity = sourceIdentity {
+            pack.geometry = try GeometryV1Pack(url: geometryURL,
+                identity: .init(sha256: identity.geometrySHA256, bytes: identity.geometryBytes),
+                expectedEdgeCount: pack.undirectedEdgeCount)
+        } else if FileManager.default.fileExists(atPath: geometryURL.path) {
+            let geomData = try Data(contentsOf: geometryURL, options: [.mappedIfSafe])
+            measurement?.increment(.fileBytesAccessed, by: UInt64(geomData.count))
+            pack.geometry = try GeometryV1Pack(data: geomData)
+        }
+        pack.exactSnapIndex = exactIndex
+        if pack.version >= 4, FileManager.default.fileExists(atPath: seamsURL.path) {
+            let seamData = try Data(contentsOf: seamsURL)
             measurement?.increment(.fileBytesAccessed, by: UInt64(seamData.count))
-            if (try? pack.applyCrossPackSeams(data: seamData)) == nil { return nil }
+            try pack.applyCrossPackSeams(data: seamData)
         }
         return pack
     }
@@ -1938,6 +2101,17 @@ final class GraphPackStore {
         let preferred = regionId.lowercased()
         guard isInstalled(preferred) else { return }
 
+        if let current = activePack, current.regionId?.lowercased() == preferred,
+           current.version >= 4, current.exactSnapIndex?.isReusable != true {
+            // A corrupt private derivative must not poison every subsequent
+            // attempt through a retained pack. Rebuild from unchanged sources.
+            if let key = decodedPackKeys.removeValue(forKey: preferred) {
+                decodedPacks.removeObject(forKey: key)
+            }
+            regionalRoutes = regionalRoutes.filter { $0.value.pack !== current }
+            regionalRouteRecency.removeAll { regionalRoutes[$0] == nil }
+            activePack = nil
+        }
         if activePack?.regionId?.lowercased() == preferred {
             if activePack?.geometry == nil {
                 maybeTopUpGeometry(regionId: preferred)
@@ -1962,18 +2136,34 @@ final class GraphPackStore {
         let key = NSString(string: stamp)
         if let prior = decodedPackKeys[preferred], prior != key { decodedPacks.removeObject(forKey: prior) }
         let pack: GraphV2Pack?
-        if let cached = decodedPacks.object(forKey: key) {
+        if let cached = decodedPacks.object(forKey: key),
+           cached.version < 4 || cached.exactSnapIndex?.isReusable == true {
             pack = cached
             RoutingDebugLog.shared.event("decoded pack cache hit region=\(preferred)")
         } else {
             if bytes > decodedPacks.totalCostLimit { decodedPacks.removeAllObjects() }
-            let measurement = RoutingWorkContext.measurement
-            pack = await Task.detached(priority: .userInitiated) {
-                RoutingWorkContext.$measurement.withValue(measurement) {
-                    Self.decodePack(regionId: preferred, graphURL: graphURL,
-                        geometryURL: geometryURL, seamsURL: seamsURL)
+            let entries = manifestFilesByRegion[preferred] ?? []
+            let graphIdentity = entries.first { $0.name == "graph.v2.bin" }
+                ?? entries.first { $0.name == "graph.v4.bin" }
+            let geometryIdentity = entries.first { $0.name == "geometry.v1.bin" }
+            let identity: ExactSnapIndex.Identity?
+            if let graphHash = graphIdentity?.sha256, let graphBytes = graphIdentity?.bytes,
+               let geometryHash = geometryIdentity?.sha256, let geometryBytes = geometryIdentity?.bytes {
+                identity = .init(graphSHA256: graphHash, graphBytes: graphBytes,
+                    geometrySHA256: geometryHash, geometryBytes: geometryBytes)
+            } else { identity = nil }
+            do {
+                pack = try await RoutingWorkContext.detachedThrowingSearch {
+                    try Self.decodePack(regionId: preferred, graphURL: graphURL,
+                        geometryURL: geometryURL, seamsURL: seamsURL,
+                        matchingIdentity: identity, requireMatchingIndex: true)
                 }
-            }.value
+            } catch {
+                RoutingDebugLog.shared.event("pack preparation incomplete region=\(preferred) cause=\(error)")
+                RoutingWorkContext.measurement?.increment(.dataErrors)
+                pack = nil
+                activePack = nil
+            }
             if let pack, bytes <= decodedPacks.totalCostLimit {
                 decodedPacks.setObject(pack, forKey: key, cost: bytes)
                 decodedPackKeys[preferred] = key
@@ -2262,6 +2452,12 @@ final class GraphPackStore {
             } else {
                 try FileManager.default.moveItem(at: dest, to: destination)
             }
+            // The published bytes now have a new immutable identity. Do not
+            // attach their seam sidecar to a retained prior graph/geometry.
+            if activePack?.regionId?.lowercased() == regionId { activePack = nil }
+            if let key = decodedPackKeys.removeValue(forKey: regionId) { decodedPacks.removeObject(forKey: key) }
+            regionalRoutes = regionalRoutes.filter { $0.value.pack?.regionId?.lowercased() != regionId }
+            regionalRouteRecency.removeAll { regionalRoutes[$0] == nil }
             verifiedInstalledRegionIds.insert(regionId)
             setInstall(regionId, .installed)
             packedFuelByRegion.removeValue(forKey: regionId)
@@ -2674,6 +2870,30 @@ final class GraphPackStore {
         case .none:
             return "Couldn’t build an on-device route in \(regionClause). Check which end is off the roadway and nudge that pin."
         }
+    }
+
+    /// Proofs must consume the exact validated snapshot, not reread a path
+    /// after checking it. Owned bytes also survive an atomic pack replacement.
+    nonisolated static func verifiedSeamData(at url: URL, expectedBytes: Int?,
+        expectedSHA256: String?) throws -> Data? {
+        try RoutingWorkContext.check()
+        guard let expectedBytes, expectedBytes > 0, let expectedSHA256,
+              expectedSHA256.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil,
+              let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              size == expectedBytes else { return nil }
+        let measurement = RoutingWorkContext.measurement
+        let phase = measurement?.begin(.verification)
+        defer { measurement?.end(phase) }
+        // Do not map: these exact bytes are hashed and then decoded by caller.
+        let snapshot = try? Data(contentsOf: url)
+        if let snapshot { measurement?.increment(.fileBytesAccessed, by: UInt64(snapshot.count)) }
+        try RoutingWorkContext.check()
+        guard let data = snapshot, data.count == expectedBytes else { return nil }
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        measurement?.increment(.fileBytesHashed, by: UInt64(data.count))
+        try RoutingWorkContext.check()
+        guard digest.caseInsensitiveCompare(expectedSHA256) == .orderedSame else { return nil }
+        return data
     }
 
     nonisolated static func fileMatchesIdentity(

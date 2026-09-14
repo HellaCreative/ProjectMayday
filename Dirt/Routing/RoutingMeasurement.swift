@@ -12,6 +12,8 @@ import Darwin.malloc
 nonisolated final class RoutingMeasurement: @unchecked Sendable {
     enum Phase: String, Codable, CaseIterable, Sendable {
         case acquisition, verification, graphAccess, decode, indexing, matching
+        case indexSourceScan, indexMerge, indexPublication
+        case stationCoverage
         case turnPreparation, reverseGuidance, search, fuelContinuation
         case geometry, finalValidation, display
     }
@@ -20,14 +22,25 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
         case downloadedBytes, diskReadBytes, graphPagesRead, graphPageHits
         /// Logical file views opened and bytes consumed by checksums; repeated
         /// access counts repeated work, not unique storage or physical disk I/O.
+        case urbanMemoHits, urbanMemoMisses, urbanMemoEvictions
+        case stationCoverageCacheHits, stationCoverageCacheMisses, stationCoverageEdgesScanned, stationCoverageEntriesEvicted
+        case directedCostMemoHits, directedCostMemoMisses, directedCostMemoEvictions
         case fileBytesAccessed, fileBytesHashed
+        case filePageBorrowAcquisitions, filePageBytesBorrowed
+        /// Scheduled source-scan checks only; file I/O/hash cancellation checks
+        /// remain additional. Counts are batched locally, avoiding per-row locks.
+        case indexSourceBlockLoads, indexSourceScalars,indexSourceBufferBorrows,indexScanCancellationChecks
         case decodedEdges, geometryEdgesRead, examinedArcs, examinedStates
         case labelPagesAllocated, labelsCreated, queuePushes, queuePops
         case fuelStagesCommitted, failedContinuations, reusedProofs
+        case rangeSnapCacheHits, rangeSnapCacheMisses, rangeSnapCoverageBypasses
+        case stationMatchesSkipped
         case cancelledWindows, dataErrors
     }
 
     enum Gauge: String, Codable, CaseIterable, Sendable {
+        case stationCoverageCacheBytes, stationCoverageCaptureBytes
+        case directedCostMemoBytes
         case graphPageBytes, geometryPageBytes, indexBytes, labelBytes, queueBytes
         case retainedGraphOwners, loadedDetailPages
     }
@@ -269,7 +282,7 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
             notes: [
                 "Request peaks sample process-wide current memory at phase boundaries and explicit loop hooks; shorter spikes may be missed.",
                 "Process lifetime peaks include earlier work and are not request allocation peaks.",
-                "fileBytesAccessed counts logical file views (mappedIfSafe may map or copy); it is not physical disk I/O, resident bytes, or unique stored bytes. fileBytesHashed counts complete checksum inputs, including repeated verification.",
+                "fileBytesAccessed counts logical file views (mappedIfSafe may map or copy); it is not physical disk I/O, resident bytes, or unique stored bytes. filePageBytesBorrowed counts page bytes referenced by borrow acquisitions (including repeats); it is neither copied bytes nor physical I/O. fileBytesHashed counts bytes submitted to checksum operations, including repeated verification and partial cancelled operations.",
                 "Malloc zone high-water sums may combine peaks from different times and exclude non-malloc mappings.",
                 "Overlapping phase times are inclusive and must not be summed as wall time.",
                 "Cold identifies application preparation state; it does not imply an empty operating-system file cache."

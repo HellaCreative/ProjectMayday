@@ -17,6 +17,7 @@ nonisolated enum RoadCompass {
     }
     static func build(stateCount: Int, destination: Int,
                       reverse: Bool = true,
+                      recordSuccessors: Bool = true,
                       deadline: Date = .distantFuture,
                       cancelled: () -> Bool = { false },
                       outgoing: (Int, (Arc) -> Void) -> Void) -> Result {
@@ -46,8 +47,8 @@ nonisolated enum RoadCompass {
             }
         }
         var remaining = [Double](repeating: .infinity, count: stateCount)
-        var nextState = [Int32](repeating: -1, count: stateCount)
-        var nextEdge = [Int32](repeating: -1, count: stateCount)
+        var nextState = [Int32](repeating: -1, count: recordSuccessors ? stateCount : 0)
+        var nextEdge = [Int32](repeating: -1, count: recordSuccessors ? stateCount : 0)
         var heap: [(state: Int, meters: Double)] = []
         func less(_ a: (state: Int, meters: Double), _ b: (state: Int, meters: Double)) -> Bool {
             a.meters < b.meters || (a.meters == b.meters && a.state < b.state)
@@ -88,7 +89,9 @@ nonisolated enum RoadCompass {
                 let from = Int(sources[arc]), candidate = current.meters + lengths[arc]
                 if candidate >= remaining[from] { continue }
                 remaining[from] = candidate
-                nextState[from] = Int32(current.state); nextEdge[from] = edges[arc]
+                if recordSuccessors {
+                    nextState[from] = Int32(current.state); nextEdge[from] = edges[arc]
+                }
                 push((from, candidate))
             }
         }

@@ -134,8 +134,10 @@ final class RoutingGraphDebugManager {
 
         // Phase E3: prefer installed pack so surface/road-class leaves paint.
         if let pack = graphPacks.packIfInstalled(region.uppercased()) {
-            let pool = await Task.detached(priority: .userInitiated) {
-                PackNetworkOverlay.features(
+            let pool: [NetworkLineFeature]
+            do {
+                pool = try await Task.detached(priority: .userInitiated) {
+                try PackNetworkOverlay.features(
                     from: pack,
                     minLon: minLon,
                     minLat: minLat,
@@ -144,7 +146,12 @@ final class RoutingGraphDebugManager {
                     province: region.uppercased(),
                     cap: cap
                 )
-            }.value
+                }.value
+            } catch {
+                guard mapState.showRoutingGraphDebug else { return }
+                mapState.updateDebugGraphFeatures([], status: "Pack geometry unavailable.", capped: false)
+                return
+            }
             guard mapState.showRoutingGraphDebug else { return }
             let capped = pool.count >= cap
             let fmt = pack.hasLeaves ? "v3" : "v2"

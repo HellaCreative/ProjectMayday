@@ -28,7 +28,7 @@ struct GraphV4PackTests {
         for profile: RouteProfile in [.cleanest, .balanced] {
             let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.graph.v4.bin")))
             pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.geometry.v1.bin")))
-            var router = OnDeviceRouter(pack: pack)
+            var router = try fixtureRouter(pack: pack)
             router.matchLimitMeters = 80
             let a = CLLocationCoordinate2D(latitude: 45, longitude: -64.004)
             let pump = CLLocationCoordinate2D(latitude: 45.0001375, longitude: -63.99965)
@@ -78,7 +78,7 @@ struct GraphV4PackTests {
         graph[access + 1] = 1
         let pack = try GraphV2Pack(data: graph)
         pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.geometry.v1.bin")))
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.matchLimitMeters = 20
         router.initialFuelApproach = true
         let west = CLLocationCoordinate2D(latitude: 45, longitude: -64.004)
@@ -111,7 +111,7 @@ struct GraphV4PackTests {
     func fuelCapIncludesApproachConnectors() throws {
         let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.graph.v4.bin")))
         pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.geometry.v1.bin")))
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.matchLimitMeters = 80
         router.initialFuelApproach = true
         let from = CLLocationCoordinate2D(latitude: 44.9997, longitude: -64.004)
@@ -144,7 +144,7 @@ struct GraphV4PackTests {
         let endpoint = CLLocationCoordinate2D(latitude: Double(pack.nodeCoords[node * 2 + 1]), longitude: Double(pack.nodeCoords[node * 2]))
         let displaced = CLLocationCoordinate2D(latitude: endpoint.latitude - 0.0003, longitude: endpoint.longitude)
         let from = CLLocationCoordinate2D(latitude: 45, longitude: -64.004)
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.matchLimitMeters = 80
         router.initialFuelApproach = true
         guard case .success = router.routeDetailed(from: from, to: displaced, profile: .cleanest, allowUnknown: false, sessionSeed: 0) else {
@@ -164,7 +164,7 @@ struct GraphV4PackTests {
     func forbiddenForecourt() throws {
         let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt-blocked.graph.v4.bin")))
         pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt-blocked.geometry.v1.bin")))
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.matchLimitMeters = 80
         router.endEndpointKind = "customers"
         for profile: RouteProfile in [.cleanest, .balanced] {
@@ -247,7 +247,7 @@ struct GraphV4PackTests {
         let geom = try Data(contentsOf: fixtureURL("legal-topology-canary.geometry.v1.bin"))
         let pack = try GraphV2Pack(data: graph)
         pack.geometry = try GeometryV1Pack(data: geom)
-        let router = OnDeviceRouter(pack: pack)
+        let router = try fixtureRouter(pack: pack)
 
         let westStart = CLLocationCoordinate2D(latitude: 45.80779, longitude: -64.191)
         let westEnd = CLLocationCoordinate2D(latitude: 45.80779, longitude: -64.209)

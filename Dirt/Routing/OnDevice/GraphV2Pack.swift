@@ -571,6 +571,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     var regionId: String?
     /// Optional road-shape sidecar. When present, painted routes follow the road.
     var geometry: GeometryV1Pack?
+    /// Prepared from this exact immutable graph/geometry pair before routing.
+    var exactSnapIndex: ExactSnapIndex?
 
     init(data: Data) throws {
         let measurement = RoutingWorkContext.measurement

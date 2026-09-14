@@ -22,7 +22,7 @@ struct GraphV4SnapTests {
         let geom = try Data(contentsOf: fixtureURL("legal-topology-canary.geometry.v1.bin"))
         let pack = try GraphV2Pack(data: graph)
         pack.geometry = try GeometryV1Pack(data: geom)
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.mapZoom = 16
         let westStart = CLLocationCoordinate2D(latitude: 45.80779, longitude: -64.191)
         let westEnd = CLLocationCoordinate2D(latitude: 45.80779, longitude: -64.209)
@@ -48,7 +48,7 @@ struct GraphV4SnapTests {
         let geom = try Data(contentsOf: fixtureURL("yarmouth-harbour.geometry.v1.bin"))
         let pack = try GraphV2Pack(data: graph)
         pack.geometry = try GeometryV1Pack(data: geom)
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.mapZoom = 10
         let start = CLLocationCoordinate2D(latitude: 45.390440, longitude: -63.201514)
         let harbour = CLLocationCoordinate2D(latitude: 43.648606, longitude: -65.774864)

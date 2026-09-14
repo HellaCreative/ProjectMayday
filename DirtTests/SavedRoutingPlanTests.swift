@@ -57,6 +57,47 @@ struct SavedRoutingPlanTests {
         #expect(resaved.fuel == plan.fuel)
     }
 
+    @Test func limitedComparisonSurvivesSavedReopenWithoutBecomingFuelFailure() throws {
+        let plan = fixture(limited: true)
+        let record = saved(plan)
+        record.routingPlanData = try JSONEncoder().encode(plan)
+        let source = SavedPlanNoRoutingSource()
+        let model = makeModel(source)
+        model.loadSavedRoute(record)
+        #expect(model.hasLimitedRouteSearch)
+        #expect(model.routeSearchNotices.count == 3)
+        #expect(model.routeSearchNotices.allSatisfy { $0.kind == .searchLimited })
+        #expect(model.fuelCoverageNotices.isEmpty)
+        #expect(model.activeResponses.allSatisfy { $0.status == "complete" })
+        #expect(model.continuePlanningFromSavedTrack())
+        #expect(model.routeSearchNotices.count == 3)
+        #expect(source.calls == 0)
+    }
+
+    @Test func limitedCompletedBuildShowsPersistentNoticeWithoutSuccessToast() async throws {
+        let keys = [FuelRangePrefs.key, FuelRangePrefs.reservePercentKey, FuelRangePrefs.automaticPlanningKey]
+        let old = keys.map { UserDefaults.standard.object(forKey: $0) }
+        defer { for (key, value) in zip(keys, old) {
+            if let value { UserDefaults.standard.set(value, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        } }
+        FuelRangePrefs.automaticPlanningEnabled = false
+        let source = SavedPlanNoRoutingSource()
+        source.returnRoute = true
+        source.limited = true
+        let model = makeModel(source)
+        model.apply(.replaceAll(waypoints: fixture().itinerary.waypoints.map(\.coordinate),
+            profile: .balanced, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
+            source: "limited-route-test")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.hasRoute)
+        #expect(model.routeSearchNotices.count == 2)
+        #expect(model.fuelCoverageNotices.isEmpty)
+        #expect(model.fuelPlanningStatus == nil)
+        #expect(model.toast != RoutePlannerModel.routeReadyToast)
+        #expect(model.activeResponses.allSatisfy { $0.status == "complete" })
+    }
+
     @Test func legacyAndUnsupportedSnapshotsKeepGeometryWithoutInventingCanonicalProof() throws {
         let plan = fixture()
         let source = SavedPlanNoRoutingSource()
@@ -150,7 +191,7 @@ struct SavedRoutingPlanTests {
         #expect(edited.itinerary.waypoints.count == original.itinerary.waypoints.count + 1)
     }
 
-    private func fixture(loop: Bool = false, automaticFuel: Bool = true) -> SavedRoutingPlan {
+    private func fixture(loop: Bool = false, automaticFuel: Bool = true, limited: Bool = false) -> SavedRoutingPlan {
         let points = [RouteCoordinate(longitude: -63.5, latitude: 44.7),
                       RouteCoordinate(longitude: -63.4, latitude: 44.8),
                       RouteCoordinate(longitude: -63.3, latitude: 44.9)].map { RiderWaypoint(coordinate: $0) }
@@ -168,7 +209,7 @@ struct SavedRoutingPlanTests {
                 distanceMeters: meters, estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
                 geometry: [from, to], segments: nil,
                 stats: RouteStats(dirtPercent: 80, pavedPercent: 20, unknownAccessPercent: 0),
-                maneuvers: nil, warnings: nil, dirtPercentValue: nil, pavedPercentValue: nil)
+                maneuvers: nil, warnings: limited ? [RouteWarning(code: "route_search_limited", message: RouteResponse.searchLimitedMessage)] : nil, dirtPercentValue: nil, pavedPercentValue: nil)
             response.terminalContinuation = NativeRoutingContinuation(version: 1, sourceEpoch: "fixture-epoch",
                 incoming: .init(wayID: 19, fromNodeID: 20, toNodeID: 21), location: .edge(fraction: 0.6),
                 restrictionContext: [], activeRestrictions: [])
@@ -212,6 +253,7 @@ private final class SavedPlanNoRoutingSource: RoutingSource {
     let name = "saved-plan-no-routing"
     var calls = 0
     var returnRoute = false
+    var limited = false
     func route(_ request: RouteRequest) async throws -> RouteResponse {
         calls += 1
         guard returnRoute else { throw CancellationError() }
@@ -219,7 +261,7 @@ private final class SavedPlanNoRoutingSource: RoutingSource {
             distanceMeters: 15_000, estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
             geometry: request.locations.map { RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude) },
             segments: nil, stats: RouteStats(dirtPercent: 80, pavedPercent: 20, unknownAccessPercent: 0),
-            maneuvers: nil, warnings: nil, dirtPercentValue: nil, pavedPercentValue: nil)
+            maneuvers: nil, warnings: limited ? [RouteWarning(code: "route_search_limited", message: RouteResponse.searchLimitedMessage)] : nil, dirtPercentValue: nil, pavedPercentValue: nil)
     }
     func fuelChain(_ request: FuelChainRequest) async throws -> FuelChainResponse { calls += 1; throw CancellationError() }
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? { calls += 1; throw CancellationError() }

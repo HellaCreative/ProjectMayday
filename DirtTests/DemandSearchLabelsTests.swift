@@ -101,7 +101,7 @@ struct DemandSearchLabelsTests {
         }
         let pack = try GraphV2Pack(data: Data(contentsOf: fixture("legal-topology-forecourt.graph.v4.bin")))
         pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixture("legal-topology-forecourt.geometry.v1.bin")))
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.matchLimitMeters = 80
         router.initialFuelApproach = true
         let from = CLLocationCoordinate2D(latitude: 45, longitude: -64.004)

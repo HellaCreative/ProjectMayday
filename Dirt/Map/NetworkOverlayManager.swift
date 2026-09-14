@@ -127,8 +127,10 @@ final class NetworkOverlayManager {
         }
 
         let minLon = bbox.minLon, minLat = bbox.minLat, maxLon = bbox.maxLon, maxLat = bbox.maxLat
-        let pool = await Task.detached(priority: .userInitiated) {
-            PackNetworkOverlay.features(
+        let pool: [NetworkLineFeature]
+        do {
+            pool = try await Task.detached(priority: .userInitiated) {
+            try PackNetworkOverlay.features(
                 from: pack,
                 minLon: minLon,
                 minLat: minLat,
@@ -137,7 +139,11 @@ final class NetworkOverlayManager {
                 province: provinceCode,
                 cap: maxFeatures * 3
             )
-        }.value
+            }.value
+        } catch {
+            RoutingDebugLog.shared.event("network overlay geometry unavailable: \(error)")
+            return
+        }
 
         var selected: [NetworkLineFeature] = []
         if showLens {
@@ -319,7 +325,7 @@ nonisolated enum PackNetworkOverlay {
         maxLat: Double,
         province: String,
         cap: Int
-    ) -> [NetworkLineFeature] {
+    ) throws -> [NetworkLineFeature] {
         var out: [NetworkLineFeature] = []
         out.reserveCapacity(min(cap, 512))
         let from = pack.edgeFrom
@@ -330,7 +336,7 @@ nonisolated enum PackNetworkOverlay {
                 hit = nodeIn(pack, Int(from[ei]), minLon, minLat, maxLon, maxLat)
                     || nodeIn(pack, Int(to[ei]), minLon, minLat, maxLon, maxLat)
             } else if let geom = pack.geometry {
-                let line = geom.polyline(edgeIndex: ei)
+                let line = try geom.polyline(edgeIndex: ei)
                 if let p = line.first {
                     hit = p.longitude >= minLon && p.longitude <= maxLon
                         && p.latitude >= minLat && p.latitude <= maxLat
@@ -339,7 +345,7 @@ nonisolated enum PackNetworkOverlay {
             guard hit else { continue }
             let coords: [NetworkLineFeature.Point]
             if let geom = pack.geometry {
-                let line = geom.polyline(edgeIndex: ei)
+                let line = try geom.polyline(edgeIndex: ei)
                 coords = line.map { NetworkLineFeature.Point(lat: $0.latitude, lon: $0.longitude) }
             } else if let from, let to, ei < from.count, ei < to.count,
                       let a = nodeCoord(pack, Int(from[ei])),

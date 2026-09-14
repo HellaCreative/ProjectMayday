@@ -123,7 +123,7 @@ struct OnDevicePackBenchmarkTests {
     @Test("Routing oracle short and rural cases replay on accepted pack")
     func routingOracleShortAndRural() throws {
         let pack = try loadPack("ns")
-        let router = OnDeviceRouter(pack: pack)
+        let router = try fixtureRouter(pack: pack)
         let cases: [(String, CLLocationCoordinate2D, CLLocationCoordinate2D)] = [
             ("short-intra-metro", .init(latitude: 44.764919, longitude: -63.340350), .init(latitude: 44.755736, longitude: -63.301255)),
             ("rural-pair", .init(latitude: 44.911062, longitude: -62.386656), .init(latitude: 45.261359, longitude: -62.621027))
@@ -174,18 +174,18 @@ struct OnDevicePackBenchmarkTests {
 
     @Test("Repeated fuel discovery keeps exact reachability distances")
     func repeatedFuelDiscovery() throws {
-        let router = OnDeviceRouter(pack: try loadPack("ns"))
+        let router = try fixtureRouter(pack: try loadPack("ns"))
         let from = CLLocationCoordinate2D(latitude: 44.764919, longitude: -63.340350)
         let to = CLLocationCoordinate2D(latitude: 44.755736, longitude: -63.301255)
         for profile in [RouteProfile.cleanest, .balanced, .dirt] {
-            let first = router.shortestGraphMeters(from: from, to: to,
+            let first = try router.shortestGraphMeters(from: from, to: to,
                 maxMeters: 207_000, profile: profile, allowUnknown: false)
-            let repeated = router.shortestGraphMeters(from: from, to: to,
+            let repeated = try router.shortestGraphMeters(from: from, to: to,
                 maxMeters: 207_000, profile: profile, allowUnknown: false)
             #expect(first != nil)
             #expect(first == repeated)
             // A cached match must never cache the previous range proof.
-            #expect(router.shortestGraphMeters(from: from, to: to,
+            #expect(try router.shortestGraphMeters(from: from, to: to,
                 maxMeters: 1, profile: profile, allowUnknown: false) == nil)
         }
     }
@@ -193,7 +193,7 @@ struct OnDevicePackBenchmarkTests {
     @Test("September 13 Nova Scotia routes replay on the accepted pack")
     func september13NovaScotiaRoutes() throws {
         let pack = try loadPack("ns")
-        let router = OnDeviceRouter(pack: pack)
+        let router = try fixtureRouter(pack: pack)
         let start = CLLocationCoordinate2D(latitude: 44.764830, longitude: -63.340243)
         let allEndpoints: [(String, CLLocationCoordinate2D)] = [
             ("short", CLLocationCoordinate2D(latitude: 45.091108, longitude: -63.057616)),
@@ -294,8 +294,15 @@ struct OnDevicePackBenchmarkTests {
         try await runOwnerPhone42Requests(repeatFirst: true)
     }
 
+    @Test("Exact fourth owner request checks fuel continuation near the destination")
     @MainActor
-    private func runOwnerPhone42Requests(repeatFirst: Bool) async throws {
+    func ownerPhone42FourthFuelContinuation() async throws {
+        try await runOwnerPhone42Requests(repeatFirst: false,
+            onlyRequestID: "EB86574E-9CF2-5EC8-AF91-664BABDD8718")
+    }
+
+    @MainActor
+    private func runOwnerPhone42Requests(repeatFirst: Bool, onlyRequestID: String? = nil) async throws {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
@@ -307,7 +314,8 @@ struct OnDevicePackBenchmarkTests {
             ("531BC48C-868A-5545-AB93-1FD01CEBABFF", 46.885033126489716, -60.49502889835437, 11.2, 5797475437955788),
             ("EB86574E-9CF2-5EC8-AF91-664BABDD8718", 45.56808192814221, -62.233921261078635, 7.9, 6709655860308004)
         ]
-        let selected = repeatFirst ? [cases[0], cases[0]] : cases
+        let selected = onlyRequestID.map { id in cases.filter { $0.0 == id } }
+            ?? (repeatFirst ? [cases[0], cases[0]] : cases)
         for (runIndex, request) in selected.enumerated() {
             let (id, lat, lon, zoom, seed) = request
             let evidenceID = id + (repeatFirst ? (runIndex == 0 ? "-first-use" : "-repeated") : "")
@@ -346,7 +354,72 @@ struct OnDevicePackBenchmarkTests {
             #expect(result.legs.first?.endsAtFuelStop?.stationID != nil)
             #expect(result.legs.last?.toCoordinate == b.coordinate)
             #expect(result.riderLegStatus[leg.id] == .built)
+            if result.riderLegStatus[leg.id] == .built {
+                var metersSinceRefill = 0.0
+                for stage in result.legs {
+                    let meters = try #require(stage.response.distanceMeters)
+                    #expect(meters.isFinite && meters >= 0)
+                    metersSinceRefill += meters
+                    #expect(metersSinceRefill <= 180_000,
+                        "A completed fuel plan must charge every selected stage against the actual reserve-adjusted range")
+                    if stage.endsAtFuelStop != nil { metersSinceRefill = 0 }
+                }
+            }
         }
+    }
+
+    @Test("Ontario private index preparation measures cold reuse and cancellation")
+    @MainActor
+    func ontarioIndexPreparationAndCancellation() async throws {
+        let version = "fabric-v4-20260909-02"
+        let dir = root.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(version).appendingPathComponent("packs/on")
+        let manifest = try #require(JSONSerialization.jsonObject(with:
+            Data(contentsOf: dir.appendingPathComponent("pack-manifest.v2.json"))) as? [String: Any])
+        let graph = try #require(manifest["graph"] as? [String: Any])
+        let geometry = try #require(manifest["geometry"] as? [String: Any])
+        let identity = ExactSnapIndex.Identity(graphSHA256: try #require(graph["sha256"] as? String),
+            graphBytes: try #require(graph["bytes"] as? Int),
+            geometrySHA256: try #require(geometry["sha256"] as? String),
+            geometryBytes: try #require(geometry["bytes"] as? Int))
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        let graphURL = dir.appendingPathComponent("graph.v4.bin")
+        let geometryURL = dir.appendingPathComponent("geometry.v1.bin")
+        for run in 0..<2 {
+            let measurement = RoutingMeasurement(metadata: ["workload": "Ontario exact index preparation",
+                "packRelease": version, "graphSHA256": identity.graphSHA256,
+                "geometrySHA256": identity.geometrySHA256,
+                "hardware": "MacBookPro17,1 Apple M1 16 GiB; iPhone17 iOS26.5 simulator",
+                "preparation": run == 0 ? "cold private derivative" : "reuse verified derivative"])
+            try await RoutingWorkContext.$measurement.withValue(measurement) {
+                try await RoutingWorkContext.detachedThrowingSearch {
+                    _ = try ExactSnapIndexPreparation.prepare(graphURL: graphURL, geometryURL: geometryURL,
+                        destination: temporary.appendingPathComponent("index"), identity: identity,
+                        cancelled: { RoutingWorkContext.stopReason != nil })
+                }
+            }
+            let report = measurement.finish(outcome: "verified")
+            try saveEvidence(["measurement": try object(report)], name: "ontario-index-preparation-\(run)")
+        }
+        let cancelledURL = temporary.appendingPathComponent("cancelled-index")
+        let worker = Task {
+            try await RoutingWorkContext.detachedThrowingSearch {
+                _ = try ExactSnapIndexPreparation.prepare(graphURL: graphURL, geometryURL: geometryURL,
+                    destination: cancelledURL, identity: identity,
+                    cancelled: { RoutingWorkContext.stopReason != nil })
+            }
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        let began = ProcessInfo.processInfo.systemUptime
+        worker.cancel()
+        do { try await worker.value; Issue.record("Preparation finished before cancellation workload could be exercised") }
+        catch { /* The caller's cancelled operation must not publish. */ }
+        let elapsed = ProcessInfo.processInfo.systemUptime - began
+        #expect(elapsed < 1)
+        #expect(!FileManager.default.fileExists(atPath: cancelledURL.path))
+        try saveEvidence(["cancellationResponseSeconds": elapsed, "packRelease": version,
+            "graphSHA256": identity.graphSHA256], name: "ontario-index-cancellation")
     }
 
     @Test("Current Ontario pack completes the existing southern Ontario endpoints without fuel")
@@ -373,7 +446,7 @@ struct OnDevicePackBenchmarkTests {
                 }
                 let outcome: String
                 switch result {
-                case .success: outcome = "complete"
+                case .success(let route): outcome = route.searchMeta.timedOut ? "road-complete-search-incomplete" : "complete"
                 case .failure(let failure): outcome = String(describing: failure)
                 }
                 var output: [String: Any] = ["from": [from.longitude, from.latitude], "to": [to.longitude, to.latitude],
@@ -381,9 +454,17 @@ struct OnDevicePackBenchmarkTests {
                 switch result {
                 case .success(let route):
                     output["route"] = ["distanceMeters": route.distanceMeters,
-                        "dirtPercent": route.reportedDirtPercent, "repeatedMeters": route.backtrackMeters,
+                        "dirtPercent": route.reportedDirtPercent, "coarseDirtPercent": route.dirtPercent,
+                        "unknownSurfacePercent": route.unknownSurfacePercent,
+                        "reportedPavedPercent": route.reportedPavedPercent,
+                        "timedOut": route.searchMeta.timedOut, "pops": route.searchMeta.pops,
+                        "pass2Outcome": route.searchMeta.pass2Outcome, "debugNote": route.debugNote,
+                        "urbanCoreFallback": route.searchMeta.urbanCoreFallbackUsed,
+                        "cleanUnpavedFallback": route.searchMeta.cleanUnpavedFallbackUsed,
+                        "repeatedMeters": route.backtrackMeters,
                         "geometry": route.coordinates.map { [$0.longitude, $0.latitude] },
                         "legs": route.legs.map { leg in ["edgeID": leg.edgeId, "meters": leg.distanceMeters,
+                            "surface": leg.surfaceName, "access": leg.accessName,
                             "geometry": leg.coordinates.map { [$0.longitude, $0.latitude] }] as [String: Any] }]
 
                     #expect(route.coordinates.count > 1)

@@ -11,7 +11,7 @@ struct NativeRoutingContinuationTests {
         let a = coordinate(pack, try node(pack, 1)), b = coordinate(pack, try node(pack, 2))
         let station = CLLocationCoordinate2D(latitude: (a.latitude + b.latitude) / 2,
                                              longitude: (a.longitude + b.longitude) / 2)
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.initialFuelApproach = true
         router.startEndpointKind = "customers"
         router.endEndpointKind = "customers"
@@ -36,7 +36,7 @@ struct NativeRoutingContinuationTests {
         prohibited[accessOffset + 1] = 2
         let forbiddenPack = try GraphV2Pack(data: prohibited)
         forbiddenPack.geometry = pack.geometry
-        var forbiddenRouter = OnDeviceRouter(pack: forbiddenPack)
+        var forbiddenRouter = try fixtureRouter(pack: forbiddenPack)
         forbiddenRouter.initialFuelApproach = true
         forbiddenRouter.startEndpointKind = "customers"
         forbiddenRouter.endEndpointKind = "customers"
@@ -63,7 +63,7 @@ struct NativeRoutingContinuationTests {
                 let origin = try node(pack, reverse ? 5 : 1)
                 let destination = try node(pack, reverse ? 1 : 5)
                 let split = try node(pack, nodeRestriction ? 2 : 3)
-                var wholeRouter = OnDeviceRouter(pack: pack)
+                var wholeRouter = try fixtureRouter(pack: pack)
                 wholeRouter.matchLimitMeters = 10
                 wholeRouter.recordedStartNode = origin
                 wholeRouter.recordedEndNode = destination
@@ -94,7 +94,7 @@ struct NativeRoutingContinuationTests {
         for reverse in [false, true] {
             let origin = try node(pack, reverse ? 5 : 1), destination = try node(pack, reverse ? 1 : 5)
             let split = CLLocationCoordinate2D(latitude: 0, longitude: reverse ? 0.0025 : 0.0015)
-            var firstRouter = OnDeviceRouter(pack: pack)
+            var firstRouter = try fixtureRouter(pack: pack)
             firstRouter.matchLimitMeters = 10
             firstRouter.recordedStartNode = origin
             let first = firstRouter.routeDetailed(from: coordinate(pack, origin), to: split,
@@ -102,7 +102,7 @@ struct NativeRoutingContinuationTests {
             guard case .success(let approach) = first else { Issue.record("Fractional approach failed: \(first)"); continue }
             let token = try #require(approach.terminalContinuation)
             guard case .edge = token.location else { Issue.record("Expected fractional token"); continue }
-            var onwardRouter = OnDeviceRouter(pack: pack)
+            var onwardRouter = try fixtureRouter(pack: pack)
             onwardRouter.matchLimitMeters = 10
             onwardRouter.recordedEndNode = destination
             let onward = onwardRouter.routeDetailed(from: split, to: coordinate(pack, destination),
@@ -117,7 +117,7 @@ struct NativeRoutingContinuationTests {
         write32(&bytes, Int(read32(bytes, 120)), 0)
         let pack = try GraphV2Pack(data: bytes)
         pack.geometry = try GeometryV1Pack(data: fixture(name: "legal-topology-restrictions.geometry.v1.bin"))
-        var router = OnDeviceRouter(pack: pack)
+        var router = try fixtureRouter(pack: pack)
         router.matchLimitMeters = 5
         let start = CLLocationCoordinate2D(latitude: 0, longitude: 0.0001)
         let arrival = CLLocationCoordinate2D(latitude: 0, longitude: 0.00075)
@@ -141,7 +141,7 @@ struct NativeRoutingContinuationTests {
         bytes[Int(read32(bytes, 112)) + incoming * 2 + 1] = 2
         let denied = try GraphV2Pack(data: bytes)
         denied.geometry = pack.geometry
-        var deniedRouter = OnDeviceRouter(pack: denied)
+        var deniedRouter = try fixtureRouter(pack: denied)
         deniedRouter.matchLimitMeters = 5
         let blocked = deniedRouter.routeDetailed(from: arrival, to: pump, profile: profile,
             allowUnknown: true, arrivalContinuation: token, sessionSeed: 0, maxRouteMeters: 100)

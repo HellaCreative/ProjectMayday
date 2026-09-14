@@ -10,7 +10,7 @@ nonisolated enum SurfaceFamily: String, Codable, CaseIterable, Hashable, Sendabl
 }
 
 /// One rider-facing surface composition shared by map paint and every route
-/// summary. Dirt remains the simple aggregate of gravel + loose + unknown.
+/// summary. Known dirt includes gravel + loose; unknown stays separate.
 struct RouteSurfaceComposition: Equatable, Sendable {
     var pavedMeters = 0.0
     var gravelMeters = 0.0
@@ -18,10 +18,10 @@ struct RouteSurfaceComposition: Equatable, Sendable {
     var unknownMeters = 0.0
 
     var totalMeters: Double { pavedMeters + gravelMeters + looseMeters + unknownMeters }
-    var dirtMeters: Double { gravelMeters + looseMeters + unknownMeters }
+    var dirtMeters: Double { gravelMeters + looseMeters }
 
     var dirtPercent: Int { percent(dirtMeters) }
-    var pavedPercent: Int { max(0, 100 - dirtPercent) }
+    var pavedPercent: Int { percent(pavedMeters) }
     var gravelPercent: Int { percent(gravelMeters) }
     var loosePercent: Int { percent(looseMeters) }
     var unknownPercent: Int { percent(unknownMeters) }
@@ -69,7 +69,7 @@ struct RouteSurfaceComposition: Equatable, Sendable {
             }
 
             // Legacy saved routes have only their two-bucket summary. Preserve
-            // the numbers but do not invent a specific non-paved material.
+            // known paved amount and total; do not invent proof of dirt.
             let meters = response.distanceMeters ?? GeoMath.lineMeters(response.coordinates)
             let paved = max(0, min(100, response.pavedPercent))
             result.add(meters: meters * Double(paved) / 100, family: .paved)
@@ -132,7 +132,7 @@ nonisolated enum SurfaceFamilyStats {
         return map[raw.lowercased()] ?? .unknown
     }
 
-    /// Rider-facing Dirt% = non-paved (gravel + loose + unknown). Matches map paint.
+    /// Rider-facing known Dirt% includes gravel + loose. Unknown is separate.
     /// Selection-time coarse dirt is separate and is not computed here.
     struct Percents: Sendable, Equatable {
         var dirtPercent: Int
@@ -159,7 +159,7 @@ nonisolated enum SurfaceFamilyStats {
             case .unknown: unknownM += row.meters
             }
         }
-        let dirtM = gravelM + looseM + unknownM
+        let dirtM = gravelM + looseM
         let total = distanceMeters > 0 ? distanceMeters : (pavedM + gravelM + looseM + unknownM)
         func pct(_ m: Double) -> Int {
             guard total > 0 else { return 0 }

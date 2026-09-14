@@ -165,6 +165,11 @@ extension OnDeviceRouter.Result {
             backtrackMeters: hops.reduce(0) { $0 + $1.backtrackMeters },
             backtrackPct: hops.reduce(0) { $0 + $1.backtrackMeters } / meters * 100,
             searchMeta: OnDeviceRouter.SearchMeta(
+                timedOut: hops.contains { $0.searchMeta.timedOut },
+                pass2Outcome: hops.map { $0.searchMeta.pass2Outcome }
+                    .filter { !$0.isEmpty }.joined(separator: ";"),
+                pops: hops.reduce(0) { $0 + $1.searchMeta.pops },
+                elapsedMs: hops.reduce(0) { $0 + $1.searchMeta.elapsedMs },
                 urbanCoreFallbackUsed: hops.contains { $0.searchMeta.urbanCoreFallbackUsed },
                 cleanUnpavedFallbackUsed: hops.contains { $0.searchMeta.cleanUnpavedFallbackUsed },
                 settlementFallbackUsed: hops.contains { $0.searchMeta.settlementFallbackUsed },

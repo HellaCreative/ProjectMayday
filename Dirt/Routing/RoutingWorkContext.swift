@@ -43,4 +43,21 @@ nonisolated enum RoutingWorkContext {
             worker.cancel()
         }
     }
+    static func detachedThrowingSearch<Value: Sendable>(
+        _ operation: @escaping @Sendable () throws -> Value
+    ) async throws -> Value {
+        let deadline = deadline
+        let measurement = measurement
+        let worker = Task.detached(priority: .userInitiated) {
+            try Self.$deadline.withValue(deadline) {
+                try Self.$measurement.withValue(measurement) { try operation() }
+            }
+        }
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+    }
+
 }

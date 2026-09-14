@@ -35,6 +35,32 @@ nonisolated enum PathRetrace {
         }
         return false
     }
+    /// Same walk with one immutable label read per predecessor node.
+    @inline(__always) static func contains(node initial: Int, span: Span,
+                         step: (Int) -> (previous: Int, span: Span?)) -> Bool {
+        var node = initial, steps = 0
+        var checkpoint = initial, checkpointPower = 1, sinceCheckpoint = 0
+        while node >= 0 {
+            if steps & 255 == 0, RoutingWorkContext.stopReason != nil { return true }
+            let entry = step(node)
+            if let row = entry.span, row.overlaps(span) { return true }
+            let next = entry.previous
+            steps += 1
+            if next == node || steps > 10_000_000 { return true }
+            // A cyclic predecessor chain already returns true under the existing
+            // guard. Brent's detection proves the same outcome promptly, using
+            // constant memory instead of walking up to ten million links.
+            if next >= 0, next == checkpoint { return true }
+            sinceCheckpoint += 1
+            if sinceCheckpoint == checkpointPower {
+                checkpoint = next
+                checkpointPower *= 2
+                sinceCheckpoint = 0
+            }
+            node = next
+        }
+        return false
+    }
     static func repeats(_ rows: [Span]) -> Bool {
         var byEdge: [Int: [Span]] = [:]
         for row in rows {
