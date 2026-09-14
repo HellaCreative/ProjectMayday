@@ -457,8 +457,21 @@ nonisolated struct OnDeviceRouter {
         }
         }()
         guard case .success(var result) = outcome else { return outcome }
+        // Mutable predecessor rewrites can change the reconstructed path after a
+        // descendant label was budgeted. Only the returned actual metres prove
+        // that this selected route fits; failure does not prove disconnection.
+        if let failure = Self.reconstructedDistanceFailure(resultMeters: result.distanceMeters, maximumMeters: maxRouteMeters) {
+            return .failure(failure)
+        }
         result.searchMeta.calculationElapsedMs = Int((ProcessInfo.processInfo.systemUptime - calculationStarted) * 1000)
         return .success(result)
+    }
+
+    /// Matches exceedsLengthSlack's strict spent-distance cap. Its +1 allowance
+    /// applies only to reverse lower-bound guidance, not actual travelled metres.
+    static func reconstructedDistanceFailure(resultMeters: Double, maximumMeters: Double?) -> Failure? {
+        guard let maximumMeters, maximumMeters.isFinite, resultMeters > maximumMeters else { return nil }
+        return .searchLimit("reconstructedDistanceExceedsCap")
     }
 
     private func routeDetailedWithinBounds(
