@@ -23,6 +23,7 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
         /// Logical file views opened and bytes consumed by checksums; repeated
         /// access counts repeated work, not unique storage or physical disk I/O.
         case urbanMemoHits, urbanMemoMisses, urbanMemoEvictions
+        case matchingGeometrySegments, matchingProjectionCandidates, matchingRoadSnapsConstructed
         case stationCoverageBoundsChecks
         case stationCoverageCacheHits, stationCoverageCacheMisses, stationCoverageEdgesScanned, stationCoverageEntriesEvicted
         case initialFuelBoundMemoHits, initialFuelBoundMemoMisses

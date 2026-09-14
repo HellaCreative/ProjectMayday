@@ -5449,7 +5449,13 @@ nonisolated struct OnDeviceRouter {
     ) throws -> [EdgeSnap] {
         let measurement = RoutingWorkContext.measurement
         let measuredPhase = measurement?.begin(.matching)
-        defer { measurement?.end(measuredPhase) }
+        var projectionSegments: UInt64 = 0, projectionCandidates: UInt64 = 0, constructedRoadSnaps: UInt64 = 0
+        defer {
+            measurement?.end(measuredPhase)
+            measurement?.increment(.matchingGeometrySegments,by: projectionSegments)
+            measurement?.increment(.matchingProjectionCandidates,by: projectionCandidates)
+            measurement?.increment(.matchingRoadSnapsConstructed,by: constructedRoadSnaps)
+        }
         guard let fromArr = pack.edgeFrom, let toArr = pack.edgeTo else {
             return nearestNodeFallback(to: point).map {
                 [
@@ -5539,32 +5545,25 @@ nonisolated struct OnDeviceRouter {
                 }
 
                 var along = 0.0
+                var closest = ExactRoadProjectionChoice()
                 for i in 1..<poly.count {
+                    projectionSegments &+= 1
                     let segA = poly[i - 1]
                     let segB = poly[i]
                     let segM = meters(segA, segB)
                     let proj = projectOntoSegment(point: point, a: segA, b: segB)
                     let d = meters(point, proj.coord)
-                    if d <= maxMeters {
-                        let candidate = EdgeSnap(
-                            edgeIndex: ei,
-                            nodeA: a,
-                            nodeB: b,
-                            distanceMeters: d,
-                            projected: proj.coord,
-                            distanceAlongM: along + segM * proj.t,
-                            segmentIndex: i - 1,
-                            tangentDeg: bearingDeg(from: segA, to: segB)
-                        )
-                        if let existing = bestByEdge[ei] {
-                            if d < existing.distanceMeters {
-                                bestByEdge[ei] = candidate
-                            }
-                        } else {
-                            bestByEdge[ei] = candidate
-                        }
-                    }
+                    if d <= maxMeters { projectionCandidates &+= 1 }
+                    closest.consider(distance: d,maximum: maxMeters,along: along + segM * proj.t,
+                        segment: i-1,projected: proj.coord)
                     along += segM
+                }
+                if let selected = closest.value {
+                    constructedRoadSnaps &+= 1
+                    bestByEdge[ei] = EdgeSnap(edgeIndex: ei,nodeA: a,nodeB: b,
+                        distanceMeters: selected.distance,projected: selected.projected,
+                        distanceAlongM: selected.along,segmentIndex: selected.segment,
+                        tangentDeg: bearingDeg(from: poly[selected.segment],to: poly[selected.segment+1]))
                 }
             }
         }
