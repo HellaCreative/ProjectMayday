@@ -100,7 +100,13 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         private let patterns: [Pattern]
         private let starters: [Int: [Int]]
 
-        static func build(pack: GraphV2Pack, startNode: Int, endNode: Int) -> Self {
+        /// Initial seed scan only; closure expansion remains separately sized.
+        var seedScannedNodes: Int = 0
+        var seedScannedArcs: Int = 0
+        var usedSelectiveSeeding: Bool = false
+
+        static func build(pack: GraphV2Pack, startNode: Int, endNode: Int,
+                          selectiveSeeding: Bool = true) -> Self {
             let n = pack.nodeCount
             guard pack.version >= 4, pack.legalTopology, !pack.restrictions.isEmpty else {
                 return Self(
@@ -198,16 +204,38 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                 queue.append(state)
                 return state
             }
-            for source in 0..<n {
+            // V4 edge endpoint columns identify the only possible source rows;
+            // actual CSR still establishes direction and duplicate ordering.
+            // Sorting retains the original full-scan state creation order.
+            // Missing/invalid optional endpoint metadata keeps the legacy scan.
+            var seedSources: [Int]?
+            if selectiveSeeding, pack.hasVerifiedCSREndpoints, let from = pack.edgeFrom, let to = pack.edgeTo {
+                var sources: Set<Int> = []
+                var usable = true
+                for edge in statefulEdges {
+                    guard from.indices.contains(edge), to.indices.contains(edge),
+                          (0..<n).contains(Int(from[edge])), (0..<n).contains(Int(to[edge])) else {
+                        usable = false; break
+                    }
+                    sources.insert(Int(from[edge])); sources.insert(Int(to[edge]))
+                }
+                if usable { seedSources = sources.sorted() }
+            }
+            var scannedNodes = 0, scannedArcs = 0
+            func seed(source: Int) {
+                scannedNodes += 1
                 let arcStart = Int(pack.nodeOffsets[source])
                 let arcEnd = Int(pack.nodeOffsets[source + 1])
-                guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
+                guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { return }
                 for arc in arcStart..<arcEnd {
+                    scannedArcs += 1
                     let incoming = Int(pack.edgeUndirectedIndex[arc])
                     if !statefulEdges.contains(incoming) { continue }
                     _ = addState(node: Int(pack.edgeTargets[arc]), incomingEdge: incoming, active: [])
                 }
             }
+            if let seedSources { for source in seedSources { seed(source: source) } }
+            else { for source in 0..<n { seed(source: source) } }
 
             var transitionCache: [TransitionKey: Int] = [:]
             var cursor = 0
@@ -243,7 +271,9 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                 stateCount: n + 2 + records.count, records: records,
                 stateByArrival: stateByArrival, transitionCache: transitionCache,
                 statefulEdges: statefulEdges, blockedNode: blockedNode,
-                onlyNode: onlyNode, patterns: patterns, starters: starters
+                onlyNode: onlyNode, patterns: patterns, starters: starters,
+                seedScannedNodes: scannedNodes, seedScannedArcs: scannedArcs,
+                usedSelectiveSeeding: seedSources != nil
             )
         }
 
@@ -532,6 +562,10 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     let edgeMeters: [UInt32]
     let edgeFrom: [Int32]?
     let edgeTo: [Int32]?
+    /// Decoder-owned proof for these immutable arrays. A future paged decoder
+    /// must bind an equivalent persisted proof to source hash/version, not omit it.
+    private(set) var hasVerifiedCSREndpoints = false
+    private(set) var csrValidationScannedArcs = 0
     let nodeCoords: [Float] // lon,lat pairs
     let accessNames: [String]
     let surfaceLeafNames: [String]
@@ -911,7 +945,43 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             blockedViaWayExits = [:]
             onlyViaWayEntries = [:]
         }
+        if isV4, let from = edgeFrom, let to = edgeTo {
+            // One full CSR verification at eager decode, not once per search.
+            // This is preparation work, not selective loading by itself.
+            try Self.validateCSREndpoints(nodes: nodeCount, edges: undirectedEdgeCount,
+                arcs: directedArcCount, offsets: nodeOffsets, targets: edgeTargets,
+                arcEdges: edgeUndirectedIndex, from: from, to: to)
+            hasVerifiedCSREndpoints = true
+            csrValidationScannedArcs = directedArcCount
+        }
         measurement?.increment(.decodedEdges, by: UInt64(undirectedEdgeCount))
+    }
+
+    private static func validateCSREndpoints(nodes: Int, edges: Int, arcs: Int,
+        offsets: [Int32], targets: [Int32], arcEdges: [Int32], from: [Int32], to: [Int32]) throws {
+        guard offsets.count == nodes + 1, targets.count == arcs, arcEdges.count == arcs,
+              from.count == edges, to.count == edges, offsets.first == 0,
+              offsets.last == Int32(exactly: arcs) else { throw PackError.invalidTopology }
+        for edge in 0..<edges {
+            if edge & 4095 == 0 { try RoutingWorkContext.check() }
+            guard (0..<nodes).contains(Int(from[edge])), (0..<nodes).contains(Int(to[edge])) else {
+                throw PackError.invalidTopology
+            }
+        }
+        for node in 0..<nodes {
+            if node & 4095 == 0 { try RoutingWorkContext.check() }
+            let start = Int(offsets[node]), end = Int(offsets[node+1])
+            guard start >= 0, end >= start, end <= arcs else { throw PackError.invalidTopology }
+            for arc in start..<end {
+                if arc & 4095 == 0 { try RoutingWorkContext.check() }
+                let edge = Int(arcEdges[arc]), target = Int(targets[arc])
+                guard (0..<edges).contains(edge), (0..<nodes).contains(target) else { throw PackError.invalidTopology }
+                let a = Int(from[edge]), b = Int(to[edge])
+                guard (a == node && b == target) || (b == node && a == target) else {
+                    throw PackError.invalidTopology
+                }
+            }
+        }
     }
 
     /// Install the independently hash-verified V4 border proof downloaded with
@@ -1277,6 +1347,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         case missingCapability
         case missingSafetySection
         case invalidSeamSidecar
+        case invalidTopology
     }
 }
 
