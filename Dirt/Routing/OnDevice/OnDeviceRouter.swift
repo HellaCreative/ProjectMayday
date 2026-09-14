@@ -824,10 +824,13 @@ nonisolated struct OnDeviceRouter {
             let base = ctx.corridorMeters ?? HopSearchPolicy.dirtCorridorMeters
             var candidates: [(route: Result, width: Double, objective: String)] = []
             var lastBoundedFailure: Failure = .noPath
+            let ladderBudget = HopSearchPolicy.dirtLadderBudgetSeconds(nodeCount: pack.nodeCount)
+            let ladderDeadline = CFAbsoluteTimeGetCurrent() + ladderBudget
 
             func searchDirt(
                 width: Double?,
-                costMode: HopSearchPolicy.CostMode = .pavement
+                costMode: HopSearchPolicy.CostMode = .pavement,
+                comparison: Bool = false
             ) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
                 hunt.costMode = costMode
@@ -835,8 +838,10 @@ nonisolated struct OnDeviceRouter {
                 hunt.corridorMeters = width
                 hunt.hardCorridor = width != nil
                 hunt.boundedSearch = true
-                hunt.timeCapSeconds = HopSearchPolicy.dirtCandidateTimeCapSeconds
-                hunt.popCap = HopSearchPolicy.dirtCandidatePopCap
+                let remaining = ladderDeadline - CFAbsoluteTimeGetCurrent()
+                guard remaining > 0.5 else { return .failure(.searchLimit("timeCap")) }
+                hunt.timeCapSeconds = HopSearchPolicy.dirtCandidateTimeCap(remaining: remaining, comparison: comparison)
+                hunt.popCap = HopSearchPolicy.dirtCandidatePopCap(nodeCount: pack.nodeCount, comparison: comparison)
                 hunt.maxPathMeters = lengthCap
                 lastFailure = .noPath
                 let initial: Result
@@ -867,7 +872,7 @@ nonisolated struct OnDeviceRouter {
             }
 
             comparison: for width in [base * 2, base] {
-                switch searchDirt(width: width) {
+                switch searchDirt(width: width, comparison: true) {
                 case .success(let route):
                     candidates.append((route, width, "pavement"))
                     if route.dirtPercent >= 70 { break comparison }
@@ -1822,7 +1827,7 @@ nonisolated struct OnDeviceRouter {
             if cur.cost != dist[cur.node] { continue }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
-            if let deadline, CFAbsoluteTimeGetCurrent() > deadline {
+            if let deadline, pops & 255 == 0, CFAbsoluteTimeGetCurrent() > deadline {
                 abort = "timeCap"
                 break
             }
@@ -2400,7 +2405,7 @@ nonisolated struct OnDeviceRouter {
         while let cur = heap.pop() {
             pops += 1
             if pops > popCap { abort = "popCap"; break }
-            if let deadline, CFAbsoluteTimeGetCurrent() > deadline {
+            if let deadline, pops & 255 == 0, CFAbsoluteTimeGetCurrent() > deadline {
                 abort = "timeCap"
                 break
             }

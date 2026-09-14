@@ -112,8 +112,8 @@ struct Phase1RoutingCharacterTests {
         #expect(fog.expansions >= 1)
     }
 
-    @Test func routingSessionContextSuppliesAFreshSeed() async {
-        let captured = await RoutingSessionContext.$seed.withValue(9_001) {
+    @MainActor @Test func routingSessionContextSuppliesAFreshSeed() {
+        let captured = RoutingSessionContext.$seed.withValue(9_001) {
             RouteRequest(
                 profile: .dirt,
                 locations: [

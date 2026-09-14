@@ -74,6 +74,48 @@ nonisolated enum HopSearchPolicy {
     static let pass2PopCap: Int = 400_000
     static let dirtCandidateTimeCapSeconds: Double = 7
     static let dirtCandidatePopCap: Int = 200_000
+
+    // MARK: - Adaptive search budgets (lockstep: find-path-v2.js)
+    //
+    // The live JS router scales time and pop budgets with graph size so a
+    // province-scale pack gets enough runway to finish a long ride. The flat
+    // constants above were calibrated on small packs; they starve every
+    // candidate on a large pack like NS (~920K nodes).
+
+    private static let largeGraphNodes = 500_000
+    private static let provinceScaleGraphNodes = 1_500_000
+    private static let dirtBaseBudgetSeconds: Double = 3.5
+    private static let dirtMaxBudgetSeconds: Double = 18
+
+    static func largeGraphPressure(nodeCount: Int) -> Double {
+        let n = max(0, nodeCount)
+        guard n > largeGraphNodes else { return 0 }
+        return min(1, Double(n - largeGraphNodes) / Double(provinceScaleGraphNodes - largeGraphNodes))
+    }
+
+    /// Total wall-clock budget for one Dirt ladder. Lockstep:
+    /// `profileSearchBudgetMs("dirt", ...)` in find-path-v2.js.
+    static func dirtLadderBudgetSeconds(nodeCount: Int) -> Double {
+        let p = largeGraphPressure(nodeCount: nodeCount)
+        return dirtBaseBudgetSeconds + (dirtMaxBudgetSeconds - dirtBaseBudgetSeconds) * p
+    }
+
+    /// Per-candidate pop cap. Comparison searches get half the base; both
+    /// scale with graph pressure. Lockstep: `profileSearchPopCap` in
+    /// find-path-v2.js.
+    static func dirtCandidatePopCap(nodeCount: Int, comparison: Bool) -> Int {
+        let base = comparison ? pass2PopCap / 2 : pass2PopCap
+        let p = largeGraphPressure(nodeCount: nodeCount)
+        return Int(ceil(Double(base) * (1 + p)))
+    }
+
+    /// Per-candidate time cap clamped to the remaining ladder budget.
+    /// Comparison candidates share roughly one old pass-2 budget (7 s);
+    /// non-comparison candidates may run to the full pass-2 cap (18 s).
+    static func dirtCandidateTimeCap(remaining: Double, comparison: Bool) -> Double {
+        let ceiling = comparison ? dirtCandidateTimeCapSeconds : pass2TimeCapSeconds
+        return min(ceiling, max(0.25, remaining))
+    }
     /// Chord-ranked proven crossings to try before spending another full hop.
     static let chainSeamCandidatePrefix: Int = 3
     static let dirtRidePavedPerKm: Double = 150
