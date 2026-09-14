@@ -108,4 +108,87 @@ nonisolated enum ExactGuidanceSeams {
         RoutingWorkContext.measurement?.increment(.seamSpatialLookupsAvoided, by: UInt64(pairs.count * 2))
         return result
     }
+    static func connections<L: ExactSeamTopologySource,R: ExactSeamTopologySource>(local: L, remote: R,
+        anchors: [GraphV2Pack.CrossPackSeamAnchor],
+        reverse: [GraphV2Pack.CrossPackSeamAnchor]) throws -> [Connection] {
+        let phase = RoutingWorkContext.measurement?.begin(.seamNodePreparation)
+        defer { RoutingWorkContext.measurement?.end(phase) }
+        try RoutingWorkContext.check()
+        if anchors.isEmpty && reverse.isEmpty { return [] }
+        guard !anchors.isEmpty, !reverse.isEmpty else { throw Failure.invalidRecordedIdentity }
+        try local.validate();try remote.validate()
+        guard let epoch = local.sourceEpoch,!epoch.isEmpty,epoch == remote.sourceEpoch else { throw Failure.incompatibleSource }
+        func reciprocal(_ a: GraphV2Pack.CrossPackSeamAnchor, _ b: GraphV2Pack.CrossPackSeamAnchor) -> Bool {
+            guard let id = a.osmNodeId, id != 0 else { return false }
+            return b.osmNodeId == id && b.osmWayId == a.osmWayId
+                && b.localEdgeId == a.remoteEdgeId && b.remoteEdgeId == a.localEdgeId
+                && a.gapMeters >= 0 && a.gapMeters <= 2 && b.gapMeters >= 0 && b.gapMeters <= 2
+                && abs(b.latitude - a.latitude) < 0.00002
+                && abs(b.longitude - a.longitude) < 0.00002
+        }
+        // Coverage is symmetric; duplicates do not demand one-to-one pairing,
+        // but an unmatched row on either side is not complete guidance.
+        for row in reverse {
+            try RoutingWorkContext.check()
+            guard anchors.contains(where: { reciprocal($0, row) }) else { throw Failure.invalidRecordedIdentity }
+        }
+        var pairs: [(GraphV2Pack.CrossPackSeamAnchor, GraphV2Pack.CrossPackSeamAnchor)] = []
+        var wanted: Set<Int64> = []
+        for anchor in anchors {
+            try RoutingWorkContext.check()
+            guard let id = anchor.osmNodeId,
+                  let other = reverse.first(where: { reciprocal(anchor, $0) })
+            else { throw Failure.invalidRecordedIdentity }
+            for row in [anchor, other] {
+                let parts = row.localEdgeId.split(separator: ":")
+                guard parts.count == 3, let first = Int64(parts[1]), let last = Int64(parts[2])
+                else { throw Failure.invalidRecordedIdentity }
+                wanted.insert(first); wanted.insert(last)
+            }
+            pairs.append((anchor, other)); wanted.insert(id)
+        }
+        let a = try local.resolve(wanted),b = try remote.resolve(wanted)
+        func verify<S: ExactSeamTopologySource>(_ source: S,_ anchor: GraphV2Pack.CrossPackSeamAnchor,_ node: Int,_ nodes: [Int64: Int]) throws {
+            let parts = anchor.localEdgeId.split(separator: ":")
+            guard (0..<source.nodeCount).contains(node) else { throw Failure.invalidRecordedIdentity }
+            let actualNode = try source.nodeID(node)
+            guard parts.count == 3,
+                  let way = Int64(parts[0]),let first = Int64(parts[1]),let last = Int64(parts[2]),
+                  String(way) == anchor.osmWayId,
+                  first == actualNode || last == actualNode,
+                  let firstNode = nodes[first],let lastNode = nodes[last] else { throw Failure.invalidRecordedIdentity }
+            // Internal early exit preserves the reference's first exact incident
+            // arc match. It never catches data, cancellation or source failures.
+            do {
+                for endpoint in [firstNode,lastNode] {
+                    guard (0..<source.nodeCount).contains(endpoint) else { throw Failure.invalidRecordedIdentity }
+                    try source.outgoing(endpoint) { edge,target in
+                        try RoutingWorkContext.check()
+                        guard (0..<source.nodeCount).contains(target),(0..<source.edgeCount).contains(edge) else { throw Failure.invalidRecordedIdentity }
+                        let row = try source.edge(edge)
+                        guard (0..<source.nodeCount).contains(row.from),(0..<source.nodeCount).contains(row.to),
+                              (row.from == endpoint && row.to == target) || (row.to == endpoint && row.from == target) else { throw Failure.invalidRecordedIdentity }
+                        let x = try source.nodeID(row.from),y = try source.nodeID(row.to)
+                        if row.way == way && ((x == first && y == last) || (x == last && y == first)) { throw ExactSeamMatch.found }
+                    }
+                }
+            } catch ExactSeamMatch.found { return }
+            throw Failure.invalidRecordedIdentity
+        }
+        var seen: Set<Connection> = [], result: [Connection] = []
+        for (anchor, other) in pairs {
+            try RoutingWorkContext.check()
+            guard let id = anchor.osmNodeId, let x = a[id], let y = b[id] else { throw Failure.invalidRecordedIdentity }
+            try verify(local, anchor, x, a); try verify(remote, other, y, b)
+            let connection = Connection(localNode: x, remoteNode: y)
+            if seen.insert(connection).inserted { result.append(connection) }
+        }
+        try local.validate();try remote.validate()
+        try RoutingWorkContext.check()
+        RoutingWorkContext.measurement?.increment(.exactSeamRows, by: UInt64(pairs.count))
+        RoutingWorkContext.measurement?.increment(.exactSeamBindings, by: UInt64(result.count))
+        // Avoided lookups include prior cache hits; not a claim each was a scan.
+        RoutingWorkContext.measurement?.increment(.seamSpatialLookupsAvoided, by: UInt64(pairs.count * 2))
+        return result
+    }
 }

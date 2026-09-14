@@ -6,16 +6,36 @@ nonisolated final class PagedV4ContinuationSpace {
     private let identity: PagedV4Core.Identity
     private let sourceEpoch: String
     private let restrictions: [GraphV2Pack.TurnRestriction]
-    private let state: GraphV2Pack.V4TurnStateSpace
-    var stateCount: Int { state.stateCount }
-    func graphNode(of value: Int) -> Int { state.graphNode(of: value) }
-    func transition(state value: Int,outgoingEdge: Int,toNode: Int) -> Int {
-        state.transition(state: value,outgoingEdge: outgoingEdge,toNode: toNode)
+    private var state: GraphV2Pack.V4TurnStateSpace
+    private let budget: V4TurnPreparationBudget
+    private let stateLock = NSRecursiveLock()
+    var stateCount: Int { stateLock.lock(); defer { stateLock.unlock() }; return state.stateCount }
+    func graphNode(of value: Int) -> Int { stateLock.lock(); defer { stateLock.unlock() }; return state.graphNode(of: value) }
+    func startState(node: Int,core: PagedV4Core,query: PagedV4Core.Query) throws -> Int {
+        guard core.identity == identity,query.belongs(to: core) else { throw PagedV4Core.Failure.identityMismatch }
+        try query.validateSource(); _ = try query.node(node); try query.validateSource()
+        return node
     }
+    func transition(state value: Int,outgoingEdge: Int,toNode: Int,
+        core: PagedV4Core,query: PagedV4Core.Query) throws -> Int {
+        stateLock.lock(); defer { stateLock.unlock() }
+        guard core.identity == identity,query.belongs(to: core) else { throw PagedV4Core.Failure.identityMismatch }
+        try query.validateSource()
+        let node = state.graphNode(of: value)
+        guard (0..<core.nodeCount).contains(node) else { throw V4TurnPreparationError.invalidTopology }
+        var present = false
+        try query.outgoing(node) { if $0.edge == outgoingEdge && $0.target == toNode { present = true } }
+        guard present else { throw V4TurnPreparationError.invalidTopology }
+        let result = try state.demandTransition(state: value,outgoingEdge: outgoingEdge,toNode: toNode,budget: budget)
+        try query.validateSource()
+        return result
+    }
+    /// Call once when this search scope completes or fails; no per-arc metric locks.
+    func publishDiagnostics() { stateLock.lock(); defer { stateLock.unlock() }; budget.publishDiagnostics() }
     private init(identity: PagedV4Core.Identity,sourceEpoch: String,
-        restrictions: [GraphV2Pack.TurnRestriction],state: GraphV2Pack.V4TurnStateSpace) {
+        restrictions: [GraphV2Pack.TurnRestriction],state: GraphV2Pack.V4TurnStateSpace,budget: V4TurnPreparationBudget) {
         self.identity = identity;self.sourceEpoch = sourceEpoch
-        self.restrictions = restrictions;self.state = state
+        self.restrictions = restrictions;self.state = state;self.budget = budget
     }
     static func prepare(core: PagedV4Core,query: PagedV4Core.Query,legal: PagedV4Core.LegalQuery,
         index: OriginalIDIndex,limits: V4TurnPreparationLimits = .init()) throws -> PagedV4ContinuationSpace {
@@ -24,25 +44,14 @@ nonisolated final class PagedV4ContinuationSpace {
               index.verifiedIdentity.graphBytes == core.identity.bytes else { throw PagedV4Core.Failure.identityMismatch }
         try index.validateSource(cancelled: { RoutingWorkContext.stopReason != nil })
         let topology = try PagedV4TurnTopology(core: core,query: query,legal: legal,limits: limits)
-        // Observed immutable NS/NB/ON provenance lengths:103229/127305/1146734.
-        // Decode only the epoch property from unchanged provenance; no invented
-        // default. This is bounded metadata parsing, not an all-road allocation.
-        let count = try legal.sectionLength(.provenance)
-        guard count > 0,count <= 2*1024*1024 else { throw PagedV4Core.Failure.metadataLimit }
-        var data = Data();data.reserveCapacity(count)
-        for offset in stride(from: 0,to: count,by: 65_536) {
-            let lease = try legal.sectionChunk(.provenance,offset: offset,count: min(65_536,count-offset))
-            lease.withUnsafeBytes { data.append(contentsOf: $0) }
-        }
-        struct Epoch: Decodable { let sourceEpoch: String? }
-        guard let epoch = try JSONDecoder().decode(Epoch.self,from: data).sourceEpoch,!epoch.isEmpty else {
-            throw NativeRoutingContinuationError.unavailableSourceEpoch
-        }
+        let epoch = try PagedV4SourceMetadata.sourceEpoch(legal)
         let state = try GraphV2Pack.V4TurnStateSpace.build(topology: topology,
-            startNode: core.nodeCount,endNode: core.nodeCount+1,limits: limits)
+            startNode: core.nodeCount,endNode: core.nodeCount+1,limits: limits,demandDriven: true)
         try query.validateSource();try legal.validateSource()
         try index.validateSource(cancelled: { RoutingWorkContext.stopReason != nil })
-        return .init(identity: core.identity,sourceEpoch: epoch,restrictions: topology.restrictions,state: state)
+        let budget = try V4TurnPreparationBudget(limits: limits)
+        try budget.reserve(state.preparationReservedBytes)
+        return .init(identity: core.identity,sourceEpoch: epoch,restrictions: topology.restrictions,state: state,budget: budget)
     }
     private func access(core: PagedV4Core,query: PagedV4Core.Query,index: OriginalIDIndex) throws -> PagedV4ContinuationAccess {
         guard core.identity == identity,query.belongs(to: core),
@@ -55,6 +64,7 @@ nonisolated final class PagedV4ContinuationSpace {
     func exportContinuation(state value: Int,incomingEdge: Int,arrivedFromNode: Int,
         core: PagedV4Core,query: PagedV4Core.Query,index: OriginalIDIndex,
         location: NativeRoutingContinuation.Location? = nil) throws -> NativeRoutingContinuation {
+        stateLock.lock(); defer { stateLock.unlock() }
         let access = try access(core: core,query: query,index: index)
         let token = try state.exportContinuation(state: value,incomingEdge: incomingEdge,
             arrivedFromNode: arrivedFromNode,access: access,location: location)
@@ -62,6 +72,7 @@ nonisolated final class PagedV4ContinuationSpace {
     }
     func importContinuation(_ token: NativeRoutingContinuation,
         core: PagedV4Core,query: PagedV4Core.Query,index: OriginalIDIndex) throws -> GraphV2Pack.V4TurnStateSpace.ImportedContinuation {
+        stateLock.lock(); defer { stateLock.unlock() }
         let access = try access(core: core,query: query,index: index)
         // Bound untrusted carried metadata before Set/map allocations. This limit
         // fails explicitly; it never truncates context or clears a restriction.
@@ -69,7 +80,7 @@ nonisolated final class PagedV4ContinuationSpace {
               token.restrictionContext.reduce(0,{ $0+$1.members.count }) <= 1_048_576 else {
             throw V4TurnPreparationError.resourceLimit
         }
-        let arrival = try state.importContinuation(token,access: access)
+        let arrival = try state.importContinuation(token,access: access,demandBudget: budget)
         try access.validate();return arrival
     }
 }

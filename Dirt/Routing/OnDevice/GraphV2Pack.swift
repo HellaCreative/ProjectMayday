@@ -90,10 +90,10 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let baseNodeCount: Int
         let startNode: Int
         let endNode: Int
-        let stateCount: Int
-        private let records: [Record]
-        private let stateByArrival: [ArrivalKey: Int]
-        private let transitionCache: [TransitionKey: Int]
+        var stateCount: Int
+        private var records: [Record]
+        private var stateByArrival: [ArrivalKey: Int]
+        private var transitionCache: [TransitionKey: Int]
         private let statefulEdges: Set<Int>
         private let blockedNode: [TurnKey: Set<Int>]
         private let onlyNode: [TurnKey: Set<Int>]
@@ -281,9 +281,10 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         /// Throwing accessor path, staged beside the reference builder for A/B.
         /// Accessor/query closures are released after preparation, never retained.
         static func build<T: V4TurnTopologyAccess>(topology: T, startNode: Int, endNode: Int,
-            limits: V4TurnPreparationLimits = V4TurnPreparationLimits()) throws -> Self {
+            limits: V4TurnPreparationLimits = V4TurnPreparationLimits(), demandDriven: Bool = false) throws -> Self {
             try topology.validate()
             let budget = try V4TurnPreparationBudget(limits: limits)
+            defer { budget.publishDiagnostics() }
             try budget.reserve(topology.retainedRestrictionPayloadBytes)
             let n = topology.nodeCount
             guard !topology.restrictions.isEmpty else {
@@ -323,6 +324,14 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                         blockedNode[key, default: []].insert(restriction.toEdge)
                     }
                 }
+            }
+
+            if demandDriven {
+                try topology.validate()
+                return Self(baseNodeCount: n,startNode: startNode,endNode: endNode,
+                    stateCount: n+2,records: [],stateByArrival: [:],transitionCache: [:],
+                    statefulEdges: statefulEdges,blockedNode: blockedNode,onlyNode: onlyNode,
+                    patterns: patterns,starters: starters,preparationReservedBytes: budget.reservedBytes)
             }
 
             func advance(
@@ -593,7 +602,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                 activeRestrictions: progress)
         }
 
-        func importContinuation(_ token: NativeRoutingContinuation, access: PagedV4ContinuationAccess) throws -> ImportedContinuation {
+        mutating func importContinuation(_ token: NativeRoutingContinuation, access: PagedV4ContinuationAccess,
+            demandBudget: V4TurnPreparationBudget? = nil) throws -> ImportedContinuation {
             guard token.version == 1 else { throw NativeRoutingContinuationError.unsupportedVersion }
             guard let epoch = access.sourceEpoch, !epoch.isEmpty else {
                 throw NativeRoutingContinuationError.unavailableSourceEpoch
@@ -641,6 +651,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             let state: Int
             if let exact = stateByArrival[ArrivalKey(node: to, incomingEdge: edge, active: active)] {
                 state = exact
+            } else if let demandBudget {
+                state = try internDemandArrival(node: to,incomingEdge: edge,active: active,budget: demandBudget)
             } else {
                 guard active.isEmpty, !statefulEdges.contains(edge) else {
                     throw NativeRoutingContinuationError.unavailableLegalState
@@ -729,6 +741,56 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                     kind: restriction.kind, only: restriction.only, vehicleMask: restriction.vehicleMask,
                     viaNodeID: via, members: members)
             }.sorted { $0.relationID < $1.relationID }
+        }
+
+        /// Paged searches add only encountered arrivals. IDs are never evicted or
+        /// renumbered while labels or continuation operations can reference them.
+        private mutating func internDemandArrival(node: Int,incomingEdge: Int,active: [Progress],
+            budget: V4TurnPreparationBudget) throws -> Int {
+            guard (0..<baseNodeCount).contains(node) else { throw V4TurnPreparationError.invalidTopology }
+            if active.isEmpty && !statefulEdges.contains(incomingEdge) { return node }
+            let key = ArrivalKey(node: node,incomingEdge: incomingEdge,active: active)
+            if let existing = stateByArrival[key] { return existing }
+            try budget.state(progress: active.count)
+            let result = baseNodeCount+2+records.count
+            records.append(Record(node: node,incomingEdge: incomingEdge,active: active))
+            stateByArrival[key] = result; stateCount = result+1
+            preparationReservedBytes = budget.reservedBytes
+            return result
+        }
+        /// Same advance law as native exit validation, evaluated only for an
+        /// actually requested arc. Missing cache entries mean unexamined, not closed.
+        mutating func demandTransition(state: Int,outgoingEdge: Int,toNode: Int,
+            budget: V4TurnPreparationBudget) throws -> Int {
+            try RoutingWorkContext.check()
+            guard (0..<baseNodeCount).contains(toNode) else { throw V4TurnPreparationError.invalidTopology }
+            // Ordinary arrivals carry no turn progress. Their exact identity is
+            // already the destination node; do not cache every unrelated road.
+            if ((0..<baseNodeCount).contains(state) || state == startNode || state == endNode),
+               !statefulEdges.contains(outgoingEdge) { return toNode }
+            let key = TransitionKey(state: state,edge: outgoingEdge,toNode: toNode)
+            if let cached = transitionCache[key] { return cached }
+            let active: [Progress]
+            if (0..<baseNodeCount).contains(state) || state == startNode || state == endNode {
+                active = []
+            } else {
+                let i = state-(baseNodeCount+2)
+                guard records.indices.contains(i) else { throw V4TurnPreparationError.invalidTopology }
+                let row = records[i]
+                let result = advance(row.active,fromEdge: row.incomingEdge,toEdge: outgoingEdge,viaNode: row.node)
+                if !result.allowed {
+                    try budget.transition(); transitionCache[key] = -1
+                    preparationReservedBytes = budget.reservedBytes
+                    return -1
+                }
+                active = result.active
+            }
+            // Reserve cache work before publishing the transition. A failed state
+            // allocation throws; it never publishes a permissive or absent answer.
+            try budget.transition()
+            let result = try internDemandArrival(node: toNode,incomingEdge: outgoingEdge,active: active,budget: budget)
+            transitionCache[key] = result; preparationReservedBytes = budget.reservedBytes
+            return result
         }
 
         func stateForArrival(node: Int, incomingEdge: Int) -> Int {
@@ -1497,10 +1559,16 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         startEndpointKind: String? = nil,
         endEndpointKind: String? = nil,
         customerStartEdges: Set<Int> = [],
-        customerEndEdges: Set<Int> = []
+        customerEndEdges: Set<Int> = [],
+        useSharedPolicy: Bool = false
     ) -> Bool {
         guard version >= 4, legalTopology else { return true }
         let code = Int(v4AccessCode(ei: ei, from: from, to: to))
+        if useSharedPolicy {
+            return NativeV4AccessPolicy.allowed(code: UInt8(code),edge: ei,startEdge: startEi,endEdge: endEi,
+                allowUnknown: allowUnknown,startEndpointKind: startEndpointKind,endEndpointKind: endEndpointKind,
+                customerStartEdges: customerStartEdges,customerEndEdges: customerEndEdges)
+        }
         if code == 0 { return true }
         if code == 1 { return allowUnknown }
         if code == 2 || code == 5 { return false }

@@ -183,6 +183,10 @@ nonisolated final class PagedV4Core: @unchecked Sendable {
             let x = try owner.scalar(Float.self,at: l.coords+node*8,cancelled: cancelled)
             let y = try owner.scalar(Float.self,at: l.coords+node*8+4,cancelled: cancelled)
             let osm = try owner.scalar(Int64.self,at: l.osmNodes+node*8,cancelled: cancelled)
+            guard osm != 0, x.isFinite, y.isFinite,
+                  (-180...180).contains(x), (-90...90).contains(y) else {
+                throw Failure.invalidTopology
+            }
             owner.count(nodes: 1); return .init(longitude: x,latitude: y,osmID: osm)
         }
         func edge(_ edge: Int) throws -> Edge {
@@ -195,6 +199,7 @@ nonisolated final class PagedV4Core: @unchecked Sendable {
             let way = try owner.scalar(Int64.self,at: l.osmWays+edge*8,cancelled: cancelled)
             let forward = try owner.scalar(UInt8.self,at: l.access+edge*2,cancelled: cancelled)
             let reverse = try owner.scalar(UInt8.self,at: l.access+edge*2+1,cancelled: cancelled)
+            guard forward <= 5, reverse <= 5 else { throw Failure.invalidLegalMetadata }
             owner.count(edges: 1)
             return .init(from: a,to: b,meters: meters,attributes: attr,osmWayID: way,forwardAccess: forward,reverseAccess: reverse)
         }

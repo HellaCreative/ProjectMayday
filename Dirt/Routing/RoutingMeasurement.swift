@@ -41,11 +41,14 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
         case fuelStagesCommitted, failedContinuations, reusedProofs
         case rangeSnapCacheHits, rangeSnapCacheMisses, rangeSnapCoverageBypasses
         case stationMatchesSkipped, exactSeamRows, exactSeamBindings, seamSpatialLookupsAvoided
+        case turnPreparationStates, turnPreparationTransitions
+        case turnPreparationByteLimitHits, turnPreparationStateLimitHits, turnPreparationTransitionLimitHits
         case cancelledWindows, dataErrors
     }
 
     enum Gauge: String, Codable, CaseIterable, Sendable {
         case stationCoverageCacheBytes, stationCoverageCaptureBytes
+        case turnPreparationReservedBytes, turnPreparationByteLimit, turnPreparationStateLimit, turnPreparationTransitionLimit
         case directedCostMemoBytes
         case labelDirectoryLogicalBytes
         case graphPageBytes, geometryPageBytes, indexBytes, labelBytes, queueBytes

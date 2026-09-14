@@ -235,6 +235,8 @@ nonisolated struct OnDeviceRouter {
     private var balancedCalculationDeadline: Double?
     /// Temporary same-binary qualification switch; both paths preserve existing policy.
     var useExtractedFullRoadCost = true
+    var useSharedRoadLegality = false // Qualification-only until route A/B passes.
+    var useSharedFullRoadPolicy = false // Same-binary qualification only.
     var useSharedCleanPolicyReads = false // Qualification-only until A/B passes.
     var useLabelReadPointerCache = true
     var useScopedRoadBounds = true
@@ -6220,6 +6222,20 @@ nonisolated struct OnDeviceRouter {
         to: CLLocationCoordinate2D,
         ctx: HopSearchContext
     ) throws -> Bool {
+        if useSharedRoadLegality {
+            let exactBounds: ((Int,UrbanCore.Box) throws -> Bool)? = pack.exactSnapIndex.map { index in
+                { edge,box in
+                    let radius = 110_000 * max((box.maxLat-box.minLat)/2,(box.maxLon-box.minLon)/2)
+                    return try index.mayIntersect(edge: edge,
+                        latitude: (box.minLat+box.maxLat)/2,longitude: (box.minLon+box.maxLon)/2,
+                        meters: radius,query: roadBoundsQuery,cancelled: { RoutingWorkContext.stopReason != nil })
+                }
+            }
+            return try NativeRoadBlockPolicy.blocked(point,edgeFrom: edgeFrom,edgeIndex: edgeIndex,
+                edgeShape: edgeShape,from: from,to: to,ctx: ctx,sourceIdentity: pack,
+                hasGeometry: pack.geometry != nil,urbanCores: { packUrbanCores },settlements: { packSettlements },
+                boundsMayIntersect: exactBounds,geometryForEdge: { try edgeGeometry($0) })
+        }
         if ctx.cityWall, !packUrbanCores.isEmpty {
             let memo = ctx.urbanEdgeMemo.flatMap {
                 $0.matches(owner: pack,from: from,to: to) ? $0 : nil
@@ -6332,6 +6348,36 @@ nonisolated struct OnDeviceRouter {
         startOnMajorHighway: Bool, endOnMajorHighway: Bool, policyUnknown: Bool,
         awayExtraMeters: Double?, applySoftCorridor: Bool,
         predecessorTier: () throws -> RoadTier?) throws -> Double {
+        if useSharedFullRoadPolicy {
+            return try NativeFullRoadPolicy.step(baseCost: {
+                try hopCostStep(
+            meters: edgeM,
+            edgeIndex: ei,
+            surface: surface,
+            roadClass: roadClass,
+            access: access,
+            confidence: confidence,
+            profile: profile,
+            ctx: ctx,
+            toLL: toLL,
+            endLL: endLL,
+            abMeters: abMeters,
+            projectedOrigin: projectedOrigin,
+            startOnMajorHighway: startOnMajorHighway,
+            endOnMajorHighway: endOnMajorHighway,
+            policyUnknown: policyUnknown
+                )
+            }, meters: edgeM, attributes: attr, profile: profile, ctx: ctx,
+                toLL: toLL, edgeFrom: edgeFrom, from: from, to: to, endLL: endLL,
+                projectedOrigin: projectedOrigin, startOnMajorHighway: startOnMajorHighway,
+                endOnMajorHighway: endOnMajorHighway, awayExtraMeters: awayExtraMeters,
+                applySoftCorridor: applySoftCorridor, hasLeaves: pack.hasLeaves,
+                initialFuelApproach: initialFuelApproach, urbanCores: { packUrbanCores },
+                settlementBoxes: { settlementBoxes(for: profile) },
+                backtrack: { backtrackPenalized($0,edgeID: eid,ctx: ctx) },
+                currentTier: { try pack.roadTier(ei,query: edgeDetailQuery) },
+                predecessorTier: predecessorTier)
+        }
         var step = (try hopCostStep(
             meters: edgeM,
             edgeIndex: ei,
@@ -6758,7 +6804,7 @@ extension OnDeviceRouter {
         if !pack.v4AccessAllowed(ei: edge, from: fromNode, to: toNode,
             startEi: originEdge, endEi: destinationEdge, allowUnknown: false,
             startEndpointKind: nil, endEndpointKind: nil,
-            customerStartEdges: context.customerStartEdges, customerEndEdges: context.customerEndEdges) { return false }
+            customerStartEdges: context.customerStartEdges, customerEndEdges: context.customerEndEdges, useSharedPolicy: useSharedRoadLegality) { return false }
         if try edgeBlockedByPavedOnly(edge, ctx: context, allowSnapEdges: originEdge, endEi: destinationEdge) { return false }
         let edgeID = pack.edgeId(edge)
         if !edgeID.isEmpty, avoidEdgeIDs.contains(edgeID) { return false }

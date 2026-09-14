@@ -14,6 +14,7 @@ nonisolated enum V4TurnPreparationError: Error, Equatable {
     case unsupportedMetadata, unverifiedTopology, resourceLimit, invalidTopology
 }
 nonisolated struct V4TurnPreparationLimits {
+    var maximumConditionalMetadataBytes = 256 * 1024
     var maximumRestrictions = 16_384
     var maximumViaMembers = 131_072
     var maximumStates = 32_768
@@ -26,8 +27,22 @@ nonisolated final class V4TurnPreparationBudget {
     let limits: V4TurnPreparationLimits
     private(set) var reservedBytes: Int = 0
     private(set) var states = 0, transitions = 0
+    private var byteLimitHit = false, stateLimitHit = false, transitionLimitHit = false
+    func publishDiagnostics() {
+        guard let measurement = RoutingWorkContext.measurement else { return }
+        measurement.increment(.turnPreparationStates, by: UInt64(states))
+        measurement.increment(.turnPreparationTransitions, by: UInt64(transitions))
+        measurement.set(.turnPreparationReservedBytes, to: UInt64(reservedBytes))
+        measurement.set(.turnPreparationByteLimit, to: UInt64(limits.maximumReservedBytes))
+        measurement.set(.turnPreparationStateLimit, to: UInt64(limits.maximumStates))
+        measurement.set(.turnPreparationTransitionLimit, to: UInt64(limits.maximumTransitions))
+        if byteLimitHit { measurement.increment(.turnPreparationByteLimitHits) }
+        if stateLimitHit { measurement.increment(.turnPreparationStateLimitHits) }
+        if transitionLimitHit { measurement.increment(.turnPreparationTransitionLimitHits) }
+    }
     init(limits: V4TurnPreparationLimits) throws {
-        guard limits.maximumRestrictions >= 0, limits.maximumRestrictions <= 65_536,
+        guard limits.maximumConditionalMetadataBytes >= 0, limits.maximumConditionalMetadataBytes <= 1_048_576,
+              limits.maximumRestrictions >= 0, limits.maximumRestrictions <= 65_536,
               limits.maximumViaMembers >= 0, limits.maximumViaMembers <= 1_048_576,
               limits.maximumStates > 0, limits.maximumStates <= 262_144,
               limits.maximumTransitions > 0, limits.maximumTransitions <= 1_048_576,
@@ -36,16 +51,16 @@ nonisolated final class V4TurnPreparationBudget {
     }
     func reserve(_ bytes: Int) throws {
         try RoutingWorkContext.check()
-        guard bytes >= 0, bytes <= limits.maximumReservedBytes-reservedBytes else { throw V4TurnPreparationError.resourceLimit }
+        guard bytes >= 0, bytes <= limits.maximumReservedBytes-reservedBytes else { byteLimitHit = true; throw V4TurnPreparationError.resourceLimit }
         reservedBytes += bytes
     }
     func state(progress: Int) throws {
-        guard states < limits.maximumStates, progress <= limits.maximumViaMembers else { throw V4TurnPreparationError.resourceLimit }
+        guard states < limits.maximumStates, progress <= limits.maximumViaMembers else { stateLimitHit = true; throw V4TurnPreparationError.resourceLimit }
         // Record/key/queue/dictionary slots and duplicated active-array capacity.
         try reserve(512 + progress * 64); states += 1
     }
     func transition() throws {
-        guard transitions < limits.maximumTransitions else { throw V4TurnPreparationError.resourceLimit }
+        guard transitions < limits.maximumTransitions else { transitionLimitHit = true; throw V4TurnPreparationError.resourceLimit }
         try reserve(256); transitions += 1
     }
 }
@@ -97,14 +112,7 @@ nonisolated struct PagedV4TurnTopology: V4TurnTopologyAccess {
         _ = try V4TurnPreparationBudget(limits: limits)
         guard query.belongs(to: core), legal.belongs(to: core) else { throw V4TurnPreparationError.unverifiedTopology }
         try legal.requireCurrentCapability()
-        // Do not silently erase future conditional interpretation during extraction.
-        let length = try legal.sectionLength(.conditionals)
-        guard length <= 65_536 else { throw V4TurnPreparationError.unsupportedMetadata }
-        let lease = try legal.sectionChunk(.conditionals,offset: 0,count: length)
-        let data = lease.withUnsafeBytes { Data($0) }
-        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              object["policy"] as? String == "fail_closed",
-              let rules = object["rules"] as? [Any], rules.isEmpty else { throw V4TurnPreparationError.unsupportedMetadata }
+        try Self.validateConditionalMetadata(legal, limits: limits)
         var rows: [GraphV2Pack.TurnRestriction] = [], members = 0, viaBytes = 0
         try legal.forEachRestriction { _,row in
             guard rows.count < limits.maximumRestrictions,
@@ -124,8 +132,46 @@ nonisolated struct PagedV4TurnTopology: V4TurnTopologyAccess {
                 throw V4TurnPreparationError.resourceLimit
             }
         }
+        try legal.validateSource()
+        try query.validateSource()
         self.nodeCount = core.nodeCount; self.query = query; self.restrictions = rows
         retainedRestrictionPayloadBytes = try ArrayV4TurnTopology.restrictionBytes(rows,limits: limits)
+    }
+    /// Definitions describe the encoder's fail-closed decisions; they are not
+    /// runtime temporal rules. Directional access bytes remain authoritative.
+    /// Actual conditional turn references are rejected separately above.
+    private static func validateConditionalMetadata(_ legal: PagedV4Core.LegalQuery,
+                                                     limits: V4TurnPreparationLimits) throws {
+        let length = try legal.sectionLength(.conditionals)
+        guard length <= limits.maximumConditionalMetadataBytes else { throw V4TurnPreparationError.resourceLimit }
+        let budget = try V4TurnPreparationBudget(limits: limits)
+        // Explicit conservative temporary reservation for input, Foundation JSON
+        // objects and a read lease; this is not an allocator/RSS measurement.
+        try budget.reserve(length * 32 + min(length, 65_536))
+        try autoreleasepool {
+            var data = Data(); data.reserveCapacity(length)
+            for offset in stride(from: 0, to: length, by: 65_536) {
+                try RoutingWorkContext.check()
+                let lease = try legal.sectionChunk(.conditionals, offset: offset, count: min(65_536, length-offset))
+                lease.withUnsafeBytes { data.append(contentsOf: $0) }
+            }
+            try legal.validateSource()
+            let decoded: Any
+            do { decoded = try JSONSerialization.jsonObject(with: data) }
+            catch { throw V4TurnPreparationError.unsupportedMetadata }
+            guard let object = decoded as? [String: Any], object["policy"] as? String == "fail_closed",
+                  let rules = object["rules"] as? [[String: Any]] else { throw V4TurnPreparationError.unsupportedMetadata }
+            for rule in rules {
+                try RoutingWorkContext.check()
+                guard rule["policy"] as? String == "fail_closed",
+                      let way = rule["osmWayId"] as? String, let id = Int64(way), id > 0,
+                      let definitions = rule["rules"] as? [[String: Any]],
+                      definitions.allSatisfy({ $0["tag"] is String && $0["raw"] is String }) else {
+                    throw V4TurnPreparationError.unsupportedMetadata
+                }
+            }
+            try legal.validateSource()
+        }
     }
     func validate() throws { try RoutingWorkContext.check(); try query.validateSource() }
     func endpoints(_ edge: Int) throws -> (Int,Int) { let row = try query.edge(edge); return (row.from,row.to) }

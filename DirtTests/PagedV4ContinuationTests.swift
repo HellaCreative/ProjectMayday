@@ -24,27 +24,32 @@ struct PagedV4ContinuationTests {
         try withPrepared(data) { core,index in
             try core.withQuery { query in try core.withLegalQuery { legal in
                 let paged = try PagedV4ContinuationSpace.prepare(core: core,query: query,legal: legal,index: index)
+                let importedOnly = try PagedV4ContinuationSpace.prepare(core: core,query: query,legal: legal,index: index)
                 let reference = try GraphV2Pack.V4TurnStateSpace.build(topology: ArrayV4TurnTopology(pack: pack,limits: .init()),startNode: pack.nodeCount,endNode: pack.nodeCount+1)
-                #expect(paged.stateCount == reference.stateCount)
-                var visited = Set<Int>(),queue = Array(0..<pack.nodeCount),cursor = 0
+                #expect(paged.stateCount == pack.nodeCount+2)
+                var visited = Set<Int>(),queue = (0..<pack.nodeCount).map { ($0,$0) },cursor = 0
                 var compared = 0,activeTokens = 0
                 while cursor < queue.count {
-                    let state = queue[cursor];cursor += 1
+                    let (state,referenceState) = queue[cursor];cursor += 1
                     if !visited.insert(state).inserted { continue }
                     let node = paged.graphNode(of: state)
                     try query.outgoing(node) { arc in
-                        let next = paged.transition(state: state,outgoingEdge: arc.edge,toNode: arc.target)
-                        #expect(next == reference.transition(state: state,outgoingEdge: arc.edge,toNode: arc.target))
+                        let next = try paged.transition(state: state,outgoingEdge: arc.edge,toNode: arc.target,core: core,query: query)
+                        let expectedNext = reference.transition(state: referenceState,outgoingEdge: arc.edge,toNode: arc.target)
+                        #expect((next >= 0) == (expectedNext >= 0))
                         guard next >= 0 else { return }
-                        queue.append(next)
+                        queue.append((next,expectedNext))
                         for location in [NativeRoutingContinuation.Location.node(try query.node(arc.target).osmID),.edge(fraction: 0.4)] {
-                            let expected = try reference.exportContinuation(state: next,incomingEdge: arc.edge,arrivedFromNode: node,pack: pack,location: location)
+                            let expected = try reference.exportContinuation(state: expectedNext,incomingEdge: arc.edge,arrivedFromNode: node,pack: pack,location: location)
                             let actual = try paged.exportContinuation(state: next,incomingEdge: arc.edge,arrivedFromNode: node,core: core,query: query,index: index,location: location)
                             #expect(actual == expected);compared += 1
                             if !actual.activeRestrictions.isEmpty { activeTokens += 1 }
+                            let fresh = try importedOnly.importContinuation(actual,core: core,query: query,index: index)
+                            #expect(try importedOnly.exportContinuation(state: fresh.stateAtParentEnd,incomingEdge: fresh.incomingEdge,
+                                arrivedFromNode: fresh.fromNode,core: core,query: query,index: index,location: location) == actual)
                             let imported = try paged.importContinuation(actual,core: core,query: query,index: index)
                             let original = try reference.importContinuation(actual,pack: pack)
-                            #expect(imported.stateAtParentEnd == original.stateAtParentEnd)
+                            #expect(paged.graphNode(of: imported.stateAtParentEnd) == reference.graphNode(of: original.stateAtParentEnd))
                             #expect(imported.incomingEdge == original.incomingEdge && imported.fromNode == original.fromNode && imported.toNode == original.toNode)
                             #expect(imported.location == location)
                             let incompatible = NativeRoutingContinuation(version: actual.version,sourceEpoch: "different-source",incoming: actual.incoming,location: actual.location,restrictionContext: actual.restrictionContext,activeRestrictions: actual.activeRestrictions)
@@ -86,8 +91,37 @@ struct PagedV4ContinuationTests {
             } }
             let query = try #require(saved),prepared = try #require(space)
             #expect(throws: (any Error).self) {
+                try prepared.transition(state: 0,outgoingEdge: 0,toNode: 1,core: core,query: query)
+            }
+            #expect(throws: (any Error).self) {
                 try prepared.exportContinuation(state: 0,incomingEdge: 0,arrivedFromNode: 1,core: core,query: query,index: index)
             }
         }
     }
+    @Test func demandTurnBudgetStopsExplicitlyWithoutEvictingExistingStates() throws {
+        let data = try fixture(),pack = try GraphV2Pack(data: data)
+        var state = try GraphV2Pack.V4TurnStateSpace.build(topology: ArrayV4TurnTopology(pack: pack,limits: .init()),
+            startNode: pack.nodeCount,endNode: pack.nodeCount+1,demandDriven: true)
+        #expect(state.seedScannedNodes == 0 && state.seedScannedArcs == 0)
+        var limits = V4TurnPreparationLimits(); limits.maximumTransitions = 1
+        let budget = try V4TurnPreparationBudget(limits: limits)
+        try budget.reserve(state.preparationReservedBytes)
+        let stateful = Set(pack.restrictions.filter { $0.vehicleMask & 1 != 0 }.map(\.fromEdge))
+        var arcs: [(Int,Int,Int)] = []
+        for node in 0..<pack.nodeCount {
+            for arc in Int(pack.nodeOffsets[node])..<Int(pack.nodeOffsets[node+1]) {
+                if stateful.contains(Int(pack.edgeUndirectedIndex[arc])) {
+                    arcs.append((node,Int(pack.edgeUndirectedIndex[arc]),Int(pack.edgeTargets[arc])))
+                }
+            }
+        }
+        let a = try #require(arcs.first),b = try #require(arcs.dropFirst().first)
+        let committed = try state.demandTransition(state: a.0,outgoingEdge: a.1,toNode: a.2,budget: budget)
+        #expect(throws: V4TurnPreparationError.resourceLimit) {
+            try state.demandTransition(state: b.0,outgoingEdge: b.1,toNode: b.2,budget: budget)
+        }
+        #expect(try state.demandTransition(state: a.0,outgoingEdge: a.1,toNode: a.2,budget: budget) == committed)
+        #expect(state.graphNode(of: committed) == a.2)
+    }
+
 }

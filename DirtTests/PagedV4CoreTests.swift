@@ -95,6 +95,30 @@ struct PagedV4CoreTests {
             #expect(reader.pageStatistics.peakLivePayloadBytes <= reader.pageStatistics.maximumLivePayloadBytes)
         }
     }
+    @Test func queriedInvalidIdentityCoordinatesAndAccessAreDataErrors() throws {
+        for corruption in 0..<4 {
+            var bytes = try original()
+            switch corruption {
+            case 0:
+                let offset = read(bytes,104)
+                bytes.replaceSubrange(offset..<offset+8,with: Data(repeating: 0,count: 8))
+            case 1: put(&bytes,read(bytes,44),Int(Float.nan.bitPattern))
+            case 2: put(&bytes,read(bytes,44)+4,Int(Float(91).bitPattern))
+            default: bytes[read(bytes,112)] = 255
+            }
+            try file(bytes) { url in
+                let reader = try PagedV4Core(url: url,identity: identity(bytes))
+                defer { reader.close() }
+                try reader.withQuery { query in
+                    if corruption == 3 {
+                        #expect(throws: PagedV4Core.Failure.invalidLegalMetadata) { try query.edge(0) }
+                    } else {
+                        #expect(throws: PagedV4Core.Failure.invalidTopology) { try query.node(0) }
+                    }
+                }
+            }
+        }
+    }
     @Test func corruptionAndWrongProofCannotBecomeDisconnected() throws {
         let bytes = try original()
         try file(bytes) { url in
