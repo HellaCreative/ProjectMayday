@@ -33,6 +33,7 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
     private let directoryAt: Int
     private let edgesAt: Int
     var statistics: RoutingFilePages.Statistics { source.statistics }
+    var verifiedIdentity: Identity { header.identity }
 
     /// Cheap file identity validation before reusing an already verified reader.
     /// Cancellation belongs to each query and does not invalidate shared data.
@@ -105,6 +106,64 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
                     offset += count
                 }
             }
+        }
+    }
+
+    /// Bounded spatial sample for work ordering ONLY. Endpoint-grid membership
+    /// need not include every curved road near the point; no result proves a
+    /// station unreachable. The caller must keep unsampled stations eligible.
+    /// At most 64 directory entries and maximumRecords memberships are visited.
+    @discardableResult
+    func sampleHintEdges(latitude: Double,longitude: Double,meters: Double,maximumRecords: Int = 64,
+        query: BoundsQuery? = nil,cancelled: @escaping () -> Bool = { false },
+        _ visit: (Int) throws -> Void) throws -> Int {
+        try withBoundsQuery(reusing: query,cancelled: cancelled) { bounds in
+            guard latitude.isFinite,longitude.isFinite,abs(latitude) <= 90,abs(longitude) <= 180,
+                  meters.isFinite,meters >= 0,maximumRecords > 0,maximumRecords <= 64 else { throw Failure.invalidFormat }
+            let latPad = meters / 110_000
+            let polarLatitude = min(90,abs(latitude)+latPad)
+            let lonPad = latPad / max(0.000001,cos(polarLatitude * .pi / 180))
+            // Dateline/polar or excessive rectangle: unknown ordering, not absence.
+            guard lonPad < 180,abs(longitude)+lonPad < 180 else { return 0 }
+            let x0 = try Self.cell(longitude-lonPad),x1 = try Self.cell(longitude+lonPad)
+            let y0 = try Self.cell(max(-90,latitude-latPad)),y1 = try Self.cell(min(90,latitude+latPad))
+            let width = x1-x0+1,height = y1-y0+1
+            guard width > 0,height > 0,width <= 64,height <= 64/width else { return 0 }
+            var entries: [(start: Int,count: Int)] = []
+            entries.reserveCapacity(64)
+            var total = 0
+            for x in x0...x1 { for y in y0...y1 {
+                guard !cancelled() else { throw Failure.cancelled }
+                if let entry = try directory(key: Self.key(x,y),query: bounds,cancelled: cancelled),entry.count > 0 {
+                    let sum = total.addingReportingOverflow(entry.count)
+                    guard !sum.overflow else { throw Failure.corrupt }
+                    entries.append(entry);total = sum.partialValue
+                }
+            } }
+            let count = min(maximumRecords,total)
+            guard count > 0 else { return 0 }
+            // Quantiles over concatenated cell memberships give deterministic
+            // proportional allocation, including first/last records instead of
+            // favoring low road IDs. Work/memory do not scale with memberships.
+            var entryIndex = 0,entryBase = 0
+            for sample in 0..<count {
+                guard !cancelled() else { throw Failure.cancelled }
+                let ordinal: Int
+                if count == 1 { ordinal = (total-1)/2 }
+                else {
+                    let divisor = count-1
+                    ordinal = ((total-1)/divisor)*sample + (((total-1)%divisor)*sample)/divisor
+                }
+                while ordinal >= entryBase+entries[entryIndex].count {
+                    entryBase += entries[entryIndex].count;entryIndex += 1
+                }
+                let offset = entries[entryIndex].start+ordinal-entryBase
+                let raw = try source.read(at: edgesAt+offset*4,count: 4,cancelled: cancelled)
+                let edge = raw.withUnsafeBytes { Int(UInt32.routingDecode($0,at: 0)) }
+                guard edge < header.edgeCount else { throw Failure.corrupt }
+                if try bounds.mayIntersect(edge: edge,latitude: latitude,longitude: longitude,meters: meters) { try visit(edge) }
+            }
+            return count
         }
     }
 

@@ -27,6 +27,8 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
     private var coordinateWindow: (key: Int, lease: RoutingByteLease?) = (-1,nil)
     private var offsetPage: RoutingPageBorrow?
     private var coordinatePage: RoutingPageBorrow?
+    /// Present only after successful full source hashing by the file initializer.
+    let verifiedFileIdentity: Identity?
     private let source: Source
     let edgeCount: Int
     private let coordinateCount: Int
@@ -56,7 +58,7 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
     init(data: Data,limits: Limits = Limits()) throws {
         let header = try data.withUnsafeBytes { try Header($0,fileBytes: data.count) }
         guard limits.maximumPolylinePoints > 0,limits.pages.maximumReadBytes >= 65_536 else { throw PackError.geometryMemoryLimit }
-        source = .memory(data); self.limits = limits
+        source = .memory(data); verifiedFileIdentity = nil; self.limits = limits
         edgeCount = header.edges;coordinateCount = header.coordinates
         coordsAt = header.coordinatesAt;useFloat64 = header.doubles
     }
@@ -69,7 +71,7 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
         let bytes = try pages.read(at: 0,count: 16,cancelled: cancelled)
         let header = try bytes.withUnsafeBytes { try Header($0,fileBytes: pages.fileBytes) }
         guard header.edges == expectedEdgeCount else { throw PackError.identityMismatch }
-        source = .file(pages);self.limits = limits
+        source = .file(pages);verifiedFileIdentity = identity;self.limits = limits
         edgeCount = header.edges;coordinateCount = header.coordinates
         coordsAt = header.coordinatesAt;useFloat64 = header.doubles
     }

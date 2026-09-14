@@ -899,6 +899,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         }
     }
 
+    /// Geometry source hash embedded in the unchanged V4 graph bytes.
+    let pairedGeometrySHA256: String?
     let version: UInt16
     let flags: UInt16
     let hasLeaves: Bool
@@ -1206,6 +1208,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             guard provenanceAt < capAt, capAt < shaAt, shaAt + 32 <= data.count else {
                 throw PackError.truncated
             }
+            pairedGeometrySHA256 = data[shaAt..<(shaAt + 32)].map { String(format: "%02x", $0) }.joined()
             let provenance = (try? JSONSerialization.jsonObject(
                 with: data.subdata(in: provenanceAt..<capAt)
             ) as? [String: Any]) ?? [:]
@@ -1284,6 +1287,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             blockedViaWayExits = blockedVia
             onlyViaWayEntries = onlyVia
         } else {
+            pairedGeometrySHA256 = nil
             legalTopology = false
             capabilities = []
             sourceEpoch = nil

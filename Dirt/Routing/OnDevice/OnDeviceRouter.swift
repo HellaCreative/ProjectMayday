@@ -1265,6 +1265,107 @@ nonisolated struct OnDeviceRouter {
         return result
     }
 
+    /// Unactivated single-source API. Both fields die before this method returns;
+    /// the caller can release preparation data before attempting any native leg.
+    func prepareLazyOnwardStationHints(from: CLLocationCoordinate2D,to: CLLocationCoordinate2D,
+        stations: [CLLocationCoordinate2D],profile: RouteProfile,allowUnknown: Bool,usableMeters: Double,
+        limits: LazyOnwardStationPreparation.Limits = .init()) throws -> LazyOnwardStationPreparation.Outcome {
+        try RoutingWorkContext.check()
+        guard pack.version >= 4,pack.legalTopology,let index = pack.exactSnapIndex,
+              let graphReader = pack.edgeDetailReader,let graphIdentity = graphReader.identity,
+              let geometry = pack.geometry,let geometryIdentity = geometry.verifiedFileIdentity else {
+            return .requiresExactPreparation("verified-single-source-data-unavailable")
+        }
+        let rowBytes = MemoryLayout<LazyOnwardStationPreparation.Hint>.stride + MemoryLayout<LazyOnwardStationPreparation.Point>.stride + 2*MemoryLayout<Double?>.stride
+        guard limits.maximumNodes > 0,limits.maximumArcs > 0,limits.maximumStations >= 0,
+              limits.maximumHintPayloadBytes >= 0,pack.nodeCount <= min(262_144,limits.maximumNodes),
+              pack.edgeTargets.count <= min(1_048_576,limits.maximumArcs),
+              stations.count <= min(4_096,limits.maximumStations),
+              stations.count <= limits.maximumHintPayloadBytes / max(1,rowBytes) else {
+            return .requiresExactPreparation("bounded-single-source-preparation-limit")
+        }
+        func validPoint(_ point: CLLocationCoordinate2D) -> Bool {
+            point.latitude.isFinite && point.longitude.isFinite && abs(point.latitude) <= 90 && abs(point.longitude) <= 180
+        }
+        guard usableMeters.isFinite,usableMeters > 0,validPoint(from),validPoint(to),stations.allSatisfy(validPoint) else {
+            throw LazyOnwardStationPreparation.Failure.invalidInput
+        }
+        let began = ProcessInfo.processInfo.systemUptime
+        let source = index.verifiedIdentity
+        guard pack.pairedGeometrySHA256 == source.geometrySHA256,
+              graphIdentity.sha256 == source.graphSHA256,graphIdentity.bytes == source.graphBytes,
+              graphIdentity.edgeCount == pack.undirectedEdgeCount,
+              geometryIdentity.sha256 == source.geometrySHA256,geometryIdentity.bytes == source.geometryBytes else {
+            throw LazyOnwardStationPreparation.Failure.incompatibleSource
+        }
+        func validate() throws {
+            try RoutingWorkContext.check()
+            guard pack.exactSnapIndex === index,pack.geometry === geometry,pack.edgeDetailReader === graphReader else { throw LazyOnwardStationPreparation.Failure.incompatibleSource }
+            try index.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { _ in
+                try geometry.validateSource(cancelled: { RoutingWorkContext.stopReason != nil })
+                try graphReader.withQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { _ in }
+            }
+        }
+        try validate()
+        var forward = Array<Double?>(repeating: nil,count: stations.count)
+        var reverse = Array<Double?>(repeating: nil,count: stations.count)
+        var visits = 0
+        guard try Self.fuelRoadDistances(packs: [pack],seamSnapshots: [[:]],anchor: from,points: stations,
+            profile: profile,allowUnknown: allowUnknown,reverse: false,forwardRangeMeters: usableMeters,
+            coarseHintSink: { i,value,count in forward[i] = value; visits += count }) != nil else {
+            return .requiresExactPreparation("forward-field-incomplete")
+        }
+        try validate()
+        guard try Self.fuelRoadDistances(packs: [pack],seamSnapshots: [[:]],anchor: to,points: stations,
+            profile: profile,allowUnknown: allowUnknown,reverse: true,
+            coarseHintSink: { i,value,count in reverse[i] = value; visits += count }) != nil else {
+            return .requiresExactPreparation("reverse-field-incomplete")
+        }
+        try validate()
+        let hints = stations.indices.map { LazyOnwardStationPreparation.Hint(stationIndex: $0,
+            forwardEstimate: forward[$0],remainingEstimate: reverse[$0]) }
+        let request = LazyOnwardStationPreparation.Request(source: source,origin: .init(from),destination: .init(to),
+            stations: stations.map { .init($0) },profile: profile,allowUnknown: allowUnknown,usableMeters: usableMeters,
+            radiusMeters: Self.preferredMatchMeters,formatVersion: LazyOnwardStationPreparation.version)
+        let payload = hints.capacity * MemoryLayout<LazyOnwardStationPreparation.Hint>.stride
+            + request.stations.capacity * MemoryLayout<LazyOnwardStationPreparation.Point>.stride
+        guard payload <= limits.maximumHintPayloadBytes else { return .requiresExactPreparation("hint-payload-limit") }
+        try validate()
+        return .prepared(.init(request: request,hints: hints,statistics: .init(
+            elapsedSeconds: ProcessInfo.processInfo.systemUptime-began,completedFields: 2,
+            parentMembershipVisits: visits,retainedHintPayloadBytes: payload,stationProjectionQueries: 0)))
+    }
+    /// Populates the existing exact guidance match cache for this candidate only.
+    /// A returned count is matching information, never an approach/onward proof.
+    func refineLazyOnwardStationHint(_ prepared: LazyOnwardStationPreparation.Prepared,stationIndex: Int) throws -> Int {
+        try RoutingWorkContext.check()
+        let request = prepared.request
+        guard request.formatVersion == LazyOnwardStationPreparation.version,
+              request.radiusMeters == Self.preferredMatchMeters,
+              let index = pack.exactSnapIndex,index.verifiedIdentity == request.source,
+              pack.pairedGeometrySHA256 == request.source.geometrySHA256,
+              let geometry = pack.geometry,let geometryIdentity = geometry.verifiedFileIdentity,
+              let graphReader = pack.edgeDetailReader,let graphIdentity = graphReader.identity,
+              graphIdentity.sha256 == request.source.graphSHA256,graphIdentity.bytes == request.source.graphBytes,
+              graphIdentity.edgeCount == pack.undirectedEdgeCount,
+              geometryIdentity.sha256 == request.source.geometrySHA256,geometryIdentity.bytes == request.source.geometryBytes,
+              pack.version >= 4,pack.legalTopology,
+              request.stations.indices.contains(stationIndex) else { throw LazyOnwardStationPreparation.Failure.incompatibleSource }
+        let point = request.stations[stationIndex].coordinate
+        return try index.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { _ in
+            try geometry.validateSource(cancelled: { RoutingWorkContext.stopReason != nil })
+            try graphReader.withQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { _ in }
+            let result = try Self.rangeSnapCache.snaps(pack: pack,point: point,profile: request.profile,allowUnknown: request.allowUnknown) {
+                try nearestEdgeSnaps(to: point,allowUnknown: request.allowUnknown,profile: request.profile,maxMeters: request.radiusMeters)
+            }
+            try geometry.validateSource(cancelled: { RoutingWorkContext.stopReason != nil })
+            try graphReader.withQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { _ in }
+            try RoutingWorkContext.check()
+            guard pack.exactSnapIndex === index,pack.geometry === geometry,pack.edgeDetailReader === graphReader else { throw LazyOnwardStationPreparation.Failure.incompatibleSource }
+            return result.count
+        }
+    }
+
     /// A direction-aware distance field over installed packs and reciprocal
     /// recorded seams. This is guidance: exact routes still prove turn legality.
     static func fuelRoadDistances(packs: [GraphV2Pack],
@@ -1275,7 +1376,8 @@ nonisolated struct OnDeviceRouter {
                                   useCachedMatchesBeforeCoverage: Bool = true,
                                   useStationCoveragePreprobe: Bool = true,
                                   forwardRangeMeters: Double? = nil,
-                                  forwardFieldLimits: BoundedForwardFuelField.Limits = .init()) throws -> [Double]? {
+                                  forwardFieldLimits: BoundedForwardFuelField.Limits = .init(),
+                                  coarseHintSink: ((Int, Double?, Int) -> Void)? = nil) throws -> [Double]? {
         let diagnosticStart = ProcessInfo.processInfo.systemUptime
         var diagnosticStatus = "incomplete", matchingStage = "anchor"
         var matchCounts: [String: Int] = [:], matchSeconds: [String: Double] = [:]
@@ -1467,6 +1569,41 @@ nonisolated struct OnDeviceRouter {
             return try routers[index].stationCoverageCannotReach(point,
                 isPossiblyReachedNode: { $0 < 0 || $0 >= count || remaining($0) != .infinity },
                 nodeOffset: offsets[index], protectedEdges: protectedByPack[index])
+        }
+        if let coarseHintSink {
+            // Sample nearby index records under an explicit work budget. These
+            // values are ordering hints only, NOT complete-parent lower bounds.
+            // Unsampled/unmatched stations remain eligible for exact refinement.
+            for (ordinal, point) in points.enumerated() {
+                try RoutingWorkContext.check()
+                var best = Double.infinity, visits = 0
+                for index in packs.indices {
+                    let pack = packs[index], offset = offsets[index]
+                    guard let spatial = pack.exactSnapIndex,let edgeFrom = pack.edgeFrom,let edgeTo = pack.edgeTo else { continue }
+                    try spatial.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { bounds in
+                        guard try bounds.mayContainMatch(latitude: point.latitude,longitude: point.longitude,
+                            meters: Self.preferredMatchMeters) else { return }
+                        visits += try spatial.sampleHintEdges(latitude: point.latitude,longitude: point.longitude,
+                            meters: Self.preferredMatchMeters,maximumRecords: LazyOnwardStationPreparation.maximumSampledParentRecords,
+                            query: bounds,cancelled: { RoutingWorkContext.stopReason != nil }) { edge in
+                            try RoutingWorkContext.check()
+                            guard edgeFrom.indices.contains(edge),edgeTo.indices.contains(edge) else { throw LazyOnwardStationPreparation.Failure.invalidInput }
+                            let a = Int(edgeFrom[edge]),b = Int(edgeTo[edge])
+                            guard (0..<pack.nodeCount).contains(a),(0..<pack.nodeCount).contains(b) else { throw LazyOnwardStationPreparation.Failure.invalidInput }
+                            if protectedByPack[index].contains(edge) { best = 0; return }
+                            var value = Double.infinity
+                            let forward = permitted(pack,from: a,to: b,edge: edge)
+                            let backward = permitted(pack,from: b,to: a,edge: edge)
+                            if reverse ? backward : forward { value = min(value,remaining(offset+a)) }
+                            if reverse ? forward : backward { value = min(value,remaining(offset+b)) }
+                            if value.isFinite && value >= 0 { best = min(best,value) }
+                        }
+                    }
+                }
+                coarseHintSink(ordinal,best.isFinite && best >= 0 ? best : nil,visits)
+            }
+            diagnosticStatus += "-ordering-hints-only"
+            return [] // Internal sink mode; no station distances/proofs returned.
         }
         var distances: [Double] = []
         for point in points {
