@@ -33,6 +33,7 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
         /// remain additional. Counts are batched locally, avoiding per-row locks.
         case indexSourceBlockLoads, indexSourceScalars,indexSourceBufferBorrows,indexScanCancellationChecks
         case decodedEdges, geometryEdgesRead, examinedArcs, examinedStates
+        case resourceFiniteLabels, resourceAllocatedLabelSlots, resourceAllocatedPages
         case labelPagesAllocated, labelsCreated, queuePushes, queuePops
         case fuelStagesCommitted, failedContinuations, reusedProofs
         case rangeSnapCacheHits, rangeSnapCacheMisses, rangeSnapCoverageBypasses
@@ -43,6 +44,7 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
     enum Gauge: String, Codable, CaseIterable, Sendable {
         case stationCoverageCacheBytes, stationCoverageCaptureBytes
         case directedCostMemoBytes
+        case labelDirectoryLogicalBytes
         case graphPageBytes, geometryPageBytes, indexBytes, labelBytes, queueBytes
         case retainedGraphOwners, loadedDetailPages
     }

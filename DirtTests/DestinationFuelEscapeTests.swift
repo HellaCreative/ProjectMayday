@@ -134,6 +134,79 @@ struct DestinationFuelEscapeTests {
         guard case .verified = proof else { Issue.record("Next legally proved candidate should qualify"); return }
     }
 
+    @Test func lazyScreenStopsAtFirstLegalEscapeAndPreservesCandidateOrder() async throws {
+        let pack = try packFixture()
+        var router = try fixtureRouter(pack: pack)
+        router.recordedStartNode = try node(pack, 5)
+        router.recordedEndNode = try node(pack, 4)
+        guard case .success(let legal) = router.routeDetailed(
+            from: coordinate(pack, try node(pack, 5)), to: coordinate(pack, try node(pack, 4)),
+            profile: .cleanest, allowUnknown: false, sessionSeed: 0) else {
+            Issue.record("Missing legal fixture"); return
+        }
+        let token = try #require(legal.terminalContinuation)
+        func pump(_ id: String, _ longitude: Double) -> POIFeature {
+            .init(id: id, category: "fuel", latitude: 0, longitude: longitude,
+                name: id, address: nil, brand: nil, openingHours: nil, phone: nil, website: nil)
+        }
+        let near = pump("a-near", 0.0001), tied = pump("b-tied", 0.0001), remote = pump("remote", 1)
+        let deadline = ProcessInfo.processInfo.systemUptime + 60
+        for firstOutcome in ["success", "route-failed", "screen-excluded"] {
+            var screened: [String] = [], attempted: [String] = []
+            let screen = DestinationFuelScreen(identity: "files", currentIdentity: { "files" }) { station in
+                #expect(RoutingWorkContext.deadline == deadline)
+                screened.append(station.id)
+                return firstOutcome != "screen-excluded" || station.id != near.id
+            }
+            let proof = await RoutingWorkContext.$deadline.withValue(deadline) {
+                await PackRoutingSource.verifyDestinationEscape(arrival: token,
+                    remainingMeters: 1_000, from: .init(longitude: 0, latitude: 0),
+                    stations: [remote, tied, near], screen: screen) { station, carried, cap in
+                        #expect(carried == token && cap == 1_000)
+                        #expect(RoutingWorkContext.deadline == deadline)
+                        attempted.append(station.id)
+                        if firstOutcome == "route-failed", station.id == near.id { return .failure(.noPath) }
+                        return .success(legal)
+                    }
+            }
+            #expect(screened == (firstOutcome == "success" ? [near.id] : [near.id, tied.id]))
+            #expect(attempted == (firstOutcome == "success" ? [near.id] :
+                firstOutcome == "route-failed" ? [near.id, tied.id] : [tied.id]))
+            guard case .verified = proof else { Issue.record("Legal escape should qualify"); continue }
+        }
+    }
+
+    @Test func lazyScreenCancellationAndSourceReplacementRemainUnknown() async throws {
+        let pack = try packFixture()
+        var router = try fixtureRouter(pack: pack)
+        router.recordedStartNode = try node(pack, 5)
+        router.recordedEndNode = try node(pack, 4)
+        let end = coordinate(pack, try node(pack, 4))
+        guard case .success(let legal) = router.routeDetailed(
+            from: coordinate(pack, try node(pack, 5)), to: end,
+            profile: .cleanest, allowUnknown: false, sessionSeed: 0) else {
+            Issue.record("Missing legal fixture"); return
+        }
+        let token = try #require(legal.terminalContinuation)
+        for failurePoint in ["before-screen", "during-screen", "during-route", "cancel-screen"] {
+            var identity = failurePoint == "before-screen" ? "changed" : "files"
+            var routes = 0
+            let screen = DestinationFuelScreen(identity: "files", currentIdentity: { identity }) { _ in
+                if failurePoint == "during-screen" { identity = "changed" }
+                if failurePoint == "cancel-screen" { throw CancellationError() }
+                return true
+            }
+            let proof = await PackRoutingSource.verifyDestinationEscape(arrival: token,
+                remainingMeters: 1_000, stations: [station(end)], screen: screen) { _, _, _ in
+                    routes += 1
+                    identity = "changed"
+                    return .success(legal)
+                }
+            #expect(routes == (failurePoint == "during-route" ? 1 : 0))
+            guard case .unknown = proof else { Issue.record("Stale/cancelled screening cannot prove fuel"); continue }
+        }
+    }
+
     private func packFixture() throws -> GraphV2Pack {
         let pack = try GraphV2Pack(data: data("legal-topology-restrictions.graph.v4.bin"))
         pack.geometry = try GeometryV1Pack(data: data("legal-topology-restrictions.geometry.v1.bin"))

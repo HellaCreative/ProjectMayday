@@ -27,6 +27,8 @@ nonisolated final class DemandBalancedSearchLabels {
     struct Statistics: Equatable {
         let allocatedPages: Int
         let allocatedLabelCapacity: Int
+        /// Labels with finite search costs, not padded untouched page slots.
+        let finiteLabels: Int
         /// Includes struct padding, using MemoryLayout<Label>.stride.
         let allocatedPayloadBytes: Int
         let maximumPayloadBytes: Int
@@ -73,6 +75,7 @@ nonisolated final class DemandBalancedSearchLabels {
     private let pageShift: Int
     private(set) var allocationRevision = 0
     private var allocatedLabelCapacity = 0
+    private var finiteLabels = 0
     private var allocatedPayloadBytes = 0
 
     init(stateCount: Int, maxPayloadBytes: Int, pageCapacity: Int = 256,
@@ -165,13 +168,18 @@ nonisolated final class DemandBalancedSearchLabels {
             allocatedLabelCapacity += capacity
             allocatedPayloadBytes += requiredBytes
         }
-        body(&page.values[pageOffset(state)])
+        let offset = pageOffset(state)
+        let wasFinite = page.values[offset].cost.isFinite
+        body(&page.values[offset])
+        let isFinite = page.values[offset].cost.isFinite
+        if isFinite != wasFinite { finiteLabels += isFinite ? 1 : -1 }
     }
 
     var statistics: Statistics {
         Statistics(
             allocatedPages: pages.count,
             allocatedLabelCapacity: allocatedLabelCapacity,
+            finiteLabels: finiteLabels,
             allocatedPayloadBytes: allocatedPayloadBytes,
             maximumPayloadBytes: maximumPayloadBytes,
             maximumPages: maximumPages,

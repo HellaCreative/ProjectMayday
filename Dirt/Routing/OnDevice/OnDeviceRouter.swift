@@ -218,6 +218,8 @@ nonisolated struct OnDeviceRouter {
     /// Planning-session seed for controlled variety. New process → new seed.
     /// Internal qualification switch; normal routing uses the identical memoized arithmetic.
     var useDirectedStepMemo = true
+    /// Allocation granularity only; state × bucket identity is unchanged.
+    var balancedLabelPageCapacity = 32
     var useLabelReadPointerCache = true
     var useScopedRoadBounds = true
     // Confined to one synchronous request; never copied into returned route data.
@@ -3119,6 +3121,7 @@ nonisolated struct OnDeviceRouter {
 
         guard let labelStore = try? DemandBalancedSearchLabels(
             stateCount: labels, maxPayloadBytes: maximumSearchLabelPayloadBytes,
+            pageCapacity: profile == .balanced ? balancedLabelPageCapacity : 256,
             useReadPointerCache: useLabelReadPointerCache,
             shouldStop: { RoutingWorkContext.stopReason != nil }
         ) else { return .failure(.searchLimit("labelStorageConfiguration")) }
@@ -3130,16 +3133,26 @@ nonisolated struct OnDeviceRouter {
             measurement?.increment(.labelPagesAllocated, by: UInt64(stats.allocatedPages - measuredLabelPages))
             measurement?.increment(.labelsCreated, by: UInt64(stats.allocatedLabelCapacity - measuredLabelCapacity))
             measurement?.set(.labelBytes, to: UInt64(stats.allocatedPayloadBytes))
+            measurement?.set(.labelDirectoryLogicalBytes, to: UInt64(stats.logicalPageDirectoryEntryBytes))
             measuredLabelPages = stats.allocatedPages
             measuredLabelCapacity = stats.allocatedLabelCapacity
         }
-        defer { measurement?.set(.labelBytes, to: 0) }
+        defer {
+            let stats = labelStore.statistics
+            measurement?.increment(.resourceFiniteLabels, by: UInt64(stats.finiteLabels))
+            measurement?.increment(.resourceAllocatedLabelSlots, by: UInt64(stats.allocatedLabelCapacity))
+            measurement?.increment(.resourceAllocatedPages, by: UInt64(stats.allocatedPages))
+            measurement?.set(.labelBytes, to: 0)
+            measurement?.set(.labelDirectoryLogicalBytes, to: 0)
+        }
+        var labelMemoryExhausted = false
         func writeLabel(_ state: Int, _ update: (inout DemandBalancedSearchLabels.Label) -> Void) -> Failure? {
             do {
                 try labelStore.mutate(state, update)
                 publishLabelAllocation()
                 return nil
             } catch DemandBalancedSearchLabels.StorageError.memoryLimit {
+                labelMemoryExhausted = true
                 return .searchLimit("labelMemoryCap:payloadBytes=\(maximumSearchLabelPayloadBytes)")
             } catch DemandBalancedSearchLabels.StorageError.cancelled {
                 return .searchLimit(RoutingWorkContext.stopReason ?? "cancelled")
@@ -3274,7 +3287,7 @@ nonisolated struct OnDeviceRouter {
             ? huntStart + (ctx.timeCapSeconds ?? HopSearchPolicy.pass2TimeCapSeconds)
             : nil
 
-        while let cur = heap.pop() {
+        resourceSearch: while let cur = heap.pop() {
             if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
@@ -3449,7 +3462,14 @@ nonisolated struct OnDeviceRouter {
                                 row.pathMeters = newMeters
                                 row.dirtMeters = newDirt
                             }
-                        }) { return .failure(failure) }
+                        }) {
+                            if labelMemoryExhausted, profile == .balanced,
+                               RoutingWorkContext.stopReason == nil, selectedResourceEnd() != nil {
+                                abort = "labelMemoryCap"
+                                break resourceSearch
+                            }
+                            return .failure(failure)
+                        }
                         if HopSearchPolicy.shouldPush(action) {
                             heap.push(node: toLab, cost: newScore)
                         }
@@ -3471,7 +3491,14 @@ nonisolated struct OnDeviceRouter {
                                 row.predecessorKind = 2
                                 row.predecessorData = -1
                                 row.forward = true
-                            }) { return .failure(failure) }
+                            }) {
+                                if labelMemoryExhausted, profile == .balanced,
+                                   RoutingWorkContext.stopReason == nil, selectedResourceEnd() != nil {
+                                    abort = "labelMemoryCap"
+                                    break resourceSearch
+                                }
+                                return .failure(failure)
+                            }
                             heap.push(node: toLab, cost: cur.cost)
                         }
                     }
@@ -3596,7 +3623,14 @@ nonisolated struct OnDeviceRouter {
                             row.predecessorKind = 1
                             row.predecessorData = item.id
                             row.forward = item.forward
-                        }) { return .failure(failure) }
+                        }) {
+                            if labelMemoryExhausted, profile == .balanced,
+                               RoutingWorkContext.stopReason == nil, selectedResourceEnd() != nil {
+                                abort = "labelMemoryCap"
+                                break resourceSearch
+                            }
+                            return .failure(failure)
+                        }
                         heap.push(node: toLab, cost: newScore)
                     }
                 }
@@ -3721,6 +3755,12 @@ nonisolated struct OnDeviceRouter {
             ),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         )
+        if abort == "labelMemoryCap" {
+            // Road completion passed the same reconstruction/legal checks as
+            // time-capped routes; riding selection remains incomplete.
+            result.searchMeta.pass2Outcome = abort
+            result.searchMeta.timedOut = true
+        }
         result.searchMeta.resourceSelectionCost = labelStore[bestLab].cost
         result.searchMeta.resourceSelectionDirtMeters = labelStore[bestLab].dirtMeters
         return .success(result)

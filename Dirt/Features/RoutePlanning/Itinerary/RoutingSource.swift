@@ -263,6 +263,7 @@ final class PackRoutingSource: RoutingSource {
     static func verifyDestinationEscape(
         arrival: NativeRoutingContinuation?, remainingMeters: Double,
         from: RouteCoordinate? = nil, stations: [POIFeature],
+        screen: DestinationFuelScreen? = nil,
         route: (POIFeature, NativeRoutingContinuation, Double) async -> Swift.Result<OnDeviceRouter.Result, OnDeviceRouter.Failure>
     ) async -> DestinationEscapeProof {
         guard let arrival, remainingMeters.isFinite, remainingMeters >= 0 else {
@@ -296,9 +297,16 @@ final class PackRoutingSource: RoutingSource {
             if let reason = RoutingWorkContext.stopReason {
                 return .unknown("Destination fuel escape was not completed: \(reason).")
             }
+            do {
+                if let screen, !(try await screen.allows(station)) { continue }
+            } catch {
+                return .unknown("Destination fuel escape screening was not completed: \(error).")
+            }
             RoutingDebugLog.shared.event("destination escape candidate=\(station.id) attempt=\(index + 1) "
                 + "distanceLowerBound=\(entry.lowerBound)m remaining=\(Int(remainingMeters))m")
             let candidate = await route(station, arrival, remainingMeters)
+            do { try screen?.validate() }
+            catch { return .unknown("Destination fuel escape source verification was not completed: \(error).") }
             switch candidate {
             case .success(let routed):
                 RoutingDebugLog.shared.event("destination escape result=route candidate=\(station.id) "
@@ -667,15 +675,15 @@ final class PackRoutingSource: RoutingSource {
                             routes: plannedRoutes + [RouteResponse(onDevice: route, priorEdgeIDs: carriedHistory)],
                             foundationRoute: retainedRoad.map { RouteResponse(onDevice: $0, priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])) },
                             windowComplete: false)
-                        let candidates = try await packs.destinationEscapeCandidates(
+                        let screen = try await packs.destinationEscapeScreen(
                             from: end.locationCoordinate, arrival: route.terminalContinuation,
-                            remainingMeters: max(0, firstCap - route.distanceMeters), stations: stations,
+                            remainingMeters: max(0, firstCap - route.distanceMeters),
                             mapZoom: req.options?.mapZoom, matchLimitMeters: req.options?.matchLimitMeters)
                         RoutingDebugLog.shared.event("destination escape objective=physical-distance-contingency arrivalVerified=required")
                         let proof = await Self.verifyDestinationEscape(
                             arrival: route.terminalContinuation,
                             remainingMeters: max(0, firstCap - route.distanceMeters),
-                            from: end, stations: candidates
+                            from: end, stations: stations, screen: screen
                         ) { station, arrival, cap in
                             await packs.routeOnDeviceDetailed(
                                 from: end.locationCoordinate,

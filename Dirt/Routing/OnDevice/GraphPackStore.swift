@@ -1433,39 +1433,57 @@ final class GraphPackStore {
         return .init(name: "cross-pack-seams.v2.json", bytes: bytes, sha256: hash)
     }
 
-    /// Filter only when the complete relaxed arrival field cannot leave this
-    /// verified pack. A missing/incompatible context preserves all candidates.
-    func destinationEscapeCandidates(from: CLLocationCoordinate2D,
+    /// Prepare once, then inspect only stations actually reached in the
+    /// existing destination candidate order. Nil keeps the ordinary legal
+    /// route attempt; incomplete preparation never proves absence of fuel.
+    func destinationEscapeScreen(from: CLLocationCoordinate2D,
         arrival: NativeRoutingContinuation?, remainingMeters: Double,
-        stations: [POIFeature], mapZoom: Double?, matchLimitMeters: Double?) async throws -> [POIFeature] {
+        mapZoom: Double?, matchLimitMeters: Double?) async throws -> DestinationFuelScreen? {
+        try RoutingWorkContext.check()
         guard let arrival, let region = Self.primaryRegionId(containing: from),
               isInstalled(region),
               let seamIdentity = try verifiedSeamSourceIdentity(region: region)
-        else { return stations }
+        else { return nil }
         await activateInstalledPack(regionId: region)
+        let identity = routingCacheIdentity()
         guard let pack = activePack, pack.regionId?.lowercased() == region,
               pack.exactSnapIndex?.isReusable == true,
               let seamData = try Self.verifiedSeamData(at: seamsFileURL(regionId: region),
                   expectedBytes: seamIdentity.bytes, expectedSHA256: seamIdentity.sha256),
-              (try? pack.applyCrossPackSeams(data: seamData)) != nil else { return stations }
+              (try? pack.applyCrossPackSeams(data: seamData)) != nil else { return nil }
         try RoutingWorkContext.check()
-        let filtered = try await RoutingWorkContext.detachedThrowingSearch {
-            let router = OnDeviceRouter(pack: pack)
-            guard let field = try router.relaxedArrivalFuelField(arrival: arrival, remainingMeters: remainingMeters),
-                  !field.reachesRecordedBorder else { return (stations, 0) }
-            var retained: [POIFeature] = []
-            for station in stations {
-                try RoutingWorkContext.check()
+        let field = try await RoutingWorkContext.detachedThrowingSearch {
+            try OnDeviceRouter(pack: pack).relaxedArrivalFuelField(
+                arrival: arrival, remainingMeters: remainingMeters)
+        }
+        try RoutingWorkContext.check()
+        guard routingCacheIdentity() == identity else { throw DestinationFuelScreen.Failure.sourceChanged }
+        guard let field, !field.reachesRecordedBorder else { return nil }
+        RoutingDebugLog.shared.event("destination escape relaxed prepared nodes=\(field.reachedNodes.count) screening=lazy")
+        return DestinationFuelScreen(identity: identity, currentIdentity: { self.routingCacheIdentity() }) { station in
+            try await RoutingWorkContext.detachedThrowingSearch {
                 let cap = TapRadius.meters(zoom: mapZoom, latitude: station.latitude,
                     requestedMeters: matchLimitMeters, graphBinaryVersion: Int(pack.version))
-                if try !router.stationOutsideRelaxedArrivalField(
+                return try !OnDeviceRouter(pack: pack).stationOutsideRelaxedArrivalField(
                     .init(latitude: station.latitude, longitude: station.longitude),
-                    field: field, maxMeters: cap) { retained.append(station) }
+                    field: field, maxMeters: cap)
             }
-            return (retained, field.reachedNodes.count)
         }
-        RoutingDebugLog.shared.event("destination escape relaxed candidates=\(stations.count) retained=\(filtered.0.count) nodes=\(filtered.1)")
-        return filtered.0
+    }
+
+    /// Compatibility helper for focused field tests. Product proof consumes the
+    /// screen lazily and stops screening immediately after a legal escape.
+    func destinationEscapeCandidates(from: CLLocationCoordinate2D,
+        arrival: NativeRoutingContinuation?, remainingMeters: Double,
+        stations: [POIFeature], mapZoom: Double?, matchLimitMeters: Double?) async throws -> [POIFeature] {
+        guard let screen = try await destinationEscapeScreen(from: from, arrival: arrival,
+            remainingMeters: remainingMeters, mapZoom: mapZoom, matchLimitMeters: matchLimitMeters)
+        else { return stations }
+        var retained: [POIFeature] = []
+        for station in stations {
+            if try await screen.allows(station) { retained.append(station) }
+        }
+        return retained
     }
 
     /// Nil is an incomplete nearest-station proof, including a reachable
