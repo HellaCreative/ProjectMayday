@@ -425,6 +425,14 @@ routing-quality acceptance. Existing fuel work and requirements are preserved,
 but are inactive in this phase. Record the accepted routing freeze here in
 place; do not create a separate specification or freeze document.
 
+Owner direction, later on September 14: stop simulator qualification of these
+rides and put the current native binary on white so Richard can watch routes
+being drawn and judge speed and interest. That evaluation build is DIRT Dev
+2 (45), source `0da738f` on `feature/routing-itinerary-rebuild`, catalog
+`fabric-v4-20260909-02`. It is not accepted and routing is not frozen. Turn
+Automatic fuel planning off before judging the line; last time fuel stayed on,
+the ride timed out and fell back to pavement.
+
 Continue the authorized build → review → test → repair cycle until a coherent
 candidate meets its declared acceptance criteria or a specific external blocker
 prevents progress. Passing one microbenchmark is not the end of the job. Answer
@@ -468,9 +476,10 @@ implemented. Update it as results change instead of adding another status file.
 
 | Item, as reviewed 2026-09-14 | State |
 | --- | --- |
-| Main product checkout | `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, app checkpoint `91cc3cc`; preserve the accepted app rather than restoring an older shell. |
+| Evaluation build 45 on white | DIRT Dev 2 (45), Debug, bundle `com.mayday.dirt.dev`, source `0da738f` on `feature/routing-itinerary-rebuild`, installed in place and launched on white (`00008140-000414593A61801C`) at 2026-09-14 10:07 ADT. Binary SHA-256 `0b18d8450b7d11d1facbf3512233328f48f60da12bd09b79bbc648531be62f33`. Catalog remains `fabric-v4-20260909-02`. This replaces build 44 so Richard can watch routes being built and judge speed and interest. It is not routing acceptance and not a freeze. The working tree also had uncommitted Profile/Paywall/Onboarding/AppEnvironment/RootView edits at compile time. Receipts: `.build/recovery-evidence/phone-review-45`. |
+| Main product checkout | `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, branch `feature/routing-itinerary-rebuild` at `0da738f`; preserve the accepted app rather than restoring an older shell. |
 | Existing native candidate | `.build/engine-architecture`, branch `audit/baseline-recovery-20260913`. Recovery checkpoints `b7c7c44`, `864493a`, `7de5bd5`, `cfad1d7` and `aa4e348` remain preserved. `864493a` reuses a completed initial-station bound vector only for identical validated inputs; it preserves the existing closest-station selection. This is not the final qualified candidate; inspect status before editing. |
-| Device checkpoint | DIRT Dev 2 (44), source `60cc909`, was installed in place and launched on white with Richard’s explicit authorization on September 14. Build 43 was not installed. Physical route feedback is pending; installation does not establish routing acceptance. Receipts: `.build/recovery-evidence/phone-review-44`. |
+| Device checkpoint | DIRT Dev 2 (45) is now on white. Build 44 remains the rejected physical baseline (47% dirt / fuel timeout). Build 43 was not installed. Installation does not establish routing acceptance. |
 | Physical build 44 acceptance failure | Richard rejects Porters Lake–St Stephen (~675 km, reported 47% dirt and major-town traversal). Supplied September 14 09:55:57–10:02:13 log confirms NS/NB download consent and completion, local calculation, initial fill and one further pump, then a fuel timeout and 492,214 m road-only fallback with fuel unknown. Southwest NS requests also exhaust fuel planning after repeated candidate failures. This is failed riding-quality and fuel acceptance, despite road completion. Exact St Stephen endpoint 45.262939746458734,-67.29131337653283, seed 3806057305948982, Dirt, Allow Unknown off, 200 km / 10% reserve. Reproduce before claiming repair; no geographic rescue logic or pack publication is authorized. |
 | Candidate data | Phone catalog `fabric-v4-20260909-02`; some historical fixtures use `fabric-v4-20260908-02`. Results against one do not automatically qualify the other. |
 | Verified acquisition repair | DEV planning now waits for the existing pack prompt and verified installation, then resumes the same pins; missing data is not reported as disconnected roads. The real planning model now completes empty-directory → current public catalog → consent → verified NS download → native ride. Delayed catalog, cancel, stale reply, and retry model tests pass. The real notification presentation test also passes: consent, progress, cancel and retry preserve pins (`/tmp/Dirt-Pack-Acquisition-UI-20260913.xcresult`, one UI test). The UI fixture suspends installation; real network qualification is the separate planning-model test. |
