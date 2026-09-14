@@ -11,6 +11,7 @@ enum PackRevisionState: String, Equatable, Sendable {
 enum PackAcquisitionError: LocalizedError, Equatable {
     case checksumMismatch(regionID: String)
     case downloadFailed(regionID: String, message: String)
+    case catalogNotReady
     case unavailable(regionID: String)
 
     var errorDescription: String? {
@@ -19,6 +20,8 @@ enum PackAcquisitionError: LocalizedError, Equatable {
             return "Downloaded \(regionID) did not match the approved catalog identity."
         case .downloadFailed(let regionID, let message):
             return "Could not install \(regionID): \(message)"
+        case .catalogNotReady:
+            return "Routing pack information is not ready. Check your connection and try again; your pins have been kept."
         case .unavailable(let regionID):
             return "No approved pack is available for \(regionID)."
         }
@@ -48,7 +51,7 @@ struct PackConsentPrompt: Equatable, Sendable {
         let names = PackAcquisitionEvaluator.joinedTitles(regionTitles)
         switch kind {
         case .download:
-            return "Installing \(names) improves routing speed and enables offline rerouting."
+            return "Download \(names) to calculate this ride on your phone and keep the routing data available offline."
         case .update:
             return "A newer approved \(names) pack is available. Updating is recommended. You can keep using the installed revision."
         }
@@ -79,9 +82,9 @@ struct PackRoutingWarning: Equatable, Identifiable, Sendable {
         let names = PackAcquisitionEvaluator.joinedTitles(regionTitles)
         switch reason {
         case .declinedDownload:
-            return "Offline rerouting will not be available for \(names)."
+            return "This ride is paused until \(names) is installed. Your pins are kept."
         case .packUnavailable:
-            return "\(names) is not available as an approved pack. Offline rerouting will not be available for this region."
+            return "\(names) is not available as an approved pack. This ride is paused; your pins are kept."
         }
     }
 }
@@ -94,9 +97,16 @@ enum PackAcquisitionDecision: Equatable, Sendable {
 
 @MainActor
 protocol PackCoverageInspecting: RoutingInstalledPackRegistry {
+    func requiresRoutingCatalogReadiness(for regionIDs: [String]) -> Bool
+    func prepareRoutingCatalog(for regionIDs: [String]) async throws
     func isRoutingPackPublished(_ regionID: String) -> Bool
     func packRevisionState(_ regionID: String) -> PackRevisionState
     func displayTitle(forRegionId: String) -> String
+}
+
+extension PackCoverageInspecting {
+    func requiresRoutingCatalogReadiness(for regionIDs: [String]) -> Bool { false }
+    func prepareRoutingCatalog(for regionIDs: [String]) async throws { try Task.checkCancellation() }
 }
 
 @MainActor
@@ -118,7 +128,7 @@ enum PackAcquisitionEvaluator {
     static func requiredRegionIDs(
         for coordinates: [CLLocationCoordinate2D]
     ) -> [String] {
-        GraphPackStore.regionIds(containingAny: coordinates)
+        GraphPackStore.requiredRoutingRegionIDs(for: coordinates)
     }
 
     static func decide(
@@ -139,7 +149,9 @@ enum PackAcquisitionEvaluator {
             ))
         }
 
-        let unpublished = needed.filter { !registry.isRoutingPackPublished($0) }
+        let unpublished = needed.filter {
+            !registry.isRoutingPackInstalled($0) && !registry.isRoutingPackPublished($0)
+        }
         let missingApproved = needed.filter {
             registry.isRoutingPackPublished($0)
                 && registry.packRevisionState($0) == .missing
@@ -210,6 +222,19 @@ final class PackAcquisitionCoordinator {
 
     convenience init(store: GraphPackStore) {
         self.init(inspect: store, installer: store)
+    }
+
+    func requiresCatalogReadiness(for coordinates: [CLLocationCoordinate2D]) -> Bool {
+        inspect.requiresRoutingCatalogReadiness(
+            for: PackAcquisitionEvaluator.requiredRegionIDs(for: coordinates)
+        )
+    }
+
+    func prepareCatalog(for coordinates: [CLLocationCoordinate2D]) async throws {
+        try await inspect.prepareRoutingCatalog(
+            for: PackAcquisitionEvaluator.requiredRegionIDs(for: coordinates)
+        )
+        try Task.checkCancellation()
     }
 
     func decision(

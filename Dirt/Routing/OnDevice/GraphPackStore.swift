@@ -318,6 +318,21 @@ final class GraphPackStore {
         await refreshCatalog()
     }
 
+    func requiresRoutingCatalogReadiness(for regionIDs: [String]) -> Bool {
+        !catalogIdentityLoaded && regionIDs.contains { !isInstalled($0) }
+    }
+
+    func prepareRoutingCatalog(for regionIDs: [String]) async throws {
+        try Task.checkCancellation()
+        guard requiresRoutingCatalogReadiness(for: regionIDs) else { return }
+        // Never treat the NS seed catalog as proof that NB/QC are unpublished.
+        await refreshCatalog()
+        try Task.checkCancellation()
+        if requiresRoutingCatalogReadiness(for: regionIDs) {
+            throw PackAcquisitionError.catalogNotReady
+        }
+    }
+
     /// Regions suggested from GPS and/or active route geometry.
     func suggestedRegionIds(
         location: CLLocationCoordinate2D?,
@@ -1966,6 +1981,25 @@ final class GraphPackStore {
             ordered.append(id)
         }
         return ordered
+    }
+
+    /// Download prerequisites between rider points, before detailed road search.
+    /// Use connected region adjacency, not a straight-line/bounding-box corridor.
+    static func requiredRoutingRegionIDs(for coordinates: [CLLocationCoordinate2D]) -> [String] {
+        let endpoints = coordinates.compactMap { primaryRegionId(containing: $0) }
+        guard let first = endpoints.first else { return [] }
+        let countries = Dictionary(uniqueKeysWithValues: catalogSeed.map { ($0.id, $0.country) })
+        let all = Set(catalogSeed.map(\.id))
+        var result = [first]
+        for (from, to) in zip(endpoints, endpoints.dropFirst()) {
+            let domestic = countries[from] == countries[to]
+                ? Set(catalogSeed.filter { $0.country == countries[from] }.map(\.id)) : all
+            let path = shortestRegionPath(from: from, to: to, allowedRegionIds: domestic)
+                ?? shortestRegionPath(from: from, to: to, allowedRegionIds: all)
+                ?? [from, to]
+            for region in path where !result.contains(region) { result.append(region) }
+        }
+        return result
     }
 
     /// Collapse legacy QC quadrant / shard ids to one province pack family.

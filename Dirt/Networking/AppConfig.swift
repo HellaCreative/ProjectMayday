@@ -2,10 +2,10 @@ import CoreLocation
 import Foundation
 
 /// DIRT iOS endpoints.
-/// Road fabric: Cloudflare R2 `dirt-packs` (`graph.v2.bin`) for PACKS download
-/// and on-device navigation recovery. Live `/api/route` is always the planning
-/// source of truth while online, regardless of installed packs. Map tiles use
-/// the Shortbread schema through Dirt's health-gated edge service. Accounts are Supabase.
+/// Road fabric: Cloudflare R2 `dirt-packs` for pack download. Every route is
+/// computed on-device from downloaded packs. The live `/api/route` service is
+/// not a planning fallback while online. Map tiles use the Shortbread schema
+/// through Dirt's health-gated edge service. Accounts are Supabase.
 enum DirtBackendEnvironment: String, Sendable {
     case development
     case production
@@ -91,7 +91,7 @@ enum AppConfig {
             ?? URL(fileURLWithPath: "/dev/null")
     }
 
-    /// Active visual basemap (display only). Routing uses packs on-device and live `/api/route` online.
+    /// Active visual basemap (display only). Routing uses downloaded packs on-device.
     static var activeMapStyleURL: URL { MapStyleCatalog.styleURL() }
 
     /// Versioned graph.v2 packs. Same R2 objects live `/api/route` loads —

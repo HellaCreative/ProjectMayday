@@ -3,7 +3,7 @@ import Foundation
 
 /// Page-backed search labels. Unwritten pages stay unallocated so a hop search
 /// can span a regional pack without resident arrays for every node.
-struct SparseDefaultArray<Value> {
+nonisolated struct SparseDefaultArray<Value> {
     let count: Int
     let defaultValue: Value
     private let pageSize: Int
@@ -42,7 +42,7 @@ struct SparseDefaultArray<Value> {
 
 /// Moving 10–20 km working neighborhood around A, B, and the developing route.
 /// The envelope follows the wide tolerance corridor so off-axis dirt stays loadable.
-struct FogOfWarNeighborhood {
+nonisolated struct FogOfWarNeighborhood {
     var start: CLLocationCoordinate2D
     var end: CLLocationCoordinate2D
     var workingRadiusMeters: Double

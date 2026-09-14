@@ -792,19 +792,22 @@ struct RoutingSourcePolicy {
             let locations = request.locations.map {
                 CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
             }
-            let needed = GraphPackStore.regionIds(containingAny: locations)
+            let needed = GraphPackStore.requiredRoutingRegionIDs(for: locations)
             let provinces = GraphPackStore.endpointProvinceIds(containingAny: locations)
             let installed = needed.filter { installedPacks.isRoutingPackInstalled($0) }
             let packsCover = installedPacksCover(locations, registry: installedPacks)
             let singleRegion = provinces.count <= 1
-            let chosen = isOnline() ? live : pack
+            // Device-first: online is delivery, not a reason to force /api/route.
+            // Missing regions are paused by pack acquisition, not sent live.
+            let chosen = pack
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
                     "provinces=[\(provinces.joined(separator: ","))] " +
+                    "needed=[\(needed.joined(separator: ","))] " +
                     "installed=[\(installed.joined(separator: ","))] " +
                     "path=\(needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) } ?? "nil") " +
                     "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline()) " +
-                    "selected=\(chosen.name)"
+                    "selected=\(chosen.name) liveUnused=\(live.name)"
             )
             return chosen
         }
@@ -823,11 +826,11 @@ private func installedPacksCover(
     _ endpoints: [CLLocationCoordinate2D],
     registry: any RoutingInstalledPackRegistry
 ) -> Bool {
-    let needed = GraphPackStore.regionIds(containingAny: endpoints)
+    let needed = GraphPackStore.requiredRoutingRegionIDs(for: endpoints)
     if !needed.isEmpty, needed.allSatisfy({ registry.isRoutingPackInstalled($0) }) { return true }
     let primaries = endpoints.compactMap { GraphPackStore.primaryRegionId(containing: $0) }
     guard let first = primaries.first, primaries.allSatisfy({ $0 == first }) else { return false }
-    return registry.isRoutingPackInstalled(first)
+    return needed.count <= 1 && registry.isRoutingPackInstalled(first)
 }
 
 private func coordinate(_ location: RouteLocation) -> RouteCoordinate {

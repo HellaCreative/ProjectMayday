@@ -441,11 +441,29 @@ prevents progress. Passing one microbenchmark is not the end of the job. Answer
 Richard's questions and continue work; provide concise findings, failures, and
 next actions rather than silent work or unsupported success claims.
 
+Owner working-method direction, September 14: the acceptance gate is the running
+app on the owner's device, not a passing test suite. Definition of done for a
+routing change is an end-to-end result — a route computed on-device from a
+downloaded pack, with the regional-download prompt firing for any missing region
+— proved in the installed app, not merely in fixtures. Three explicit criteria:
+(1) a clean DIRT app-target build is mandatory before claiming done — the app
+target sets default main-actor isolation while the test targets do not, so green
+native fixtures never prove the app compiles; (2) for a route the installed packs
+cover, the routing debug log must show the on-device pack was selected and used,
+never a live-server calculation; (3) a missing region must raise the download
+prompt, never a silent live fallback. Favor short loops: compile, build to the
+owner's device, and get the owner's reaction and debug log, rather than long
+simulator or regression cycles. Broad simulator runs and regression suites have
+repeatedly let work drift too far in one direction before correction; use a few
+focused fixtures to guard a specific repair, then get a build in front of the
+owner early and often.
+
 Use existing fixtures and raw results. Record exact app/source identity, dirty
 changes, pack hashes/epoch, endpoints, settings, seed, fuel range/reserve, device,
 and computation source. Repeat relevant cold/warm cases. Use focused tests for
-each repair and run the necessary integrated suite once the candidate is stable.
-Do not rerun unrelated suites or change acceptance to make a result green.
+each repair, then get a build onto the owner's device; run a broader integrated
+suite only after the owner has accepted the ride, not before. Do not rerun
+unrelated suites or change acceptance to make a result green.
 
 The acceptance matrix must cover:
 

@@ -481,6 +481,7 @@ final class RoutePlannerModel {
     private let itineraryBuilder: ItineraryBuilder
     private let routingSourcePolicy: RoutingSourcePolicy
     private let packAcquisition: PackAcquisitionCoordinator
+    private let requiresInstalledRoutingPacks: Bool
     private weak var poiManager: POIManager?
     /// Wired by AppEnvironment — restore Music volume after End Navigation.
     /// Fires after nav teardown. Argument is a contribute candidate when enough
@@ -498,7 +499,8 @@ final class RoutePlannerModel {
         poiManager: POIManager? = nil,
         routingSourcePolicy: RoutingSourcePolicy? = nil,
         itineraryBuilder: ItineraryBuilder? = nil,
-        packAcquisition: PackAcquisitionCoordinator? = nil
+        packAcquisition: PackAcquisitionCoordinator? = nil,
+        requiresInstalledRoutingPacks: Bool? = nil
     ) {
         self.routing = routing
         self.locationService = locationService
@@ -524,6 +526,8 @@ final class RoutePlannerModel {
             )
         }
         self.packAcquisition = packAcquisition ?? PackAcquisitionCoordinator(store: graphPacks)
+        self.requiresInstalledRoutingPacks = requiresInstalledRoutingPacks
+            ?? (routingSourcePolicy == nil)
 
         navigation.onRerouteNeeded = { [weak self] in
             guard let self else { return }
@@ -830,14 +834,20 @@ final class RoutePlannerModel {
     var packRoutingWarnings: [PackRoutingWarning] { packAcquisition.warnings }
 
     func acceptPackConsent() async {
+        guard packAcquisition.consent != nil else { return }
+        toast = "Downloading routing packs…"
         do {
             try await packAcquisition.acceptConsent()
             resumePendingPackBuild()
+        } catch is CancellationError {
+            isRouting = false
+            isAssemblingRoute = false
+            if toast == "Downloading routing packs…" { toast = nil }
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             isRouting = false
             isAssemblingRoute = false
-            if toast == Self.calculatingRouteToast { toast = nil }
+            if toast == Self.calculatingRouteToast || toast == "Downloading routing packs…" { toast = nil }
         }
     }
 
@@ -864,6 +874,74 @@ final class RoutePlannerModel {
         replanFromStationID: String? = nil
     ) {
         let requested = itinerary
+        if requiresInstalledRoutingPacks {
+            let coordinates = requested.waypoints.map { $0.coordinate.locationCoordinate }
+            if packAcquisition.requiresCatalogReadiness(for: coordinates) {
+                isRouting = true
+                isAssemblingRoute = true
+                toast = "Checking routing pack availability…"
+                RoutingDebugLog.shared.event(
+                    "local planning waiting for routing catalog " +
+                        "regions=\(PackAcquisitionEvaluator.requiredRegionIDs(for: coordinates).joined(separator: ","))"
+                )
+                buildTask = Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    do {
+                        try await self.packAcquisition.prepareCatalog(for: coordinates)
+                        guard !Task.isCancelled, self.itinerary.generation == requested.generation else { return }
+                        self.buildTask = nil
+                        self.startCanonicalBuild(
+                            from: legIndex,
+                            through: throughLegIndex,
+                            reuse: reuse,
+                            replanFromStationID: replanFromStationID
+                        )
+                        await self.buildTask?.value
+                    } catch {
+                        guard !Task.isCancelled, self.itinerary.generation == requested.generation else { return }
+                        self.isRouting = false
+                        self.isAssemblingRoute = false
+                        self.fuelPlanningStatus = nil
+                        self.toast = nil
+                        self.errorMessage = error.localizedDescription
+                        RoutingDebugLog.shared.event(
+                            "local planning blocked: routing catalog not ready"
+                        )
+                    }
+                }
+                return
+            }
+            switch packAcquisition.evaluate(
+                coordinates: coordinates,
+                protectInstalledRevisions: graphPacks.protectInstalledRevisions
+            ) {
+            case .requestConsent(let prompt):
+                pendingPackBuild = (legIndex, throughLegIndex, reuse, replanFromStationID)
+                isRouting = false
+                isAssemblingRoute = false
+                fuelPlanningStatus = nil
+                toast = nil
+                RoutingDebugLog.shared.event(
+                    "local planning waiting for required routing packs " +
+                        "regions=\(prompt.regionIDs.joined(separator: ",")) " +
+                        "kind=\(prompt.kind == .update ? "update" : "download")"
+                )
+                return
+            case .useLive:
+                pendingPackBuild = nil
+                isRouting = false
+                isAssemblingRoute = false
+                fuelPlanningStatus = nil
+                toast = nil
+                errorMessage = "Install the required regional routing pack before building this ride."
+                RoutingDebugLog.shared.event(
+                    "local planning blocked: required routing packs unavailable"
+                )
+                return
+            case .useInstalledPacks:
+                pendingPackBuild = nil
+            }
+        }
         let preferences = ridePreferences
         let fuel = FuelRangePrefs.snapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)
@@ -3646,8 +3724,8 @@ final class RoutePlannerModel {
     }
 
     /// From here / Plan A→B.
-    /// Live `/api/route` is always authoritative while online. Installed packs
-    /// route only while offline.
+    /// Installed packs are the planning source. Missing regions prompt a download;
+    /// the live server is not a silent fallback.
     var preservedDestination: RouteCoordinate? {
         if shouldPreserveStagesForRecovery,
            let idx = activeStageIndex(near: locationService.currentCoordinate),
