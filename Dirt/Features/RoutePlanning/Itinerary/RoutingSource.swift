@@ -600,6 +600,17 @@ final class PackRoutingSource: RoutingSource {
         var carriedArrival = req.options?.arrivalEdgeId
         var carriedContinuation = req.options?.arrivalContinuation
         var carriedSurfacePrefix = req.options?.owningRideSurfacePrefix
+        let forwardReuse = FuelReachabilityReuseScope.current ?? FuelReachabilityReuse()
+        func completedReachability(from: CLLocationCoordinate2D,maxMeters: Double) async throws -> [String: Double] {
+            try await forwardReuse.resolve(.init(
+                from: .init(longitude: from.longitude,latitude: from.latitude),toward: end,
+                pumps: stations,maximumMeters: maxMeters,profile: req.profile,
+                allowUnknown: req.accessPolicy.motorizedUnknown),currentIdentity: { packs.routingCacheIdentity() }) {
+                try await packs.reachableFuelMeters(from: from,toward: end.locationCoordinate,
+                    pumps: stations,maxMeters: maxMeters,profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown)
+            }
+        }
         var roadProgress: FuelItinerary.RoadProgress?
         var roadProgressSourceIdentity: String?
         let exitReuse = FuelExitReuseScope.current ?? FuelExitReuseHolder()
@@ -807,14 +818,7 @@ final class PackRoutingSource: RoutingSource {
                     regionIds: nil, stops: stops, graphMeters: graphMeters, diagnostics: nil,
                     routes: plannedRoutes, windowComplete: false)
             }
-            let reachable = try await packs.reachableFuelMeters(
-                from: current.locationCoordinate,
-                toward: end.locationCoordinate,
-                pumps: stations,
-                maxMeters: firstCap,
-                profile: req.profile,
-                allowUnknown: req.accessPolicy.motorizedUnknown
-            )
+            let reachable = try await completedReachability(from: current.locationCoordinate,maxMeters: firstCap)
             let newlyReachable = stations.filter {
                 reachable[$0.id] != nil && roadProgress?.stationRemainingMeters[$0.id] == nil
             }
@@ -1029,14 +1033,7 @@ final class PackRoutingSource: RoutingSource {
                 if destinationMayFit || !avoidsMeaningfulRetrace {
                     onward = [:]
                 } else {
-                    onward = try await packs.reachableFuelMeters(
-                        from: candidateCoordinate,
-                        toward: end.locationCoordinate,
-                        pumps: stations,
-                        maxMeters: req.fuel.usableRangeMeters,
-                        profile: req.profile,
-                        allowUnknown: req.accessPolicy.motorizedUnknown
-                    )
+                    onward = try await completedReachability(from: candidateCoordinate,maxMeters: req.fuel.usableRangeMeters)
                 }
                 // The first reverse field deliberately covered only pumps
                 // within the current tank. A refill can expose a new frontier.

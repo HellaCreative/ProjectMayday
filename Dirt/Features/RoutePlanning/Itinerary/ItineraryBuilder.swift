@@ -100,10 +100,12 @@ final class ItineraryBuilder {
         onFuelStatus: @MainActor (String) -> Void = { _ in },
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
+        await FuelReachabilityReuseScope.$current.withValue(FuelReachabilityReuse()) {
         await FuelExitReuseScope.$current.withValue(FuelExitReuseHolder()) {
             await buildWithinFuelExitScope(itinerary, from: legIndex, through: throughLegIndex,
                 reuse: reuse, fuel: fuel, source: policy, replanFromStationID: replanFromStationID,
                 onFuelStatus: onFuelStatus, onProgress: onProgress)
+        }
         }
     }
 
