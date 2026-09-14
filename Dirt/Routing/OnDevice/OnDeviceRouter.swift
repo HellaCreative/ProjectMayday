@@ -225,6 +225,8 @@ nonisolated struct OnDeviceRouter {
     var usePackGeometryEnvelope = RoutingWorkContext.usePackGeometryEnvelope
     /// Allocation granularity only; state × bucket identity is unchanged.
     var balancedLabelPageCapacity = 32
+    /// Fixed read-pointer metadata, independent of state count; qualified against 256 slots.
+    var balancedLabelReadCacheSlots = 4096
     var balancedEnvelopeTimeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
     private var balancedCalculationDeadline: Double?
     var useLabelReadPointerCache = true
@@ -3193,6 +3195,7 @@ nonisolated struct OnDeviceRouter {
             stateCount: labels, maxPayloadBytes: maximumSearchLabelPayloadBytes,
             pageCapacity: profile == .balanced ? balancedLabelPageCapacity : 256,
             useReadPointerCache: useLabelReadPointerCache,
+            readCacheSlots: profile == .balanced ? balancedLabelReadCacheSlots : 256,
             shouldStop: { RoutingWorkContext.stopReason != nil }
         ) else { return .failure(.searchLimit("labelStorageConfiguration")) }
         var measuredLabelCapacity = 0

@@ -69,7 +69,7 @@ nonisolated final class DemandBalancedSearchLabels {
         var key: Int = -1
         var values: UnsafeMutablePointer<Label>? = nil
     }
-    private static var readSlotCount: Int { 256 }
+    private let readSlotCount: Int
     private let readSlots: UnsafeMutablePointer<ReadSlot>
     private let useReadPointerCache: Bool
     private let pageShift: Int
@@ -79,19 +79,22 @@ nonisolated final class DemandBalancedSearchLabels {
     private var allocatedPayloadBytes = 0
 
     init(stateCount: Int, maxPayloadBytes: Int, pageCapacity: Int = 256,
-         useReadPointerCache: Bool = true,
+         useReadPointerCache: Bool = true, readCacheSlots: Int = 256,
          shouldStop: @escaping () -> Bool = { false }) throws {
         guard stateCount >= 0, maxPayloadBytes >= 0, pageCapacity > 0,
               pageCapacity <= Int.max / MemoryLayout<Label>.stride else {
             throw StorageError.invalidConfiguration
         }
-        // Exactly 256 × 16-byte slots on supported 64-bit platforms. This is
-        // metadata payload, separate from label and allocator/object overhead.
-        guard Self.readSlotCount * MemoryLayout<ReadSlot>.stride <= 4_096 else {
+        // Fixed metadata bound independent of graph/state counts. Qualification
+        // may compare 256 slots (4 KiB) with4096 slots (64 KiB).
+        guard readCacheSlots > 0, readCacheSlots <= 4096,
+              readCacheSlots.nonzeroBitCount == 1,
+              readCacheSlots * MemoryLayout<ReadSlot>.stride <= 65_536 else {
             throw StorageError.invalidConfiguration
         }
-        readSlots = .allocate(capacity: Self.readSlotCount)
-        readSlots.initialize(repeating: ReadSlot(), count: Self.readSlotCount)
+        readSlotCount = readCacheSlots
+        readSlots = .allocate(capacity: readCacheSlots)
+        readSlots.initialize(repeating: ReadSlot(), count: readCacheSlots)
         self.useReadPointerCache = useReadPointerCache
         self.stateCount = stateCount
         self.pageCapacity = pageCapacity
@@ -124,14 +127,14 @@ nonisolated final class DemandBalancedSearchLabels {
     }
 
     deinit {
-        readSlots.deinitialize(count: Self.readSlotCount)
+        readSlots.deinitialize(count: readSlotCount)
         readSlots.deallocate()
         // Dictionary-owned Page objects release their label payload afterward.
     }
 
     @inline(__always) private func readValues(for key: Int) -> UnsafeMutablePointer<Label>? {
         guard useReadPointerCache else { return pages[key]?.values }
-        let slot = key & (Self.readSlotCount - 1)
+        let slot = key & (readSlotCount - 1)
         if readSlots[slot].key == key { return readSlots[slot].values }
         let values = pages[key]?.values
         readSlots[slot] = ReadSlot(key: key, values: values)
@@ -139,7 +142,7 @@ nonisolated final class DemandBalancedSearchLabels {
     }
 
     @inline(__always) private func remember(_ key: Int, page: Page) {
-        readSlots[key & (Self.readSlotCount - 1)] = ReadSlot(key: key, values: page.values)
+        readSlots[key & (readSlotCount - 1)] = ReadSlot(key: key, values: page.values)
     }
 
     /// The caller should invoke this only for accepted relaxations. Exhausting
@@ -184,7 +187,7 @@ nonisolated final class DemandBalancedSearchLabels {
             maximumPayloadBytes: maximumPayloadBytes,
             maximumPages: maximumPages,
             logicalPageDirectoryEntryBytes: pages.count * (MemoryLayout<Int>.stride + MemoryLayout<Page>.stride),
-            logicalLookupCacheBytes: Self.readSlotCount * MemoryLayout<ReadSlot>.stride
+            logicalLookupCacheBytes: readSlotCount * MemoryLayout<ReadSlot>.stride
         )
     }
 }

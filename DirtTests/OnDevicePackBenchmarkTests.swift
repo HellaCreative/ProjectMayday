@@ -611,6 +611,89 @@ struct OnDevicePackBenchmarkTests {
         }
     }
 
+    @Test("Actual Ontario Balanced warm read-cache slots ABBA")
+    @MainActor
+    func southernOntarioBalancedReadCacheSlotsAB() async throws {
+        let version = "fabric-v4-20260909-02"
+        let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(version).appendingPathComponent("packs")
+        let (store, temp) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let from = CLLocationCoordinate2D(latitude: 44.632662, longitude: -75.651839)
+        let to = CLLocationCoordinate2D(latitude: 44.601681, longitude: -79.308263)
+        // Warm the actual store preparation once, then reuse its verified pack/indexes.
+        if case .failure(let failure) = await store.routeOnDeviceDetailed(from: from, to: to, profile: .cleanest,
+            allowUnknown: false, sessionSeed: 0xD1470008) {
+            Issue.record("Ontario verified pack preparation failed: \(failure)"); return
+        }
+        let pack = try #require(store.packIfInstalled("on"))
+        _ = try #require(pack.exactSnapIndex, "A/B must reuse the prepared app pack")
+        let manifest = try #require(JSONSerialization.jsonObject(with: Data(contentsOf:
+            candidate.appendingPathComponent("on/pack-manifest.v2.json"))) as? [String: Any])
+        let graph = try #require(manifest["graph"] as? [String: Any])
+        let geometry = try #require(manifest["geometry"] as? [String: Any])
+        // ABBA controls simple warm-order bias without concurrent calculations.
+        for (ordinal, slots) in [256,4096,4096,256].enumerated() {
+            let measurement = RoutingMeasurement(metadata: ["workload": "Ontario Balanced read-cache slots ABBA",
+                "packRelease": version, "graphSHA256": try #require(graph["sha256"] as? String),
+                "geometrySHA256": try #require(geometry["sha256"] as? String),
+                "pointerCacheSlots": String(slots), "pointerCacheMetadataBytes": String(slots*16),
+                "retraceCounters": "local-counted",
+                "profile": RouteProfile.balanced.rawValue, "fuel": "off", "allowUnknown": "false",
+                "seed": String(0xD1470008), "preparation": "warm verified app pack",
+                "hardware": "MacBookPro17,1 M1 16GiB iPhone17 iOS26.5 simulator"])
+            let result = await RoutingWorkContext.$measurement.withValue(measurement) {
+                await RoutingWorkContext.detachedSearch {
+                    var router = OnDeviceRouter(pack: pack)
+                    router.sessionSeed = 0xD1470008
+                    router.balancedLabelReadCacheSlots = slots
+                    return router.routeDetailed(from: from, to: to, profile: .balanced,
+                        allowUnknown: false, sessionSeed: 0xD1470008)
+                }
+            }
+            let outcome: String
+            switch result {
+            case .success(let route): outcome = route.searchMeta.timedOut ? "road-complete-search-incomplete" : "complete"
+            case .failure(let failure): outcome = String(describing: failure)
+            }
+            let report = measurement.finish(outcome: outcome)
+            var output: [String: Any] = ["from": [from.longitude, from.latitude],
+                "to": [to.longitude, to.latitude], "pointerCacheSlots": slots]
+            switch result {
+            case .success(let route):
+                #expect(route.searchMeta.rideObjective == "surface-balance")
+                #expect(route.coordinates.last?.latitude == to.latitude)
+                #expect(route.coordinates.last?.longitude == to.longitude)
+                #expect(route.unknownAccessPercent == 0)
+                #expect(route.backtrackMeters == 0)
+                #expect((45...55).contains(route.dirtPercent))
+                #expect(route.terminalContinuation != nil)
+                if route.searchMeta.pass2Outcome == "timeCap" || route.searchMeta.pass2Outcome == "popCap"
+                    || route.searchMeta.pass2Outcome == "labelMemoryCap" {
+                    #expect(route.searchMeta.timedOut)
+                }
+                output["searchDebug"] = try object(route.searchMeta.responseDebug)
+                output["dirtPercent"] = route.dirtPercent
+                output["unknownAccessPercent"] = route.unknownAccessPercent
+                output["repeatedMeters"] = route.backtrackMeters
+                output["terminalContinuation"] = try route.terminalContinuation.map { try object($0) } ?? NSNull()
+                output["legs"] = route.legs.map { leg in
+                    ["edgeID": leg.edgeId,"meters": leg.distanceMeters,"surface": leg.surfaceName,
+                     "access": leg.accessName,"geometry": leg.coordinates.map { [$0.longitude,$0.latitude] }] as [String: Any]
+                }
+                output["distanceMeters"] = route.distanceMeters
+                output["pops"] = route.searchMeta.pops
+                output["edgeIds"] = route.edgeIds
+                output["geometry"] = route.coordinates.map { [$0.longitude, $0.latitude] }
+                output["measurement"] = try object(report)
+            case .failure(let failure):
+                output["measurement"] = try object(report)
+                Issue.record("Ontario Balanced slot A/B lost legal road completion: \(failure)")
+            }
+            try saveEvidence(output, name: "ontario-balanced-cache-slots-ab-\(ordinal)-\(slots)")
+        }
+    }
+
     @Test("Short fuel-enabled itinerary begins with the required initial refill")
     @MainActor
     func shortItineraryStartsWithRefill() async throws {
