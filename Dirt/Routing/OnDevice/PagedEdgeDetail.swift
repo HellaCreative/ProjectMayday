@@ -224,7 +224,7 @@ nonisolated final class PagedEdgeDetail: @unchecked Sendable {
             self.owner = owner;scopedCancellation = cancelled
         }
         fileprivate func invalidate() { owner = nil;scopedCancellation = nil }
-        fileprivate func belongs(to reader: PagedEdgeDetail) -> Bool { owner === reader }
+        func belongs(to reader: PagedEdgeDetail) -> Bool { owner === reader }
         /// Payload numbers refer to the ONE shared reader cache and must not be
         /// summed over queries. The query itself allocates no row/page storage.
         var statistics: Statistics {

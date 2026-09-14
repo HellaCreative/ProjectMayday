@@ -104,6 +104,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         var seedScannedNodes: Int = 0
         var seedScannedArcs: Int = 0
         var usedSelectiveSeeding: Bool = false
+        var preparationReservedBytes: Int = 0
 
         static func build(pack: GraphV2Pack, startNode: Int, endNode: Int,
                           selectiveSeeding: Bool = true) -> Self {
@@ -277,6 +278,169 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             )
         }
 
+        /// Throwing accessor path, staged beside the reference builder for A/B.
+        /// Accessor/query closures are released after preparation, never retained.
+        static func build<T: V4TurnTopologyAccess>(topology: T, startNode: Int, endNode: Int,
+            limits: V4TurnPreparationLimits = V4TurnPreparationLimits()) throws -> Self {
+            try topology.validate()
+            let budget = try V4TurnPreparationBudget(limits: limits)
+            try budget.reserve(topology.retainedRestrictionPayloadBytes)
+            let n = topology.nodeCount
+            guard !topology.restrictions.isEmpty else {
+                return Self(
+                    baseNodeCount: n, startNode: startNode, endNode: endNode,
+                    stateCount: n + 2, records: [], stateByArrival: [:],
+                    transitionCache: [:], statefulEdges: [], blockedNode: [:],
+                    onlyNode: [:], patterns: [], starters: [:]
+                )
+            }
+
+            var blockedNode: [TurnKey: Set<Int>] = [:]
+            var onlyNode: [TurnKey: Set<Int>] = [:]
+            var patterns: [Pattern] = []
+            var starters: [Int: [Int]] = [:]
+            var statefulEdges: Set<Int> = []
+            for restriction in topology.restrictions where (restriction.vehicleMask & 1) != 0 {
+                // Bounds derived maps/patterns/sets separately from retained rows.
+                try budget.reserve(512 + restriction.viaEdges.count * 64)
+                statefulEdges.insert(restriction.fromEdge)
+                if !restriction.viaEdges.isEmpty {
+                    let id = patterns.count
+                    patterns.append(Pattern(
+                        relationID: restriction.osmRelationId,
+                        fromEdge: restriction.fromEdge,
+                        toEdge: restriction.toEdge,
+                        viaEdges: restriction.viaEdges,
+                        entryNode: restriction.viaNode,
+                        only: restriction.only
+                    ))
+                    starters[restriction.fromEdge, default: []].append(id)
+                } else {
+                    let key = TurnKey(viaNode: restriction.viaNode, fromEdge: restriction.fromEdge)
+                    if restriction.only {
+                        onlyNode[key, default: []].insert(restriction.toEdge)
+                    } else {
+                        blockedNode[key, default: []].insert(restriction.toEdge)
+                    }
+                }
+            }
+
+            func advance(
+                _ active: [Progress],
+                fromEdge: Int,
+                toEdge: Int,
+                viaNode: Int
+            ) -> (allowed: Bool, active: [Progress]) {
+                let key = TurnKey(viaNode: viaNode, fromEdge: fromEdge)
+                if let only = onlyNode[key], !only.contains(toEdge) { return (false, []) }
+                if blockedNode[key]?.contains(toEdge) == true { return (false, []) }
+
+                let activeOnly = active.filter { patterns.indices.contains($0.id) && patterns[$0.id].only }
+                if !activeOnly.isEmpty, !activeOnly.contains(where: { row in
+                    let pattern = patterns[row.id]
+                    let sequence = [pattern.fromEdge] + pattern.viaEdges + [pattern.toEdge]
+                    return row.progress + 1 < sequence.count && sequence[row.progress + 1] == toEdge
+                }) { return (false, []) }
+
+                var next: [Progress] = []
+                for row in active where patterns.indices.contains(row.id) {
+                    let pattern = patterns[row.id]
+                    let sequence = [pattern.fromEdge] + pattern.viaEdges + [pattern.toEdge]
+                    guard row.progress + 1 < sequence.count,
+                          sequence[row.progress + 1] == toEdge else { continue }
+                    if row.progress + 1 == sequence.count - 1 {
+                        if !pattern.only { return (false, []) }
+                    } else {
+                        next.append(Progress(id: row.id, progress: row.progress + 1))
+                    }
+                }
+
+                let starting = (starters[fromEdge] ?? []).filter { id in
+                    let entry = patterns[id].entryNode
+                    return entry < 0 || entry == viaNode
+                }
+                let startingOnly = starting.filter { patterns[$0].only }
+                if !startingOnly.isEmpty,
+                   !startingOnly.contains(where: { patterns[$0].viaEdges.first == toEdge }) {
+                    return (false, [])
+                }
+                for id in starting where patterns[id].viaEdges.first == toEdge {
+                    next.append(Progress(id: id, progress: 1))
+                }
+                return (true, Array(Set(next)).sorted {
+                    $0.id == $1.id ? $0.progress < $1.progress : $0.id < $1.id
+                })
+            }
+
+            var records: [Record] = []
+            var stateByArrival: [ArrivalKey: Int] = [:]
+            var queue: [Int] = []
+            func addState(node: Int, incomingEdge: Int, active: [Progress]) throws -> Int {
+                let key = ArrivalKey(node: node, incomingEdge: incomingEdge, active: active)
+                if let existing = stateByArrival[key] { return existing }
+                try budget.state(progress: active.count)
+                let state = n + 2 + records.count
+                stateByArrival[key] = state
+                records.append(Record(node: node, incomingEdge: incomingEdge, active: active))
+                queue.append(state)
+                return state
+            }
+            var sources: Set<Int> = []
+            for edge in statefulEdges {
+                let (a,b) = try topology.endpoints(edge)
+                guard (0..<n).contains(a), (0..<n).contains(b) else { throw V4TurnPreparationError.invalidTopology }
+                sources.insert(a); sources.insert(b)
+            }
+            let seedSources = sources.sorted()
+            var scannedNodes = 0, scannedArcs = 0
+            for source in seedSources {
+                scannedNodes += 1
+                try topology.outgoing(source) { incoming,target in
+                    scannedArcs += 1
+                    if statefulEdges.contains(incoming) {
+                        _ = try addState(node: target,incomingEdge: incoming,active: [])
+                    }
+                }
+            }
+
+            var transitionCache: [TransitionKey: Int] = [:]
+            var cursor = 0
+            while cursor < queue.count {
+                let state = queue[cursor]
+                cursor += 1
+                let record = records[state - (n + 2)]
+                try topology.outgoing(record.node) { edge,toNode in
+                    let result = advance(
+                        record.active, fromEdge: record.incomingEdge,
+                        toEdge: edge, viaNode: record.node
+                    )
+                    let key = TransitionKey(state: state, edge: edge, toNode: toNode)
+                    if transitionCache[key] == nil { try budget.transition() }
+                    if !result.allowed {
+                        transitionCache[key] = -1
+                    } else if statefulEdges.contains(edge) || !result.active.isEmpty {
+                        transitionCache[key] = try addState(
+                            node: toNode, incomingEdge: edge, active: result.active
+                        )
+                    } else {
+                        transitionCache[key] = toNode
+                    }
+                }
+            }
+
+            try topology.validate()
+            return Self(
+                baseNodeCount: n, startNode: startNode, endNode: endNode,
+                stateCount: n + 2 + records.count, records: records,
+                stateByArrival: stateByArrival, transitionCache: transitionCache,
+                statefulEdges: statefulEdges, blockedNode: blockedNode,
+                onlyNode: onlyNode, patterns: patterns, starters: starters,
+                seedScannedNodes: scannedNodes, seedScannedArcs: scannedArcs,
+                usedSelectiveSeeding: true,
+                preparationReservedBytes: budget.reservedBytes
+            )
+        }
+
         func graphNode(of state: Int) -> Int {
             if state < baseNodeCount || state == startNode || state == endNode { return state }
             let index = state - (baseNodeCount + 2)
@@ -387,6 +551,130 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             }
             return ImportedContinuation(stateAtParentEnd: state, incomingEdge: edge,
                 fromNode: from, toNode: to, location: token.location)
+        }
+
+        func exportContinuation(
+            state: Int, incomingEdge: Int, arrivedFromNode: Int,
+            access: PagedV4ContinuationAccess,
+            location: NativeRoutingContinuation.Location? = nil
+        ) throws -> NativeRoutingContinuation {
+            try access.validate()
+            guard let epoch = access.sourceEpoch, !epoch.isEmpty else {
+                throw NativeRoutingContinuationError.unavailableSourceEpoch
+            }
+            let node = graphNode(of: state)
+            let road = try Self.pagedDirectedRoad(edge: incomingEdge, from: arrivedFromNode, to: node, access: access)
+            let active: [Progress]
+            if state >= baseNodeCount + 2 {
+                let index = state - (baseNodeCount + 2)
+                guard records.indices.contains(index), records[index].incomingEdge == incomingEdge else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                active = records[index].active
+            } else {
+                guard node >= 0, node < baseNodeCount, !statefulEdges.contains(incomingEdge) else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                active = []
+            }
+            let progress = try active.map { row -> NativeRoutingContinuation.RestrictionProgress in
+                guard patterns.indices.contains(row.id) else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                return .init(relationID: patterns[row.id].relationID, memberIndex: row.progress)
+            }.sorted { $0.relationID < $1.relationID }
+            let resolvedLocation = location ?? .node(road.toNodeID)
+            try Self.validateLocation(resolvedLocation, road: road)
+            try access.validate()
+            return NativeRoutingContinuation(version: 1, sourceEpoch: epoch,
+                incoming: road, location: resolvedLocation,
+                restrictionContext: try Self.pagedContext(access: access, incomingEdge: incomingEdge,
+                    activeRelations: Set(progress.map(\.relationID))),
+                activeRestrictions: progress)
+        }
+
+        func importContinuation(_ token: NativeRoutingContinuation, access: PagedV4ContinuationAccess) throws -> ImportedContinuation {
+            guard token.version == 1 else { throw NativeRoutingContinuationError.unsupportedVersion }
+            guard let epoch = access.sourceEpoch, !epoch.isEmpty else {
+                throw NativeRoutingContinuationError.unavailableSourceEpoch
+            }
+            guard token.sourceEpoch == epoch else { throw NativeRoutingContinuationError.incompatibleSourceEpoch }
+            try Self.validateLocation(token.location, road: token.incoming)
+            try access.validate()
+            guard let from = try access.nodeIndex(token.incoming.fromNodeID),
+                  let to = try access.nodeIndex(token.incoming.toNodeID) else {
+                throw NativeRoutingContinuationError.unavailableRoad
+            }
+            var selected: Int?
+            try access.forEachWay(token.incoming.wayID) { candidate in
+                let endpoints = try access.endpoints(candidate)
+                if (endpoints.0 == from && endpoints.1 == to) || (endpoints.0 == to && endpoints.1 == from) {
+                    guard selected == nil else { throw NativeRoutingContinuationError.ambiguousRoad }
+                    selected = candidate
+                }
+            }
+            guard let edge = selected else { throw NativeRoutingContinuationError.unavailableRoad }
+            _ = try Self.pagedDirectedRoad(edge: edge, from: from, to: to, access: access)
+            let activeIDs = token.activeRestrictions.map(\.relationID)
+            guard Set(activeIDs).count == activeIDs.count else {
+                throw NativeRoutingContinuationError.incompatibleRestrictionContext
+            }
+            let expected = try Self.pagedContext(access: access, incomingEdge: edge, activeRelations: Set(activeIDs))
+            guard Set(expected) == Set(token.restrictionContext),
+                  expected.count == token.restrictionContext.count else {
+                throw NativeRoutingContinuationError.incompatibleRestrictionContext
+            }
+            var active: [Progress] = []
+            for row in token.activeRestrictions {
+                let matches = patterns.indices.filter { patterns[$0].relationID == row.relationID }
+                guard matches.count == 1, let id = matches.first,
+                      row.memberIndex > 0, row.memberIndex <= patterns[id].viaEdges.count,
+                      patterns[id].viaEdges[row.memberIndex - 1] == edge else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                active.append(Progress(id: id, progress: row.memberIndex))
+            }
+            active.sort { lhs, rhs in
+                if lhs.id == rhs.id { return lhs.progress < rhs.progress }
+                return lhs.id < rhs.id
+            }
+            let state: Int
+            if let exact = stateByArrival[ArrivalKey(node: to, incomingEdge: edge, active: active)] {
+                state = exact
+            } else {
+                guard active.isEmpty, !statefulEdges.contains(edge) else {
+                    throw NativeRoutingContinuationError.unavailableLegalState
+                }
+                state = to
+            }
+            try access.validate()
+            return ImportedContinuation(stateAtParentEnd: state, incomingEdge: edge,
+                fromNode: from, toNode: to, location: token.location)
+        }
+
+        private static func pagedDirectedRoad(edge: Int,from: Int,to: Int,access: PagedV4ContinuationAccess) throws -> NativeRoutingContinuation.Road {
+            guard (0..<access.edgeCount).contains(edge),(0..<access.nodeCount).contains(from),
+                  (0..<access.nodeCount).contains(to),from != to else { throw NativeRoutingContinuationError.unavailableRoad }
+            let a = try access.nodeID(from),b = try access.nodeID(to)
+            guard a != 0,b != 0 else { throw NativeRoutingContinuationError.unavailableRoad }
+            guard try access.hasDirectedArc(from: from,to: to,edge: edge) else { throw NativeRoutingContinuationError.illegalDirection }
+            return .init(wayID: try access.wayID(edge),fromNodeID: a,toNodeID: b)
+        }
+        private static func pagedContext(access: PagedV4ContinuationAccess,incomingEdge: Int,activeRelations: Set<Int64>) throws -> [NativeRoutingContinuation.RestrictionSignature] {
+            let relevant = access.restrictions.filter {
+                ($0.vehicleMask & 1) != 0 && ($0.fromEdge == incomingEdge || activeRelations.contains($0.osmRelationId))
+            }
+            guard activeRelations.isSubset(of: Set(relevant.map(\.osmRelationId))) else { throw NativeRoutingContinuationError.incompatibleRestrictionContext }
+            return try relevant.map { restriction in
+                let members = try ([restriction.fromEdge]+restriction.viaEdges+[restriction.toEdge]).map { edge -> NativeRoutingContinuation.Road in
+                    let endpoints = try access.endpoints(edge)
+                    let a = try access.nodeID(endpoints.0),b = try access.nodeID(endpoints.1)
+                    return .init(wayID: try access.wayID(edge),fromNodeID: min(a,b),toNodeID: max(a,b))
+                }
+                let via: Int64? = restriction.viaNode >= 0 ? try access.nodeID(restriction.viaNode) : nil
+                return NativeRoutingContinuation.RestrictionSignature(relationID: restriction.osmRelationId,
+                    kind: restriction.kind,only: restriction.only,vehicleMask: restriction.vehicleMask,viaNodeID: via,members: members)
+            }.sorted { $0.relationID < $1.relationID }
         }
 
         private static func validateLocation(_ location: NativeRoutingContinuation.Location,

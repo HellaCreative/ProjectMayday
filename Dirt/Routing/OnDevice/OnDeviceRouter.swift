@@ -235,6 +235,7 @@ nonisolated struct OnDeviceRouter {
     private var balancedCalculationDeadline: Double?
     /// Temporary same-binary qualification switch; both paths preserve existing policy.
     var useExtractedFullRoadCost = true
+    var useSharedCleanPolicyReads = false // Qualification-only until A/B passes.
     var useLabelReadPointerCache = true
     var useScopedRoadBounds = true
     // Confined to one synchronous request; never copied into returned route data.
@@ -6419,6 +6420,14 @@ nonisolated struct OnDeviceRouter {
         endOnMajorHighway: Bool,
         policyUnknown: Bool
     ) throws -> Double {
+        if useSharedCleanPolicyReads, profile == .cleanest, ctx.costMode == .profile,
+           pack.hasLeaves, ei >= 0 {
+            return try NativeCleanProfileStep.cost(read: ArrayCleanPolicyReadAccess(pack: pack,query: edgeDetailQuery),
+                edge: ei,attributes: pack.edgeAttrs[ei],meters: edgeMeters,ctx: ctx,
+                toLL: toLL,endLL: endLL,projectedOrigin: projectedOrigin,
+                startOnMajorHighway: startOnMajorHighway,endOnMajorHighway: endOnMajorHighway,
+                activePreferences: activeRidePreferences)
+        }
         if ei >= 0, GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(pack.edgeAttrs[ei])) {
             let sec = OnDeviceProfileCosts.ferryCrossingSeconds(
                 distanceMeters: edgeMeters,
