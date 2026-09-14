@@ -1499,16 +1499,20 @@ final class GraphPackStore {
                   expectedBytes: identity.bytes, expectedSHA256: identity.sha256),
               (try? pack.applyCrossPackSeams(data: data)) != nil else { return nil }
         try RoutingWorkContext.check()
-        return try await RoutingWorkContext.detachedThrowingSearch {
+        let sourceIdentity = routingCacheIdentity()
+        let result: [String: Double]? = try await RoutingWorkContext.detachedThrowingSearch {
             let points = stations.map { station in
                 (point: CLLocationCoordinate2D(latitude: station.latitude, longitude: station.longitude),
                  matchMeters: TapRadius.meters(zoom: mapZoom, latitude: station.latitude,
                     requestedMeters: matchLimitMeters, graphBinaryVersion: Int(pack.version)))
             }
             guard let bounds = try OnDeviceRouter(pack: pack).initialStationLowerBounds(from: from,
-                stations: points, incumbentMeters: incumbentMeters) else { return nil }
+                stations: points, incumbentMeters: incumbentMeters, sourceIdentity: sourceIdentity) else { return nil }
             return Dictionary(zip(stations.map(\.id), bounds), uniquingKeysWith: min)
         }
+        try RoutingWorkContext.check()
+        guard routingCacheIdentity() == sourceIdentity else { throw RoutingPageError.sourceChanged }
+        return result
     }
 
     func reachableFuelMeters(

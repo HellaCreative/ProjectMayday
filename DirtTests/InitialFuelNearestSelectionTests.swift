@@ -82,6 +82,19 @@ struct InitialFuelNearestSelectionTests {
         let sameEdge = try #require(try router.initialStationLowerBounds(from: origin,
             stations: [(point: midpoint, matchMeters: 1)], incumbentMeters: 0))
         #expect(sameEdge == [0], "Zero-seeded parent must protect a station before either road endpoint")
+        let measurement = RoutingMeasurement(metadata: ["case": "initial-bound-memo"])
+        try RoutingWorkContext.$measurement.withValue(measurement) {
+            for _ in 0..<2 {
+                let actual = try router.initialStationLowerBounds(from: origin,
+                    stations: [(point: midpoint, matchMeters: 1)], incumbentMeters: 0,
+                    sourceIdentity: "fixture-exact-source")
+                #expect(actual == sameEdge)
+            }
+        }
+        let counters = measurement.finish(outcome: "complete").counters
+        #expect(counters["initialFuelBoundMemoHits"] == 1)
+        #expect(counters["initialFuelBoundMemoMisses"] == 1)
+
         let offset = CLLocationCoordinate2D(latitude: midpoint.latitude + 0.007, longitude: midpoint.longitude)
         let wide = try #require(try router.initialStationLowerBounds(from: origin,
             stations: [(point: offset, matchMeters: 1_000)], incumbentMeters: 100))

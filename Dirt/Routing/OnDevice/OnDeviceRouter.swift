@@ -974,9 +974,38 @@ nonisolated struct OnDeviceRouter {
 
     /// Bounds refer to the actual endpoint-match radius, not the old fuel
     /// discovery radius. Index envelopes are a superset of every eligible snap.
+    private static let initialFuelBoundMemo = InitialFuelBoundMemo()
     func initialStationLowerBounds(from origin: CLLocationCoordinate2D,
         stations: [(point: CLLocationCoordinate2D, matchMeters: Double)], incumbentMeters: Double,
+        sourceIdentity: String? = nil,
         limits: RelaxedArrivalFuelFieldLimits = .init()) throws -> [Double]? {
+        guard let sourceIdentity, !sourceIdentity.isEmpty, let index = pack.exactSnapIndex,
+              stations.count <= InitialFuelBoundMemo.maximumStations,
+              sourceIdentity.utf8.count <= InitialFuelBoundMemo.maximumIdentityBytes else {
+            return try uncachedInitialStationLowerBounds(from: origin, stations: stations,
+                incumbentMeters: incumbentMeters, limits: limits)
+        }
+        let input = InitialFuelBoundMemo.Input(sourceIdentity: sourceIdentity,
+            origin: .init(latitude: origin.latitude, longitude: origin.longitude, meters: 0),
+            stations: stations.map { .init(latitude: $0.point.latitude,
+                longitude: $0.point.longitude, meters: $0.matchMeters) },
+            incumbentMeters: incumbentMeters, maximumStates: limits.maximumStates,
+            maximumQueueEntries: limits.maximumQueueEntries, maximumBorderNodes: limits.maximumBorderNodes)
+        return try Self.initialFuelBoundMemo.value(owner: pack, index: index, input: input,
+            validate: {
+                try RoutingWorkContext.check()
+                try index.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { _ in
+                    try pack.geometry?.validateSource(cancelled: { RoutingWorkContext.stopReason != nil })
+                }
+            }, compute: {
+                try uncachedInitialStationLowerBounds(from: origin, stations: stations,
+                    incumbentMeters: incumbentMeters, limits: limits)
+            })
+    }
+
+    private func uncachedInitialStationLowerBounds(from origin: CLLocationCoordinate2D,
+        stations: [(point: CLLocationCoordinate2D, matchMeters: Double)], incumbentMeters: Double,
+        limits: RelaxedArrivalFuelFieldLimits) throws -> [Double]? {
         try RoutingWorkContext.check()
         let phase = RoutingWorkContext.measurement?.begin(.reverseGuidance)
         defer { RoutingWorkContext.measurement?.end(phase) }
