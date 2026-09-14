@@ -877,6 +877,38 @@ final class RoutePlannerModel {
         refreshMap()
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
+
+            // Auto-download missing packs for the route when online.
+            if self.network.isOnline {
+                let endpoints = requested.waypoints.map(\.coordinate.locationCoordinate)
+                let needed = GraphPackStore.regionIds(containingAny: endpoints)
+                let missing = needed.filter {
+                    self.graphPacks.isRoutingPackPublished($0)
+                        && !self.graphPacks.isInstalled($0)
+                }
+                if !missing.isEmpty {
+                    let titles = missing.map { self.graphPacks.displayTitle(forRegionId: $0) }
+                    let names = PackAcquisitionEvaluator.joinedTitles(titles)
+                    self.toast = "Installing \(names) routing pack\(missing.count > 1 ? "s" : "")"
+                    RoutingDebugLog.shared.event(
+                        "pack auto-install begin regions=[\(missing.joined(separator: ","))]"
+                    )
+                    do {
+                        try await self.graphPacks.installVerifiedPacks(missing, replaceInstalled: false)
+                        RoutingDebugLog.shared.event(
+                            "pack auto-install complete regions=[\(missing.joined(separator: ","))]"
+                        )
+                    } catch {
+                        RoutingDebugLog.shared.event(
+                            "pack auto-install failed regions=[\(missing.joined(separator: ","))] "
+                                + "error=\(error.localizedDescription)"
+                        )
+                    }
+                    guard !Task.isCancelled else { return }
+                    self.toast = initialProgress
+                }
+            }
+
             self.itineraryBuilder.mapZoom = self.mapState.mapZoom
             let result = await RidePreferenceContext.$current.withValue(preferences) {
                 await RoutingSessionContext.$seed.withValue(self.routingSessionSeed) {

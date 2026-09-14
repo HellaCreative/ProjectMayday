@@ -797,7 +797,7 @@ struct RoutingSourcePolicy {
             let installed = needed.filter { installedPacks.isRoutingPackInstalled($0) }
             let packsCover = installedPacksCover(locations, registry: installedPacks)
             let singleRegion = provinces.count <= 1
-            let chosen = isOnline() ? live : pack
+            let chosen = packsCover ? pack : (isOnline() ? live : pack)
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
                     "provinces=[\(provinces.joined(separator: ","))] " +
