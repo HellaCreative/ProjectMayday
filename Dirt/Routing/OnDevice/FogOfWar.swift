@@ -77,9 +77,9 @@ struct FogOfWarNeighborhood {
         let a = RouteCoordinate(longitude: start.longitude, latitude: start.latitude)
         let b = RouteCoordinate(longitude: end.longitude, latitude: end.latitude)
         let p = RouteCoordinate(longitude: point.longitude, latitude: point.latitude)
-        let progress = GeoMath.progressAlongAB(from: a, to: b, point: p)
+        // progressAlongAB is already signed metres along A→B.
+        let along = GeoMath.progressAlongAB(from: a, to: b, point: p)
         let ab = max(1, GeoMath.meters(start, end))
-        let along = progress * ab
         return along >= -radius && along <= ab + radius
     }
 
