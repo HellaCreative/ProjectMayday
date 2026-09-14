@@ -822,8 +822,6 @@ nonisolated struct OnDeviceRouter {
 
         if profile == .dirt {
             let base = ctx.corridorMeters ?? HopSearchPolicy.dirtCorridorMeters
-            let comparisonWidths = [base * 2, base]
-            let connectivityWidths: [Double?] = [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double, objective: String)] = []
             var lastBoundedFailure: Failure = .noPath
 
@@ -849,15 +847,17 @@ nonisolated struct OnDeviceRouter {
                 var route = initial
                 var penaltyEdgeIds = hunt.shortDirtPenaltyEdgeIds
                 var repairPasses = 0
-                for _ in 0..<HopSearchPolicy.maximumShortDirtRepairPasses {
-                    let found = Self.shortDirtExcursionEdgeIDs(in: route.legs)
-                    let additions = found.subtracting(penaltyEdgeIds)
-                    if additions.isEmpty { break }
-                    penaltyEdgeIds.formUnion(additions)
-                    hunt.shortDirtPenaltyEdgeIds = penaltyEdgeIds
-                    guard case .success(let next) = runProfile(hunt) else { break }
-                    route = next
-                    repairPasses += 1
+                if !initial.searchMeta.timedOut, initial.dirtPercent < 70 {
+                    for _ in 0..<HopSearchPolicy.maximumShortDirtRepairPasses {
+                        let found = Self.shortDirtExcursionEdgeIDs(in: route.legs)
+                        let additions = found.subtracting(penaltyEdgeIds)
+                        if additions.isEmpty { break }
+                        penaltyEdgeIds.formUnion(additions)
+                        hunt.shortDirtPenaltyEdgeIds = penaltyEdgeIds
+                        guard case .success(let next) = runProfile(hunt) else { break }
+                        route = next
+                        repairPasses += 1
+                    }
                 }
                 route.searchMeta.minimumEarnedDirtExcursionMeters =
                     HopSearchPolicy.minimumEarnedDirtExcursionMeters
@@ -866,22 +866,24 @@ nonisolated struct OnDeviceRouter {
                 return .success(route)
             }
 
-            for width in comparisonWidths {
+            comparison: for width in [base * 2, base] {
                 switch searchDirt(width: width) {
-                case .success(let route): candidates.append((route, width, "pavement"))
-                case .failure(let failure): lastBoundedFailure = failure
+                case .success(let route):
+                    candidates.append((route, width, "pavement"))
+                    if route.dirtPercent >= 70 { break comparison }
+                case .failure(let failure):
+                    lastBoundedFailure = failure
                 }
             }
             if candidates.isEmpty {
-                for width in connectivityWidths {
+                connectivity: for width in [Optional(base * 3), Optional(base * 4), nil] {
                     switch searchDirt(width: width) {
                     case .success(let route):
                         candidates.append((route, width ?? 0, "pavement"))
+                        break connectivity
                     case .failure(let failure):
                         lastBoundedFailure = failure
-                        continue
                     }
-                    break
                 }
             }
             // Minimizing absolute pavement normally produces excellent DIRT
@@ -1775,10 +1777,6 @@ nonisolated struct OnDeviceRouter {
             }
             return prevKind[label] == 1 ? virt[prevData[label]].roadSpan : nil
         }
-        func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
-            guard pack.version >= 4, let span else { return false }
-            return PathRetrace.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
-        }
         var slots = SparseDefaultArray(count: total, default: UInt8(0))
         var heap = MinHeap()
         var fog = FogOfWarNeighborhood(
@@ -1830,11 +1828,18 @@ nonisolated struct OnDeviceRouter {
             if cur.cost != dist[cur.node] { continue }
             pops += 1
             if pops > popCap { abort = "popCap"; break }
-            if let deadline, (pops & 255) == 0, CFAbsoluteTimeGetCurrent() > deadline {
+            if let deadline, CFAbsoluteTimeGetCurrent() > deadline {
                 abort = "timeCap"
                 break
             }
             if cur.node == endVirt { break }
+            let occupied = pack.version >= 4
+                ? PathRetrace.occupancy(from: cur.node, previous: { prev[$0] }, record: pathRecord)
+                : PathRetrace.Occupancy()
+            func retraces(_ span: PathRetrace.Span?) -> Bool {
+                guard pack.version >= 4, let span else { return false }
+                return occupied.overlaps(span)
+            }
 
             let graphNode = turnState.graphNode(of: cur.node)
             if pops & 63 == 1, graphNode >= 0, graphNode < n {
@@ -1983,7 +1988,7 @@ nonisolated struct OnDeviceRouter {
                         variety: ctx.variety,
                         slotsUsed: Int(slots[toState])
                     )
-                    if action != .reject, retraces(cur.node, .init(edge: ei, lower: 0, upper: Double(pack.edgeMeters[ei]))) { action = .reject }
+                    if action != .reject, retraces(.init(edge: ei, lower: 0, upper: Double(pack.edgeMeters[ei]))) { action = .reject }
                     if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toState) {
                         action = .reject
                     }
@@ -2164,7 +2169,7 @@ nonisolated struct OnDeviceRouter {
                         variety: ctx.variety,
                         slotsUsed: Int(slots[toState])
                     )
-                    if action != .reject, retraces(cur.node, v.roadSpan) { action = .reject }
+                    if action != .reject, retraces(v.roadSpan) { action = .reject }
                     if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toState) {
                         action = .reject
                     }
@@ -2384,10 +2389,6 @@ nonisolated struct OnDeviceRouter {
             }
             return prevKind[label] == 1 ? virt[prevData[label]].roadSpan : nil
         }
-        func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
-            guard pack.version >= 4, let span else { return false }
-            return PathRetrace.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
-        }
         var slots = SparseDefaultArray(count: labels, default: UInt8(0))
         var heap = MinHeap()
         var fog = FogOfWarNeighborhood(
@@ -2414,11 +2415,18 @@ nonisolated struct OnDeviceRouter {
         while let cur = heap.pop() {
             pops += 1
             if pops > popCap { abort = "popCap"; break }
-            if let deadline, (pops & 255) == 0, CFAbsoluteTimeGetCurrent() > deadline {
+            if let deadline, CFAbsoluteTimeGetCurrent() > deadline {
                 abort = "timeCap"
                 break
             }
             if cur.cost != dist[cur.node] { continue }
+            let occupied = pack.version >= 4
+                ? PathRetrace.occupancy(from: cur.node, previous: { prev[$0] }, record: pathRecord)
+                : PathRetrace.Occupancy()
+            func retraces(_ span: PathRetrace.Span?) -> Bool {
+                guard pack.version >= 4, let span else { return false }
+                return occupied.overlaps(span)
+            }
             let metersSoFar = pathMeters[cur.node]
             if metersSoFar > cap { continue }
             let state = sid(cur.node)
@@ -2548,7 +2556,7 @@ nonisolated struct OnDeviceRouter {
                         variety: ctx.variety,
                         slotsUsed: Int(slots[toLab])
                     )
-                    if action != .reject, retraces(cur.node, .init(edge: ei, lower: 0, upper: Double(pack.edgeMeters[ei]))) { action = .reject }
+                    if action != .reject, retraces(.init(edge: ei, lower: 0, upper: Double(pack.edgeMeters[ei]))) { action = .reject }
                     if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toLab) {
                         action = .reject
                     }
@@ -2683,7 +2691,7 @@ nonisolated struct OnDeviceRouter {
                         edgeID: virtualEdgeID,
                         ctx: ctx
                     )
-                    if newScore < dist[toLab], !retraces(cur.node, v.roadSpan) {
+                    if newScore < dist[toLab], !retraces(v.roadSpan) {
                         dist[toLab] = newScore
                         pathMeters[toLab] = newMeters
                         dirtAt[toLab] = dirtSoFar

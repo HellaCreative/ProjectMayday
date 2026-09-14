@@ -946,7 +946,7 @@ final class GraphPackStore {
                   remotePack.regionId?.lowercased() == nextRegionId else { return nil }
             let reverseAnchors = remotePack.crossPackSeams[regionId] ?? []
 
-            for anchor in anchors.prefix(8) {
+            for anchor in anchors.prefix(HopSearchPolicy.chainSeamCandidatePrefix) {
                 guard seamAttempts < maximumSeamAttempts else { return nil }
                 guard let reverse = reverseAnchors.first(where: {
                     $0.osmWayId == anchor.osmWayId

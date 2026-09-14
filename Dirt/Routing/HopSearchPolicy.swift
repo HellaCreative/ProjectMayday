@@ -74,6 +74,8 @@ nonisolated enum HopSearchPolicy {
     static let pass2PopCap: Int = 400_000
     static let dirtCandidateTimeCapSeconds: Double = 7
     static let dirtCandidatePopCap: Int = 200_000
+    /// Chord-ranked proven crossings to try before spending another full hop.
+    static let chainSeamCandidatePrefix: Int = 3
     static let dirtRidePavedPerKm: Double = 150
     static let dirtRideGravelPerKm: Double = 0.7
     static let dirtRideResourcePerKm: Double = 0.5
