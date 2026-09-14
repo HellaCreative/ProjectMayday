@@ -476,6 +476,98 @@ struct OnDevicePackBenchmarkTests {
         }
     }
 
+    @Test("Ontario Clean pointer cache A/B preserves the exact route and search work")
+    @MainActor
+    func southernOntarioCleanPointerCacheAB() async throws {
+        try await southernOntarioCleanLookupAB(comparison: .pointer)
+    }
+
+    @Test("Ontario Clean combined and split retrace callbacks preserve exact search")
+    @MainActor
+    func southernOntarioCleanRetraceCallbackAB() async throws {
+        try await southernOntarioCleanLookupAB(comparison: .callback)
+    }
+
+    @Test("Ontario Clean scoped bounds preserve exact towns, roads and search work")
+    @MainActor
+    func southernOntarioScopedBoundsAB() async throws {
+        try await southernOntarioCleanLookupAB(comparison: .bounds)
+    }
+
+    private enum LookupComparison: String { case pointer, callback, bounds }
+
+    @MainActor
+    private func southernOntarioCleanLookupAB(comparison: LookupComparison) async throws {
+        let version = "fabric-v4-20260909-02"
+        let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(version).appendingPathComponent("packs")
+        let (store, temp) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let from = CLLocationCoordinate2D(latitude: 44.632662, longitude: -75.651839)
+        let to = CLLocationCoordinate2D(latitude: 44.601681, longitude: -79.308263)
+        // Warm the actual store preparation once, then reuse its verified pack/indexes.
+        let warmup = await store.routeOnDeviceDetailed(from: from, to: to, profile: .cleanest,
+            allowUnknown: false, sessionSeed: 0xD1470008)
+        guard case .success(let reference) = warmup else {
+            Issue.record("Ontario Clean warmup failed: \(warmup)"); return
+        }
+        #expect(!reference.searchMeta.timedOut)
+        let pack = try #require(store.packIfInstalled("on"))
+        _ = try #require(pack.exactSnapIndex, "A/B must reuse the prepared app pack")
+        let manifest = try #require(JSONSerialization.jsonObject(with: Data(contentsOf:
+            candidate.appendingPathComponent("on/pack-manifest.v2.json"))) as? [String: Any])
+        let graph = try #require(manifest["graph"] as? [String: Any])
+        let geometry = try #require(manifest["geometry"] as? [String: Any])
+        // ABBA controls simple warm-order bias without concurrent calculations.
+        for (ordinal, enabled) in [true, false, false, true].enumerated() {
+            let pointerEnabled = comparison != .pointer || enabled
+            let callbackEnabled = comparison != .callback || enabled
+            let boundsEnabled = comparison != .bounds || enabled
+            let measurement = RoutingMeasurement(metadata: ["workload": "Ontario Clean \(comparison.rawValue) ABBA",
+                "packRelease": version, "graphSHA256": try #require(graph["sha256"] as? String),
+                "geometrySHA256": try #require(geometry["sha256"] as? String),
+                "pointerCache": String(pointerEnabled), "retraceCounters": "local-counted",
+                "combinedCallback": String(callbackEnabled), "scopedBounds": String(boundsEnabled),
+                "profile": RouteProfile.cleanest.rawValue, "fuel": "off", "allowUnknown": "false",
+                "seed": String(0xD1470008), "preparation": "warm verified app pack",
+                "hardware": "MacBookPro17,1 M1 16GiB iPhone17 iOS26.5 simulator"])
+            let result = await RoutingWorkContext.$measurement.withValue(measurement) {
+                await RoutingWorkContext.detachedSearch {
+                    var router = OnDeviceRouter(pack: pack)
+                    router.sessionSeed = 0xD1470008
+                    router.useLabelReadPointerCache = pointerEnabled
+                    router.useCombinedRetraceCallback = callbackEnabled
+                    router.useScopedRoadBounds = boundsEnabled
+                    return router.routeDetailed(from: from, to: to, profile: .cleanest,
+                        allowUnknown: false, sessionSeed: 0xD1470008)
+                }
+            }
+            var output: [String: Any] = ["from": [from.longitude, from.latitude],
+                "to": [to.longitude, to.latitude], "pointerCache": pointerEnabled,
+                "combinedCallback": callbackEnabled, "scopedBounds": boundsEnabled]
+            switch result {
+            case .success(let route):
+                #expect(!route.searchMeta.timedOut)
+                #expect(route.edgeIds == reference.edgeIds)
+                #expect(route.coordinates.map(\.latitude) == reference.coordinates.map(\.latitude))
+                #expect(route.coordinates.map(\.longitude) == reference.coordinates.map(\.longitude))
+                #expect(route.distanceMeters == reference.distanceMeters)
+                #expect(route.backtrackMeters == reference.backtrackMeters)
+                #expect(route.searchMeta.pops == reference.searchMeta.pops)
+                output["distanceMeters"] = route.distanceMeters
+                output["pops"] = route.searchMeta.pops
+                output["edgeIds"] = route.edgeIds
+                output["geometry"] = route.coordinates.map { [$0.longitude, $0.latitude] }
+                output["measurement"] = try object(measurement.finish(outcome:
+                    route.searchMeta.timedOut ? "road-complete-search-incomplete" : "complete"))
+            case .failure(let failure):
+                output["measurement"] = try object(measurement.finish(outcome: String(describing: failure)))
+                Issue.record("Ontario Clean pointer A/B failed: \(failure)")
+            }
+            try saveEvidence(output, name: "ontario-clean-\(comparison.rawValue)-ab-\(ordinal)-\(enabled)")
+        }
+    }
+
     @Test("Short fuel-enabled itinerary begins with the required initial refill")
     @MainActor
     func shortItineraryStartsWithRefill() async throws {

@@ -219,6 +219,11 @@ nonisolated struct OnDeviceRouter {
     /// Internal qualification switch; normal routing uses the identical memoized arithmetic.
     var useDirectedStepMemo = true
     var useLabelReadPointerCache = true
+    var useScopedRoadBounds = true
+    // Confined to one synchronous request; never copied into returned route data.
+    private var roadBoundsQuery: ExactSnapIndex.BoundsQuery?
+    /// Qualification only: both walkers preserve the exact predecessor law.
+    var useCombinedRetraceCallback = true
     var useReachableCachedMatchesBeforeCoverage = true
     var ridePreferences: RidePreferences?
     private var activeRidePreferences: RidePreferences? {
@@ -363,6 +368,50 @@ nonisolated struct OnDeviceRouter {
     }
 
     func routeDetailed(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        avoidEdgeIds: Set<String> = [],
+        priorEdgeIds: Set<String> = [],
+        arrivalEdgeId: String? = nil,
+        arrivalContinuation: NativeRoutingContinuation? = nil,
+        backtrackFactor: Double = 4,
+        sessionSeed: UInt64? = nil,
+        maxRouteMeters: Double? = nil,
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
+    ) -> Swift.Result<Result, Failure> {
+        var worker = self
+        worker.roadBoundsQuery = nil
+        guard useScopedRoadBounds, let index = pack.exactSnapIndex else {
+            return worker.routeDetailedWithinBounds(from: from, to: to, profile: profile,
+                allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds, priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId, arrivalContinuation: arrivalContinuation,
+                backtrackFactor: backtrackFactor, sessionSeed: sessionSeed, maxRouteMeters: maxRouteMeters,
+                cleanMetroMultiplier: cleanMetroMultiplier, avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads)
+        }
+        do {
+            // No route or fuel proof escapes until the backing index passes its
+            // closing identity check. Matching and town checks share these pages.
+            return try index.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { query in
+                worker.roadBoundsQuery = query
+                defer { worker.roadBoundsQuery = nil }
+                return worker.routeDetailedWithinBounds(from: from, to: to, profile: profile,
+                allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds, priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId, arrivalContinuation: arrivalContinuation,
+                backtrackFactor: backtrackFactor, sessionSeed: sessionSeed, maxRouteMeters: maxRouteMeters,
+                cleanMetroMultiplier: cleanMetroMultiplier, avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads)
+            }
+        } catch {
+            return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "roadBoundsUnavailable"))
+        }
+    }
+
+    private func routeDetailedWithinBounds(
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
         profile: RouteProfile,
@@ -2439,10 +2488,24 @@ nonisolated struct OnDeviceRouter {
         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
             guard pack.version >= 4, let span else { return false }
             retraceQueries &+= 1
+            if !useCombinedRetraceCallback {
+                let result = PathRetrace.containsCounted(node: label, span: span,
+                    previous: { labels[$0].predecessor }, record: { ancestor in
+                        let row = labels[ancestor]
+                        guard row.predecessor >= 0 else { return nil }
+                        let entry = row.predecessorData
+                        if row.predecessorKind == 0 {
+                            guard entry == span.edge else { return nil }
+                            return .init(edge: entry, lower: 0, upper: Double(pack.edgeMeters[entry]))
+                        }
+                        return row.predecessorKind == 1 ? virt[entry].roadSpan : nil
+                    })
+                retracePredecessorVisits &+= result.visits
+                return result.contains
+            }
             // Synchronous read-only traversal of the same predecessor chain;
             // no dense array snapshot or cached path history is created.
-            return PathRetrace.contains(node: label, span: span, step: { ancestor in
-                retracePredecessorVisits &+= 1
+            let result = PathRetrace.containsCounted(node: label, span: span, step: { ancestor in
                 let row = labels[ancestor]
                 guard row.predecessor >= 0 else { return (row.predecessor,nil) }
                 let entry = row.predecessorData
@@ -2452,6 +2515,8 @@ nonisolated struct OnDeviceRouter {
                 }
                 return (row.predecessor,row.predecessorKind == 1 ? virt[entry].roadSpan : nil)
             })
+            retracePredecessorVisits &+= result.visits
+            return result.contains
         }
         var heap = MinHeap()
         defer { heap.flushMeasurement() }
@@ -3116,10 +3181,24 @@ nonisolated struct OnDeviceRouter {
         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
             guard pack.version >= 4, let span else { return false }
             retraceQueries &+= 1
+            if !useCombinedRetraceCallback {
+                let result = PathRetrace.containsCounted(node: label, span: span,
+                    previous: { labelStore[$0].predecessor }, record: { ancestor in
+                        let row = labelStore[ancestor]
+                        guard row.predecessor >= 0 else { return nil }
+                        let entry = row.predecessorData
+                        if row.predecessorKind == 0 {
+                            guard entry == span.edge else { return nil }
+                            return .init(edge: entry, lower: 0, upper: Double(pack.edgeMeters[entry]))
+                        }
+                        return row.predecessorKind == 1 ? virt[entry].roadSpan : nil
+                    })
+                retracePredecessorVisits &+= result.visits
+                return result.contains
+            }
             // Synchronous read-only traversal retains the same predecessor
             // chain; bucket identities and relaxation order remain unchanged.
-            return PathRetrace.contains(node: label, span: span, step: { ancestor in
-                retracePredecessorVisits &+= 1
+            let result = PathRetrace.containsCounted(node: label, span: span, step: { ancestor in
                 let row = labelStore[ancestor]
                 guard row.predecessor >= 0 else { return (row.predecessor,nil) }
                 let entry = row.predecessorData
@@ -3129,6 +3208,8 @@ nonisolated struct OnDeviceRouter {
                 }
                 return (row.predecessor,row.predecessorKind == 1 ? virt[entry].roadSpan : nil)
             })
+            retracePredecessorVisits &+= result.visits
+            return result.contains
         }
         func selectedResourceEnd() -> (lab: Int, len: Double, dirt: Double, score: Double)? {
             var labelsAtEnd: [(lab: Int, len: Double, dirt: Double, score: Double)] = []
@@ -3741,7 +3822,7 @@ nonisolated struct OnDeviceRouter {
                         heap.push(node: toNode, cost: cand)
                     }
                 }
-                if let siblings = coincidentSiblings[cur.node] {
+                if pack.version < 4, let siblings = coincidentSiblings[cur.node] {
                     for toNode in siblings where cur.cost < dist[toNode] {
                         dist[toNode] = cur.cost
                         heap.push(node: toNode, cost: cur.cost)
@@ -5065,7 +5146,8 @@ nonisolated struct OnDeviceRouter {
         }
         }
         if let diskIndex {
-            try diskIndex.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) {
+            try diskIndex.withBoundsQuery(reusing: roadBoundsQuery,
+                cancelled: { RoutingWorkContext.stopReason != nil }) {
                 try scanCandidates($0)
             }
         } else { try scanCandidates(nil) }
@@ -5648,7 +5730,9 @@ nonisolated struct OnDeviceRouter {
     /// Pack duplicate nodes within `cleanCoincidentNodeMeters` share a place.
     private func coincidentSiblingLists() -> [[Int]?] {
         if pack.version >= 4 {
-            return [[Int]?](repeating: nil, count: pack.nodeCount)
+            // V4 connects only verified source nodes, never coordinate siblings.
+            // Call sites skip legacy stitching, so no node-sized nil table is needed.
+            return []
         }
         let n = pack.nodeCount
         var lists = [[Int]?](repeating: nil, count: n)
@@ -5744,7 +5828,7 @@ nonisolated struct OnDeviceRouter {
                         return try index.mayIntersect(edge: edgeIndex,
                             latitude: (box.minLat + box.maxLat) / 2,
                             longitude: (box.minLon + box.maxLon) / 2, meters: radius,
-                            cancelled: { RoutingWorkContext.stopReason != nil })
+                            query: roadBoundsQuery, cancelled: { RoutingWorkContext.stopReason != nil })
                     }
                 }
                 if couldCross {

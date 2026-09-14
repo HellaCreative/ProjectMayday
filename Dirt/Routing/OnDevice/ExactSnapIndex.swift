@@ -100,7 +100,12 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
     }
 
     func mayIntersect(edge: Int, latitude: Double, longitude: Double, meters: Double,
-        cancelled: () -> Bool = { false }) throws -> Bool {
+        query: BoundsQuery? = nil, cancelled: () -> Bool = { false }) throws -> Bool {
+        if let query {
+            try query.validateOwner(self)
+            guard !cancelled() else { throw Failure.cancelled }
+            return try query.mayIntersect(edge: edge, latitude: latitude, longitude: longitude, meters: meters)
+        }
         guard edge >= 0, edge < header.edgeCount else { return true }
         let lease = try source.read(at: Self.headerBytes + edge * 40, count: 40, cancelled: cancelled)
         return try lease.withUnsafeBytes { raw in
@@ -127,8 +132,18 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
     /// A query is valid only after the closing source check succeeds. Never
     /// commit route state inside this closure; return it after this method does.
     /// Retained query objects are invalidated on both success and failure.
-    func withBoundsQuery<Value>(cancelled: @escaping () -> Bool = { false },
+    func withBoundsQuery<Value>(reusing existing: BoundsQuery? = nil,
+        cancelled: @escaping () -> Bool = { false },
         _ body: (BoundsQuery) throws -> Value) throws -> Value {
+        if let existing {
+            // Nested work remains provisional until its owning outer query closes.
+            // Sharing its reservations avoids overlapping independent page budgets.
+            try existing.validateOwner(self)
+            guard !cancelled() else { throw Failure.cancelled }
+            let value = try body(existing)
+            guard !cancelled() else { throw Failure.cancelled }
+            return value
+        }
         try source.validate(cancelled: cancelled)
         let query = BoundsQuery(index: self, cancelled: cancelled)
         defer { query.invalidate() }

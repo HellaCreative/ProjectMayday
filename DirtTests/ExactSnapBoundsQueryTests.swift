@@ -94,4 +94,82 @@ struct ExactSnapBoundsQueryTests {
             #expect(index.statistics.borrowedPageCount == 0)
         }
     }
+    @Test func nestedReuseSharesReservationsAndRetainsOuterOwnership() throws {
+        try fixture { index,_ in
+            var retained: ExactSnapIndex.BoundsQuery?
+            try index.withBoundsQuery { outer in
+                retained = outer
+                for edge in [0,1638,3276,4914] {
+                    _ = try index.mayIntersect(edge: edge,latitude: 0,longitude: 0,meters: 100,query: outer)
+                }
+                #expect(index.statistics.borrowedPageCount == 4)
+                try index.withBoundsQuery(reusing: outer) { inner in
+                    #expect(inner === outer)
+                    var count = 0
+                    try index.forEachEdge(nearLat: 0,lon: 0,radiusCells: 0,query: inner) { edge in
+                        _ = try index.mayIntersect(edge: edge,latitude: 0,longitude: 0,meters: 100,query: inner)
+                        count += 1
+                        #expect(index.statistics.leaseCount <= 8)
+                    }
+                    #expect(count == 7000)
+                }
+                #expect(try outer.mayIntersect(edge: 0,latitude: 0,longitude: 0,meters: 100))
+                #expect(index.statistics.peakLivePayloadBytes <= index.statistics.maximumLivePayloadBytes)
+            }
+            #expect(index.statistics.leaseCount == 0)
+            #expect(index.statistics.borrowedPageCount == 0)
+            let escaped = try #require(retained)
+            #expect(throws: RoutingPageError.closed) {
+                _ = try index.mayIntersect(edge: 0,latitude: 0,longitude: 0,meters: 100,query: escaped)
+            }
+        }
+    }
+
+    @Test func sharedQueryRejectsDifferentIndexAndExplicitCancellation() throws {
+        try fixture { index,_ in
+            try fixture { other,_ in
+                try index.withBoundsQuery { query in
+                    #expect(throws: ExactSnapIndex.Failure.identityMismatch) {
+                        _ = try other.mayIntersect(edge: 0,latitude: 0,longitude: 0,meters: 100,query: query)
+                    }
+                    #expect(throws: ExactSnapIndex.Failure.identityMismatch) {
+                        try other.withBoundsQuery(reusing: query) { _ in Issue.record("Foreign query accepted") }
+                    }
+                    #expect(throws: (any Error).self) {
+                        _ = try index.mayIntersect(edge: 0,latitude: 0,longitude: 0,meters: 100,
+                            query: query,cancelled: { true })
+                    }
+                    var cancelled = false
+                    #expect(throws: (any Error).self) {
+                        try index.withBoundsQuery(reusing: query,cancelled: { cancelled }) { _ in
+                            cancelled = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func nestedResultCannotQualifyChangedSourceBeforeOuterClose() throws {
+        try fixture { index,url in
+            var returned = false
+            #expect(throws: (any Error).self) {
+                _ = try index.withBoundsQuery { outer in
+                    _ = try outer.mayIntersect(edge: 0,latitude: 0,longitude: 0,meters: 100)
+                    let provisional = try index.withBoundsQuery(reusing: outer) { inner in
+                        try inner.mayIntersect(edge: 1,latitude: 0,longitude: 0,meters: 100)
+                    }
+                    let writer = try FileHandle(forWritingTo: url)
+                    try writer.truncate(atOffset: 100)
+                    try writer.close()
+                    return provisional
+                }
+                returned = true
+            }
+            #expect(!returned)
+            #expect(index.statistics.leaseCount == 0)
+            #expect(index.statistics.borrowedPageCount == 0)
+        }
+    }
+
 }
