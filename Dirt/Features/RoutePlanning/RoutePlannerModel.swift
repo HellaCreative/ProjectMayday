@@ -3159,28 +3159,7 @@ final class RoutePlannerModel {
             unknownSurfacePercent: local.unknownSurfacePercent,
             surfaceFamilyMode: local.hasSurfaceLeaves ? "leaf-v3" : nil,
             maneuvers: local.maneuvers,
-            warnings: {
-                var warnings: [RouteWarning] = local.searchMeta.limitedSearchWarning.map { [$0] } ?? []
-                if local.searchMeta.urbanCoreFallbackUsed {
-                    warnings.append(RouteWarning(
-                    code: "urban_core_fallback",
-                    message: "No route could reach the destination while keeping every urban core as a wall. This Clean route uses an urban crossing only as a last resort."
-                    ))
-                }
-                if local.searchMeta.cleanUnpavedFallbackUsed {
-                    warnings.append(RouteWarning(
-                        code: "clean_unpaved_fallback",
-                        message: "No fully paved route could reach the destination while respecting the current routing walls. Clean used tagged unpaved road only as a last resort."
-                    ))
-                }
-                if local.searchMeta.settlementFallbackUsed {
-                    warnings.append(RouteWarning(
-                        code: "settlement_fallback",
-                        message: "This route could not avoid every mapped town without losing its routing objective. Town travel remains strongly penalized and is used only where the alternatives are worse."
-                    ))
-                }
-                return warnings.isEmpty ? nil : warnings
-            }(),
+            warnings: local.searchMeta.routeWarnings(),
             terminalContinuation: local.terminalContinuation
         )
         response.debug = local.searchMeta.responseDebug

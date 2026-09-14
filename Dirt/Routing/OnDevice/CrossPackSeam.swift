@@ -170,6 +170,11 @@ extension OnDeviceRouter.Result {
                     .filter { !$0.isEmpty }.joined(separator: ";"),
                 pops: hops.reduce(0) { $0 + $1.searchMeta.pops },
                 elapsedMs: hops.reduce(0) { $0 + $1.searchMeta.elapsedMs },
+                calculationElapsedMs: hops.contains { $0.searchMeta.calculationElapsedMs != nil }
+                    ? hops.reduce(0) { $0 + ($1.searchMeta.calculationElapsedMs ?? 0) } : nil,
+                selectionAttempts: hops.contains { $0.searchMeta.selectionAttempts != nil }
+                    ? hops.reduce(0) { $0 + ($1.searchMeta.selectionAttempts ?? 0) } : nil,
+                selectionLimitedOutcomes: hops.flatMap { $0.searchMeta.selectionLimitedOutcomes ?? [] },
                 urbanCoreFallbackUsed: hops.contains { $0.searchMeta.urbanCoreFallbackUsed },
                 cleanUnpavedFallbackUsed: hops.contains { $0.searchMeta.cleanUnpavedFallbackUsed },
                 settlementFallbackUsed: hops.contains { $0.searchMeta.settlementFallbackUsed },

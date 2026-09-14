@@ -142,6 +142,10 @@ nonisolated struct OnDeviceRouter {
         var shortestMeters: Double? = nil
         var pops: Int = 0
         var elapsedMs: Int = 0
+        /// Whole public calculation wall time; selected-search elapsedMs stays separate.
+        var calculationElapsedMs: Int? = nil
+        var selectionAttempts: Int? = nil
+        var selectionLimitedOutcomes: [String]? = nil
         var rideObjective: String? = nil
         /// Native resource-label objective, in weighted kilometres. Diagnostic
         /// evidence for whole/fractional traversal consistency, not ride distance.
@@ -218,8 +222,11 @@ nonisolated struct OnDeviceRouter {
     /// Planning-session seed for controlled variety. New process → new seed.
     /// Internal qualification switch; normal routing uses the identical memoized arithmetic.
     var useDirectedStepMemo = true
+    var usePackGeometryEnvelope = RoutingWorkContext.usePackGeometryEnvelope
     /// Allocation granularity only; state × bucket identity is unchanged.
     var balancedLabelPageCapacity = 32
+    var balancedEnvelopeTimeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
+    private var balancedCalculationDeadline: Double?
     var useLabelReadPointerCache = true
     var useScopedRoadBounds = true
     // Confined to one synchronous request; never copied into returned route data.
@@ -227,6 +234,10 @@ nonisolated struct OnDeviceRouter {
     /// Qualification only: both walkers preserve the exact predecessor law.
     var useCombinedRetraceCallback = true
     var useReachableCachedMatchesBeforeCoverage = true
+    /// Qualification switch for optional station exclusion; exact matching remains mandatory.
+    var useStationCoveragePreprobe = true
+    /// Qualification-only resource-alternative budget; production retains its existing cap.
+    var dirtResourceCandidatePopCapOverride: Int? = nil
     var ridePreferences: RidePreferences?
     private var activeRidePreferences: RidePreferences? {
         guard !initialFuelApproach, let value = ridePreferences else { return nil }
@@ -385,7 +396,11 @@ nonisolated struct OnDeviceRouter {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
     ) -> Swift.Result<Result, Failure> {
+        let calculationStarted = ProcessInfo.processInfo.systemUptime
+        let outcome: Swift.Result<Result, Failure> = {
         var worker = self
+        worker.balancedCalculationDeadline = profile == .balanced && !initialFuelApproach
+            ? CFAbsoluteTimeGetCurrent() + max(0, balancedEnvelopeTimeCapSeconds) : nil
         worker.roadBoundsQuery = nil
         guard useScopedRoadBounds, let index = pack.exactSnapIndex else {
             return worker.routeDetailedWithinBounds(from: from, to: to, profile: profile,
@@ -411,6 +426,10 @@ nonisolated struct OnDeviceRouter {
         } catch {
             return .failure(.searchLimit(RoutingWorkContext.stopReason ?? "roadBoundsUnavailable"))
         }
+        }()
+        guard case .success(var result) = outcome else { return outcome }
+        result.searchMeta.calculationElapsedMs = Int((ProcessInfo.processInfo.systemUptime - calculationStarted) * 1000)
+        return .success(result)
     }
 
     private func routeDetailedWithinBounds(
@@ -791,7 +810,7 @@ nonisolated struct OnDeviceRouter {
             if cached != nil {
                 RoutingWorkContext.measurement?.increment(.rangeSnapCoverageBypasses)
             }
-            if cached == nil, try stationCoverageCannotReach(ll, distances: dist, nodeOffset: 0,
+            if useStationCoveragePreprobe, cached == nil, try stationCoverageCannotReach(ll, distances: dist, nodeOffset: 0,
                 protectedEdges: protectedEdges) {
                 skipped += 1
                 continue
@@ -808,6 +827,11 @@ nonisolated struct OnDeviceRouter {
     private func forEachStationCoverageEdge(_ point: CLLocationCoordinate2D,meters: Double,
         index: ExactSnapIndex,bounds: ExactSnapIndex.BoundsQuery,
         visit: (Int) throws -> Void) throws {
+        if usePackGeometryEnvelope,
+           try !bounds.mayContainMatch(latitude: point.latitude, longitude: point.longitude, meters: meters) {
+            RoutingWorkContext.measurement?.increment(.snapEnvelopeRejectedQueries)
+            return
+        }
         // Caller retains the validated index query around both cache hits and
         // misses, including its final source/cancellation check.
         try Self.stationCoverageCache.enumerate(owner: pack,index: index,
@@ -1063,7 +1087,8 @@ nonisolated struct OnDeviceRouter {
     static func fuelRoadDistances(packs: [GraphV2Pack], anchor: CLLocationCoordinate2D,
                                   points: [CLLocationCoordinate2D], profile: RouteProfile,
                                   allowUnknown: Bool, reverse: Bool,
-                                  useCachedMatchesBeforeCoverage: Bool = true) throws -> [Double]? {
+                                  useCachedMatchesBeforeCoverage: Bool = true,
+                                  useStationCoveragePreprobe: Bool = true) throws -> [Double]? {
         let routers = packs.map { OnDeviceRouter(pack: $0) }
         var offsets: [Int] = [], count = 0
         for pack in packs { offsets.append(count); count += pack.nodeCount }
@@ -1166,7 +1191,7 @@ nonisolated struct OnDeviceRouter {
                 if cached != nil {
                     RoutingWorkContext.measurement?.increment(.rangeSnapCoverageBypasses)
                 }
-                if cached == nil, try routers[index].stationCoverageCannotReach(point,
+                if useStationCoveragePreprobe, cached == nil, try routers[index].stationCoverageCannotReach(point,
                     distances: result.remaining, nodeOffset: offset,
                     protectedEdges: protectedByPack[index]) {
                     skipped += 1
@@ -1408,6 +1433,9 @@ nonisolated struct OnDeviceRouter {
                 ? v4Pairs
                 : snapAttemptPairs(starts: starts, ends: ends)
             for (startSnap, endSnap) in pairs {
+                if let deadline = ctx.calculationDeadline, CFAbsoluteTimeGetCurrent() >= deadline {
+                    return .failure(.searchLimit("timeCap"))
+                }
                 switch routeWithSnaps(
                     from: from,
                     to: to,
@@ -1430,6 +1458,9 @@ nonisolated struct OnDeviceRouter {
         }
 
         func runProfile(_ ctx: HopSearchContext) -> Swift.Result<Result, Failure> {
+            if let deadline = ctx.calculationDeadline, CFAbsoluteTimeGetCurrent() >= deadline {
+                return .failure(.searchLimit("timeCap"))
+            }
             if let hit = attempt(starts: adventureStarts, ends: adventureEnds, ctx: ctx) {
                 return hit
             }
@@ -1450,6 +1481,7 @@ nonisolated struct OnDeviceRouter {
         }
 
         var ctx = HopSearchContext.forProfile(profile, seed: sessionSeed)
+        ctx.calculationDeadline = balancedCalculationDeadline
         ctx.urbanEdgeMemo = UrbanEdgeMemo(owner: pack,from: from,to: to,boxes: packUrbanCores)
         defer { ctx.urbanEdgeMemo?.recordMeasurements(RoutingWorkContext.measurement) }
         ctx.priorEdgeIds = priorEdgeIds
@@ -1499,6 +1531,12 @@ nonisolated struct OnDeviceRouter {
             let connectivityWidths: [Double?] = [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double, objective: String)] = []
             var lastBoundedFailure: Failure = .noPath
+            var selectionAudit = NativeSelectionSearchAudit()
+            func auditedProfile(_ context: HopSearchContext) -> Swift.Result<Result, Failure> {
+                let outcome = runProfile(context)
+                selectionAudit.record(outcome)
+                return outcome
+            }
 
             func searchDirt(
                 width: Double?,
@@ -1511,11 +1549,13 @@ nonisolated struct OnDeviceRouter {
                 hunt.hardCorridor = width != nil
                 hunt.boundedSearch = true
                 hunt.timeCapSeconds = HopSearchPolicy.dirtCandidateTimeCapSeconds
-                hunt.popCap = HopSearchPolicy.dirtCandidatePopCap
+                hunt.popCap = costMode == .balancedResource
+                    ? (dirtResourceCandidatePopCapOverride ?? HopSearchPolicy.dirtCandidatePopCap)
+                    : HopSearchPolicy.dirtCandidatePopCap
                 hunt.maxPathMeters = maxRouteMeters
                 lastFailure = .noPath
                 let initial: Result
-                switch runProfile(hunt) {
+                switch auditedProfile(hunt) {
                 case .success(let route): initial = route
                 case .failure(let failure): return .failure(failure)
                 }
@@ -1528,7 +1568,7 @@ nonisolated struct OnDeviceRouter {
                     if additions.isEmpty { break }
                     penaltyEdgeIds.formUnion(additions)
                     hunt.shortDirtPenaltyEdgeIds = penaltyEdgeIds
-                    guard case .success(let next) = runProfile(hunt) else { break }
+                    guard case .success(let next) = auditedProfile(hunt) else { break }
                     route = next
                     repairPasses += 1
                 }
@@ -1575,6 +1615,7 @@ nonisolated struct OnDeviceRouter {
                 return .failure(lastBoundedFailure)
             }
             var route = selected.route
+            selectionAudit.apply(to: &route.searchMeta)
             route.searchMeta.rideObjective = "earned-dirt-detour"
             route.searchMeta.corridorMeters = selected.width > 0 ? selected.width : nil
             route.searchMeta.corridorWidened = selected.width > base
@@ -1592,8 +1633,8 @@ nonisolated struct OnDeviceRouter {
         if profile == .balanced {
             let base = HopSearchPolicy.balancedCorridorMeters
             let multipliers: [Double] = [1, 2, 3, 4, 6, 8]
-            var lastEnvelopeFailure: Failure = .noPath
-            for width in multipliers.map({ base * $0 }) + [0] {
+            return BalancedEnvelopeSearch.run(widths: multipliers.map({ base * $0 }) + [0],
+                deadline: ctx.calculationDeadline) { width in
                 var envelope = ctx
                 envelope.costMode = .balancedResource
                 envelope.variety = false
@@ -1616,10 +1657,9 @@ nonisolated struct OnDeviceRouter {
                     route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
                     return .success(route)
                 case .failure(let failure):
-                    lastEnvelopeFailure = failure
+                    return .failure(failure)
                 }
             }
-            return .failure(lastEnvelopeFailure)
         }
 
         // Clean law: one paved fabric search — no corridor ladder, no regression wall.
@@ -2587,9 +2627,10 @@ nonisolated struct OnDeviceRouter {
         let popCap = isHunt
             ? (ctx.popCap ?? HopSearchPolicy.pass2PopCap)
             : min(8_000_000, total * (HopSearchPolicy.varietySlots + 2) * 8)
-        let deadline: Double? = isHunt
+        let perSearchDeadline: Double? = isHunt
             ? huntStart + (ctx.timeCapSeconds ?? HopSearchPolicy.pass2TimeCapSeconds)
             : nil
+        let deadline = ctx.calculationDeadline.map { min($0, perSearchDeadline ?? $0) } ?? perSearchDeadline
 
         while let cur = heap.pop() {
             if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
@@ -3312,9 +3353,10 @@ nonisolated struct OnDeviceRouter {
         let isHunt = ctx.maxPathMeters != nil || ctx.boundedSearch
         let huntStart = CFAbsoluteTimeGetCurrent()
         let popCap = isHunt ? (ctx.popCap ?? HopSearchPolicy.pass2PopCap) : 8_000_000
-        let deadline: Double? = isHunt
+        let perSearchDeadline: Double? = isHunt
             ? huntStart + (ctx.timeCapSeconds ?? HopSearchPolicy.pass2TimeCapSeconds)
             : nil
+        let deadline = ctx.calculationDeadline.map { min($0, perSearchDeadline ?? $0) } ?? perSearchDeadline
 
         resourceSearch: while let cur = heap.pop() {
             if let reason = RoutingWorkContext.stopReason { return .failure(.searchLimit(reason)) }
@@ -5144,6 +5186,11 @@ nonisolated struct OnDeviceRouter {
         let maxRadius = max(2, Int(ceil(maxMeters / 1000.0 / cellKm)) + 2)
 
         func scanCandidates(_ boundsQuery: ExactSnapIndex.BoundsQuery?) throws {
+        if usePackGeometryEnvelope, let boundsQuery,
+           try !boundsQuery.mayContainMatch(latitude: lat, longitude: lon, meters: maxMeters) {
+            RoutingWorkContext.measurement?.increment(.snapEnvelopeRejectedQueries)
+            return
+        }
         var checked = Set<Int>()
         for radius in 0...maxRadius {
             try visitCandidates(radius, boundsQuery) { ei in

@@ -12,7 +12,7 @@ import Darwin.malloc
 nonisolated final class RoutingMeasurement: @unchecked Sendable {
     enum Phase: String, Codable, CaseIterable, Sendable {
         case acquisition, verification, graphAccess, decode, indexing, matching
-        case indexSourceScan, indexMerge, indexPublication
+        case indexSourceScan, indexMerge, indexPublication, indexEnvelopeValidation
         case stationCoverage
         case turnPreparation, reverseGuidance, search, fuelContinuation
         case geometry, finalValidation, display
@@ -25,6 +25,7 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
         case urbanMemoHits, urbanMemoMisses, urbanMemoEvictions
         case stationCoverageCacheHits, stationCoverageCacheMisses, stationCoverageEdgesScanned, stationCoverageEntriesEvicted
         case initialFuelBoundMemoHits, initialFuelBoundMemoMisses
+        case snapEnvelopeRejectedQueries
         case singleRetraceQueries, singleRetracePredecessorVisits
         case resourceRetraceQueries, resourceRetracePredecessorVisits
         case directedCostMemoHits, directedCostMemoMisses, directedCostMemoEvictions

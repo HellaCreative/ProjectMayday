@@ -301,13 +301,52 @@ struct OnDevicePackBenchmarkTests {
             onlyRequestID: "EB86574E-9CF2-5EC8-AF91-664BABDD8718")
     }
 
+    @Test("Exact first owner fuel request compares optional station coverage with two cold stores")
     @MainActor
-    private func runOwnerPhone42Requests(repeatFirst: Bool, onlyRequestID: String? = nil) async throws {
+    func ownerPhone42CoveragePreprobeAB() async throws {
+        let request = "20AB1401-6158-52C4-8FF8-572F828EC800"
+        let enabled = try await runOwnerPhone42Requests(repeatFirst: false,onlyRequestID: request,
+            coveragePreprobe: true,evidenceSuffix: "-coverage-on",packRegions: ["ns"],captureDigest: true)
+        let disabled = try await runOwnerPhone42Requests(repeatFirst: false,onlyRequestID: request,
+            coveragePreprobe: false,evidenceSuffix: "-coverage-off",packRegions: ["ns"],captureDigest: true)
+        #expect(enabled.count == 1 && disabled.count == 1)
+        #expect(enabled == disabled, "Canonical road/fuel/legal data must match apart from measured search timing")
+    }
+
+    private func canonicalOwnerResultDigest(_ result: BuiltItinerary) throws -> Data {
+        let legs = try result.legs.map { leg -> [String: Any] in
+            var response = try #require(try object(leg.response) as? [String: Any])
+            if var debug = response["debug"] as? [String: Any] {
+                debug.removeValue(forKey: "searchMs")
+                if var meta = debug["searchMeta"] as? [String: Any] {
+                    meta.removeValue(forKey: "elapsedMs")
+                    meta.removeValue(forKey: "calculationElapsedMs")
+                    debug["searchMeta"] = meta
+                }
+                response["debug"] = debug
+            }
+            return ["response": response,"from": try object(leg.fromCoordinate),
+                "to": try object(leg.toCoordinate),"fuelStop": try leg.endsAtFuelStop.map { try object($0) } ?? NSNull(),
+                "fuelUsedOnArrivalMeters": leg.fuelUsedOnArrivalMeters,
+                "profile": leg.routeProfile?.rawValue as Any? ?? NSNull(),"fuelTargets": leg.validFuelTargets.map(\.id)]
+        }
+        let canonical: [String: Any] = ["legs": legs,"generation": result.generation,
+            "status": try object(result.riderLegStatus)]
+        return Data(SHA256.hash(data: try JSONSerialization.data(withJSONObject: canonical,options: [.sortedKeys])))
+    }
+
+    @MainActor
+    @discardableResult
+    private func runOwnerPhone42Requests(repeatFirst: Bool, onlyRequestID: String? = nil,
+        coveragePreprobe: Bool = true, evidenceSuffix: String = "",
+        packRegions: [String] = ["ns", "nb"], captureDigest: Bool = false) async throws -> [Data] {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
-        let (store, temp) = try fixtureStore(packRoot: candidate, version: version)
+        let (store, temp) = try fixtureStore(packRoot: candidate, version: version, regions: packRegions)
         defer { try? FileManager.default.removeItem(at: temp) }
+        store.useStationCoveragePreprobe = coveragePreprobe
+        var resultDigests: [Data] = []
         let cases: [(String, Double, Double, Double, UInt64)] = [
             ("20AB1401-6158-52C4-8FF8-572F828EC800", 46.95522997783574, -60.45932167843518, 10.2, 5934816597329416),
             ("B43439CF-6AD5-5307-840F-B44671702BE7", 46.907159895654424, -60.5140885784627, 11.2, 5514739685182283),
@@ -318,7 +357,7 @@ struct OnDevicePackBenchmarkTests {
             ?? (repeatFirst ? [cases[0], cases[0]] : cases)
         for (runIndex, request) in selected.enumerated() {
             let (id, lat, lon, zoom, seed) = request
-            let evidenceID = id + (repeatFirst ? (runIndex == 0 ? "-first-use" : "-repeated") : "")
+            let evidenceID = id + (repeatFirst ? (runIndex == 0 ? "-first-use" : "-repeated") : "") + evidenceSuffix
             let a = RiderWaypoint(coordinate: RouteCoordinate(longitude: -63.34024797349485, latitude: 44.764804567541226))
             let b = RiderWaypoint(coordinate: RouteCoordinate(longitude: lon, latitude: lat))
             let template = RiderLeg(from: a.id, to: b.id, profile: .dirt, allowUnknown: false, avoidMotorways: false)
@@ -331,6 +370,7 @@ struct OnDevicePackBenchmarkTests {
             builder.mapZoom = zoom
             let measurement = RoutingMeasurement(metadata: [
                 "workload": "owner-phone42-" + id, "packRelease": version,
+                "stationCoveragePreprobe": String(coveragePreprobe),
                 "hardware": "MacBookPro17,1 Apple M1 16 GiB; iPhone17 iOS26.5 simulator",
                 "execution": "native PackRoutingSource / ItineraryBuilder",
                 "preparation": runIndex == 0 ? "first request in store" : "reused store",
@@ -345,7 +385,9 @@ struct OnDevicePackBenchmarkTests {
                 onFuelStatus: { _ in }, onProgress: { _ in })
             }
             let report = measurement.finish(outcome: String(describing: result.riderLegStatus))
-            try saveEvidence(["measurement": try object(report)], name: "measurement-phone42-" + evidenceID)
+            if captureDigest { resultDigests.append(try canonicalOwnerResultDigest(result)) }
+            try saveEvidence(["measurement": try object(report),
+                "installedIdentity": store.installedPackIdentity(regionId: "ns") ?? [:]], name: "measurement-phone42-" + evidenceID)
             try saveEvidence(["pack": version, "itinerary": try object(itinerary), "mapZoom": zoom,
                 "tankMeters": 200_000, "usableMeters": 180_000,
                 "routes": try result.legs.map { try object($0.response) },
@@ -366,6 +408,7 @@ struct OnDevicePackBenchmarkTests {
                 }
             }
         }
+        return resultDigests
     }
 
     @Test("Ontario private index preparation measures cold reuse and cancellation")

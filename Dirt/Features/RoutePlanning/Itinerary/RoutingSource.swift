@@ -1427,7 +1427,7 @@ private func normalizedEdgeIDs(_ ids: [String]?) -> [String] {
 }
 
 extension RouteResponse {
-    init(onDevice local: OnDeviceRouter.Result, priorEdgeIDs: Set<String>) {
+    init(onDevice local: OnDeviceRouter.Result, priorEdgeIDs: Set<String>, existingWarnings: [RouteWarning]? = nil) {
         let geometry = local.coordinates.map {
             RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
         }
@@ -1468,7 +1468,7 @@ extension RouteResponse {
                 unknownSurfacePercent: local.unknownSurfacePercent,
                 surfaceFamilyMode: local.hasSurfaceLeaves ? "leaf-v3" : nil
             ),
-            maneuvers: local.maneuvers, warnings: local.searchMeta.limitedSearchWarning.map { [$0] },
+            maneuvers: local.maneuvers, warnings: local.searchMeta.routeWarnings(merging: existingWarnings),
             dirtPercentValue: nil, pavedPercentValue: nil,
             backtrackMeters: repeatedMeters,
             backtrackPct: repeatedPct,

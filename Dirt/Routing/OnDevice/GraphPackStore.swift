@@ -41,6 +41,8 @@ struct NavigationRegionRequirementCache {
 @Observable
 @MainActor
 final class GraphPackStore {
+    /// Qualification only; disables an optional station exclusion preprobe.
+    var useStationCoveragePreprobe = true
     enum Phase: Equatable {
         case idle
         case downloading
@@ -1371,10 +1373,11 @@ final class GraphPackStore {
                           allowUnknown: Bool) async throws -> FuelItinerary.RoadProgress? {
         let packs = await fuelDistancePacks(from: from, to: to)
         guard !packs.isEmpty else { throw RoutingError.fuelUnknown("Required routing data is unavailable; road connectivity has not been checked.") }
+        let coveragePreprobe = useStationCoveragePreprobe
         return try await RoutingWorkContext.detachedThrowingSearch {
             let points = [from] + pumps.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
             guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: to,
-                points: points, profile: profile, allowUnknown: allowUnknown, reverse: true),
+                points: points, profile: profile, allowUnknown: allowUnknown, reverse: true, useStationCoveragePreprobe: coveragePreprobe),
                 let origin = distances.first, origin.isFinite else { return nil }
             return FuelItinerary.RoadProgress(originRemainingMeters: origin,
                 stationRemainingMeters: Dictionary(zip(pumps.map(\.id), distances.dropFirst()).filter { $0.1.isFinite },
@@ -1392,9 +1395,10 @@ final class GraphPackStore {
         if Self.primaryRegionId(containing: from) != Self.primaryRegionId(containing: to) {
             let packs = await fuelDistancePacks(from: from, to: to)
             guard !packs.isEmpty else { throw RoutingError.fuelUnknown("Required regional data could not be prepared; reachability has not been checked.") }
+            let coveragePreprobe = useStationCoveragePreprobe
             return try await RoutingWorkContext.detachedThrowingSearch {
                 guard let distance = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
-                    points: [to], profile: profile, allowUnknown: allowUnknown, reverse: false)?.first,
+                    points: [to], profile: profile, allowUnknown: allowUnknown, reverse: false, useStationCoveragePreprobe: coveragePreprobe)?.first,
                     distance.isFinite, distance <= maxMeters else { return nil }
                 return distance
             }
@@ -1524,6 +1528,7 @@ final class GraphPackStore {
         allowUnknown: Bool,
         stationSourceRegionID: String? = nil
     ) async throws -> [String: Double] {
+        let coveragePreprobe = useStationCoveragePreprobe
         let sourceRegion = stationSourceRegionID ?? Self.primaryRegionId(containing: toward)
         if Self.primaryRegionId(containing: from) != sourceRegion {
             let packs = await fuelDistancePacks(from: from, to: toward, stationSourceRegionID: stationSourceRegionID)
@@ -1531,7 +1536,7 @@ final class GraphPackStore {
             return try await RoutingWorkContext.detachedThrowingSearch {
                 let points = pumps.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
                 guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
-                    points: points, profile: profile, allowUnknown: allowUnknown, reverse: false) else { return [:] }
+                    points: points, profile: profile, allowUnknown: allowUnknown, reverse: false, useStationCoveragePreprobe: coveragePreprobe) else { return [:] }
                 return Dictionary(zip(pumps.map(\.id), distances).filter { $0.1.isFinite && $0.1 <= maxMeters },
                     uniquingKeysWith: min)
             }
@@ -1542,7 +1547,9 @@ final class GraphPackStore {
               let pack = activePack, pack.regionId?.lowercased() == expected else { throw RoutingError.fuelUnknown("Required routing data could not be prepared; fuel reachability has not been checked.") }
         let packRef = pack
         return try await RoutingWorkContext.detachedThrowingSearch {
-            try OnDeviceRouter(pack: packRef).reachableGraphMeters(
+            var router = OnDeviceRouter(pack: packRef)
+            router.useStationCoveragePreprobe = coveragePreprobe
+            return try router.reachableGraphMeters(
                 from: from, toward: toward, pumps: pumps, maxMeters: maxMeters,
                 profile: profile, allowUnknown: allowUnknown
             )

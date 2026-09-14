@@ -29,6 +29,7 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
         maximumLivePayloadBytes: 1_179_648, maximumLeases: 8)
     private let source: RoutingFilePages
     private let header: Header
+    private let geometryEnvelope: GeometryEnvelope?
     private let directoryAt: Int
     private let edgesAt: Int
     var statistics: RoutingFilePages.Statistics { source.statistics }
@@ -64,8 +65,9 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
         edgesAt = directoryAt + decoded.cellCount * 24
         guard decoded.membershipCount <= (source.fileBytes - edgesAt) / 4,
               edgesAt + decoded.membershipCount * 4 == source.fileBytes else { throw Failure.corrupt }
-        guard try Self.digest(source, offset: Self.headerBytes, cancelled: cancelled) == decoded.bodySHA256 else { throw Failure.corrupt }
-        self.source = source; header = decoded
+        let verified = try Self.validateBodyAndEnvelope(source, edgeCount: decoded.edgeCount, cancelled: cancelled)
+        guard verified.digest == decoded.bodySHA256 else { throw Failure.corrupt }
+        self.source = source; header = decoded; geometryEnvelope = verified.envelope
     }
 
     /// Visits in the exact prior x/y/ring/bucket ordering. No complete bucket
@@ -113,20 +115,62 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
         }
     }
 
-    private static func intersects(_ raw: UnsafeRawBufferPointer, offset: Int,
-        latitude: Double, longitude: Double, meters: Double) throws -> Bool {
-            guard raw[offset] <= 1 else { throw Failure.corrupt }
-            if raw[offset] == 0 { return true }
-            let minLon = Double.routingDecode(raw, at: offset + 8), maxLon = Double.routingDecode(raw, at: offset + 16)
-            let minLat = Double.routingDecode(raw, at: offset + 24), maxLat = Double.routingDecode(raw, at: offset + 32)
-            guard minLon.isFinite, maxLon.isFinite, minLat.isFinite, maxLat.isFinite,
-                  minLon <= maxLon, minLat <= maxLat else { throw Failure.corrupt }
+    private struct GeometryEnvelope {
+        var minLon: Double, maxLon: Double, minLat: Double, maxLat: Double
+        func mayIntersect(latitude: Double, longitude: Double, meters: Double) -> Bool {
             let latPad = max(0, meters) / 110_000
             if maxLat < latitude - latPad || minLat > latitude + latPad { return false }
             let polarLatitude = min(90, abs(latitude) + latPad)
             let lonPad = latPad / max(0.000001, cos(polarLatitude * .pi / 180))
             if lonPad >= 180 || abs(longitude) + lonPad >= 180 || maxLon-minLon >= 180 { return true }
             return maxLon >= longitude-lonPad && minLon <= longitude+lonPad
+        }
+    }
+    private static func envelope(_ raw: UnsafeRawBufferPointer, offset: Int) throws -> GeometryEnvelope? {
+        guard raw[offset] <= 1 else { throw Failure.corrupt }
+        guard raw[offset] != 0 else { return nil }
+        let result = GeometryEnvelope(minLon: Double.routingDecode(raw, at: offset + 8),
+            maxLon: Double.routingDecode(raw, at: offset + 16),
+            minLat: Double.routingDecode(raw, at: offset + 24),
+            maxLat: Double.routingDecode(raw, at: offset + 32))
+        guard result.minLon.isFinite, result.maxLon.isFinite, result.minLat.isFinite, result.maxLat.isFinite,
+              result.minLon <= result.maxLon, result.minLat <= result.maxLat else { throw Failure.corrupt }
+        return result
+    }
+    private static func intersects(_ raw: UnsafeRawBufferPointer, offset: Int,
+        latitude: Double, longitude: Double, meters: Double) throws -> Bool {
+        try envelope(raw, offset: offset)?.mayIntersect(latitude: latitude, longitude: longitude, meters: meters) ?? true
+    }
+
+    /// Piggyback the already-required body hash: 65,520 is both <=64KiB and
+    /// divisible by the40-byte bounds stride. No extra pass or per-row I/O.
+    private static func validateBodyAndEnvelope(_ source: RoutingFilePages, edgeCount: Int,
+        cancelled: () -> Bool) throws -> (digest: String, envelope: GeometryEnvelope?) {
+        let phase = RoutingWorkContext.measurement?.begin(.indexEnvelopeValidation)
+        defer { RoutingWorkContext.measurement?.end(phase) }
+        var sha = SHA256(), at = headerBytes, decodedRows = 0
+        var union: GeometryEnvelope?, complete = true
+        while at < source.fileBytes {
+            let block = try source.read(at: at, count: min(65_520, source.fileBytes-at), cancelled: cancelled)
+            try block.withUnsafeBytes { raw in
+                sha.update(bufferPointer: raw)
+                let rows = min(edgeCount-decodedRows, raw.count/40)
+                for row in 0..<rows {
+                    if row & 255 == 0, cancelled() { throw Failure.cancelled }
+                    guard let edge = try envelope(raw, offset: row*40) else { complete = false; continue }
+                    if var prior = union {
+                        prior.minLon = min(prior.minLon, edge.minLon); prior.maxLon = max(prior.maxLon, edge.maxLon)
+                        prior.minLat = min(prior.minLat, edge.minLat); prior.maxLat = max(prior.maxLat, edge.maxLat)
+                        union = prior
+                    } else { union = edge }
+                }
+                decodedRows += rows
+            }
+            RoutingWorkContext.measurement?.increment(.fileBytesHashed, by: UInt64(block.count))
+            at += block.count
+        }
+        guard decodedRows == edgeCount else { throw Failure.corrupt }
+        return (sha.finalize().map { String(format: "%02x", $0) }.joined(), complete ? union : nil)
     }
 
     /// A query is valid only after the closing source check succeeds. Never
@@ -167,6 +211,14 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
         private(set) var directoryBlockLoads = 0
         fileprivate init(index: ExactSnapIndex, cancelled: @escaping () -> Bool) {
             self.index = index; self.cancelled = cancelled
+        }
+        /// Negative only when every exact edge envelope misses the same padded
+        /// rectangle used by per-edge matching. Unknown bounds retain all work.
+        func mayContainMatch(latitude: Double, longitude: Double, meters: Double) throws -> Bool {
+            guard valid else { throw RoutingPageError.closed }
+            guard !cancelled() else { throw Failure.cancelled }
+            guard latitude.isFinite, longitude.isFinite, meters.isFinite else { return true }
+            return index.geometryEnvelope?.mayIntersect(latitude: latitude, longitude: longitude, meters: meters) ?? true
         }
         fileprivate func invalidate() {
             valid = false

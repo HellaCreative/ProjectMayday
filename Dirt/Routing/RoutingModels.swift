@@ -795,6 +795,9 @@ struct RouteResponseSearchMeta: Codable, Sendable {
     let cleanUnpavedFallbackUsed: Bool?
     let settlementFallbackUsed: Bool?
     var corridorCandidates: [RouteSearchAttempt]? = nil
+    var calculationElapsedMs: Int? = nil
+    var selectionAttempts: Int? = nil
+    var selectionLimitedOutcomes: [String]? = nil
 }
 
 /// Live `/api/route` diagnostics block (`debug.diagnostics`). Logging only.
@@ -1041,7 +1044,7 @@ enum RoutingError: LocalizedError {
 /// A completed legal line may still have bounded, unfinished comparison of
 /// riding alternatives. This is independent of road completion and fuel proof.
 extension RouteResponse {
-    static let searchLimitedMessage = "Route found. The search reached its limit before finishing comparison of alternatives."
+    static let searchLimitedMessage = "Route found. Comparison of riding alternatives could not finish."
 
     var hasLimitedRouteSearch: Bool {
         debug?.searchMeta?.timedOut == true ||
@@ -1063,7 +1066,9 @@ extension OnDeviceRouter.SearchMeta {
                 shortestMeters: shortestMeters, extraUsedMeters: extraUsedMeters,
                 extraBudgetMeters: extraBudgetMeters, urbanCoreFallbackUsed: urbanCoreFallbackUsed,
                 cleanUnpavedFallbackUsed: cleanUnpavedFallbackUsed,
-                settlementFallbackUsed: settlementFallbackUsed),
+                settlementFallbackUsed: settlementFallbackUsed,
+                calculationElapsedMs: calculationElapsedMs, selectionAttempts: selectionAttempts,
+                selectionLimitedOutcomes: selectionLimitedOutcomes),
             fallback: nil, searchMs: elapsedMs, pops: pops)
     }
 }

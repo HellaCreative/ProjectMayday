@@ -303,6 +303,8 @@ nonisolated struct HopSearchContext: Sendable {
     var hardCorridor: Bool
     var boundedSearch: Bool
     var timeCapSeconds: Double?
+    /// Absolute CF time shared by every snap pair and Balanced envelope.
+    var calculationDeadline: Double? = nil
     var popCap: Int?
     /// Soft continuity signal from already-built itinerary legs. Never a wall.
     var priorEdgeIds: Set<String>

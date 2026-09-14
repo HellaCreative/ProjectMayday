@@ -5,6 +5,8 @@ import Foundation
 nonisolated enum RoutingWorkContext {
     @TaskLocal static var deadline: Double?
     @TaskLocal static var measurement: RoutingMeasurement?
+    /// Qualification toggle: calculation/matching semantics remain identical.
+    @TaskLocal static var usePackGeometryEnvelope = true
 
     static var stopReason: String? {
         if Task.isCancelled { return "cancelled" }
@@ -32,9 +34,12 @@ nonisolated enum RoutingWorkContext {
     ) async -> Value {
         let deadline = deadline
         let measurement = measurement
+        let envelope = usePackGeometryEnvelope
         let worker = Task.detached(priority: .userInitiated) {
             Self.$deadline.withValue(deadline) {
-                Self.$measurement.withValue(measurement) { operation() }
+                Self.$measurement.withValue(measurement) {
+                    Self.$usePackGeometryEnvelope.withValue(envelope) { operation() }
+                }
             }
         }
         return await withTaskCancellationHandler {
@@ -48,9 +53,12 @@ nonisolated enum RoutingWorkContext {
     ) async throws -> Value {
         let deadline = deadline
         let measurement = measurement
+        let envelope = usePackGeometryEnvelope
         let worker = Task.detached(priority: .userInitiated) {
             try Self.$deadline.withValue(deadline) {
-                try Self.$measurement.withValue(measurement) { try operation() }
+                try Self.$measurement.withValue(measurement) {
+                    try Self.$usePackGeometryEnvelope.withValue(envelope) { try operation() }
+                }
             }
         }
         return try await withTaskCancellationHandler {
