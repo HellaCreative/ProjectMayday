@@ -214,6 +214,14 @@ nonisolated struct OnDeviceRouter {
     var pavedBias: Double = 1
     /// The owner-required refill approach precedes the recreational ride.
     var initialFuelApproach = false
+    // Same-binary qualification switch; no alternate source or profile.
+    var useFullWanderDirtQuality = true
+    private var fullWanderDirtQuality: Bool {
+        useFullWanderDirtQuality && (activeRidePreferences?.normalized.wander ?? 1) == 1
+    }
+    private func permitsChordCost(_ profile: RouteProfile) -> Bool {
+        profile != .dirt || !fullWanderDirtQuality
+    }
     /// Single-objective label payload only; graph, queue and indexes are separate.
     var maximumSearchLabelPayloadBytes = 128 * 1024 * 1024
     /// Regional joins are recorded graph nodes, not rider tap locations.
@@ -2240,7 +2248,7 @@ nonisolated struct OnDeviceRouter {
     /// Dirt works back from 100%. When percentages are effectively tied, use
     /// less pavement and then less cross-track wandering. Total route length is
     /// intentionally not an objective.
-    private func chooseDirtEnvelopeCandidate(
+    func chooseDirtEnvelopeCandidate(
         _ candidates: [(route: Result, width: Double, objective: String)]
     ) throws -> (route: Result, width: Double, objective: String)? {
         let summaries = candidates.map { candidate in
@@ -2256,18 +2264,26 @@ nonisolated struct OnDeviceRouter {
         }
         let bestDirt = summaries.map(\.candidate.route.dirtPercent).max() ?? 0
         let bestCoherentDirt = coherent.map(\.candidate.route.dirtPercent).max() ?? Int.min
-        let pool = !coherent.isEmpty && bestDirt - bestCoherentDirt < 10
+        // Moving away from the chord is not a repeated road. Full Wander
+        // retains legal meanders; actual retrace and short-spur checks remain.
+        let pool = !fullWanderDirtQuality && !coherent.isEmpty && bestDirt - bestCoherentDirt < 10
             ? coherent
             : summaries
         return try pool.min { lhs, rhs in
             let a = lhs.candidate
             let b = rhs.candidate
-            if let preferences = activeRidePreferences, preferences.wander < 1 || preferences.avoidHighways {
+            if fullWanderDirtQuality, activeRidePreferences?.avoidHighways == true {
+                let majorA = try avoidedHighwayMeters(a.route),majorB = try avoidedHighwayMeters(b.route)
+                if majorA != majorB { return majorA < majorB }
+            }
+            if !fullWanderDirtQuality, let preferences = activeRidePreferences,
+               preferences.wander < 1 || preferences.avoidHighways {
                 let costA = (try preferenceRouteCost(a.route, preferences: preferences))
                 let costB = (try preferenceRouteCost(b.route, preferences: preferences))
                 if costA != costB { return costA < costB }
             }
             let dirtDelta = a.route.dirtPercent - b.route.dirtPercent
+            if fullWanderDirtQuality, dirtDelta != 0 { return dirtDelta > 0 }
             if abs(dirtDelta) > 2 { return dirtDelta > 0 }
             let pavedA = a.route.distanceMeters * Double(100 - a.route.dirtPercent) / 100
             let pavedB = b.route.distanceMeters * Double(100 - b.route.dirtPercent) / 100
@@ -2281,7 +2297,7 @@ nonisolated struct OnDeviceRouter {
             }
             let crossA = crossTrack(a.route)
             let crossB = crossTrack(b.route)
-            if abs(crossA - crossB) > 1_000 { return crossA < crossB }
+            if !fullWanderDirtQuality, abs(crossA - crossB) > 1_000 { return crossA < crossB }
             if a.route.dirtPercent != b.route.dirtPercent {
                 return a.route.dirtPercent > b.route.dirtPercent
             }
@@ -3042,7 +3058,7 @@ nonisolated struct OnDeviceRouter {
         }
         heap.push(node: startVirt, cost: 0)
 
-        let applyAway = ctx.costMode == .profile || ctx.costMode == .pavement
+        let applyAway = permitsChordCost(profile) && (ctx.costMode == .profile || ctx.costMode == .pavement)
         // Clean uses toward-B gravity only — no chord XT.
         let applySoftCorridor = applyAway
             && profile != .cleanest
@@ -4811,14 +4827,14 @@ nonisolated struct OnDeviceRouter {
                     }
 
                     let fromLL = coordinate(forNode: cur.node)
-                    step += OnDeviceProfileCosts.approachAwayExtra(
+                    step += permitsChordCost(profile) ? OnDeviceProfileCosts.approachAwayExtra(
                         profile: profile,
                         dFromMeters: meters(fromLL, endLL),
                         dToMeters: meters(toLL, endLL),
                         abMeters: abMeters,
                         regionId: pack.regionId
-                    )
-                    if ctx.corridorMeters == nil {
+                    ) : 0
+                    if permitsChordCost(profile), ctx.corridorMeters == nil {
                         step += OnDeviceProfileCosts.corridorCrossTrackExtra(
                             profile: profile,
                             point: toLL,
@@ -4871,13 +4887,13 @@ nonisolated struct OnDeviceRouter {
                     }
                     let fromLL = coordinate(forNode: cur.node)
                     let toLL = coordinate(forNode: link.to)
-                    step += OnDeviceProfileCosts.approachAwayExtra(
+                    step += permitsChordCost(profile) ? OnDeviceProfileCosts.approachAwayExtra(
                         profile: profile,
                         dFromMeters: meters(fromLL, endLL),
                         dToMeters: meters(toLL, endLL),
                         abMeters: abMeters,
                         regionId: pack.regionId
-                    )
+                    ) : 0
                     if initialFuelApproach { step = s.meters / 1_000 }
                     let cost = cur.cost + step
                     if cost < dist[link.to] {
@@ -6444,6 +6460,14 @@ nonisolated struct OnDeviceRouter {
         let roadClass = edge >= 0 ? ((try pack.roadClassLeaf(edge,query: edgeDetailQuery)) ?? roadClassNameForEdge(edge)) : "unknown"
         return NativeRidePreferenceCosts.edgeCost(base: base, meters: meters,
             roadClass: roadClass, preferences: preferences)
+    }
+
+    private func avoidedHighwayMeters(_ route: Result) throws -> Double {
+        try route.legs.reduce(0) { sum,leg in
+            let name = try leg.edgeIndex.flatMap { try pack.roadClassLeaf($0,query: edgeDetailQuery) } ?? leg.roadClassName
+            // Identical classes to NativeRidePreferenceCosts.edgeCost.
+            return sum + (["motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link", "freeway"].contains(name) ? leg.distanceMeters : 0)
+        }
     }
 
     private func preferenceRouteCost(_ route: Result, preferences: RidePreferences) throws -> Double {

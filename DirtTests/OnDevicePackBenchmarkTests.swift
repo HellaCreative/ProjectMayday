@@ -310,6 +310,19 @@ struct OnDevicePackBenchmarkTests {
         try await runOwnerPhone42Requests(repeatFirst: false)
     }
 
+    @Test("Owner phone 44 St Stephen route with fuel off must deliver substantial Dirt")
+    @MainActor
+    func ownerPhone44StStephenFuelOffQuality() async throws {
+        let wasEnabled = RoutingDebugLog.shared.isEnabled
+        RoutingDebugLog.shared.isEnabled = true
+        defer { RoutingDebugLog.shared.isEnabled = wasEnabled }
+        try await runOwnerPhone42Requests(repeatFirst: false,
+            evidenceSuffix: "-phone44-fuel-off-quality",
+            replayCases: [("63D20328-F243-52CF-B30E-E9CD2578D1FB",
+                45.262939746458734, -67.29131337653283, 12.5, 3806057305948982)],
+            minimumDirtPercent: 70, fuelEnabled: false)
+    }
+
     @Test("Exact first owner request measures first-use and repeated preparation")
     @MainActor
     func ownerPhone42ColdWarm() async throws {
@@ -404,7 +417,9 @@ struct OnDevicePackBenchmarkTests {
     private func runOwnerPhone42Requests(repeatFirst: Bool, onlyRequestID: String? = nil,
         coveragePreprobe: Bool = true, evidenceSuffix: String = "",
         packRegions: [String] = ["ns", "nb"], captureDigest: Bool = false,
-        forceInitialDestinationProbeTimeout: Bool = false) async throws -> [Data] {
+        forceInitialDestinationProbeTimeout: Bool = false,
+        replayCases: [(String, Double, Double, Double, UInt64)]? = nil,
+        minimumDirtPercent: Double? = nil, fuelEnabled: Bool = true) async throws -> [Data] {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
@@ -412,7 +427,7 @@ struct OnDevicePackBenchmarkTests {
         defer { try? FileManager.default.removeItem(at: temp) }
         store.useStationCoveragePreprobe = coveragePreprobe
         var resultDigests: [Data] = []
-        let cases: [(String, Double, Double, Double, UInt64)] = [
+        let cases: [(String, Double, Double, Double, UInt64)] = replayCases ?? [
             ("20AB1401-6158-52C4-8FF8-572F828EC800", 46.95522997783574, -60.45932167843518, 10.2, 5934816597329416),
             ("B43439CF-6AD5-5307-840F-B44671702BE7", 46.907159895654424, -60.5140885784627, 11.2, 5514739685182283),
             ("531BC48C-868A-5545-AB93-1FD01CEBABFF", 46.885033126489716, -60.49502889835437, 11.2, 5797475437955788),
@@ -441,7 +456,7 @@ struct OnDevicePackBenchmarkTests {
                 "preparation": runIndex == 0 ? "first request in store" : "reused store",
                 "maxLabelPayloadBytes": "134217728",
                 "seed": String(seed), "profile": "dirt", "allowUnknown": "false",
-                "tankMeters": "200000", "reservePercent": "10"
+                "tankMeters": "200000", "reservePercent": "10", "fuelEnabled": String(fuelEnabled)
             ])
             let nativeSource = PackRoutingSource(packs: store, cache: RouteResponseCache())
             let probeAdapter = forceInitialDestinationProbeTimeout ? MissingDestinationPreprobeSource(nativeSource) : nil
@@ -451,7 +466,7 @@ struct OnDevicePackBenchmarkTests {
             if probeAdapter != nil { RoutingDebugLog.shared.event(logMarker) }
             let result = await RoutingWorkContext.$measurement.withValue(measurement) {
                 await builder.build(itinerary, from: 0, reuse: nil,
-                fuel: FuelRangePrefs.Snapshot(tankMeters: 200_000, usableMeters: 180_000, reservePercent: 10, automaticPlanningEnabled: true),
+                fuel: FuelRangePrefs.Snapshot(tankMeters: 200_000, usableMeters: 180_000, reservePercent: 10, automaticPlanningEnabled: fuelEnabled),
                 source: .fixed(replaySource),
                 onFuelStatus: { _ in }, onProgress: { _ in })
             }
@@ -462,7 +477,7 @@ struct OnDevicePackBenchmarkTests {
                 "catalogInstalledIdentityNS": store.installedPackIdentity(regionId: "ns") as Any? ?? NSNull()], name: "measurement-phone42-" + evidenceID)
             try saveEvidence(["pack": version, "verifiedFixtureIdentity": fixtureIdentity,
                 "itinerary": try object(itinerary), "mapZoom": zoom,
-                "tankMeters": 200_000, "usableMeters": 180_000,
+                "tankMeters": 200_000, "usableMeters": 180_000, "fuelEnabled": fuelEnabled,
                 "routes": try result.legs.map { try object($0.response) },
                 "status": String(describing: result.riderLegStatus),
                 "stops": result.legs.compactMap { $0.endsAtFuelStop?.stationID }], name: "phone42-" + evidenceID)
@@ -487,10 +502,30 @@ struct OnDevicePackBenchmarkTests {
                 #expect(!rideRequests.isEmpty)
                 #expect(rideRequests.allSatisfy { $0.options?.sessionSeed == seed && $0.fuel.usableRangeMeters == 180_000 })
             }
-            #expect(result.legs.first?.endsAtFuelStop?.stationID != nil)
+            if let minimumDirtPercent {
+                // Owner quality criterion applies to the recreational ride; the initial fill is separate.
+                let stages = result.legs.dropFirst(fuelEnabled ? 1 : 0)
+                let total = stages.reduce(0.0) { $0 + ($1.response.distanceMeters ?? 0) }
+                let dirt = stages.reduce(0.0) {
+                    $0 + ($1.response.distanceMeters ?? 0) * Double($1.response.stats?.dirtPercent ?? 0) / 100
+                }
+                let percent = total > 0 ? dirt / total * 100 : 0
+                try saveEvidence(["diagnostic": RoutingDebugLog.shared.text,
+                    "rideDirtPercent": percent, "rideMeters": total,
+                    "criterion": minimumDirtPercent,
+                    "preferences": "App default: no preference edits in supplied session log"],
+                    name: "quality-phone44-" + evidenceID)
+                #expect(percent >= minimumDirtPercent,
+                    "Owner rejects a completed Balanced-like ride under Dirt; substantial dirt is required")
+            }
+            if fuelEnabled {
+                #expect(result.legs.first?.endsAtFuelStop?.stationID != nil)
+            } else {
+                #expect(result.legs.allSatisfy { $0.endsAtFuelStop == nil }, "Fuel-off route must have no automatic stops")
+            }
             #expect(result.legs.last?.toCoordinate == b.coordinate)
             #expect(result.riderLegStatus[leg.id] == .built)
-            if result.riderLegStatus[leg.id] == .built {
+            if fuelEnabled, result.riderLegStatus[leg.id] == .built {
                 var metersSinceRefill = 0.0
                 for stage in result.legs {
                     let meters = try #require(stage.response.distanceMeters)

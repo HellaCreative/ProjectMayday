@@ -199,6 +199,16 @@ final class ItineraryBuilder {
                 "mapZoom=\(mapZoom.map { String(format: "%.1f", $0) } ?? "-")"
         )
 
+        let loggedPreferences = firstRequest.options?.ridePreferences?.normalized
+        RoutingDebugLog.shared.event(
+            "ride settings profile=\(firstRequest.profile.rawValue) " +
+            "wander=\(loggedPreferences?.wander ?? 1) " +
+            "avoidCities=\(loggedPreferences?.avoidCities ?? true) " +
+            "avoidHighways=\(loggedPreferences?.avoidHighways ?? false) " +
+            "avoidMotorways=\(firstRequest.options?.avoidMotorways == true) " +
+            "seed=\(firstRequest.options?.sessionSeed ?? 0) " +
+            "preferenceSource=\(loggedPreferences == nil ? "profile-default" : "rider")")
+
         // Fuel-enabled routing is built forward from one proven anchor to the
         // next. There is deliberately no disposable Point 1 -> Point 2 scout
         // route: each feeler asks whether the rider waypoint is reachable with

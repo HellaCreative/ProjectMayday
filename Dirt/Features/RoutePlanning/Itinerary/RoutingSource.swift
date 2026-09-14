@@ -131,6 +131,7 @@ final class LiveRoutingSource: RoutingSource {
             )
         }
         let response = try await client.route(req)
+
         if req.options?.maxPathMeters == nil { cache.insert(response, for: key) }
         return response
     }
@@ -439,6 +440,12 @@ final class PackRoutingSource: RoutingSource {
                 end: snap.end
             )
         }
+        RoutingDebugLog.shared.event(
+            "road ride quality profile=\(req.profile.rawValue) meters=\(local.distanceMeters) " +
+            "dirt=\(local.reportedDirtPercent) paved=\(local.reportedPavedPercent) " +
+            "unknownSurface=\(local.unknownSurfacePercent) " +
+            "urbanFallback=\(local.searchMeta.urbanCoreFallbackUsed) " +
+            "townCrossing=\(local.searchMeta.settlementFallbackUsed) selection=\(local.debugNote)")
         if req.options?.maxPathMeters == nil { cache.insert(response, for: key) }
         return response
     }
@@ -997,6 +1004,7 @@ final class PackRoutingSource: RoutingSource {
                     continue
                 }
                 trace("leg-proved-\(candidate.id)")
+
                 evaluatedRoutesByID[candidate.id] = firstRoute
                 try await prepareDestinationReservation(
                     approachMeters: guidance.stationRemainingMeters[candidate.id],

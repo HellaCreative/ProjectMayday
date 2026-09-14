@@ -45,10 +45,10 @@ not a substitute for fixing regional continuity.
 
 | Control | Intended outcome |
 | --- | --- |
-| Dirt | Seek as much meaningful continuous known dirt as feasible connected alternatives support, within legal access, fuel, coherence, and rider preferences. Use paved connections when needed. Avoid repeated spurs or gratuitous loops that merely inflate a statistic; disclose search limits. |
+| Dirt | Strive for 100% meaningful continuous known dirt. Richard expects substantial dirt riding, ordinarily 70–80% or better where the connected legal network supports it; the 675 km / 47% Porters Lake–St Stephen phone result is explicitly rejected. Seek worthwhile meandering dirt alternatives instead of optimizing a straight or short journey. Use paved connections when necessary, preserve fuel/access, and avoid repeated spurs that only inflate the statistic. A low-dirt completed route is not successful Dirt qualification; explain limitations without silently redefining the chosen style. |
 | Balanced | Seek the closest feasible mix to half dirt/unpaved and half paved across the owning rider leg, subject to the other constraints. Fuel stops do not each restart the mix target. |
 | Clean | Prefer paved backroads. Do not hunt for dirt; disclose necessary other-surface endpoint access or connections. |
-| Wander | Continuously adjust willingness to travel farther within the selected style. Zero must not turn Dirt into Clean. Adjacent values can select the same roads; a unique route at every tick is not required. |
+| Wander | Continuously adjust willingness to meander and travel farther within the selected style. Full Wander must allow substantial coherent dirt detours; decreasing Wander limits detour appetite without silently converting Dirt to Balanced or Clean. It is not a guarantee that arbitrary endpoints have a 100% dirt connection. Adjacent values can select the same roads; a unique route at every tick is not required. |
 | Allow Unknown | Explicitly permit the supported uncertain-road/access category. It never overrides known motorcycle prohibitions, barriers, or closures. Clean keeps it off. Unknown surface and uncertain motor access are distinct facts. |
 
 Respect the rider's settlement/highway avoidance and access settings. Small
@@ -296,6 +296,36 @@ per-request memory, cancellations, and cold behavior on the actual service class
 
 ## 7. Qualification and working method
 
+### Active owner-directed sequence — September 14
+
+Stop fuel development and fuel-enabled qualification while repairing routing.
+First qualify ordinary rider-to-rider routes with automatic fuel OFF: Dirt
+strives for 100% known dirt with substantial coherent dirt detours, Balanced
+seeks its intended roughly half-and-half mix, and Clean prefers pavement.
+Verify Wander, settlement avoidance, legal access, regional continuity,
+completion, riding character and practical performance on those actual routes.
+Current routing-only evidence: the exact Porters Lake–St Stephen request with
+fuel off completes with no generated stops at 892,898.858 m, 71% reported dirt,
+and 2,211 m repeated roads. The first routing-only run takes 10.551 s inside the
+measured calculation (12.698 s including test setup). Full-Wander Dirt no longer
+pays straight-chord/away costs, but comparisons still report a resource limit.
+The settlement shape correction passes its six focused checks and retains this
+same route, while increasing calculation time to 21.999 s (24.178 s including
+setup). Its performance needs repair before acceptance. Approximate attribution
+identifies Nackawic exposure and an exact 2,210.899 m reversed road sequence at
+the NS/NB join. Cross-pack canonical identities already translate correctly;
+loss of identity has NOT been established as its cause. Existing seam selection
+and finite prior-road penalties remain under investigation. Raw evidence:
+`.build/recovery-evidence/phone44-fuel-off-routing-r1` and
+`.build/recovery-evidence/fuel-off-settlement-shape-r1`.
+
+Freeze the exact routing source and configuration after Richard reviews and
+accepts the rides. Only then resume fuel integration against that frozen routing
+behavior. Do not tune routing and fuel simultaneously or use a fuel success as
+routing-quality acceptance. Existing fuel work and requirements are preserved,
+but are inactive in this phase. Record the accepted routing freeze here in
+place; do not create a separate specification or freeze document.
+
 Continue the authorized build → review → test → repair cycle until a coherent
 candidate meets its declared acceptance criteria or a specific external blocker
 prevents progress. Passing one microbenchmark is not the end of the job. Answer
@@ -342,6 +372,7 @@ implemented. Update it as results change instead of adding another status file.
 | Main product checkout | `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, app checkpoint `91cc3cc`; preserve the accepted app rather than restoring an older shell. |
 | Existing native candidate | `.build/engine-architecture`, branch `audit/baseline-recovery-20260913`. Recovery checkpoints `b7c7c44`, `864493a`, `7de5bd5`, `cfad1d7` and `aa4e348` remain preserved. `864493a` reuses a completed initial-station bound vector only for identical validated inputs; it preserves the existing closest-station selection. This is not the final qualified candidate; inspect status before editing. |
 | Device checkpoint | DIRT Dev 2 (44), source `60cc909`, was installed in place and launched on white with Richard’s explicit authorization on September 14. Build 43 was not installed. Physical route feedback is pending; installation does not establish routing acceptance. Receipts: `.build/recovery-evidence/phone-review-44`. |
+| Physical build 44 acceptance failure | Richard rejects Porters Lake–St Stephen (~675 km, reported 47% dirt and major-town traversal). Supplied September 14 09:55:57–10:02:13 log confirms NS/NB download consent and completion, local calculation, initial fill and one further pump, then a fuel timeout and 492,214 m road-only fallback with fuel unknown. Southwest NS requests also exhaust fuel planning after repeated candidate failures. This is failed riding-quality and fuel acceptance, despite road completion. Exact St Stephen endpoint 45.262939746458734,-67.29131337653283, seed 3806057305948982, Dirt, Allow Unknown off, 200 km / 10% reserve. Reproduce before claiming repair; no geographic rescue logic or pack publication is authorized. |
 | Candidate data | Phone catalog `fabric-v4-20260909-02`; some historical fixtures use `fabric-v4-20260908-02`. Results against one do not automatically qualify the other. |
 | Verified acquisition repair | DEV planning now waits for the existing pack prompt and verified installation, then resumes the same pins; missing data is not reported as disconnected roads. The real planning model now completes empty-directory → current public catalog → consent → verified NS download → native ride. Delayed catalog, cancel, stale reply, and retry model tests pass. The real notification presentation test also passes: consent, progress, cancel and retry preserve pins (`/tmp/Dirt-Pack-Acquisition-UI-20260913.xcresult`, one UI test). The UI fixture suspends installation; real network qualification is the separate planning-model test. |
 | Recoverable-checkpoint owner replay | At checkpoint `95158d6`, all four exact build-42 requests passed with initial fuel and actual arrival-aware destination escape: `/tmp/Dirt-Journey-Checkpoint-20260913.xcresult` (13 tests in three suites, including saved-route and legal-continuation tests). Current catalog, coordinates/seeds, 200 km / 10% settings and outputs are preserved in `.build/recovery-evidence/journey-checkpoint`. Escape ordering and verified unrestricted same-road reversal repair the earlier timeout. This is simulator qualification of these requests, not phone or broad regional acceptance. |
@@ -387,12 +418,10 @@ implemented. Update it as results change instead of adding another status file.
 | Legacy hosted services | DEV was last audited at `139a173`; production at `af96ca97`. These are observations, not desired architecture or current deployment proof. Recheck only when relevant. |
 | Release | No deployment, archive, device replacement, or App Review submission is part of documentation consolidation. |
 
-The next implementation pass should verify existing acquisition repairs, then
-address whole-graph preparation/allocation, turn-aware regional continuity,
-fuel range reserved for complete stages, and successful long-chain continuation.
-Check the reported sixteen-attempt cutoff and incomplete destination fuel proof
-against current code before changing them. Preserve useful fixes; do not start
-over from an old app or repeat an engine comparison without a concrete reason.
+The next implementation pass is routing-only with automatic fuel OFF, under
+section 7’s owner-directed sequence. Fuel repair, fuel selection experiments,
+and fuel-enabled test runs are paused until routing has been qualified and
+accepted. Preserve the existing app and all pending fuel work.
 
 Raw evidence remains under `.build/` and benchmark/test fixtures. Historical
 worktrees there are code/evidence snapshots, not current documentation sources.
