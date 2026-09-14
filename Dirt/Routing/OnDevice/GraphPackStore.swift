@@ -804,7 +804,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        ridePreferences: RidePreferences? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
@@ -835,7 +836,8 @@ final class GraphPackStore {
                 mapZoom: mapZoom,
                 matchLimitMeters: matchLimitMeters,
                 startEndpointKind: startEndpointKind,
-                endEndpointKind: endEndpointKind
+                endEndpointKind: endEndpointKind,
+                ridePreferences: ridePreferences
             )
         }
         return await routeOnDeviceInRegion(
@@ -856,7 +858,8 @@ final class GraphPackStore {
             mapZoom: mapZoom,
             matchLimitMeters: matchLimitMeters,
             startEndpointKind: startEndpointKind,
-            endEndpointKind: endEndpointKind
+            endEndpointKind: endEndpointKind,
+            ridePreferences: ridePreferences
         )
     }
 
@@ -882,7 +885,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        ridePreferences: RidePreferences? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         guard regions.count >= 2 else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
@@ -915,7 +919,8 @@ final class GraphPackStore {
                     avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
-                    endEndpointKind: endEndpointKind
+                    endEndpointKind: endEndpointKind,
+                    ridePreferences: ridePreferences
                 )
                 guard case .success(let last) = final, last.coordinates.count > 1 else {
                     if case .failure(let reason) = final { lastFailure = reason }
@@ -970,7 +975,8 @@ final class GraphPackStore {
                     avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
                     startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
-                    endEndpointKind: nil
+                    endEndpointKind: nil,
+                    ridePreferences: ridePreferences
                 )
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
                     if case .failure(let reason) = hop { lastFailure = reason }
@@ -1042,7 +1048,8 @@ final class GraphPackStore {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        ridePreferences: RidePreferences? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -1062,6 +1069,7 @@ final class GraphPackStore {
         let matchLimit = matchLimitMeters
         let startKind = startEndpointKind
         let endKind = endEndpointKind
+        let prefs = ridePreferences
         return await Task.detached(priority: .userInitiated) {
             var router = OnDeviceRouter(pack: packRef)
             router.sessionSeed = seed
@@ -1069,6 +1077,7 @@ final class GraphPackStore {
             router.matchLimitMeters = matchLimit
             router.startEndpointKind = startKind
             router.endEndpointKind = endKind
+            router.ridePreferences = prefs
             return router.routeDetailed(
                 from: start,
                 to: end,

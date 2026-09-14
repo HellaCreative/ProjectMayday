@@ -272,15 +272,16 @@ nonisolated enum OnDeviceProfileCosts {
     }
 
     /// Extra cost for meters walked *away* from B.
-    /// Strong soft forward fan: regressing must cost more than grazing a city
-    /// (×120) or a short highway connector. Slight backtracks around water OK.
+    /// Soft waypoint pull: heading briefly away to reach real dirt is affordable.
+    /// `wander` 1 = gentlest pull; 0 = stronger (never a hard ratchet).
     static func approachAwayExtra(
         profile: RouteProfile,
         dFromMeters: Double,
         dToMeters: Double,
         abMeters: Double,
         minAwayMeters: Double = 50,
-        regionId: String? = nil
+        regionId: String? = nil,
+        wander: Double = 1
     ) -> Double {
         _ = regionId
         let away = dToMeters - dFromMeters
@@ -288,56 +289,68 @@ nonisolated enum OnDeviceProfileCosts {
         let dFrom = max(0, dFromMeters)
         let ab = abMeters > 0 ? abMeters : 0
         let kmAway = away / 1000.0
+        let w = HopSearchPolicy.clampedWander(wander)
+        let awayScale = HopSearchPolicy.wanderAwayScale(w)
 
         switch profile {
         case .dirt:
-            // Applied with ×10 in pavement mode → ~95–150/km effective.
-            let mid = kmAway * 9.5
+            let mid = kmAway * 0.32 * awayScale
             let horizon = 2_500.0
             var near = 0.0
             if dFrom < horizon {
                 let t = 1 - dFrom / horizon
-                near = kmAway * (2.0 + t * t * 6.0)
+                near = kmAway * (0.12 + t * t * 0.35) * awayScale
             }
             return mid + near
         case .balanced:
-            let mid = kmAway * 180.0
+            let mid = kmAway * 1.15 * awayScale
             let horizon = max(4_000.0, ab * 0.2)
             var near = 0.0
             if dFrom < horizon {
                 let t = 1 - dFrom / horizon
-                near = kmAway * (20.0 + t * t * 60.0)
+                near = kmAway * (0.25 + t * t * 0.6) * awayScale
             }
             return mid + near
         case .cleanest:
-            // Gravity toward B only — ~2/km away keeps a 15 km dip below ~60 km extra pavement.
             let nearBand = max(2500.0, ab * 0.08)
-            let w = dFrom < nearBand ? 2.5 : 2.0
-            return kmAway * w
+            let base = dFrom < nearBand ? 2.5 : 2.0
+            return kmAway * base
         }
     }
 
-    /// Quadratic penalty on perpendicular distance to the A→B great-circle.
-    /// Clean has none — around-the-lake pavement that flows toward B is legal.
-    /// Balanced, then Dirt.
+    /// Wide flat-bottomed corridor: zero extra inside a generous radius, then
+    /// a gentle linear ramp. Clean has none — around-the-lake pavement that
+    /// flows toward B is legal.
     static func corridorCrossTrackExtra(
         profile: RouteProfile,
         point: CLLocationCoordinate2D,
         lineFrom: CLLocationCoordinate2D,
         lineTo: CLLocationCoordinate2D,
-        edgeMeters: Double
+        edgeMeters: Double,
+        wander: Double = 1
     ) -> Double {
         guard edgeMeters > 0 else { return 0 }
         if profile == .cleanest { return 0 }
-        let k: Double
+        let w = HopSearchPolicy.clampedWander(wander)
+        let freeMeters: Double
+        let rampPerKm: Double
         switch profile {
-        case .balanced: k = 0.014
-        case .dirt: k = 0.005
-        case .cleanest: k = 0
+        case .balanced:
+            freeMeters = HopSearchPolicy.corridorFreeRadiusBalancedMeters
+                * HopSearchPolicy.wanderCorridorScale(w)
+            rampPerKm = HopSearchPolicy.corridorRampPerKmBalanced
+        case .dirt:
+            freeMeters = HopSearchPolicy.corridorFreeRadiusDirtMeters
+                * HopSearchPolicy.wanderCorridorScale(w)
+            rampPerKm = HopSearchPolicy.corridorRampPerKmDirt
+        case .cleanest:
+            return 0
         }
-        let xtKm = abs(GeoMath.crossTrackMeters(point: point, lineFrom: lineFrom, to: lineTo)) / 1000.0
+        let xt = abs(GeoMath.crossTrackMeters(point: point, lineFrom: lineFrom, to: lineTo))
+        let excessKm = max(0, xt - freeMeters) / 1000.0
+        guard excessKm > 0 else { return 0 }
         let km = edgeMeters / 1000.0
-        return km * xtKm * xtKm * k
+        return km * excessKm * rampPerKm
     }
 
     /// Adventure meters share — OSM highway stack is pavement when untagged.

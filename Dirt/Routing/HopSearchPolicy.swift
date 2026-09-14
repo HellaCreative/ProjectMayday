@@ -8,6 +8,17 @@ nonisolated enum HopSearchPolicy {
     static let dirtCorridorMeters: Double = 60_000
     /// Safety ceiling only — Balanced shaping is the 45–55% dirt ratio.
     static let balancedCorridorMeters: Double = 40_000
+    /// Wide envelope first so Balanced does not snap to the chord. Tightest
+    /// (1×) is a last-resort fallback, not the first try.
+    static let balancedEnvelopeMultipliers: [Double] = [2, 3, 4, 6, 8, 1]
+    /// Flat-bottomed soft corridor: no cross-track tax inside this radius.
+    static let corridorFreeRadiusDirtMeters: Double = 40_000
+    static let corridorFreeRadiusBalancedMeters: Double = 28_000
+    /// Linear ramp (cost per edge-km per km of excess cross-track).
+    static let corridorRampPerKmDirt: Double = 0.018
+    static let corridorRampPerKmBalanced: Double = 0.035
+    /// Fog-of-war working neighborhood around A, B, and the developing route.
+    static let fogWorkingRadiusMeters: Double = 16_000
     /// Clean has no corridor product rule (soft forward fan only).
     /// Pack duplicate nodes within this radius are treated as one place for Clean.
     static let cleanCoincidentNodeMeters: Double = 2
@@ -70,6 +81,8 @@ nonisolated enum HopSearchPolicy {
     /// Optional paved-to-paved Dirt excursions must earn this much continuous,
     /// explicitly known unpaved riding. Unknown surface contributes zero.
     static let minimumEarnedDirtExcursionMeters: Double = 1_000
+    /// Dirt shorter than this is not meaningful dirt and must not inflate %.
+    static let insignificantDirtRunMeters: Double = 500
     /// Bound the retry cost when successive tiny alternatives are discovered.
     static let maximumShortDirtRepairPasses: Int = 3
 
@@ -82,6 +95,21 @@ nonisolated enum HopSearchPolicy {
         case pavement
         /// Length cost + dirt resource labels (Balanced, Dirt).
         case balancedResource
+    }
+
+    static func clampedWander(_ wander: Double) -> Double {
+        wander.isFinite ? min(1, max(0, wander)) : 1
+    }
+
+    /// Full Wander keeps the full corridor; lower Wander shrinks detour appetite
+    /// without converting Dirt into Balanced.
+    static func wanderCorridorScale(_ wander: Double) -> Double {
+        0.45 + 0.55 * clampedWander(wander)
+    }
+
+    /// Full Wander is the gentlest waypoint pull; lower Wander strengthens it.
+    static func wanderAwayScale(_ wander: Double) -> Double {
+        2.15 - 1.15 * clampedWander(wander)
     }
 
     static func hash(_ seed: UInt64, _ node: Int, _ ei: Int) -> UInt64 {
@@ -199,14 +227,25 @@ nonisolated enum HopSearchPolicy {
     }
 
     static func apply(_ action: RelaxAction, slots: inout [UInt8], at index: Int) -> Bool {
+        apply(action, slot: &slots[index])
+    }
+
+    static func apply(_ action: RelaxAction, slots: inout SparseDefaultArray<UInt8>, at index: Int) -> Bool {
+        var slot = slots[index]
+        let ok = apply(action, slot: &slot)
+        if ok { slots[index] = slot }
+        return ok
+    }
+
+    static func apply(_ action: RelaxAction, slot: inout UInt8) -> Bool {
         switch action {
         case .reject:
             return false
         case .acceptReset:
-            slots[index] = 1
+            slot = 1
             return true
         case .acceptImprove, .stealPred:
-            if slots[index] < 255 { slots[index] += 1 }
+            if slot < 255 { slot += 1 }
             return true
         }
     }
@@ -216,27 +255,36 @@ nonisolated enum HopSearchPolicy {
     }
 
     static func createsCycle(prev: [Int], from: Int, through node: Int) -> Bool {
+        createsCycle(prevAt: { prev[$0] }, from: from, through: node, bound: prev.count)
+    }
+
+    static func createsCycle(prev: SparseDefaultArray<Int>, from: Int, through node: Int) -> Bool {
+        createsCycle(prevAt: { prev[$0] }, from: from, through: node, bound: prev.count)
+    }
+
+    static func createsCycle(prevAt: (Int) -> Int, from: Int, through node: Int, bound: Int) -> Bool {
         var n = from
         var hops = 0
-        let cap = prev.count + 2
+        let cap = bound + 2
         while n >= 0, hops < cap {
             if n == node { return true }
-            n = prev[n]
+            n = prevAt(n)
             hops += 1
         }
         return hops >= cap
     }
 
-    static func corridorMeters(for profile: RouteProfile) -> Double? {
+    static func corridorMeters(for profile: RouteProfile, wander: Double = 1) -> Double? {
+        let scale = wanderCorridorScale(wander)
         switch profile {
-        case .dirt: return dirtCorridorMeters
-        case .balanced: return balancedCorridorMeters
+        case .dirt: return dirtCorridorMeters * scale
+        case .balanced: return balancedCorridorMeters * scale
         case .cleanest: return nil
         }
     }
 
-    static func extraBudget(shortestMeters: Double, for profile: RouteProfile) -> Double? {
-        guard let extra = corridorMeters(for: profile) else { return nil }
+    static func extraBudget(shortestMeters: Double, for profile: RouteProfile, wander: Double = 1) -> Double? {
+        guard let extra = corridorMeters(for: profile, wander: wander) else { return nil }
         return shortestMeters + extra
     }
 
@@ -298,6 +346,7 @@ nonisolated struct HopSearchContext: Sendable {
     var settlementFallback: Bool
     var noBacktrack: Bool
     var variety: Bool
+    var wander: Double
     var corridorMeters: Double?
     var hardCorridor: Bool
     var boundedSearch: Bool
@@ -331,6 +380,7 @@ nonisolated struct HopSearchContext: Sendable {
             settlementFallback: true,
             noBacktrack: true,
             variety: profile != .cleanest,
+            wander: 1,
             corridorMeters: HopSearchPolicy.corridorMeters(for: profile),
             hardCorridor: false,
             boundedSearch: false,

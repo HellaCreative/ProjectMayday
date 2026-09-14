@@ -144,6 +144,9 @@ nonisolated struct OnDeviceRouter {
         var minimumEarnedDirtExcursionMeters: Double? = nil
         var shortDirtRepairPasses: Int = 0
         var shortDirtPenaltyEdgeCount: Int = 0
+        var fogChargedLabelBytes: Int = 0
+        var fogNeighborhoodSeeds: Int = 0
+        var fogNeighborhoodExpansions: Int = 0
     }
 
     enum Failure: Error, Equatable, Sendable {
@@ -182,8 +185,17 @@ nonisolated struct OnDeviceRouter {
     let pack: GraphV2Pack
     /// Balanced ratio-seeking: scale paved km cost. Dirt/Clean stay 1.
     var pavedBias: Double = 1
+    private var activeWander: Double {
+        ridePreferences?.normalized.wander ?? 1
+    }
+
+    private func usesVariety(seed: UInt64, profile: RouteProfile) -> Bool {
+        seed != 0 && profile != .cleanest
+    }
     /// Planning-session seed for controlled variety. New process → new seed.
     var sessionSeed: UInt64 = 0
+    /// Rider wander / city / highway preferences. Nil keeps profile defaults.
+    var ridePreferences: RidePreferences?
     /// MapLibre zoom for V4 tap radius. Nil falls back to 550 m, capped at 2000 m.
     var mapZoom: Double? = nil
     /// Optional explicit snap radius, still capped by graph version.
@@ -196,13 +208,17 @@ nonisolated struct OnDeviceRouter {
     /// New packs carry OSM-derived local cores. Static boxes remain a temporary
     /// compatibility fallback for older installed packs.
     private var packUrbanCores: [UrbanCore.Box] {
-        pack.urbanCores.isEmpty ? UrbanCore.boxes : pack.urbanCores
+        if ridePreferences?.avoidCities == false { return [] }
+        return pack.urbanCores.isEmpty ? UrbanCore.boxes : pack.urbanCores
     }
 
-    private var packSettlements: [UrbanCore.Box] { pack.settlements }
+    private var packSettlements: [UrbanCore.Box] {
+        ridePreferences?.avoidCities == false ? [] : pack.settlements
+    }
 
     private func settlementBoxes(for profile: RouteProfile) -> [UrbanCore.Box] {
-        UrbanCore.settlementBoxes(
+        guard ridePreferences?.avoidCities != false else { return [] }
+        return UrbanCore.settlementBoxes(
             embedded: pack.settlements,
             regionId: pack.regionId,
             profile: profile
@@ -795,11 +811,14 @@ nonisolated struct OnDeviceRouter {
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads
         )
-        ctx.avoidMotorways = e4.avoidMotorways
+        ctx.avoidMotorways = e4.avoidMotorways || ridePreferences?.avoidHighways == true
         ctx.preferBackRoads = e4.preferBackRoads
+        ctx.wander = activeWander
+        ctx.variety = usesVariety(seed: sessionSeed, profile: profile)
+        ctx.corridorMeters = HopSearchPolicy.corridorMeters(for: profile, wander: activeWander)
 
         if profile == .dirt {
-            let base = HopSearchPolicy.dirtCorridorMeters
+            let base = ctx.corridorMeters ?? HopSearchPolicy.dirtCorridorMeters
             let comparisonWidths = [base * 2, base]
             let connectivityWidths: [Double?] = [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double, objective: String)] = []
@@ -811,7 +830,7 @@ nonisolated struct OnDeviceRouter {
             ) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
                 hunt.costMode = costMode
-                hunt.variety = false
+                hunt.variety = usesVariety(seed: sessionSeed, profile: .dirt)
                 hunt.corridorMeters = width
                 hunt.hardCorridor = width != nil
                 hunt.boundedSearch = true
@@ -876,7 +895,7 @@ nonisolated struct OnDeviceRouter {
                     lastBoundedFailure = failure
                 }
             }
-            guard let selected = chooseDirtEnvelopeCandidate(candidates) else {
+            guard let selected = chooseDirtEnvelopeCandidate(candidates, seed: sessionSeed) else {
                 return .failure(lastBoundedFailure)
             }
             var route = selected.route
@@ -895,13 +914,12 @@ nonisolated struct OnDeviceRouter {
         }
 
         if profile == .balanced {
-            let base = HopSearchPolicy.balancedCorridorMeters
-            let multipliers: [Double] = [1, 2, 3, 4, 6, 8]
+            let base = ctx.corridorMeters ?? HopSearchPolicy.balancedCorridorMeters
             var lastEnvelopeFailure: Failure = .noPath
-            for width in multipliers.map({ base * $0 }) + [0] {
+            for width in HopSearchPolicy.balancedEnvelopeMultipliers.map({ base * $0 }) + [0] {
                 var envelope = ctx
                 envelope.costMode = .balancedResource
-                envelope.variety = false
+                envelope.variety = usesVariety(seed: sessionSeed, profile: .balanced)
                 envelope.corridorMeters = width > 0 ? width : nil
                 envelope.hardCorridor = width > 0
                 envelope.boundedSearch = true
@@ -980,10 +998,10 @@ nonisolated struct OnDeviceRouter {
                 // Weighted Dijkstra spent the budget without maximizing dirt
                 // and could return less dirt than Balanced on the same graph.
                 hunt.costMode = .balancedResource
-                hunt.variety = false
+                hunt.variety = usesVariety(seed: sessionSeed, profile: profile)
             case .balanced:
                 hunt.costMode = .balancedResource
-                hunt.variety = false
+                hunt.variety = usesVariety(seed: sessionSeed, profile: profile)
             case .cleanest:
                 break
             }
@@ -1073,10 +1091,11 @@ nonisolated struct OnDeviceRouter {
     }
 
     /// Dirt works back from 100%. When percentages are effectively tied, use
-    /// less pavement and then less cross-track wandering. Total route length is
-    /// intentionally not an objective.
+    /// less pavement. Do not prefer the straighter chord — off-axis dirt is the
+    /// product. Total route length is intentionally not an objective.
     private func chooseDirtEnvelopeCandidate(
-        _ candidates: [(route: Result, width: Double, objective: String)]
+        _ candidates: [(route: Result, width: Double, objective: String)],
+        seed: UInt64
     ) -> (route: Result, width: Double, objective: String)? {
         let summaries = candidates.map { candidate in
             let shape = HopSearchPolicy.routeShape(
@@ -1102,19 +1121,12 @@ nonisolated struct OnDeviceRouter {
             let pavedA = a.route.distanceMeters * Double(100 - a.route.dirtPercent) / 100
             let pavedB = b.route.distanceMeters * Double(100 - b.route.dirtPercent) / 100
             if abs(pavedA - pavedB) > 2_000 { return pavedA < pavedB }
-            func crossTrack(_ route: Result) -> Double {
-                guard let start = route.coordinates.first,
-                      let end = route.coordinates.last else { return 0 }
-                return HopSearchPolicy.maxCrossTrackMeters(
-                    coordinates: route.coordinates, start: start, end: end
-                )
-            }
-            let crossA = crossTrack(a.route)
-            let crossB = crossTrack(b.route)
-            if abs(crossA - crossB) > 1_000 { return crossA < crossB }
             if a.route.dirtPercent != b.route.dirtPercent {
                 return a.route.dirtPercent > b.route.dirtPercent
             }
+            let ha = HopSearchPolicy.hash(seed, Int(a.width), a.route.dirtPercent)
+            let hb = HopSearchPolicy.hash(seed, Int(b.width), b.route.dirtPercent)
+            if ha != hb { return ha < hb }
             return a.width < b.width
         }?.candidate
     }
@@ -1162,8 +1174,50 @@ nonisolated struct OnDeviceRouter {
             if boundedByPavement && knownUnpavedMeters < minimumMeters {
                 result.formUnion(edgeIDs)
             }
+            if knownUnpavedMeters > 0,
+               knownUnpavedMeters < HopSearchPolicy.insignificantDirtRunMeters,
+               boundedByPavement {
+                result.formUnion(edgeIDs)
+            }
         }
         return result
+    }
+
+    /// Known unpaved metres that belong to a contiguous run of at least
+    /// `minimumMeters`. Shorter dips do not count as Dirt.
+    static func meaningfulDirtMeters(
+        in legs: [Leg],
+        minimumMeters: Double = HopSearchPolicy.insignificantDirtRunMeters
+    ) -> Double {
+        func isPavedBoundary(_ leg: Leg) -> Bool {
+            leg.structureType != "ferry" && leg.paintSurfaceName == "paved"
+        }
+        func isKnownUnpaved(_ leg: Leg) -> Bool {
+            let surface = leg.paintSurfaceName
+            return ["gravel", "access", "resource", "track", "double_track", "single", "unpaved", "dirt"]
+                .contains(surface)
+        }
+        var total = 0.0
+        var index = 0
+        while index < legs.count {
+            if isPavedBoundary(legs[index]) || legs[index].structureType == "ferry" {
+                index += 1
+                continue
+            }
+            var run = 0.0
+            while index < legs.count,
+                  !isPavedBoundary(legs[index]),
+                  legs[index].structureType != "ferry" {
+                if isKnownUnpaved(legs[index]) {
+                    run += max(0, legs[index].distanceMeters)
+                }
+                index += 1
+            }
+            if run >= minimumMeters {
+                total += run
+            }
+        }
+        return total
     }
 
     private enum SnapRole {
@@ -1647,51 +1701,20 @@ nonisolated struct OnDeviceRouter {
             ctx.customerEndEdges = pack.customerEndpointEdges(edgeIndex: endEi,
                 seeds: (virtAdjRev[endVirt] ?? []).filter { $0.to < n }.map { ($0.to, virt[$0.id].meters) }, reverse: true)
         }
-        if pack.version >= 4, profile != .cleanest, ctx.costMode != .distance {
-            let compass = RoadCompass.build(stateCount: total, destination: endVirt,
-                deadline: Date().addingTimeInterval(ctx.timeCapSeconds ?? HopSearchPolicy.pass2TimeCapSeconds)) { state, visit in
-                let node = turnState.graphNode(of: state)
-                if node < n {
-                    for arc in Int(pack.nodeOffsets[node])..<Int(pack.nodeOffsets[node + 1]) {
-                        let ei = Int(pack.edgeUndirectedIndex[arc]), target = Int(pack.edgeTargets[arc])
-                        if avoidEdgeIds.contains(pack.edgeId(ei)) { continue }
-                        if !pack.v4AccessAllowed(ei: ei, from: node, to: target,
-                            startEi: startEi, endEi: endEi, allowUnknown: policyUnknown,
-                            startEndpointKind: startEndpointKind, endEndpointKind: endEndpointKind,
-                            customerStartEdges: ctx.customerStartEdges, customerEndEdges: ctx.customerEndEdges) { continue }
-                        let next = turnState.transition(state: state, outgoingEdge: ei, toNode: target)
-                        if next >= 0 { visit(.init(to: next, edge: ei, meters: Double(pack.edgeMeters[ei]))) }
-                    }
-                }
-                for item in virtAdj[node] ?? [] {
-                    let v = virt[item.id]
-                    if v.ei < 0 || avoidEdgeIds.contains(pack.edgeId(v.ei)) { continue }
-                    if item.to == endVirt, !turnState.allowsExit(state: state, outgoingEdge: v.ei) { continue }
-                    let a = Int(pack.edgeFrom?[v.ei] ?? -1), b = Int(pack.edgeTo?[v.ei] ?? -1)
-                    let accessFrom: Int, accessTo: Int
-                    if node == startVirt, item.to < n {
-                        accessTo = item.to; accessFrom = item.to == a ? b : a
-                    } else if node < n, item.to == endVirt {
-                        accessFrom = node; accessTo = node == a ? b : a
-                    } else {
-                        let forward = startSnap.distanceAlongM <= endSnap.distanceAlongM
-                        accessFrom = forward ? a : b; accessTo = forward ? b : a
-                    }
-                    if !pack.v4AccessAllowed(ei: v.ei, from: accessFrom, to: accessTo,
-                        startEi: startEi, endEi: endEi, allowUnknown: policyUnknown,
-                        startEndpointKind: startEndpointKind, endEndpointKind: endEndpointKind,
-                        customerStartEdges: ctx.customerStartEdges, customerEndEdges: ctx.customerEndEdges) { continue }
-                    let next = item.to < n ? turnState.stateForArrival(node: item.to, incomingEdge: v.ei) : item.to
-                    visit(.init(to: next, edge: v.ei, meters: v.meters))
-                }
-            }
-            guard compass.status == "complete" else { return .failure(.searchLimit(compass.status)) }
-            ctx.roadRemaining = compass.remaining
-        }
+        // Fog of war: do not reverse-search the whole region for remaining
+        // road distance. Geodesic away cost is the soft waypoint pull.
+        ctx.roadRemaining = nil
         func awayExtra(fromNode: Int, toNode: Int) -> Double {
-            if let remaining = ctx.roadRemaining {
-                return OnDeviceProfileCosts.approachAwayExtra(profile: profile,
-                    dFromMeters: remaining[fromNode], dToMeters: remaining[toNode], abMeters: remaining[startVirt])
+            if let remaining = ctx.roadRemaining,
+               fromNode >= 0, fromNode < remaining.count,
+               toNode >= 0, toNode < remaining.count {
+                return OnDeviceProfileCosts.approachAwayExtra(
+                    profile: profile,
+                    dFromMeters: remaining[fromNode],
+                    dToMeters: remaining[toNode],
+                    abMeters: remaining[startVirt],
+                    wander: ctx.wander
+                )
             }
             func ll(_ node: Int) -> CLLocationCoordinate2D? {
                 if node == startVirt { return startSnap.projected }
@@ -1706,29 +1729,14 @@ nonisolated struct OnDeviceRouter {
                 dFromMeters: meters(a, endLL),
                 dToMeters: meters(b, endLL),
                 abMeters: abMeters,
-                regionId: pack.regionId
+                regionId: pack.regionId,
+                wander: ctx.wander
             )
         }
 
-        var slackToDest: [Double]? = nil
-        if let cap = ctx.maxPathMeters, cap.isFinite, cap < .greatestFiniteMagnitude / 4 {
-            slackToDest = fillShortestMeters(
-                from: endVirt,
-                capMeters: cap,
-                nodeCount: n,
-                total: total,
-                virt: virt,
-                virtAdj: virtAdjRev,
-                from: from,
-                to: to,
-                ctx: ctx,
-                startEi: startEi, endEi: endEi,
-                profile: profile,
-                policyUnknown: policyUnknown,
-                avoidEdgeIds: avoidEdgeIds,
-                coincidentSiblings: coincidentSiblings
-            )
-        }
+        // Fog of war: a whole-pack reverse CSR is not a remaining-distance prune.
+        // The path-length cap still bounds search; geodesic away is the waypoint pull.
+        let slackToDest: [Double]? = nil
 
         if ctx.costMode == .balancedResource {
             return searchVirtualBalanced(
@@ -1750,12 +1758,12 @@ nonisolated struct OnDeviceRouter {
             )
         }
 
-        var dist = [Double](repeating: .infinity, count: total)
-        var prev = [Int](repeating: -1, count: total)
-        var prevKind = [UInt8](repeating: 0, count: total) // 0 graph, 1 virt
-        var prevData = [Int](repeating: -1, count: total)
-        var prevForward = [Bool](repeating: true, count: total)
-        var pathMeters = [Double](repeating: .infinity, count: total)
+        var dist = SparseDefaultArray(count: total, default: Double.infinity)
+        var prev = SparseDefaultArray(count: total, default: -1)
+        var prevKind = SparseDefaultArray(count: total, default: UInt8(0)) // 0 graph, 1 virt
+        var prevData = SparseDefaultArray(count: total, default: -1)
+        var prevForward = SparseDefaultArray(count: total, default: true)
+        var pathMeters = SparseDefaultArray(count: total, default: Double.infinity)
         func pathRecord(_ label: Int) -> PathRetrace.Span? {
             if prev[label] < 0 { return nil }
             if prevKind[label] == 0 {
@@ -1768,8 +1776,14 @@ nonisolated struct OnDeviceRouter {
             guard pack.version >= 4, let span else { return false }
             return PathRetrace.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
         }
-        var slots = [UInt8](repeating: 0, count: total)
+        var slots = SparseDefaultArray(count: total, default: UInt8(0))
         var heap = MinHeap()
+        var fog = FogOfWarNeighborhood(
+            start: startSnap.projected,
+            end: endSnap.projected,
+            workingRadiusMeters: HopSearchPolicy.fogWorkingRadiusMeters,
+            corridorMeters: ctx.corridorMeters ?? HopSearchPolicy.dirtCorridorMeters
+        )
 
         // Preserve the arrival road tier across virtual snap stubs and
         // duplicate-node stitches. The toll belongs at the real transition,
@@ -1820,6 +1834,9 @@ nonisolated struct OnDeviceRouter {
             if cur.node == endVirt { break }
 
             let graphNode = turnState.graphNode(of: cur.node)
+            if pops & 63 == 1, graphNode >= 0, graphNode < n {
+                fog.noteVisited(coordinate(forNode: graphNode))
+            }
 
             if graphNode >= 0, graphNode < n {
                 let arcStart = Int(pack.nodeOffsets[graphNode])
@@ -1921,14 +1938,15 @@ nonisolated struct OnDeviceRouter {
                     }
                     if applyAway {
                         let away = awayExtra(fromNode: cur.node, toNode: toState)
-                        step += ctx.costMode == .pavement ? away * 10 : away
+                        step += away
                         if applySoftCorridor {
                             step += OnDeviceProfileCosts.corridorCrossTrackExtra(
                                 profile: profile,
                                 point: toLL,
                                 lineFrom: startSnap.projected,
                                 lineTo: endLL,
-                                edgeMeters: edgeM
+                                edgeMeters: edgeM,
+                                wander: ctx.wander
                             )
                         }
                     }
@@ -2109,14 +2127,15 @@ nonisolated struct OnDeviceRouter {
                     }
                     if applyAway {
                         let away = awayExtra(fromNode: cur.node, toNode: item.to < n && v.ei >= 0 ? turnState.stateForArrival(node: item.to, incomingEdge: v.ei) : item.to)
-                        step += ctx.costMode == .pavement ? away * 10 : away
+                        step += away
                         if applySoftCorridor {
                             step += OnDeviceProfileCosts.corridorCrossTrackExtra(
                                 profile: profile,
                                 point: toLL,
                                 lineFrom: startSnap.projected,
                                 lineTo: endLL,
-                                edgeMeters: v.meters
+                                edgeMeters: v.meters,
+                                wander: ctx.wander
                             )
                         }
                     }
@@ -2268,7 +2287,11 @@ nonisolated struct OnDeviceRouter {
                 profile: profile,
                 allowUnknown: policyUnknown
             ),
-            pops: pops, abort: abort, started: huntStart, isHunt: isHunt
+            pops: pops, abort: abort, started: huntStart, isHunt: isHunt,
+            fogChargedLabelBytes: dist.chargedBytes + prev.chargedBytes + pathMeters.chargedBytes
+                + prevKind.chargedBytes + prevData.chargedBytes + slots.chargedBytes,
+            fogNeighborhoodSeeds: fog.seedCount,
+            fogNeighborhoodExpansions: fog.expansions
         ))
     }
 
@@ -2295,25 +2318,59 @@ nonisolated struct OnDeviceRouter {
         let abMeters = meters(startSnap.projected, endLL)
         let startOnMajorHighway = snapIsMajorHighwayPin(startSnap, profile: profile)
         let endOnMajorHighway = snapIsMajorHighwayPin(endSnap, profile: profile)
-        func roadAway(_ state: Int, _ target: Int) -> Double {
-            guard let remaining = ctx.roadRemaining else { return 0 }
-            return OnDeviceProfileCosts.approachAwayExtra(profile: profile,
-                dFromMeters: remaining[state], dToMeters: remaining[target], abMeters: remaining[startVirt])
-        }
         let B = HopSearchPolicy.balancedBuckets
         let turnState = pack.makeV4TurnStateSpace(startNode: startVirt, endNode: endVirt)
         let totalNodes = turnState.stateCount
         let labels = totalNodes * B
         func lab(_ node: Int, _ bucket: Int) -> Int { node * B + bucket }
         func sid(_ label: Int) -> Int { label / B }
+        func roadAway(_ state: Int, _ target: Int) -> Double {
+            if let remaining = ctx.roadRemaining,
+               state >= 0, state < remaining.count,
+               target >= 0, target < remaining.count {
+                return OnDeviceProfileCosts.approachAwayExtra(
+                    profile: profile,
+                    dFromMeters: remaining[state],
+                    dToMeters: remaining[target],
+                    abMeters: remaining[startVirt],
+                    wander: ctx.wander
+                )
+            }
+            func ll(_ node: Int) -> CLLocationCoordinate2D? {
+                if node == startVirt { return startSnap.projected }
+                if node == endVirt { return endSnap.projected }
+                let graphNode = turnState.graphNode(of: node)
+                if graphNode >= 0, graphNode < n { return coordinate(forNode: graphNode) }
+                return nil
+            }
+            guard let a = ll(state), let b = ll(target) else { return 0 }
+            return OnDeviceProfileCosts.approachAwayExtra(
+                profile: profile,
+                dFromMeters: meters(a, endLL),
+                dToMeters: meters(b, endLL),
+                abMeters: abMeters,
+                wander: ctx.wander
+            )
+        }
+        func shapingExtra(fromState: Int, toState: Int, point: CLLocationCoordinate2D, edgeMeters: Double) -> Double {
+            roadAway(fromState, toState)
+                + OnDeviceProfileCosts.corridorCrossTrackExtra(
+                    profile: profile,
+                    point: point,
+                    lineFrom: startSnap.projected,
+                    lineTo: endLL,
+                    edgeMeters: edgeMeters,
+                    wander: ctx.wander
+                )
+        }
 
-        var dist = [Double](repeating: .infinity, count: labels)
-        var pathMeters = [Double](repeating: .infinity, count: labels)
-        var dirtAt = [Double](repeating: 0, count: labels)
-        var prev = [Int](repeating: -1, count: labels)
-        var prevKind = [UInt8](repeating: 0, count: labels)
-        var prevData = [Int](repeating: -1, count: labels)
-        var prevForward = [Bool](repeating: true, count: labels)
+        var dist = SparseDefaultArray(count: labels, default: Double.infinity)
+        var pathMeters = SparseDefaultArray(count: labels, default: Double.infinity)
+        var dirtAt = SparseDefaultArray(count: labels, default: 0.0)
+        var prev = SparseDefaultArray(count: labels, default: -1)
+        var prevKind = SparseDefaultArray(count: labels, default: UInt8(0))
+        var prevData = SparseDefaultArray(count: labels, default: -1)
+        var prevForward = SparseDefaultArray(count: labels, default: true)
         func pathRecord(_ label: Int) -> PathRetrace.Span? {
             if prev[label] < 0 { return nil }
             if prevKind[label] == 0 {
@@ -2326,8 +2383,14 @@ nonisolated struct OnDeviceRouter {
             guard pack.version >= 4, let span else { return false }
             return PathRetrace.contains(node: label, span: span, previous: { prev[$0] }, record: pathRecord)
         }
-        var slots = [UInt8](repeating: 0, count: labels)
+        var slots = SparseDefaultArray(count: labels, default: UInt8(0))
         var heap = MinHeap()
+        var fog = FogOfWarNeighborhood(
+            start: startSnap.projected,
+            end: endSnap.projected,
+            workingRadiusMeters: HopSearchPolicy.fogWorkingRadiusMeters,
+            corridorMeters: ctx.corridorMeters ?? HopSearchPolicy.balancedCorridorMeters
+        )
         let startLab = lab(startVirt, 0)
         dist[startLab] = 0
         pathMeters[startLab] = 0
@@ -2355,6 +2418,9 @@ nonisolated struct OnDeviceRouter {
             if metersSoFar > cap { continue }
             let state = sid(cur.node)
             let node = turnState.graphNode(of: state)
+            if pops & 63 == 1, node >= 0, node < n {
+                fog.noteVisited(coordinate(forNode: node))
+            }
             let dirtSoFar = dirtAt[cur.node]
 
             if node < n {
@@ -2453,6 +2519,12 @@ nonisolated struct OnDeviceRouter {
                     if !isFerry {
                         step *= settlementMult * urbanMult
                     }
+                    step += shapingExtra(
+                        fromState: state,
+                        toState: toState,
+                        point: toLL,
+                        edgeMeters: edgeM
+                    )
                     let newScore = cur.cost + backtrackPenalized(
                         step,
                         edgeID: pack.edgeId(ei),
@@ -2595,7 +2667,12 @@ nonisolated struct OnDeviceRouter {
                     let virtualStep = v.meters * settlementMult * urbanMult
                         * (shortDirtPenalized ? HopSearchPolicy.dirtRidePavedPerKm : 1)
                     let newScore = cur.cost + backtrackPenalized(
-                        virtualStep + roadAway(state, toState),
+                        virtualStep + shapingExtra(
+                            fromState: state,
+                            toState: toState,
+                            point: toLL,
+                            edgeMeters: v.meters
+                        ),
                         edgeID: virtualEdgeID,
                         ctx: ctx
                     )
@@ -2749,7 +2826,11 @@ nonisolated struct OnDeviceRouter {
                 profile: profile,
                 allowUnknown: policyUnknown
             ),
-            pops: pops, abort: abort, started: huntStart, isHunt: isHunt
+            pops: pops, abort: abort, started: huntStart, isHunt: isHunt,
+            fogChargedLabelBytes: dist.chargedBytes + prev.chargedBytes + pathMeters.chargedBytes
+                + dirtAt.chargedBytes + prevKind.chargedBytes + prevData.chargedBytes + slots.chargedBytes,
+            fogNeighborhoodSeeds: fog.seedCount,
+            fogNeighborhoodExpansions: fog.expansions
         ))
     }
 
@@ -2891,10 +2972,16 @@ nonisolated struct OnDeviceRouter {
         pops: Int,
         abort: String,
         started: CFAbsoluteTime,
-        isHunt: Bool
+        isHunt: Bool,
+        fogChargedLabelBytes: Int = 0,
+        fogNeighborhoodSeeds: Int = 0,
+        fogNeighborhoodExpansions: Int = 0
     ) -> Result {
-        guard isHunt else { return result }
         var out = result
+        out.searchMeta.fogChargedLabelBytes = fogChargedLabelBytes
+        out.searchMeta.fogNeighborhoodSeeds = fogNeighborhoodSeeds
+        out.searchMeta.fogNeighborhoodExpansions = fogNeighborhoodExpansions
+        guard isHunt else { return out }
         out.searchMeta.pops = pops
         out.searchMeta.pass2Outcome = abort
         out.searchMeta.timedOut = abort == "timeCap" || abort == "popCap"
@@ -3269,7 +3356,8 @@ nonisolated struct OnDeviceRouter {
                         dFromMeters: meters(fromLL, endLL),
                         dToMeters: meters(toLL, endLL),
                         abMeters: abMeters,
-                        regionId: pack.regionId
+                        regionId: pack.regionId,
+                        wander: ctx.wander
                     )
                     if ctx.corridorMeters == nil {
                         step += OnDeviceProfileCosts.corridorCrossTrackExtra(
@@ -3277,7 +3365,8 @@ nonisolated struct OnDeviceRouter {
                             point: toLL,
                             lineFrom: startSnap.projected,
                             lineTo: endLL,
-                            edgeMeters: Double(pack.edgeMeters[ei])
+                            edgeMeters: Double(pack.edgeMeters[ei]),
+                            wander: ctx.wander
                         )
                     }
 
@@ -3498,7 +3587,6 @@ nonisolated struct OnDeviceRouter {
 
         var edgeIds: [String] = []
         var meters: Double = 0
-        var dirtMeters: Double = 0
         var pavedMeters: Double = 0
         var unknownMeters: Double = 0
         for leg in worked {
@@ -3511,13 +3599,12 @@ nonisolated struct OnDeviceRouter {
             if leg.structureType == "ferry" { continue }
             if leg.paintSurfaceName == "paved" {
                 pavedMeters += leg.distanceMeters
-            } else if OnDeviceProfileCosts.isAdventureSurface(leg.paintSurfaceName) {
-                dirtMeters += leg.distanceMeters
             }
             if leg.accessName == "motorized_unknown" {
                 unknownMeters += leg.distanceMeters
             }
         }
+        let dirtMeters = Self.meaningfulDirtMeters(in: worked)
 
         let coords = flattenRouteCoordinates(legs: worked, nodeFallback: nodeFallback)
         let dirtPct: Int

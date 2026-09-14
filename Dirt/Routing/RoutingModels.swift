@@ -193,7 +193,7 @@ struct RouteRequest: Codable, Sendable {
             motorizedPermissive: true,
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
-        let seed = sessionSeed == 0 ? nil : sessionSeed
+        let seed = sessionSeed == 0 ? RoutingSessionContext.seed : sessionSeed
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let scopedPrefer = false

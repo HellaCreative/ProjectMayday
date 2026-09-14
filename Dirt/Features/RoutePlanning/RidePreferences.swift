@@ -17,3 +17,8 @@ nonisolated struct RidePreferences: Codable, Equatable, Hashable, Sendable {
 nonisolated enum RidePreferenceContext {
     @TaskLocal static var current: RidePreferences?
 }
+
+/// Fresh generation seed for a new create. Saved/resume/nav freeze it.
+nonisolated enum RoutingSessionContext {
+    @TaskLocal static var seed: UInt64?
+}

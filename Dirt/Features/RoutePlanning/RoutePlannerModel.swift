@@ -199,7 +199,11 @@ final class RoutePlannerModel {
                 let builder = ItineraryBuilder()
                 builder.mapZoom = 7
                 let result = await RidePreferenceContext.$current.withValue(preferences) {
-                    await builder.build(candidate, from: 0, reuse: nil, fuel: fuel, source: policy, onProgress: { _ in })
+                    await RoutingSessionContext.$seed.withValue(
+                        UInt64.random(in: 1...9_007_199_254_740_991)
+                    ) {
+                        await builder.build(candidate, from: 0, reuse: nil, fuel: fuel, source: policy, onProgress: { _ in })
+                    }
                 }
                 guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
                 guard !result.legs.isEmpty, candidate.legs.allSatisfy({ result.riderLegStatus[$0.id] == .built }) else { continue }
@@ -755,6 +759,12 @@ final class RoutePlannerModel {
         let before = itinerary
         let change = reduce(before, action)
         guard change.itinerary != before else { return }
+        switch action {
+        case .replaceAll, .clear:
+            routingSessionSeed = UInt64.random(in: 1...9_007_199_254_740_991)
+        default:
+            break
+        }
         itinerary = change.itinerary
         RoutingDebugLog.shared.event(
             ItineraryLog.line(action: action, before: before, after: itinerary, source: source)
@@ -869,26 +879,28 @@ final class RoutePlannerModel {
             guard let self else { return }
             self.itineraryBuilder.mapZoom = self.mapState.mapZoom
             let result = await RidePreferenceContext.$current.withValue(preferences) {
-                await self.itineraryBuilder.build(
-                requested,
-                from: legIndex,
-                through: throughLegIndex,
-                reuse: reuse,
-                fuel: fuel,
-                source: self.routingSourcePolicy,
-                replanFromStationID: replanFromStationID,
-                onFuelStatus: { [weak self] status in
-                    guard let self, self.itinerary.generation == requested.generation else { return }
-                    self.fuelPlanningStatus = status
-                    self.toast = status
-                },
-                onProgress: { [weak self] progress in
-                    guard let self, self.itinerary.generation == progress.generation else { return }
-                    self.built = progress
-                    self.advanceRouteBuildCamera(with: progress)
-                    self.refreshMap()
+                await RoutingSessionContext.$seed.withValue(self.routingSessionSeed) {
+                    await self.itineraryBuilder.build(
+                        requested,
+                        from: legIndex,
+                        through: throughLegIndex,
+                        reuse: reuse,
+                        fuel: fuel,
+                        source: self.routingSourcePolicy,
+                        replanFromStationID: replanFromStationID,
+                        onFuelStatus: { [weak self] status in
+                            guard let self, self.itinerary.generation == requested.generation else { return }
+                            self.fuelPlanningStatus = status
+                            self.toast = status
+                        },
+                        onProgress: { [weak self] progress in
+                            guard let self, self.itinerary.generation == progress.generation else { return }
+                            self.built = progress
+                            self.advanceRouteBuildCamera(with: progress)
+                            self.refreshMap()
+                        }
+                    )
                 }
-            )
             }
             guard !Task.isCancelled else {
                 RoutingDebugLog.shared.event(
@@ -1141,8 +1153,10 @@ final class RoutePlannerModel {
     /// True while From here / Plan is still building the full route
     /// (including chained fuel stops). Holds the indeterminate progress notice.
     private var isAssemblingRoute = false
+    /// Fresh create mints a new seed; saved/resume/nav freeze it.
+    private(set) var routingSessionSeed: UInt64 = UInt64.random(in: 1...9_007_199_254_740_991)
     /// Stable within this app process; a fresh launch can pick a different near-equal corridor.
-    let planningSessionSeed: UInt64 = UInt64.random(in: 1...9_007_199_254_740_991)
+    var planningSessionSeed: UInt64 { routingSessionSeed }
 
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
@@ -1947,9 +1961,17 @@ final class RoutePlannerModel {
                     let builder = ItineraryBuilder()
                     builder.mapZoom = zoom
                     let result = await RidePreferenceContext.$current.withValue(preferences) {
-                        await builder.build(change.itinerary, from: legIndex, reuse: original, fuel: fuel,
-                            source: self.routingSourcePolicy, replanFromStationID: change.replanFromStationID,
-                            onProgress: { _ in })
+                        await RoutingSessionContext.$seed.withValue(self.routingSessionSeed) {
+                            await builder.build(
+                                change.itinerary,
+                                from: legIndex,
+                                reuse: original,
+                                fuel: fuel,
+                                source: self.routingSourcePolicy,
+                                replanFromStationID: change.replanFromStationID,
+                                onProgress: { _ in }
+                            )
+                        }
                     }
                     guard !Task.isCancelled, self.fuelReplacementRunID == runID,
                           self.itinerary == requested, self.navigation.phase == .idle else { return }
@@ -2592,6 +2614,7 @@ final class RoutePlannerModel {
         existing.segments = activeResponses.flatMap { $0.segments ?? [] }
         existing.surfaceFamilyMode = activeSurfaceFamilyMode
         existing.ridePreferencesData = ridePreferences.flatMap { try? JSONEncoder().encode($0) }
+        existing.routeSeedsData = try? JSONEncoder().encode(["routingSessionSeed": routingSessionSeed])
         try? context.save()
         savedRouteOrigin = SavedRouteOrigin(id: existing.id, name: existing.name)
         toast = "Updated “\(existing.name)”"
@@ -2609,6 +2632,7 @@ final class RoutePlannerModel {
             surfaceFamilyMode: activeSurfaceFamilyMode
         )
         route.ridePreferencesData = ridePreferences.flatMap { try? JSONEncoder().encode($0) }
+        route.routeSeedsData = try? JSONEncoder().encode(["routingSessionSeed": routingSessionSeed])
         context.insert(route)
         try? context.save()
         // Adopt the new record so a second Save updates it rather than stacking copies.
@@ -2624,6 +2648,11 @@ final class RoutePlannerModel {
 
     func loadSavedRoute(_ saved: SavedRoute) {
         ridePreferences = saved.ridePreferencesData.flatMap { try? JSONDecoder().decode(RidePreferences.self, from: $0) }
+        if let data = saved.routeSeedsData,
+           let seeds = try? JSONDecoder().decode([String: UInt64].self, from: data),
+           let seed = seeds["routingSessionSeed"], seed > 0 {
+            routingSessionSeed = seed
+        }
         mode = .saved
         applyStoredRouteGeometry(
             name: saved.name,

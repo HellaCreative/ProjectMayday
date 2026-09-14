@@ -23,13 +23,17 @@ struct OnDeviceProfileCostsTests {
         #expect(dirtPaved / dirtTrack > 20)
     }
 
-    @Test func adventureCrossTrackTaxesOffLineArcs() {
+    @Test func adventureCrossTrackIsFlatInsideAWideCorridor() {
         let a = CLLocationCoordinate2D(latitude: 49.73269, longitude: -123.13511)
         let b = CLLocationCoordinate2D(latitude: 50.46739, longitude: -119.14172)
         let onLine = CLLocationCoordinate2D(latitude: 50.1, longitude: -121.14)
+        let fifteenKmOff = CLLocationCoordinate2D(latitude: 50.23, longitude: -121.14)
         let farNorth = CLLocationCoordinate2D(latitude: 51.4, longitude: -121.14)
         let near = OnDeviceProfileCosts.corridorCrossTrackExtra(
             profile: .balanced, point: onLine, lineFrom: a, lineTo: b, edgeMeters: 1000
+        )
+        let insideDirt = OnDeviceProfileCosts.corridorCrossTrackExtra(
+            profile: .dirt, point: fifteenKmOff, lineFrom: a, lineTo: b, edgeMeters: 1000
         )
         let farBalanced = OnDeviceProfileCosts.corridorCrossTrackExtra(
             profile: .balanced, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
@@ -40,9 +44,11 @@ struct OnDeviceProfileCostsTests {
         let farClean = OnDeviceProfileCosts.corridorCrossTrackExtra(
             profile: .cleanest, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
         )
-        #expect(farBalanced > near * 8)
-        #expect(farBalanced > farDirt)
-        #expect(farDirt > 8)
+        #expect(near == 0)
+        #expect(insideDirt == 0)
+        #expect(farBalanced > 0)
+        #expect(farDirt > 0)
+        #expect(farDirt < 2)
         #expect(farClean == 0)
         let xt = abs(GeoMath.crossTrackMeters(point: farNorth, lineFrom: a, to: b))
         #expect(xt > 40_000)
@@ -153,7 +159,7 @@ struct OnDeviceProfileCostsTests {
         #expect(unknownLocal == pavedLocal)
     }
 
-    @Test func dirtAwayPenaltyIsSoftUntilTheLastCoupleKm() {
+    @Test func dirtAwayPenaltyIsAGentleGradient() {
         let mid = OnDeviceProfileCosts.approachAwayExtra(
             profile: .dirt,
             dFromMeters: 200_000,
@@ -178,10 +184,13 @@ struct OnDeviceProfileCostsTests {
             dToMeters: 210_000,
             abMeters: 400_000
         )
-        // Forward fan: ~9.5/km mid-ride (×10 in pavement ≈ 95/km).
-        #expect(mid > 80)
-        #expect(mid < 120)
-        #expect(stillHuntingAtTenKm > 80)
+        let dirtPavedKm = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .dirt, surfaceCode: 0, roadClassCode: 4
+        )
+        #expect(mid > 0)
+        #expect(mid < 8)
+        #expect(mid < dirtPavedKm)
+        #expect(stillHuntingAtTenKm < 8)
         #expect(near > mid)
         #expect(mid < balancedMid)
     }
@@ -202,7 +211,8 @@ struct OnDeviceProfileCostsTests {
         #expect(cleanAway > 0)
         #expect(cleanAway <= 15 * 2.5)
         #expect(cleanAway < 60 * 1.18)
-        #expect(balancedAway >= 150)
+        #expect(balancedAway > 0)
+        #expect(balancedAway < 20)
     }
 
     @Test func cleanPavementGateBlocksMinorUnknownAndGravel() {
