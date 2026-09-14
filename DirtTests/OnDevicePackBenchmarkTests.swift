@@ -17,33 +17,55 @@ struct OnDevicePackBenchmarkTests {
     }
 
 
-    private func verifyPack(_ region: String, packRoot: URL? = nil, version: String = "fabric-v4-20260908-02") throws {
+    @discardableResult
+    private func verifyPack(_ region: String, packRoot: URL? = nil, version: String = "fabric-v4-20260908-02") throws -> [String: Any] {
         let dir = (packRoot ?? root).appendingPathComponent(region)
-        let manifest = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("pack-manifest.v2.json"))) as? [String: Any])
-        #expect(manifest["fabricReleaseId"] as? String == version)
+        let manifestData = try Data(contentsOf: dir.appendingPathComponent("pack-manifest.v2.json"))
+        let manifest = try #require(JSONSerialization.jsonObject(with: manifestData) as? [String: Any])
+        try #require(manifest["fabricReleaseId"] as? String == version)
+        try #require(manifest["regionId"] as? String == region)
+        var files: [String: Any] = [:]
         for key in ["graph", "geometry", "fuel", "seams"] {
             let file = try #require(manifest[key] as? [String: Any])
             let name = try #require(file["name"] as? String)
             let data = try Data(contentsOf: dir.appendingPathComponent(name))
-            #expect(data.count == file["bytes"] as? Int)
-            #expect(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() == file["sha256"] as? String)
+            let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            try #require(data.count == file["bytes"] as? Int)
+            try #require(hash == file["sha256"] as? String)
+            files[key] = ["name": name, "bytes": data.count, "sha256": hash]
         }
+        return ["regionId": region, "fabricReleaseId": version,
+            "sourceEpoch": manifest["sourceEpoch"] ?? NSNull(),
+            "schema": manifest["schema"] ?? NSNull(), "files": files,
+            "manifest": ["name": "pack-manifest.v2.json", "bytes": manifestData.count,
+                "sha256": SHA256.hash(data: manifestData).map { String(format: "%02x", $0) }.joined()]]
     }
 
     @MainActor
-    private func fixtureStore(packRoot: URL? = nil, version: String = "fabric-v4-20260908-02", regions: [String] = ["ns", "nb"]) throws -> (GraphPackStore, URL) {
+    private func fixtureStore(packRoot: URL? = nil, version: String = "fabric-v4-20260908-02", regions: [String] = ["ns", "nb"]) throws -> (GraphPackStore, URL, [String: Any]) {
         let fm = FileManager.default
         let temp = fm.temporaryDirectory.appendingPathComponent("recovery-packs-\(UUID())")
+        var verifiedIdentities: [String: Any] = [:]
         do {
             for region in regions {
-                try verifyPack(region, packRoot: packRoot, version: version)
+                let sourceIdentity = try verifyPack(region, packRoot: packRoot, version: version)
                 let destination = temp.appendingPathComponent("\(version)/\(region)")
                 try fm.createDirectory(at: destination, withIntermediateDirectories: true)
                 for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json", "pack-manifest.v2.json"] {
                     try fm.copyItem(at: (packRoot ?? root).appendingPathComponent("\(region)/\(name)"), to: destination.appendingPathComponent(name))
                 }
+                // Verify the bytes the native store will actually open, not only
+                // their source. Manifest identity also detects a changed copy.
+                let copiedIdentity = try verifyPack(region,
+                    packRoot: temp.appendingPathComponent(version), version: version)
+                let sourceRecord = try JSONSerialization.data(withJSONObject: sourceIdentity, options: [.sortedKeys])
+                let copiedRecord = try JSONSerialization.data(withJSONObject: copiedIdentity, options: [.sortedKeys])
+                try #require(sourceRecord == copiedRecord)
+                verifiedIdentities[region] = copiedIdentity
             }
-            return (GraphPackStore(cacheRoot: temp, refreshCatalogOnInit: false), temp)
+            return (GraphPackStore(cacheRoot: temp, refreshCatalogOnInit: false), temp,
+                ["verification": "source and copied fixture bytes SHA-256 checked before calculation",
+                 "regions": verifiedIdentities])
         } catch { try? fm.removeItem(at: temp); throw error }
     }
 
@@ -142,7 +164,7 @@ struct OnDevicePackBenchmarkTests {
     @Test("Regional reuse preserves fuel caps and unfinished-search classification")
     @MainActor
     func boundedRegionalRouteReuse() async throws {
-        let (store, temp) = try fixtureStore()
+        let (store, temp, _) = try fixtureStore()
         defer { try? FileManager.default.removeItem(at: temp) }
         let from = CLLocationCoordinate2D(latitude: 44.764919, longitude: -63.340350)
         let to = CLLocationCoordinate2D(latitude: 44.755736, longitude: -63.301255)
@@ -217,7 +239,7 @@ struct OnDevicePackBenchmarkTests {
     @Test("Accepted NS and NB packs cross the canonical seam")
     @MainActor
     func september13NovaScotiaToNewBrunswick() async throws {
-        let (store, temp) = try fixtureStore()
+        let (store, temp, _) = try fixtureStore()
         defer { try? FileManager.default.removeItem(at: temp) }
         let from = CLLocationCoordinate2D(latitude: 44.764830, longitude: -63.340243)
         let to = CLLocationCoordinate2D(latitude: 47.903181, longitude: -66.074515)
@@ -343,7 +365,7 @@ struct OnDevicePackBenchmarkTests {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
-        let (store, temp) = try fixtureStore(packRoot: candidate, version: version, regions: packRegions)
+        let (store, temp, fixtureIdentity) = try fixtureStore(packRoot: candidate, version: version, regions: packRegions)
         defer { try? FileManager.default.removeItem(at: temp) }
         store.useStationCoveragePreprobe = coveragePreprobe
         var resultDigests: [Data] = []
@@ -387,8 +409,10 @@ struct OnDevicePackBenchmarkTests {
             let report = measurement.finish(outcome: String(describing: result.riderLegStatus))
             if captureDigest { resultDigests.append(try canonicalOwnerResultDigest(result)) }
             try saveEvidence(["measurement": try object(report),
-                "installedIdentity": store.installedPackIdentity(regionId: "ns") ?? [:]], name: "measurement-phone42-" + evidenceID)
-            try saveEvidence(["pack": version, "itinerary": try object(itinerary), "mapZoom": zoom,
+                "verifiedFixtureIdentity": fixtureIdentity,
+                "catalogInstalledIdentityNS": store.installedPackIdentity(regionId: "ns") as Any? ?? NSNull()], name: "measurement-phone42-" + evidenceID)
+            try saveEvidence(["pack": version, "verifiedFixtureIdentity": fixtureIdentity,
+                "itinerary": try object(itinerary), "mapZoom": zoom,
                 "tankMeters": 200_000, "usableMeters": 180_000,
                 "routes": try result.legs.map { try object($0.response) },
                 "status": String(describing: result.riderLegStatus),
@@ -471,7 +495,7 @@ struct OnDevicePackBenchmarkTests {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
-        let (store, temp) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
+        let (store, temp, _) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
         defer { try? FileManager.default.removeItem(at: temp) }
         let from = CLLocationCoordinate2D(latitude: 44.632662, longitude: -75.651839)
         let to = CLLocationCoordinate2D(latitude: 44.601681, longitude: -79.308263)
@@ -544,7 +568,7 @@ struct OnDevicePackBenchmarkTests {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
-        let (store, temp) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
+        let (store, temp, _) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
         defer { try? FileManager.default.removeItem(at: temp) }
         let from = CLLocationCoordinate2D(latitude: 44.632662, longitude: -75.651839)
         let to = CLLocationCoordinate2D(latitude: 44.601681, longitude: -79.308263)
@@ -617,7 +641,7 @@ struct OnDevicePackBenchmarkTests {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
-        let (store, temp) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
+        let (store, temp, _) = try fixtureStore(packRoot: candidate, version: version, regions: ["on"])
         defer { try? FileManager.default.removeItem(at: temp) }
         let from = CLLocationCoordinate2D(latitude: 44.632662, longitude: -75.651839)
         let to = CLLocationCoordinate2D(latitude: 44.601681, longitude: -79.308263)
@@ -697,7 +721,7 @@ struct OnDevicePackBenchmarkTests {
     @Test("Short fuel-enabled itinerary begins with the required initial refill")
     @MainActor
     func shortItineraryStartsWithRefill() async throws {
-        let (store, temp) = try fixtureStore()
+        let (store, temp, _) = try fixtureStore()
         defer { try? FileManager.default.removeItem(at: temp) }
         let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
         let a = RiderWaypoint(coordinate: RouteCoordinate(longitude: -63.340243, latitude: 44.764830))
@@ -721,7 +745,7 @@ struct OnDevicePackBenchmarkTests {
     @Test("Fuel distance guidance spans recorded regional seams in both directions")
     @MainActor
     func crossPackFuelDistances() async throws {
-        let (store, temp) = try fixtureStore()
+        let (store, temp, _) = try fixtureStore()
         defer { try? FileManager.default.removeItem(at: temp) }
         let from = RouteCoordinate(longitude: -63.340350, latitude: 44.764919)
         let to = RouteCoordinate(longitude: -64.7782, latitude: 46.0878)
@@ -752,7 +776,7 @@ struct OnDevicePackBenchmarkTests {
     @Test("Initial refill precedes the ride on the accepted real packs")
     @MainActor
     func initialRefillOnAcceptedPacks() async throws {
-        let (store, temp) = try fixtureStore()
+        let (store, temp, _) = try fixtureStore()
         defer { try? FileManager.default.removeItem(at: temp) }
         let start = RouteCoordinate(longitude: -63.340350, latitude: 44.764919)
         let destination = RouteCoordinate(longitude: -67.296103, latitude: 45.177074)
@@ -802,7 +826,7 @@ struct OnDevicePackBenchmarkTests {
         let seed = UInt64(try #require(fixture["sessionSeed"] as? Int))
         let tank = Double(try #require(fixture["tankRangeKm"] as? Int)) * 1000
         let usable = tank * (1 - Double(try #require(fixture["reservePercent"] as? Int)) / 100)
-        let (store, temp) = try fixtureStore()
+        let (store, temp, _) = try fixtureStore()
         defer { try? FileManager.default.removeItem(at: temp) }
         for scenario in cases {
             let id = try #require(scenario["id"] as? String)
@@ -892,7 +916,7 @@ struct OnDevicePackBenchmarkTests {
 
     @Test("Installed pack reuse preserves identity and invalidates changed files")
     @MainActor func installedPackReuse() async throws {
-        let (store, temp) = try fixtureStore()
+        let (store, temp, _) = try fixtureStore()
         defer { try? FileManager.default.removeItem(at: temp) }
         let ns = CLLocationCoordinate2D(latitude: 44.764830, longitude: -63.340243)
         let nb = CLLocationCoordinate2D(latitude: 45.9636, longitude: -66.6431)

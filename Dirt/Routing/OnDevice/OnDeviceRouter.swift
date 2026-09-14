@@ -827,7 +827,7 @@ nonisolated struct OnDeviceRouter {
 
     private static let stationCoverageCache = StationCoverageCache()
     private func forEachStationCoverageEdge(_ point: CLLocationCoordinate2D,meters: Double,
-        index: ExactSnapIndex,bounds: ExactSnapIndex.BoundsQuery,
+        index: ExactSnapIndex,bounds: ExactSnapIndex.BoundsQuery, cellSuperset: Bool = false,
         visit: (Int) throws -> Void) throws {
         if usePackGeometryEnvelope,
            try !bounds.mayContainMatch(latitude: point.latitude, longitude: point.longitude, meters: meters) {
@@ -837,17 +837,23 @@ nonisolated struct OnDeviceRouter {
         // Caller retains the validated index query around both cache hits and
         // misses, including its final source/cancellation check.
         try Self.stationCoverageCache.enumerate(owner: pack,index: index,
-            latitude: point.latitude,longitude: point.longitude,meters: meters,
+            latitude: point.latitude,longitude: point.longitude,meters: meters,cellSuperset: cellSuperset,
             cancelled: { RoutingWorkContext.stopReason != nil },visit: visit) { emit in
-            var examined = 0
-            defer { RoutingWorkContext.measurement?.increment(.stationCoverageEdgesScanned,by: UInt64(examined)) }
+            var examined = 0, boundsChecks = 0
+            defer {
+                RoutingWorkContext.measurement?.increment(.stationCoverageEdgesScanned,by: UInt64(examined))
+                RoutingWorkContext.measurement?.increment(.stationCoverageBoundsChecks,by: UInt64(boundsChecks))
+            }
             let radius = max(2,Int(ceil(meters/1000.0/(ExactSnapIndex.cellDegrees*111.0)))+2)
             for ring in 0...radius {
                 try index.forEachEdge(nearLat: point.latitude,lon: point.longitude,radiusCells: ring,
                     query: bounds,cancelled: { RoutingWorkContext.stopReason != nil }) { edge in
                     examined += 1
-                    guard try bounds.mayIntersect(edge: edge,latitude: point.latitude,
-                        longitude: point.longitude,meters: meters) else { return }
+                    if !cellSuperset {
+                        boundsChecks += 1
+                        guard try bounds.mayIntersect(edge: edge,latitude: point.latitude,
+                            longitude: point.longitude,meters: meters) else { return }
+                    }
                     try emit(edge)
                 }
             }
@@ -864,10 +870,47 @@ nonisolated struct OnDeviceRouter {
               let edgeTo = pack.edgeTo, maxMeters.isFinite, maxMeters > 0, nodeOffset >= 0,
               nodeOffset <= distances.count,
               pack.nodeCount <= distances.count - nodeOffset else { return false }
+        var endpointBoundsChecks = 0
+        defer { RoutingWorkContext.measurement?.increment(.stationCoverageBoundsChecks,by: UInt64(endpointBoundsChecks)) }
         return try index.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { bounds in
-            try StationFieldProbe.canSkip(completedField: true, distances: distances,
-                protectedEdges: protectedEdges) { visit in
-                try forEachStationCoverageEdge(point,meters: maxMeters,index: index,bounds: bounds) { edge in
+            guard try index.hasCompleteEndpointCoverage(query: bounds) else { return false }
+            return try StationFieldProbe.canSkip(completedField: true, distances: distances,
+                protectedEdges: protectedEdges, boundsMayIntersect: { edge in
+                    endpointBoundsChecks += 1
+                    return try bounds.mayIntersect(edge: edge,latitude: point.latitude,longitude: point.longitude,meters: maxMeters)
+                }) { visit in
+                try forEachStationCoverageEdge(point,meters: maxMeters,index: index,bounds: bounds,cellSuperset: true) { edge in
+                        guard edgeFrom.indices.contains(edge), edgeTo.indices.contains(edge) else {
+                            try visit(edge, -1, -1)
+                            return
+                        }
+                        let a = Int(edgeFrom[edge]), b = Int(edgeTo[edge])
+                        guard a >= 0, b >= 0, a < pack.nodeCount, b < pack.nodeCount else {
+                            try visit(edge, -1, -1)
+                            return
+                        }
+                        try visit(edge, nodeOffset + a, nodeOffset + b)
+                }
+            }
+        }
+    }
+
+    private func stationCoverageCannotReach(_ point: CLLocationCoordinate2D,
+        isPossiblyReachedNode: @escaping (Int) -> Bool, nodeOffset: Int, protectedEdges: Set<Int>,
+        maxMeters: Double = Self.preferredMatchMeters) throws -> Bool {
+        guard pack.version >= 4, pack.legalTopology,
+              let index = pack.exactSnapIndex, let edgeFrom = pack.edgeFrom,
+              let edgeTo = pack.edgeTo, maxMeters.isFinite, maxMeters > 0, nodeOffset >= 0 else { return false }
+        var endpointBoundsChecks = 0
+        defer { RoutingWorkContext.measurement?.increment(.stationCoverageBoundsChecks,by: UInt64(endpointBoundsChecks)) }
+        return try index.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { bounds in
+            guard try index.hasCompleteEndpointCoverage(query: bounds) else { return false }
+            return try StationFieldProbe.canSkip(completedField: true, protectedEdges: protectedEdges,
+                isPossiblyReachedNode: isPossiblyReachedNode, boundsMayIntersect: { edge in
+                    endpointBoundsChecks += 1
+                    return try bounds.mayIntersect(edge: edge,latitude: point.latitude,longitude: point.longitude,meters: maxMeters)
+                }) { visit in
+                try forEachStationCoverageEdge(point,meters: maxMeters,index: index,bounds: bounds,cellSuperset: true) { edge in
                         guard edgeFrom.indices.contains(edge), edgeTo.indices.contains(edge) else {
                             try visit(edge, -1, -1)
                             return
@@ -983,12 +1026,18 @@ nonisolated struct OnDeviceRouter {
         guard !field.reachesRecordedBorder,
               let index = pack.exactSnapIndex, let edgeFrom = pack.edgeFrom, let edgeTo = pack.edgeTo,
               maxMeters.isFinite, maxMeters > 0 else { return false }
+        var endpointBoundsChecks = 0
+        defer { RoutingWorkContext.measurement?.increment(.stationCoverageBoundsChecks,by: UInt64(endpointBoundsChecks)) }
         return try index.withBoundsQuery(cancelled: { RoutingWorkContext.stopReason != nil }) { bounds in
-            try StationFieldProbe.canSkip(completedField: true, protectedEdges: field.protectedEdges,
+            guard try index.hasCompleteEndpointCoverage(query: bounds) else { return false }
+            return try StationFieldProbe.canSkip(completedField: true, protectedEdges: field.protectedEdges,
                 isPossiblyReachedNode: { node in
                     node >= self.pack.nodeCount || field.reachedNodes.contains(node)
+                }, boundsMayIntersect: { edge in
+                    endpointBoundsChecks += 1
+                    return try bounds.mayIntersect(edge: edge,latitude: point.latitude,longitude: point.longitude,meters: maxMeters)
                 }) { visit in
-                try forEachStationCoverageEdge(point,meters: maxMeters,index: index,bounds: bounds) { edge in
+                try forEachStationCoverageEdge(point,meters: maxMeters,index: index,bounds: bounds,cellSuperset: true) { edge in
                         guard edgeFrom.indices.contains(edge), edgeTo.indices.contains(edge) else {
                             try visit(edge, -1, -1); return
                         }
@@ -1084,13 +1133,123 @@ nonisolated struct OnDeviceRouter {
         return valid
     }
 
+    /// Temporary dense distance guidance; extract only portal values and release
+    /// the field before routing. This is not a full legal-tail proof. Endpoint
+    /// seeds cover ALL geometric matching possibilities conservatively, with
+    /// partial road distance and the existing charged final-stitch cost. No geometric-distance assumption.
+    static func recordedTailLowerBounds(packs: [GraphV2Pack],
+        seamSnapshots: [[String: [GraphV2Pack.CrossPackSeamAnchor]]],
+        destination: CLLocationCoordinate2D, mapZoom: Double?, matchLimitMeters: Double?) throws
+        -> [String: [Int64: Double]] {
+        try RoutingWorkContext.check()
+        guard let destinationPack = packs.last, packs.count >= 2,
+              packs.allSatisfy({ $0.version >= 4 && $0.legalTopology }),
+              seamSnapshots.count == packs.count else { throw ExactGuidanceSeams.Failure.invalidRecordedIdentity }
+        let phase = RoutingWorkContext.measurement?.begin(.reverseGuidance)
+        defer { RoutingWorkContext.measurement?.end(phase) }
+        var offsets: [Int] = [], total = 0
+        for pack in packs { offsets.append(total); total += pack.nodeCount }
+        var extra: [Int: [RoadCompass.Arc]] = [:]
+        var requested: [Int: [Int64: Int]] = [:]
+        for index in packs.indices {
+            try RoutingWorkContext.check()
+            for other in packs.indices where other > index {
+                guard let localID = packs[index].regionId?.lowercased(),
+                      let remoteID = packs[other].regionId?.lowercased() else { throw ExactGuidanceSeams.Failure.invalidRecordedIdentity }
+                for pair in try ExactGuidanceSeams.connections(local: packs[index], remote: packs[other],
+                    anchors: seamSnapshots[index][remoteID] ?? [], reverse: seamSnapshots[other][localID] ?? []) {
+                    let a = offsets[index] + pair.localNode, b = offsets[other] + pair.remoteNode
+                    extra[a, default: []].append(.init(to: b, edge: -1, meters: 0))
+                    extra[b, default: []].append(.init(to: a, edge: -1, meters: 0))
+                    requested[index, default: [:]][packs[index].osmNodeIds[pair.localNode]] = a
+                    requested[other, default: [:]][packs[other].osmNodeIds[pair.remoteNode]] = b
+                }
+            }
+        }
+        let cap = TapRadius.meters(zoom: mapZoom, latitude: destination.latitude,
+            requestedMeters: matchLimitMeters, graphBinaryVersion: Int(destinationPack.version))
+        let destinationRouter = OnDeviceRouter(pack: destinationPack)
+        var rejections: [String] = []
+        let matches = try destinationRouter.nearestEdgeSnaps(to: destination,
+            allowUnknown: true, profile: .dirt, maxMeters: cap,
+            rejections: &rejections, collectAllGeometricMatches: true)
+        guard !matches.isEmpty else {
+            throw RoutingError.fuelUnknown("Destination matching coverage is incomplete; regional tail distance is unverified.")
+        }
+        let target = total, lastOffset = offsets[offsets.count - 1]
+        for snap in matches {
+            try RoutingWorkContext.check()
+            let along = max(0, snap.distanceAlongM)
+            let stored = Double(destinationPack.edgeMeters[snap.edgeIndex])
+            guard let geometry = try destinationRouter.edgeGeometry(snap.edgeIndex), geometry.count >= 2 else {
+                throw RoutingError.fuelUnknown("Destination road geometry is unavailable.")
+            }
+            let geometryLeft = destinationRouter.lineMeters(destinationRouter.coordsFromAToMatch(geometry, snap: snap))
+            let geometryRight = destinationRouter.lineMeters(destinationRouter.coordsFromMatchToB(geometry, snap: snap))
+            let stitch = destinationRouter.softStitchStub(tap: destination, snap: snap, idSuffix: "end")?.distanceMeters ?? 0
+            let left = min(along, geometryLeft) + stitch
+            let right = min(max(0, stored - along), geometryRight) + stitch
+            guard left.isFinite, right.isFinite else { throw ExactGuidanceSeams.Failure.invalidRecordedIdentity }
+            // Both directions, all geometric parents, no intent shortlist.
+            // The existing final-stitch helper supplies exactly the charged
+            // distance, including its accepted omission outside the stitch range.
+            extra[lastOffset + snap.nodeA, default: []].append(.init(to: target, edge: snap.edgeIndex, meters: left))
+            extra[lastOffset + snap.nodeB, default: []].append(.init(to: target, edge: snap.edgeIndex, meters: right))
+        }
+        var invalid = false
+        let field = RoadCompass.build(stateCount: total + 1, destination: target, reverse: true,
+            recordSuccessors: false, cancelled: { RoutingWorkContext.stopReason != nil || invalid }) { state, visit in
+            for arc in extra[state] ?? [] { visit(arc) }
+            guard state < total, let index = packs.indices.last(where: { offsets[$0] <= state }) else { return }
+            let pack = packs[index], node = state - offsets[index]
+            guard node >= 0, node < pack.nodeCount, pack.nodeOffsets.indices.contains(node + 1) else { invalid = true; return }
+            let start = Int(pack.nodeOffsets[node]), end = Int(pack.nodeOffsets[node+1])
+            guard start >= 0, end >= start, end <= pack.edgeTargets.count, end <= pack.edgeUndirectedIndex.count else { invalid = true; return }
+            for arc in start..<end {
+                let edge = Int(pack.edgeUndirectedIndex[arc]), next = Int(pack.edgeTargets[arc])
+                guard next >= 0, next < pack.nodeCount, pack.edgeMeters.indices.contains(edge) else { invalid = true; return }
+                // Ignore access/turn preferences only in this LOWER BOUND. The
+                // actual approach and remaining tail retain all legal rules.
+                visit(.init(to: offsets[index] + next, edge: edge, meters: Double(pack.edgeMeters[edge])))
+            }
+        }
+        try RoutingWorkContext.check()
+        guard !invalid, field.status == "complete" else {
+            throw RoutingError.fuelUnknown("Regional tail distance preparation did not complete.")
+        }
+        var result: [String: [Int64: Double]] = [:]
+        for (index, nodes) in requested {
+            guard let region = packs[index].regionId?.lowercased() else { throw ExactGuidanceSeams.Failure.invalidRecordedIdentity }
+            for (original, global) in nodes { result[region, default: [:]][original] = field.remaining[global] }
+        }
+        return result
+    }
+
     /// A direction-aware distance field over installed packs and reciprocal
     /// recorded seams. This is guidance: exact routes still prove turn legality.
-    static func fuelRoadDistances(packs: [GraphV2Pack], anchor: CLLocationCoordinate2D,
+    static func fuelRoadDistances(packs: [GraphV2Pack],
+                                  seamSnapshots: [[String: [GraphV2Pack.CrossPackSeamAnchor]]]? = nil,
+                                  anchor: CLLocationCoordinate2D,
                                   points: [CLLocationCoordinate2D], profile: RouteProfile,
                                   allowUnknown: Bool, reverse: Bool,
                                   useCachedMatchesBeforeCoverage: Bool = true,
-                                  useStationCoveragePreprobe: Bool = true) throws -> [Double]? {
+                                  useStationCoveragePreprobe: Bool = true,
+                                  forwardRangeMeters: Double? = nil,
+                                  forwardFieldLimits: BoundedForwardFuelField.Limits = .init()) throws -> [Double]? {
+        let diagnosticStart = ProcessInfo.processInfo.systemUptime
+        var diagnosticStatus = "incomplete", matchingStage = "anchor"
+        var matchCounts: [String: Int] = [:], matchSeconds: [String: Double] = [:]
+        var seamSeconds = 0.0, fieldSeconds = 0.0, coverageSeconds = 0.0, coverageCalls = 0
+        var diagnosticSkipped = 0, forwardPreparation = "none"
+        defer {
+            let matches = ["anchor", "seam", "station"].map {
+                "\($0):\(matchCounts[$0, default: 0])/\(matchSeconds[$0, default: 0])s"
+            }.joined(separator: ",")
+            let diagnosticLine = "fuel field profile=\(profile) reverse=\(reverse) anchor=\(anchor.latitude),\(anchor.longitude) points=\(points.count) packs=\(packs.compactMap(\.regionId).joined(separator: ",")) status=\(diagnosticStatus) stop=\(RoutingWorkContext.stopReason ?? "none") elapsed=\(ProcessInfo.processInfo.systemUptime - diagnosticStart)s matchMisses=\(matches) seamPrep=\(seamSeconds)s fieldBuild=\(fieldSeconds)s coverage=\(coverageCalls)/\(coverageSeconds)s skipped=\(diagnosticSkipped) forward=\(forwardPreparation)"
+            Task { @MainActor in RoutingDebugLog.shared.event(diagnosticLine) }
+        }
+        let seams = seamSnapshots ?? packs.map(\.crossPackSeams)
+        guard seams.count == packs.count else { throw ExactGuidanceSeams.Failure.invalidRecordedIdentity }
         let routers = packs.map { OnDeviceRouter(pack: $0) }
         var offsets: [Int] = [], count = 0
         for pack in packs { offsets.append(count); count += pack.nodeCount }
@@ -1109,7 +1268,11 @@ nonisolated struct OnDeviceRouter {
             let router = routers[index]
             return try Self.rangeSnapCache.snaps(pack: packs[index], point: point,
                 profile: profile, allowUnknown: allowUnknown) {
-                try router.nearestEdgeSnaps(to: point, allowUnknown: allowUnknown,
+                let began = ProcessInfo.processInfo.systemUptime
+                let stage = matchingStage
+                matchCounts[stage, default: 0] += 1
+                defer { matchSeconds[stage, default: 0] += ProcessInfo.processInfo.systemUptime - began }
+                return try router.nearestEdgeSnaps(to: point, allowUnknown: allowUnknown,
                     profile: profile, maxMeters: Self.preferredMatchMeters)
             }
         }
@@ -1133,12 +1296,31 @@ nonisolated struct OnDeviceRouter {
         }
         let anchorNode = count; count += 1
         for index in packs.indices { try attach(anchor, index: index, virtual: anchorNode) }
+        matchingStage = "seam"
+        let seamBegan = ProcessInfo.processInfo.systemUptime
+        do {
+        defer { seamSeconds = ProcessInfo.processInfo.systemUptime - seamBegan }
         for index in packs.indices {
             try RoutingWorkContext.check()
             let pack = packs[index]
             for other in packs.indices where other > index {
                 let remote = packs[other]
                 guard let localID = pack.regionId?.lowercased(), let remoteID = remote.regionId?.lowercased() else { continue }
+                if pack.version >= 4 || remote.version >= 4 {
+                    let connections = try ExactGuidanceSeams.connections(local: pack, remote: remote,
+                        anchors: seams[index][remoteID] ?? [],
+                        reverse: seams[other][localID] ?? [])
+                    for connection in connections {
+                        let a = offsets[index] + connection.localNode
+                        let b = offsets[other] + connection.remoteNode
+                        // Same original graph node, not a spatial connector. Road
+                        // direction/access remains on incident arcs; turn state is
+                        // proved by the later actual route, never this guidance.
+                        extra[a, default: []].append(.init(to: b, edge: -1, meters: 0))
+                        extra[b, default: []].append(.init(to: a, edge: -1, meters: 0))
+                    }
+                    continue
+                }
                 for seam in pack.crossPackSeams[remoteID] ?? [] {
                     guard seam.gapMeters <= 2,
                         let reciprocal = (remote.crossPackSeams[localID] ?? []).first(where: {
@@ -1155,6 +1337,44 @@ nonisolated struct OnDeviceRouter {
                 }
             }
         }
+        }
+        let fieldBegan = ProcessInfo.processInfo.systemUptime
+        var bounded: BoundedForwardFuelField?
+        if !reverse, let maximum = forwardRangeMeters {
+            guard !(extra[anchorNode] ?? []).isEmpty else {
+                throw RoutingError.fuelUnknown("The origin has no verified usable road match; range remains unverified.")
+            }
+            bounded = try BoundedForwardFuelField.build(
+                seeds: [.init(node: .init(pack: 0,local: anchorNode),meters: 0)],maximumMeters: maximum,limits: forwardFieldLimits) { key,visit in
+                let state = key.local
+            for arc in extra[state] ?? [] { try visit(.init(pack: 0,local: arc.to),arc.meters) }
+            guard let index = packs.indices.last(where: { offsets[$0] <= state }),
+                  state < offsets[index] + packs[index].nodeCount else { return }
+            let router = routers[index], pack = packs[index], node = state - offsets[index]
+            let start = Int(pack.nodeOffsets[node]), end = Int(pack.nodeOffsets[node + 1])
+            guard start >= 0, end >= start, end <= pack.edgeTargets.count, end <= pack.edgeUndirectedIndex.count else { throw BoundedForwardFuelField.Failure.invalidInput }
+            for arc in start..<end {
+                let ei = Int(pack.edgeUndirectedIndex[arc]), target = Int(pack.edgeTargets[arc])
+                guard ei >= 0, ei < pack.edgeMeters.count, target >= 0, target < pack.nodeCount else { throw BoundedForwardFuelField.Failure.invalidInput }
+                if pack.version >= 4, pack.legalTopology {
+                    let code = Int(pack.v4AccessCode(ei: ei, from: node, to: target))
+                    if code == 2 || code == 5 || (code == 1 && !policyUnknown) { continue }
+                } else if !router.accessAllowed(GraphV2Pack.unpackAccess(pack.edgeAttrs[ei]),
+                    allowUnknown: policyUnknown, profile: profile) { continue }
+                try visit(.init(pack: 0,local: offsets[index] + target),Double(pack.edgeMeters[ei]))
+            }
+            }
+        }
+        if let bounded {
+            forwardPreparation = "complete:\(bounded.completeWithinRange),states:\(bounded.stateCount),arcs:\(bounded.examinedArcs),peakPayload:\(bounded.allocatedPayloadBytes),retainedPayload:\(bounded.retainedPayloadBytes)"
+        }
+        let remaining: (Int) -> Double
+        if let bounded, bounded.completeWithinRange {
+            remaining = { bounded.distance(.init(pack: 0,local: $0)) ?? .infinity }
+            diagnosticStatus = "bounded-forward-complete"
+        } else {
+            bounded = nil // Release incomplete sparse preparation before legacy fallback.
+            // Optional accelerator exhaustion cannot exclude any station.
         let result = RoadCompass.build(stateCount: count, destination: anchorNode, reverse: reverse,
             recordSuccessors: false,
             cancelled: { RoutingWorkContext.stopReason != nil }) { state, visit in
@@ -1172,13 +1392,42 @@ nonisolated struct OnDeviceRouter {
                 visit(.init(to: offsets[index] + target, edge: ei, meters: Double(pack.edgeMeters[ei])))
             }
         }
+        diagnosticStatus = "field-" + result.status
         guard result.status == "complete" else { throw RoutingError.fuelUnknown("Regional guidance did not complete; fuel reachability remains unverified.") }
+
+            // A completed fallback field can prove the same range exclusion
+            // as the sparse accelerator. Do not match every connected station
+            // merely because the bounded preparation ran out of state slots.
+            if !reverse, let maximum = forwardRangeMeters {
+                remaining = { node in
+                    let distance = result.remaining[node]
+                    return distance.isFinite && distance > maximum ? .infinity : distance
+                }
+                diagnosticStatus = "full-forward-range-complete"
+            } else {
+                remaining = { result.remaining[$0] }
+            }
+        }
+        fieldSeconds = ProcessInfo.processInfo.systemUptime - fieldBegan
         // The field is complete. Keep anchor-interior matches even when no
         // graph endpoint can represent their direct same-edge continuation.
+        matchingStage = "anchor"
         let anchorMatches = try packs.indices.map { try snaps(anchor, $0) }
+        matchingStage = "station"
         let protectedByPack = anchorMatches.map { Set($0.map(\.edgeIndex)) }
         var skipped = 0
-        defer { RoutingWorkContext.measurement?.increment(.stationMatchesSkipped, by: UInt64(skipped)) }
+        defer {
+            diagnosticSkipped = skipped
+            RoutingWorkContext.measurement?.increment(.stationMatchesSkipped, by: UInt64(skipped))
+        }
+        func coverageCannotReach(_ point: CLLocationCoordinate2D, index: Int) throws -> Bool {
+            coverageCalls += 1
+            let began = ProcessInfo.processInfo.systemUptime
+            defer { coverageSeconds += ProcessInfo.processInfo.systemUptime - began }
+            return try routers[index].stationCoverageCannotReach(point,
+                isPossiblyReachedNode: { $0 < 0 || $0 >= count || remaining($0) != .infinity },
+                nodeOffset: offsets[index], protectedEdges: protectedByPack[index])
+        }
         var distances: [Double] = []
         for point in points {
             try RoutingWorkContext.check()
@@ -1193,9 +1442,7 @@ nonisolated struct OnDeviceRouter {
                 if cached != nil {
                     RoutingWorkContext.measurement?.increment(.rangeSnapCoverageBypasses)
                 }
-                if useStationCoveragePreprobe, cached == nil, try routers[index].stationCoverageCannotReach(point,
-                    distances: result.remaining, nodeOffset: offset,
-                    protectedEdges: protectedByPack[index]) {
+                if (useStationCoveragePreprobe || bounded?.completeWithinRange == true), cached == nil, try coverageCannotReach(point, index: index) {
                     skipped += 1
                     continue
                 }
@@ -1211,15 +1458,16 @@ nonisolated struct OnDeviceRouter {
                     let forward = permitted(pack, from: snap.nodeA, to: snap.nodeB, edge: ei)
                     let backward = permitted(pack, from: snap.nodeB, to: snap.nodeA, edge: ei)
                     if reverse ? backward : forward {
-                        best = min(best, snap.distanceMeters + snap.distanceAlongM + result.remaining[offset + snap.nodeA])
+                        best = min(best, snap.distanceMeters + snap.distanceAlongM + remaining(offset + snap.nodeA))
                     }
                     if reverse ? forward : backward {
-                        best = min(best, snap.distanceMeters + max(0, Double(pack.edgeMeters[ei]) - snap.distanceAlongM) + result.remaining[offset + snap.nodeB])
+                        best = min(best, snap.distanceMeters + max(0, Double(pack.edgeMeters[ei]) - snap.distanceAlongM) + remaining(offset + snap.nodeB))
                     }
                 }
             }
             distances.append(best)
         }
+        diagnosticStatus += "-returned"
         return distances
     }
 
@@ -5140,7 +5388,8 @@ nonisolated struct OnDeviceRouter {
         osmCoreOnly: Bool = false,
         headingDeg: Double? = nil,
         intentBearingDeg: Double? = nil,
-        rejections: inout [String]
+        rejections: inout [String],
+        collectAllGeometricMatches: Bool = false
     ) throws -> [EdgeSnap] {
         let measurement = RoutingWorkContext.measurement
         let measuredPhase = measurement?.begin(.matching)
@@ -5272,6 +5521,7 @@ nonisolated struct OnDeviceRouter {
         } else { try scanCandidates(nil) }
 
         let ranked = bestByEdge.values.sorted { $0.distanceMeters < $1.distanceMeters }
+        if collectAllGeometricMatches { return ranked }
         guard pack.version >= 4, pack.legalTopology else {
             return Array(ranked.prefix(Self.maxStartSnapCandidates * 2))
         }

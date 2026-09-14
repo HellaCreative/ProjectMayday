@@ -13,7 +13,7 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
     enum Phase: String, Codable, CaseIterable, Sendable {
         case acquisition, verification, graphAccess, decode, indexing, matching
         case indexSourceScan, indexMerge, indexPublication, indexEnvelopeValidation
-        case stationCoverage
+        case stationCoverage, seamSourceValidation, seamNodePreparation
         case turnPreparation, reverseGuidance, search, fuelContinuation
         case geometry, finalValidation, display
     }
@@ -23,6 +23,7 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
         /// Logical file views opened and bytes consumed by checksums; repeated
         /// access counts repeated work, not unique storage or physical disk I/O.
         case urbanMemoHits, urbanMemoMisses, urbanMemoEvictions
+        case stationCoverageBoundsChecks
         case stationCoverageCacheHits, stationCoverageCacheMisses, stationCoverageEdgesScanned, stationCoverageEntriesEvicted
         case initialFuelBoundMemoHits, initialFuelBoundMemoMisses
         case snapEnvelopeRejectedQueries
@@ -39,7 +40,7 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
         case labelPagesAllocated, labelsCreated, queuePushes, queuePops
         case fuelStagesCommitted, failedContinuations, reusedProofs
         case rangeSnapCacheHits, rangeSnapCacheMisses, rangeSnapCoverageBypasses
-        case stationMatchesSkipped
+        case stationMatchesSkipped, exactSeamRows, exactSeamBindings, seamSpatialLookupsAvoided
         case cancelledWindows, dataErrors
     }
 

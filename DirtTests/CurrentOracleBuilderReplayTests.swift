@@ -95,6 +95,24 @@ struct CurrentOracleBuilderReplayTests {
     }
 
     @Test @MainActor
+    func crossProvinceCleanFuelCurrentColdWarm() async throws {
+        _ = try await runCurrentOracleBuilderWorkflows(onlyScenario: "cross-province",
+            onlyProfile: "cleanest", onlyFuel: true, evidenceVariant: "exact-seams")
+    }
+
+    @Test @MainActor
+    func crossProvinceBalancedFuelCurrentColdWarm() async throws {
+        _ = try await runCurrentOracleBuilderWorkflows(onlyScenario: "cross-province",
+            onlyProfile: "balanced", onlyFuel: true, evidenceVariant: "exact-seams")
+    }
+
+    @Test @MainActor
+    func crossProvinceDirtFuelCurrentColdWarm() async throws {
+        _ = try await runCurrentOracleBuilderWorkflows(onlyScenario: "cross-province",
+            onlyProfile: "dirt", onlyFuel: true, evidenceVariant: "exact-seams")
+    }
+
+    @Test @MainActor
     func crossProvinceCleanFuelEnvelopeColdWarmAB() async throws {
         try await crossProvinceEnvelopeComparison(profile: "cleanest")
     }

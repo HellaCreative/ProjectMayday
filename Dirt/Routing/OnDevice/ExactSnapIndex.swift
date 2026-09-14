@@ -70,6 +70,13 @@ nonisolated final class ExactSnapIndex: @unchecked Sendable {
         self.source = source; header = decoded; geometryEnvelope = verified.envelope
     }
 
+    /// Private derivative membership includes every known graph endpoint cell.
+    /// Unknown rows disable consumers that need complete incident coverage.
+    func hasCompleteEndpointCoverage(query: BoundsQuery) throws -> Bool {
+        try query.validateOwner(self)
+        return header.edgeCount == 0 || geometryEnvelope != nil
+    }
+
     /// Visits in the exact prior x/y/ring/bucket ordering. No complete bucket
     /// array is allocated, even for a dense cell. Callback errors propagate.
     func forEachEdge(nearLat lat: Double, lon: Double, radiusCells: Int,

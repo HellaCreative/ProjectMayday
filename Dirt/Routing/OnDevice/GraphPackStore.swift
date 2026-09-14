@@ -1018,14 +1018,46 @@ final class GraphPackStore {
         guard regions.count >= 2 else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
         var incompleteFailure: OnDeviceRouter.Failure?
+        var incompleteRevision = 0
         func recordFailure(_ reason: OnDeviceRouter.Failure) {
             lastFailure = reason
             // A later failed approach cannot erase an earlier unfinished search.
-            if case .searchLimit = reason { incompleteFailure = reason }
+            if case .searchLimit = reason { incompleteFailure = reason; incompleteRevision += 1 }
         }
         var seamAttempts = 0
         var missingRecordedSeam = false
         let maximumSeamAttempts = max(24, min(96, (regions.count - 1) * 8))
+        var recordedTailBounds: [String: [Int64: Double]]?
+        var tailSourceIdentity: String?
+        func tailBound(region: String, node: Int64) async throws -> Double {
+            try RoutingWorkContext.check()
+            if recordedTailBounds == nil {
+                let sourceIdentity = routingCacheIdentity()
+                var packs: [GraphV2Pack] = []
+                for id in regions {
+                    await activateInstalledPack(regionId: id)
+                    try RoutingWorkContext.check()
+                    guard let pack = activePack, pack.regionId?.lowercased() == id else {
+                        throw RoutingError.fuelUnknown("Required regional tail data is unavailable.")
+                    }
+                    packs.append(pack)
+                }
+                let preparedPacks = packs
+                let snapshots = try verifiedFuelSeamSnapshots(preparedPacks)
+                let values = try await RoutingWorkContext.detachedThrowingSearch {
+                    try OnDeviceRouter.recordedTailLowerBounds(packs: preparedPacks, seamSnapshots: snapshots,
+                        destination: to, mapZoom: mapZoom, matchLimitMeters: matchLimitMeters)
+                }
+                try RoutingWorkContext.check()
+                guard routingCacheIdentity() == sourceIdentity else { throw RoutingPageError.sourceChanged }
+                recordedTailBounds = values; tailSourceIdentity = sourceIdentity
+                // Only the small portal vector survives this preparation scope.
+            }
+            guard routingCacheIdentity() == tailSourceIdentity,
+                  let value = recordedTailBounds?[region]?[node], !value.isNaN, value >= 0
+            else { throw RoutingError.fuelUnknown("Regional tail distance is unverified.") }
+            return value
+        }
 
         func search(
             regionIndex: Int,
@@ -1136,23 +1168,53 @@ final class GraphPackStore {
                     }
                 }
                 seamAttempts += 1
+                let attemptOrdinal = seamAttempts
+                let beforeCap = maxRouteMeters.map { max(0, $0 - completedMeters) }
+                var hopCap = Self.reservedChainHopCap(totalCapMeters: maxRouteMeters,
+                    completedMeters: completedMeters, hopIndex: regionIndex,
+                    hopCount: regions.count, minimumHopMeters: regionalHopMinimumMeters)
+                var recordedTail: Double?
+                if let cap = maxRouteMeters, cap.isFinite {
+                    guard let recordedNode else { recordFailure(.searchLimit("recordedSeamNodeUnavailable")); return nil }
+                    do {
+                        let minimum = try await tailBound(region: nextRegionId, node: recordedNode)
+                        recordedTail = minimum
+                        let remaining = max(0, cap - completedMeters)
+                        if minimum > remaining {
+                            // A bound over prepared regions excludes this anchor,
+                            // not all possible regions or leave/re-entry journeys.
+                            recordFailure(.searchLimit("regionalTailOutsidePreparedData"))
+                            RoutingDebugLog.shared.event("seam tail excludes attempt=\(attemptOrdinal) node=\(recordedNode) minimumM=\(minimum) availableM=\(remaining) final=\(to.latitude),\(to.longitude)")
+                            continue
+                        }
+                        hopCap = min(hopCap ?? remaining, remaining - minimum)
+                    } catch {
+                        recordFailure(.searchLimit(RoutingWorkContext.stopReason ?? "regionalTailPreparationUnavailable"))
+                        return nil
+                    }
+                }
+                let suppliedTail: Double? = regionalHopMinimumMeters.count == regions.count
+                    && regionalHopMinimumMeters.allSatisfy({ $0.isFinite && $0 >= 0 })
+                    ? regionalHopMinimumMeters.dropFirst(regionIndex + 1).reduce(0, +) : nil
+                func traceAttempt(approach: OnDeviceRouter.Result?, outcome: String, tailMeters: Double? = nil) {
+                    let actual = approach?.distanceMeters
+                    let afterCap = actual.flatMap { meters in beforeCap.map { $0 - meters } }
+                    let incoming = approach?.terminalContinuation?.incoming
+                    let incomingID = incoming.map { "\($0.wayID):\($0.fromNodeID):\($0.toNodeID)" } ?? "unknown"
+                    RoutingDebugLog.shared.event("seam attempt=\(attemptOrdinal)/\(maximumSeamAttempts) region=\(regionId) next=\(nextRegionId) node=\(recordedNode.map(String.init) ?? "unknown") way=\(anchor.osmWayId) localEdge=\(anchor.localEdgeId) remoteEdge=\(anchor.remoteEdgeId) approachM=\(actual.map { String($0) } ?? "unproved") capBeforeM=\(beforeCap.map { String($0) } ?? "unbounded") hopCapM=\(hopCap.map { String($0) } ?? "unbounded") capAfterM=\(afterCap.map { String($0) } ?? "unproved") recordedTailM=\(recordedTail.map { String($0) } ?? "unavailable") suppliedTailM=\(suppliedTail.map { String($0) } ?? "unavailable") arrival=\(incomingID) tailM=\(tailMeters.map { String($0) } ?? "unproved") outcome=\(outcome) final=\(to.latitude),\(to.longitude)")
+                }
                 let seam = CLLocationCoordinate2D(
                     latitude: (anchor.latitude + reverse.latitude) / 2,
                     longitude: (anchor.longitude + reverse.longitude) / 2
                 )
-                let hop = await routeOnDeviceInRegion(
+                func calculateApproach(_ cap: Double?) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
+                    await routeOnDeviceInRegion(
                     from: current, to: seam, regionId: regionId,
                     profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
                     priorEdgeIds: localHistory, arrivalEdgeId: localArrival,
                     arrivalContinuation: incomingContinuation,
                     backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
-                    maxRouteMeters: Self.reservedChainHopCap(
-                        totalCapMeters: maxRouteMeters,
-                        completedMeters: completedMeters,
-                        hopIndex: regionIndex,
-                        hopCount: regions.count,
-                        minimumHopMeters: regionalHopMinimumMeters
-                    ),
+                    maxRouteMeters: cap,
                     cleanMetroMultiplier: cleanMetroMultiplier,
                     avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
                     mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
@@ -1162,11 +1224,17 @@ final class GraphPackStore {
                     recordedStartNode: currentRecordedNode,
                     recordedEndNode: recordedNode
                 )
+                }
+                let hop = await calculateApproach(hopCap)
                 guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
-                    if case .failure(let reason) = hop { recordFailure(reason) }
+                    if case .failure(let reason) = hop {
+                        recordFailure(reason)
+                        traceAttempt(approach: nil, outcome: "approach-failure:\(reason)")
+                    } else { traceAttempt(approach: nil, outcome: "approach-empty-geometry") }
                     continue
                 }
                 RoutingDebugLog.shared.event("seam approach expectedWay=\(anchor.osmWayId) matchedWay=\(routed.snapDiagnostics?.end?.osmWayId ?? "unknown") offset=\(routed.snapDiagnostics?.end?.distanceM ?? -1)m")
+                let ordinaryTailRevision = incompleteRevision
                 if let result = await search(
                     regionIndex: regionIndex + 1,
                     current: seam,
@@ -1179,8 +1247,89 @@ final class GraphPackStore {
                     canonicalArrival: routed.edgeIds.reversed().compactMap { historyPack.canonicalRoadID($0) }.first ?? canonicalArrival,
                     completedMeters: completedMeters + routed.distanceMeters
                 ) {
+                    traceAttempt(approach: routed, outcome: "completed",
+                        tailMeters: result.distanceMeters - completedMeters - routed.distanceMeters)
                     return result
                 }
+                traceAttempt(approach: routed, outcome: "tail-unproved:\(lastFailure)")
+                // Only a completed noPath in the ACTUAL remaining cap can
+                // trigger budget refinement. Limited searches remain unknown.
+                if case .noPath = lastFailure, incompleteRevision == ordinaryTailRevision,
+                   let stageCap = maxRouteMeters, stageCap.isFinite, let initialCap = hopCap {
+                    let available = max(0, stageCap - completedMeters)
+                    let sourceIdentity = routingCacheIdentity()
+                    do {
+                        let repaired = try await RegionalTailRefinement.afterCappedNoPath(
+                            initial: routed, initialApproachCap: initialCap, availableMeters: available,
+                            approachMeters: { $0.distanceMeters }, tailMeters: { $0.distanceMeters },
+                            check: {
+                                try RoutingWorkContext.check()
+                                guard self.routingCacheIdentity() == sourceIdentity else { throw RoutingPageError.sourceChanged }
+                            }, consumeAttempt: {
+                                guard seamAttempts < maximumSeamAttempts else { return false }
+                                seamAttempts += 1
+                                RoutingDebugLog.shared.event("seam refinement attempt=\(seamAttempts)/\(maximumSeamAttempts) node=\(recordedNode.map(String.init) ?? "unknown") final=\(to.latitude),\(to.longitude)")
+                                return true
+                            }, approach: { cap in
+                                let began = ProcessInfo.processInfo.systemUptime
+                                let attempt = await calculateApproach(cap)
+                                switch attempt {
+                                case .success(let value):
+                                    RoutingDebugLog.shared.event("seam refinement approach attempt=\(seamAttempts) node=\(recordedNode.map(String.init) ?? "unknown") capM=\(cap) actualM=\(value.distanceMeters) elapsed=\(ProcessInfo.processInfo.systemUptime-began)s outcome=completed")
+                                    return .success(value)
+                                case .failure(let reason):
+                                    RoutingDebugLog.shared.event("seam refinement approach attempt=\(seamAttempts) node=\(recordedNode.map(String.init) ?? "unknown") capM=\(cap) elapsed=\(ProcessInfo.processInfo.systemUptime-began)s outcome=\(reason)")
+                                    if case .noPath = reason { return .noPath }
+                                    return .incomplete(String(describing: reason))
+                                }
+                            }, tail: { prefix, tailCap in
+                                let revision = incompleteRevision
+                                let began = ProcessInfo.processInfo.systemUptime
+                                let mode = tailCap == available ? "reservation-probe" : "remaining-proof"
+                                let incoming = prefix.terminalContinuation?.incoming
+                                let arrival = incoming.map { "\($0.wayID):\($0.fromNodeID):\($0.toNodeID)" } ?? "unknown"
+                                @MainActor func traceTail(_ outcome: String, actual: Double? = nil) {
+                                    RoutingDebugLog.shared.event("seam refinement suffix attempt=\(seamAttempts) mode=\(mode) node=\(recordedNode.map(String.init) ?? "unknown") capM=\(tailCap) prefixM=\(prefix.distanceMeters) arrival=\(arrival) actualM=\(actual.map { String($0) } ?? "unproved") elapsed=\(ProcessInfo.processInfo.systemUptime-began)s outcome=\(outcome) final=\(to.latitude),\(to.longitude)")
+                                }
+                                let result = await search(regionIndex: regionIndex + 1,
+                                    current: seam, currentRecordedNode: recordedNode, hops: [],
+                                    usedEdges: usedEdges.union(prefix.edgeIds),
+                                    incomingEdgeId: prefix.edgeIds.last ?? incomingEdgeId,
+                                    incomingContinuation: prefix.terminalContinuation,
+                                    canonicalHistory: knownHistory.union(prefix.edgeIds.compactMap { historyPack.canonicalRoadID($0) }),
+                                    canonicalArrival: prefix.edgeIds.reversed().compactMap { historyPack.canonicalRoadID($0) }.first ?? canonicalArrival,
+                                    // Counterfactual budget only while probing;
+                                    // no prefix/refill is committed or reset.
+                                    completedMeters: stageCap - tailCap)
+                                if let result {
+                                    traceTail("completed", actual: result.distanceMeters)
+                                    return .success(result)
+                                }
+                                if incompleteRevision != revision {
+                                    traceTail(String(describing: incompleteFailure ?? lastFailure))
+                                    return .incomplete(String(describing: incompleteFailure ?? lastFailure))
+                                }
+                                traceTail(String(describing: lastFailure))
+                                if case .noPath = lastFailure { return .noPath }
+                                return .incomplete(String(describing: lastFailure))
+                            })
+                        switch repaired {
+                        case .completed(let prefix, let suffix):
+                            guard let joined = OnDeviceRouter.Result.concatenating(hops + [prefix, suffix]),
+                                  joined.distanceMeters <= stageCap else {
+                                recordFailure(.searchLimit("regionalTailInvalidDistance")); return nil
+                            }
+                            traceAttempt(approach: prefix, outcome: "refined-completed", tailMeters: suffix.distanceMeters)
+                            return joined
+                        case .incomplete(let reason):
+                            RoutingDebugLog.shared.event("seam refinement incomplete attempt=\(seamAttempts) node=\(recordedNode.map(String.init) ?? "unknown") reason=\(reason) final=\(to.latitude),\(to.longitude)")
+                            recordFailure(.searchLimit(reason))
+                        }
+                    } catch {
+                        recordFailure(.searchLimit(RoutingWorkContext.stopReason ?? "regionalTailRefinementUnavailable"))
+                    }
+                }
+
             }
         }
 
@@ -1368,15 +1517,32 @@ final class GraphPackStore {
         return result
     }
 
+    private func verifiedFuelSeamSnapshots(_ packs: [GraphV2Pack]) throws
+        -> [[String: [GraphV2Pack.CrossPackSeamAnchor]]] {
+        let phase = RoutingWorkContext.measurement?.begin(.seamSourceValidation)
+        defer { RoutingWorkContext.measurement?.end(phase) }
+        return try packs.map { pack in
+            try RoutingWorkContext.check()
+            guard pack.version >= 4 else { return pack.crossPackSeams }
+            guard let region = pack.regionId?.lowercased(),
+                  let identity = try verifiedSeamSourceIdentity(region: region),
+                  let data = try Self.verifiedSeamData(at: seamsFileURL(regionId: region),
+                    expectedBytes: identity.bytes, expectedSHA256: identity.sha256)
+            else { throw RoutingError.fuelUnknown("Verified regional connection data is unavailable.") }
+            return try pack.decodedCrossPackSeams(data: data)
+        }
+    }
+
     func fuelRoadProgress(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D,
                           pumps: [POIFeature], profile: RouteProfile,
                           allowUnknown: Bool) async throws -> FuelItinerary.RoadProgress? {
         let packs = await fuelDistancePacks(from: from, to: to)
         guard !packs.isEmpty else { throw RoutingError.fuelUnknown("Required routing data is unavailable; road connectivity has not been checked.") }
+        let seamSnapshots = try verifiedFuelSeamSnapshots(packs)
         let coveragePreprobe = useStationCoveragePreprobe
         return try await RoutingWorkContext.detachedThrowingSearch {
             let points = [from] + pumps.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-            guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: to,
+            guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: packs, seamSnapshots: seamSnapshots, anchor: to,
                 points: points, profile: profile, allowUnknown: allowUnknown, reverse: true, useStationCoveragePreprobe: coveragePreprobe),
                 let origin = distances.first, origin.isFinite else { return nil }
             return FuelItinerary.RoadProgress(originRemainingMeters: origin,
@@ -1395,9 +1561,10 @@ final class GraphPackStore {
         if Self.primaryRegionId(containing: from) != Self.primaryRegionId(containing: to) {
             let packs = await fuelDistancePacks(from: from, to: to)
             guard !packs.isEmpty else { throw RoutingError.fuelUnknown("Required regional data could not be prepared; reachability has not been checked.") }
+            let seamSnapshots = try verifiedFuelSeamSnapshots(packs)
             let coveragePreprobe = useStationCoveragePreprobe
             return try await RoutingWorkContext.detachedThrowingSearch {
-                guard let distance = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
+                guard let distance = try OnDeviceRouter.fuelRoadDistances(packs: packs, seamSnapshots: seamSnapshots, anchor: from,
                     points: [to], profile: profile, allowUnknown: allowUnknown, reverse: false, useStationCoveragePreprobe: coveragePreprobe)?.first,
                     distance.isFinite, distance <= maxMeters else { return nil }
                 return distance
@@ -1533,10 +1700,11 @@ final class GraphPackStore {
         if Self.primaryRegionId(containing: from) != sourceRegion {
             let packs = await fuelDistancePacks(from: from, to: toward, stationSourceRegionID: stationSourceRegionID)
             guard !packs.isEmpty else { throw RoutingError.fuelUnknown("Required regional data could not be prepared; reachability has not been checked.") }
+            let seamSnapshots = try verifiedFuelSeamSnapshots(packs)
             return try await RoutingWorkContext.detachedThrowingSearch {
                 let points = pumps.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-                guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: packs, anchor: from,
-                    points: points, profile: profile, allowUnknown: allowUnknown, reverse: false, useStationCoveragePreprobe: coveragePreprobe) else { return [:] }
+                guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: packs, seamSnapshots: seamSnapshots, anchor: from,
+                    points: points, profile: profile, allowUnknown: allowUnknown, reverse: false, useStationCoveragePreprobe: coveragePreprobe, forwardRangeMeters: maxMeters) else { return [:] }
                 return Dictionary(zip(pumps.map(\.id), distances).filter { $0.1.isFinite && $0.1 <= maxMeters },
                     uniquingKeysWith: min)
             }
@@ -1546,13 +1714,14 @@ final class GraphPackStore {
         guard let expected = Self.primaryRegionId(containing: from),
               let pack = activePack, pack.regionId?.lowercased() == expected else { throw RoutingError.fuelUnknown("Required routing data could not be prepared; fuel reachability has not been checked.") }
         let packRef = pack
+        let snapshots = try verifiedFuelSeamSnapshots([pack])
         return try await RoutingWorkContext.detachedThrowingSearch {
-            var router = OnDeviceRouter(pack: packRef)
-            router.useStationCoveragePreprobe = coveragePreprobe
-            return try router.reachableGraphMeters(
-                from: from, toward: toward, pumps: pumps, maxMeters: maxMeters,
-                profile: profile, allowUnknown: allowUnknown
-            )
+            let points = pumps.map { CLLocationCoordinate2D(latitude: $0.latitude,longitude: $0.longitude) }
+            guard let distances = try OnDeviceRouter.fuelRoadDistances(packs: [packRef],seamSnapshots: snapshots,
+                anchor: from,points: points,profile: profile,allowUnknown: allowUnknown,reverse: false,
+                useStationCoveragePreprobe: coveragePreprobe,forwardRangeMeters: maxMeters) else { return [:] }
+            return Dictionary(zip(pumps.map(\.id),distances).filter { $0.1.isFinite && $0.1 <= maxMeters },
+                uniquingKeysWith: min)
         }
     }
 

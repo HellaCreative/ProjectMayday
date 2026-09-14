@@ -9,7 +9,7 @@ nonisolated final class StationCoverageCache: @unchecked Sendable {
         var maximumEntryEdges=4096
         var maximumConcurrentCaptures=4
     }
-    private struct Key: Equatable { let latitude: Double,longitude: Double,meters: Double }
+    private struct Key: Equatable { let latitude: Double,longitude: Double,meters: Double; let cellSuperset: Bool }
     private final class Entry {
         weak var owner: AnyObject?
         weak var index: AnyObject?
@@ -37,6 +37,7 @@ nonisolated final class StationCoverageCache: @unchecked Sendable {
     /// No array reference escapes, so eviction cannot leave uncharged payload.
     /// A failed/short-circuited enumeration never publishes a partial list.
     func enumerate(owner: AnyObject,index: AnyObject,latitude: Double,longitude: Double,meters: Double,
+        cellSuperset: Bool = false,
         cancelled: () -> Bool,
         visit: (Int) throws -> Void,
         build: (_ emit: (Int) throws -> Void) throws -> Void) throws {
@@ -44,7 +45,7 @@ nonisolated final class StationCoverageCache: @unchecked Sendable {
         let measurement=RoutingWorkContext.measurement
         let phase=measurement?.begin(.stationCoverage)
         defer { measurement?.end(phase) }
-        let key=Key(latitude: latitude,longitude: longitude,meters: meters)
+        let key=Key(latitude: latitude,longitude: longitude,meters: meters,cellSuperset: cellSuperset)
         lock.lock()
         if let found=entries.firstIndex(where: { $0.owner === owner && $0.index === index && $0.key == key }) {
             defer { lock.unlock() }

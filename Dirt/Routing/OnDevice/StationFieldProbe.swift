@@ -9,12 +9,13 @@ nonisolated enum StationFieldProbe {
         completedField: Bool,
         distances: [Double],
         protectedEdges: Set<Int>,
+        boundsMayIntersect: ((Int) throws -> Bool)? = nil,
         enumerateCoverage: (_ visit: (Int, Int, Int) throws -> Void) throws -> Void
     ) throws -> Bool {
         try canSkip(completedField: completedField, protectedEdges: protectedEdges,
             isPossiblyReachedNode: { node in
                 node >= distances.count || distances[node] != .infinity
-            }, enumerateCoverage: enumerateCoverage)
+            }, boundsMayIntersect: boundsMayIntersect, enumerateCoverage: enumerateCoverage)
     }
 
     /// Sparse fields supply a conservative predicate: malformed/out-of-range
@@ -23,17 +24,20 @@ nonisolated enum StationFieldProbe {
         completedField: Bool,
         protectedEdges: Set<Int>,
         isPossiblyReachedNode: @escaping (Int) -> Bool,
+        boundsMayIntersect: ((Int) throws -> Bool)? = nil,
         enumerateCoverage: (_ visit: (Int, Int, Int) throws -> Void) throws -> Void
     ) throws -> Bool {
         guard completedField else { return false }
         do {
             try enumerateCoverage { edge, a, b in
-                if protectedEdges.contains(edge) { throw Stop.possible }
                 guard a >= 0, b >= 0 else {
                     throw Stop.possible
                 }
                 // NaN and negative infinity do not prove an unreachable endpoint.
-                if isPossiblyReachedNode(a) || isPossiblyReachedNode(b) {
+                if protectedEdges.contains(edge) || isPossiblyReachedNode(a) || isPossiblyReachedNode(b) {
+                    // Query-cell membership is a superset. Decode exact bounds
+                    // only when graph reachability cannot already reject this edge.
+                    if let boundsMayIntersect, try !boundsMayIntersect(edge) { return }
                     throw Stop.possible
                 }
             }

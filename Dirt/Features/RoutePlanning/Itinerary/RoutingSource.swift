@@ -758,10 +758,27 @@ final class PackRoutingSource: RoutingSource {
                     regionIds: nil, stops: stops, graphMeters: graphMeters, diagnostics: nil,
                     routes: plannedRoutes, windowComplete: false)
             }
-            if roadProgress == nil {
-                roadProgress = try await packs.fuelRoadProgress(from: current.locationCoordinate,
-                    to: end.locationCoordinate, pumps: stations, profile: req.profile,
-                    allowUnknown: req.accessPolicy.motorizedUnknown)
+            let reachable = try await packs.reachableFuelMeters(
+                from: current.locationCoordinate,
+                toward: end.locationCoordinate,
+                pumps: stations,
+                maxMeters: firstCap,
+                profile: req.profile,
+                allowUnknown: req.accessPolicy.motorizedUnknown
+            )
+            let newlyReachable = stations.filter {
+                reachable[$0.id] != nil && roadProgress?.stationRemainingMeters[$0.id] == nil
+            }
+            if roadProgress == nil || !newlyReachable.isEmpty {
+                if let fresh = try await packs.fuelRoadProgress(from: current.locationCoordinate,
+                    to: end.locationCoordinate, pumps: newlyReachable, profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown) {
+                    var combined = roadProgress?.stationRemainingMeters ?? [:]
+                    combined.merge(fresh.stationRemainingMeters,uniquingKeysWith: min)
+                    if let departure = stops.last { combined[departure.id] = fresh.originRemainingMeters }
+                    roadProgress = .init(originRemainingMeters: roadProgress?.originRemainingMeters ?? fresh.originRemainingMeters,
+                        stationRemainingMeters: combined)
+                } else { roadProgress = nil }
             }
             try RoutingWorkContext.check()
             guard let guidance = roadProgress else {
@@ -775,14 +792,6 @@ final class PackRoutingSource: RoutingSource {
                 ?? guidance.originRemainingMeters
             let currentGuidance = FuelItinerary.RoadProgress(originRemainingMeters: currentRemaining,
                 stationRemainingMeters: guidance.stationRemainingMeters)
-            let reachable = try await packs.reachableFuelMeters(
-                from: current.locationCoordinate,
-                toward: end.locationCoordinate,
-                pumps: stations,
-                maxMeters: firstCap,
-                profile: req.profile,
-                allowUnknown: req.accessPolicy.motorizedUnknown
-            )
             let fuelAvoidanceBoxes = await packs.fuelAvoidanceBoxes(
                 from: current.locationCoordinate,
                 toward: end.locationCoordinate

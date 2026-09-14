@@ -880,6 +880,11 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     /// graphs first, prove the complete continent, then add borders without a
     /// second graph rebuild.
     func applyCrossPackSeams(data: Data) throws {
+        crossPackSeams = try decodedCrossPackSeams(data: data)
+    }
+
+    /// Decode a verified owned snapshot without mutating a pack shared by searches.
+    func decodedCrossPackSeams(data: Data) throws -> [String: [CrossPackSeamAnchor]] {
         guard version >= Self.versionV4, legalTopology else { throw PackError.missingCapability }
         guard let document = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               document["schemaVersion"] as? String == "dirt-cross-pack-seams.v2",
@@ -924,7 +929,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                 )
             }
         }
-        crossPackSeams = decoded
+        return decoded
     }
 
     private static func stringArray(from value: Any?) -> [String]? {
