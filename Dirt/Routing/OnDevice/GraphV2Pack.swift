@@ -872,9 +872,15 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     }
 
     /// Per-direction motorcycle access code (0 allowed … 2/5 deny, 3/4 endpoint-only).
+    /// Fail-closed: returns 2 (inaccessible) when the access array is missing,
+    /// the edge index is out of range, or directional node arrays are absent.
+    /// JS never allows traffic through an unresolvable edge.
     func v4AccessCode(ei: Int, from: Int, to: Int) -> UInt8 {
-        guard legalTopology, ei >= 0, ei * 2 + 1 < edgeAccess.count else { return 0 }
-        let forward = edgeFrom?[ei] == Int32(from) && edgeTo?[ei] == Int32(to)
+        guard legalTopology, ei >= 0, ei * 2 + 1 < edgeAccess.count,
+              let edgeFromArr = edgeFrom, let edgeToArr = edgeTo,
+              ei < edgeFromArr.count, ei < edgeToArr.count
+        else { return 2 }
+        let forward = edgeFromArr[ei] == Int32(from) && edgeToArr[ei] == Int32(to)
         return edgeAccess[ei * 2 + (forward ? 0 : 1)]
     }
 

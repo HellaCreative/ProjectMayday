@@ -88,6 +88,112 @@ nonisolated enum HopSearchPolicy {
     /// Bound the retry cost when successive tiny alternatives are discovered.
     static let maximumShortDirtRepairPasses: Int = 3
 
+    // MARK: - Adaptive budget (lockstep: find-path-v2.js)
+
+    static let dirtBaseSearchBudgetMs: Double = 3_500
+    static let dirtMaxSearchBudgetMs: Double = 18_000
+    static let balancedBaseSearchBudgetMs: Double = 8_000
+    static let balancedMaxSearchBudgetMs: Double = 45_000
+    static let largeGraphBaseSearchBudgetMs: Double = 12_000
+    static let cleanBaseSearchBudgetMs: Double = 12_000
+    static let cleanMaxSearchBudgetMs: Double = 18_000
+    static let balancedLongRouteMeters: Double = 500_000
+    static let balancedLargeGraphNodes: Int = 500_000
+    static let provinceScaleGraphNodes: Int = 1_500_000
+    static let dirtRecoveryExtraMeters: Double = 40_000
+    static let dirtRecoveryDistanceRatio: Double = 1.5
+
+    static func largeGraphPressure(nodeCount: Int) -> Double {
+        let nodes = max(0, nodeCount)
+        guard nodes > balancedLargeGraphNodes else { return 0 }
+        return min(
+            1,
+            Double(nodes - balancedLargeGraphNodes) /
+                Double(provinceScaleGraphNodes - balancedLargeGraphNodes)
+        )
+    }
+
+    static func balancedSearchBudgetSeconds(
+        straightLineMeters: Double,
+        nodeCount: Int
+    ) -> Double {
+        let routeMeters = max(0, straightLineMeters)
+        let gp = largeGraphPressure(nodeCount: nodeCount)
+        if gp == 0 { return balancedBaseSearchBudgetMs / 1000 }
+        let graphFloor = balancedBaseSearchBudgetMs +
+            (largeGraphBaseSearchBudgetMs - balancedBaseSearchBudgetMs) * gp
+        if routeMeters <= balancedLongRouteMeters {
+            return (graphFloor / 1000).rounded(.up)
+        }
+        let routePressure = min(
+            1,
+            (routeMeters - balancedLongRouteMeters) / 500_000
+        )
+        let pressure = min(routePressure, gp)
+        let longRouteBudget = balancedBaseSearchBudgetMs +
+            (balancedMaxSearchBudgetMs - balancedBaseSearchBudgetMs) * pressure
+        return (max(graphFloor, longRouteBudget) / 1000).rounded(.up)
+    }
+
+    static func profileSearchBudgetSeconds(
+        profile: RouteProfile,
+        straightLineMeters: Double,
+        nodeCount: Int
+    ) -> Double {
+        if profile == .balanced {
+            return balancedSearchBudgetSeconds(
+                straightLineMeters: straightLineMeters,
+                nodeCount: nodeCount
+            )
+        }
+        let gp = largeGraphPressure(nodeCount: nodeCount)
+        if profile == .cleanest {
+            return ((cleanBaseSearchBudgetMs +
+                (cleanMaxSearchBudgetMs - cleanBaseSearchBudgetMs) * gp) / 1000).rounded(.up)
+        }
+        return ((dirtBaseSearchBudgetMs +
+            (dirtMaxSearchBudgetMs - dirtBaseSearchBudgetMs) * gp) / 1000).rounded(.up)
+    }
+
+    static func profileSearchPopCap(
+        profile: RouteProfile,
+        nodeCount: Int,
+        dirtComparison: Bool = false
+    ) -> Int {
+        let base: Int
+        if profile == .balanced {
+            base = pass2PopCap * 4
+        } else if profile == .dirt && dirtComparison {
+            base = (pass2PopCap + 1) / 2
+        } else {
+            base = pass2PopCap
+        }
+        let gp = largeGraphPressure(nodeCount: nodeCount)
+        return Int(ceil(Double(base) * (1 + gp)))
+    }
+
+    static func dirtRecoveryPathCap(
+        primaryRideMeters: Double?,
+        activePathCap: Double = .infinity
+    ) -> Double {
+        guard let primary = primaryRideMeters, primary > 0 else {
+            return activePathCap.isFinite ? activePathCap : .infinity
+        }
+        let coherentCap = max(
+            primary + dirtRecoveryExtraMeters,
+            primary * dirtRecoveryDistanceRatio
+        )
+        return activePathCap.isFinite ? min(activePathCap, coherentCap) : coherentCap
+    }
+
+    static func dynamicBalancedCorridorMultipliers(
+        straightLineMeters: Double
+    ) -> [Double] {
+        straightLineMeters > balancedLongRouteMeters
+            ? [2, 3, 4, 6, 8]
+            : [1, 2, 3, 4, 6, 8]
+    }
+
     enum CostMode: Sendable {
         /// Existing profile weight tables (Clean and legacy/fallback searches).
         case profile
@@ -300,30 +406,130 @@ nonisolated enum HopSearchPolicy {
         }
     }
 
+    struct RouteShape: Sendable {
+        var routeMeters: Double = 0
+        var backwardMeters: Double = 0
+        var lateralMeters: Double = 0
+    }
+
     static func routeShape(
         coordinates: [CLLocationCoordinate2D],
         start: CLLocationCoordinate2D,
         end: CLLocationCoordinate2D
-    ) -> (routeMeters: Double, backwardMeters: Double) {
-        guard coordinates.count > 1 else { return (0, 0) }
+    ) -> RouteShape {
+        guard coordinates.count > 1 else { return RouteShape() }
         let a = RouteCoordinate(longitude: start.longitude, latitude: start.latitude)
         let b = RouteCoordinate(longitude: end.longitude, latitude: end.latitude)
-        var routeMeters = 0.0
-        var backwardMeters = 0.0
+        var shape = RouteShape()
         for index in 1..<coordinates.count {
             let prior = coordinates[index - 1]
             let current = coordinates[index]
             let meters = GeoMath.meters(prior, current)
             guard meters > 0 else { continue }
-            routeMeters += meters
+            shape.routeMeters += meters
             let p0 = RouteCoordinate(longitude: prior.longitude, latitude: prior.latitude)
             let p1 = RouteCoordinate(longitude: current.longitude, latitude: current.latitude)
-            if GeoMath.progressAlongAB(from: a, to: b, point: p1)
-                < GeoMath.progressAlongAB(from: a, to: b, point: p0) {
-                backwardMeters += meters
+            let prog0 = GeoMath.progressAlongAB(from: a, to: b, point: p0)
+            let prog1 = GeoMath.progressAlongAB(from: a, to: b, point: p1)
+            if prog1 < prog0 {
+                shape.backwardMeters += meters
+            }
+            let xt0 = GeoMath.crossTrackMeters(point: prior, lineFrom: start, to: end)
+            let xt1 = GeoMath.crossTrackMeters(point: current, lineFrom: start, to: end)
+            let lateralDelta = abs(xt1 - xt0)
+            if lateralDelta > 0 { shape.lateralMeters += lateralDelta }
+        }
+        return shape
+    }
+
+    // MARK: - Route quality summary (lockstep: route-quality.js)
+
+    struct RouteQuality: Sendable {
+        var knownDirtPercent: Double = 0
+        var firstSectionDirtPercent: Double = 0
+        var minimumSectionDirtPercent: Double = 0
+        var longestPavedRunMeters: Double = 0
+        var urbanCoreMeters: Double = 0
+    }
+
+    private static let knownDirtSurfaces: Set<String> = [
+        "gravel", "access", "resource", "track", "double_track",
+        "single", "unpaved", "dirt", "loose"
+    ]
+
+    static func summarizeRouteQuality(
+        legs: [OnDeviceRouter.Leg],
+        start: CLLocationCoordinate2D,
+        end: CLLocationCoordinate2D,
+        urbanBoxes: [UrbanCore.Box]
+    ) -> RouteQuality {
+        let sectionCount = 4
+        let routeMeters = legs.reduce(0.0) { sum, leg in
+            leg.structureType == "ferry" ? sum : sum + max(0, leg.distanceMeters)
+        }
+        guard routeMeters > 0 else { return RouteQuality() }
+        let sectionLen = routeMeters / Double(sectionCount)
+        var sectionDirtMeters = [Double](repeating: 0, count: sectionCount)
+        var sectionTotalMeters = [Double](repeating: 0, count: sectionCount)
+        var knownDirtMeters: Double = 0
+        var currentPavedRunMeters: Double = 0
+        var longestPavedRunMeters: Double = 0
+        var urbanCoreMeters: Double = 0
+        var walked: Double = 0
+
+        for leg in legs {
+            guard leg.structureType != "ferry" else { continue }
+            var remaining = max(0, leg.distanceMeters)
+            guard remaining > 0 else { continue }
+            let isDirt = knownDirtSurfaces.contains(leg.surfaceName.lowercased())
+            if isDirt {
+                knownDirtMeters += remaining
+                currentPavedRunMeters = 0
+            } else {
+                currentPavedRunMeters += remaining
+                longestPavedRunMeters = max(longestPavedRunMeters, currentPavedRunMeters)
+            }
+
+            if leg.coordinates.count >= 2 {
+                for i in 1..<leg.coordinates.count {
+                    let from = leg.coordinates[i - 1]
+                    let to = leg.coordinates[i]
+                    if UrbanCore.blocks(
+                        segmentFrom: from, segmentTo: to,
+                        start: start, end: end,
+                        boxes: urbanBoxes
+                    ) {
+                        urbanCoreMeters += GeoMath.meters(from, to)
+                    }
+                }
+            }
+
+            while remaining > 0 && sectionLen > 0 {
+                let si = min(sectionCount - 1, Int(walked / sectionLen))
+                let boundary = Double(si + 1) * sectionLen
+                let take = min(remaining, max(0, boundary - walked))
+                let actual = take > 0 ? take : remaining
+                sectionTotalMeters[si] += actual
+                if isDirt { sectionDirtMeters[si] += actual }
+                walked += actual
+                remaining -= actual
+                if take <= 0 { break }
             }
         }
-        return (routeMeters, backwardMeters)
+
+        let sectionDirtPcts = (0..<sectionCount).map { i -> Double in
+            sectionTotalMeters[i] > 0
+                ? (sectionDirtMeters[i] / sectionTotalMeters[i] * 1000).rounded() / 10
+                : 0
+        }
+
+        return RouteQuality(
+            knownDirtPercent: (knownDirtMeters / routeMeters * 1000).rounded() / 10,
+            firstSectionDirtPercent: sectionDirtPcts[0],
+            minimumSectionDirtPercent: sectionDirtPcts.min() ?? 0,
+            longestPavedRunMeters: longestPavedRunMeters.rounded(),
+            urbanCoreMeters: urbanCoreMeters.rounded()
+        )
     }
 }
 

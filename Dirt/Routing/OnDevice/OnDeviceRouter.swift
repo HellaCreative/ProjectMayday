@@ -801,8 +801,6 @@ nonisolated struct OnDeviceRouter {
         ctx.cityWall = cityWall
         ctx.pavedOnly = pavedOnly
         ctx.urbanCoreFallback = urbanCoreFallback
-        // Major urban cores are walls. Ordinary mapped towns are a finite
-        // avoidance cost so they do not sever otherwise valid rural routes.
         ctx.settlementWall = false
         ctx.settlementFallback = profile != .cleanest ? true : settlementFallback
         ctx.cleanMetroMultiplier = cleanMetroMultiplier
@@ -816,9 +814,22 @@ nonisolated struct OnDeviceRouter {
         ctx.wander = activeWander
         ctx.variety = usesVariety(seed: sessionSeed, profile: profile)
         ctx.corridorMeters = HopSearchPolicy.corridorMeters(for: profile, wander: activeWander)
-        let lengthCap = defaultLengthCapMeters(
-            from: from, to: to, profile: profile, requested: maxRouteMeters
+
+        // Adaptive budget: JS outer deadline shared across all corridor
+        // attempts. On device there is no server request deadline, so
+        // profileSearchBudgetSeconds is the adaptive ceiling.
+        let straightLineMeters = meters(from, to)
+        let nodeCount = pack.nodeCount
+        let adaptiveBudgetSeconds = HopSearchPolicy.profileSearchBudgetSeconds(
+            profile: profile,
+            straightLineMeters: straightLineMeters,
+            nodeCount: nodeCount
         )
+        let outerDeadline = CFAbsoluteTimeGetCurrent() + adaptiveBudgetSeconds
+
+        func remainingBudgetSeconds() -> Double {
+            max(0.25, outerDeadline - CFAbsoluteTimeGetCurrent())
+        }
 
         if profile == .dirt {
             let base = ctx.corridorMeters ?? HopSearchPolicy.dirtCorridorMeters
@@ -827,7 +838,8 @@ nonisolated struct OnDeviceRouter {
 
             func searchDirt(
                 width: Double?,
-                costMode: HopSearchPolicy.CostMode = .pavement
+                costMode: HopSearchPolicy.CostMode = .pavement,
+                isDirtComparison: Bool = false
             ) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
                 hunt.costMode = costMode
@@ -835,9 +847,15 @@ nonisolated struct OnDeviceRouter {
                 hunt.corridorMeters = width
                 hunt.hardCorridor = width != nil
                 hunt.boundedSearch = true
-                hunt.timeCapSeconds = HopSearchPolicy.dirtCandidateTimeCapSeconds
-                hunt.popCap = HopSearchPolicy.dirtCandidatePopCap
-                hunt.maxPathMeters = lengthCap
+                let candidateCap = isDirtComparison
+                    ? HopSearchPolicy.dirtCandidateTimeCapSeconds : HopSearchPolicy.pass2TimeCapSeconds
+                hunt.timeCapSeconds = min(candidateCap, remainingBudgetSeconds())
+                hunt.popCap = HopSearchPolicy.profileSearchPopCap(
+                    profile: .dirt, nodeCount: nodeCount, dirtComparison: isDirtComparison
+                )
+                if let mr = maxRouteMeters, mr.isFinite, mr > 0 {
+                    hunt.maxPathMeters = mr
+                }
                 lastFailure = .noPath
                 let initial: Result
                 switch runProfile(hunt) {
@@ -849,11 +867,13 @@ nonisolated struct OnDeviceRouter {
                 var repairPasses = 0
                 if !initial.searchMeta.timedOut, initial.dirtPercent < 70 {
                     for _ in 0..<HopSearchPolicy.maximumShortDirtRepairPasses {
+                        guard CFAbsoluteTimeGetCurrent() < outerDeadline else { break }
                         let found = Self.shortDirtExcursionEdgeIDs(in: route.legs)
                         let additions = found.subtracting(penaltyEdgeIds)
                         if additions.isEmpty { break }
                         penaltyEdgeIds.formUnion(additions)
                         hunt.shortDirtPenaltyEdgeIds = penaltyEdgeIds
+                        hunt.timeCapSeconds = min(candidateCap, remainingBudgetSeconds())
                         guard case .success(let next) = runProfile(hunt) else { break }
                         route = next
                         repairPasses += 1
@@ -866,10 +886,25 @@ nonisolated struct OnDeviceRouter {
                 return .success(route)
             }
 
+            var containedBaseDirtCandidate: (route: Result, width: Double, objective: String)?
             comparison: for width in [base * 2, base] {
-                switch searchDirt(width: width) {
+                guard CFAbsoluteTimeGetCurrent() < outerDeadline else { break }
+                let isDirtComparison = width <= base * 2
+                if width == base, let contained = containedBaseDirtCandidate {
+                    candidates.append(contained)
+                    continue
+                }
+                switch searchDirt(width: width, isDirtComparison: isDirtComparison) {
                 case .success(let route):
                     candidates.append((route, width, "pavement"))
+                    if width == base * 2 {
+                        let maxXT = HopSearchPolicy.maxCrossTrackMeters(
+                            coordinates: route.coordinates, start: from, end: to
+                        )
+                        if maxXT <= base {
+                            containedBaseDirtCandidate = (route, base, "pavement")
+                        }
+                    }
                     if route.dirtPercent >= 70 { break comparison }
                 case .failure(let failure):
                     lastBoundedFailure = failure
@@ -877,6 +912,7 @@ nonisolated struct OnDeviceRouter {
             }
             if candidates.isEmpty {
                 connectivity: for width in [Optional(base * 3), Optional(base * 4), nil] {
+                    guard CFAbsoluteTimeGetCurrent() < outerDeadline else { break }
                     switch searchDirt(width: width) {
                     case .success(let route):
                         candidates.append((route, width ?? 0, "pavement"))
@@ -886,20 +922,38 @@ nonisolated struct OnDeviceRouter {
                     }
                 }
             }
-            // Minimizing absolute pavement normally produces excellent DIRT
-            // routes and preserves the established product behaviour. On a
-            // weak result, compare one bounded resource-labelled route so a
-            // shorter route with less dirt cannot beat a genuinely dirtier
-            // ride merely because it contains fewer paved kilometres.
+
+            // Low-dirt recovery: resource-label search with bounded path cap.
             let primaryBestDirt = candidates.map(\.route.dirtPercent).max() ?? 0
-            if primaryBestDirt < 70 {
-                switch searchDirt(width: base, costMode: .balancedResource) {
-                case .success(let route):
-                    candidates.append((route, base, "resource"))
-                case .failure(let failure):
-                    lastBoundedFailure = failure
+            if primaryBestDirt < 70, CFAbsoluteTimeGetCurrent() < outerDeadline {
+                let primary = chooseDirtEnvelopeCandidate(candidates, seed: sessionSeed)
+                let recoveryCap = HopSearchPolicy.dirtRecoveryPathCap(
+                    primaryRideMeters: primary?.route.distanceMeters,
+                    activePathCap: maxRouteMeters ?? .infinity
+                )
+                let recoveryBudget = min(
+                    HopSearchPolicy.dirtCandidateTimeCapSeconds,
+                    remainingBudgetSeconds()
+                )
+                var recoveryCtx = ctx
+                recoveryCtx.costMode = .balancedResource
+                recoveryCtx.variety = false
+                recoveryCtx.corridorMeters = base
+                recoveryCtx.hardCorridor = true
+                recoveryCtx.boundedSearch = true
+                recoveryCtx.timeCapSeconds = recoveryBudget
+                recoveryCtx.popCap = HopSearchPolicy.profileSearchPopCap(
+                    profile: .dirt, nodeCount: nodeCount
+                )
+                if recoveryCap.isFinite { recoveryCtx.maxPathMeters = recoveryCap }
+                lastFailure = .noPath
+                if case .success(var recovered) = runProfile(recoveryCtx) {
+                    recovered.searchMeta.rideObjective = "earned-dirt-detour"
+                    recovered.searchMeta.corridorMeters = base
+                    candidates.append((recovered, base, "resource"))
                 }
             }
+
             guard let selected = chooseDirtEnvelopeCandidate(candidates, seed: sessionSeed) else {
                 return .failure(lastBoundedFailure)
             }
@@ -913,44 +967,108 @@ nonisolated struct OnDeviceRouter {
             let candidateSummary = candidates.map {
                 "\($0.objective)@\(Int($0.width / 1000))km:\($0.route.dirtPercent)%"
             }.joined(separator: ",")
-            let note = "objective=earned-dirt-detour corridor=\(Int(selected.width))m candidates=[\(candidateSummary)]"
+            let note = "objective=earned-dirt-detour corridor=\(Int(selected.width))m budget=\(Int(adaptiveBudgetSeconds * 1000))ms candidates=[\(candidateSummary)]"
             route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
             return .success(route)
         }
 
         if profile == .balanced {
             let base = ctx.corridorMeters ?? HopSearchPolicy.balancedCorridorMeters
-            var lastEnvelopeFailure: Failure = .noPath
-            for width in HopSearchPolicy.balancedEnvelopeMultipliers.map({ base * $0 }) + [0] {
+
+            // Balanced pre-computes direct shortest for path cap and fallback
+            // (lockstep: JS directShortest).
+            var directShortest: Result? = nil
+            var directShortestMeters: Double = .infinity
+            do {
+                var shortCtx = ctx
+                shortCtx.costMode = .distance
+                shortCtx.corridorMeters = 0
+                shortCtx.hardCorridor = false
+                shortCtx.boundedSearch = true
+                shortCtx.variety = false
+                shortCtx.settlementWall = false
+                shortCtx.settlementFallback = false
+                shortCtx.timeCapSeconds = remainingBudgetSeconds()
+                if case .success(let result) = runProfile(shortCtx) {
+                    directShortest = result
+                    directShortestMeters = result.distanceMeters
+                }
+            }
+            let requestedCap = maxRouteMeters ?? .infinity
+            let directBudget = directShortestMeters.isFinite
+                ? directShortestMeters + 40_000 : .infinity
+            let activePathCap = min(
+                requestedCap.isFinite ? requestedCap : .infinity,
+                directBudget
+            )
+
+            let multipliers = HopSearchPolicy.dynamicBalancedCorridorMultipliers(
+                straightLineMeters: straightLineMeters
+            )
+            let widths: [Double] = multipliers.map { base * $0 } + [.infinity]
+
+            var balancedCandidates: [(route: Result, width: Double, quality: HopSearchPolicy.RouteQuality, miss: Double)] = []
+            for width in widths {
+                guard CFAbsoluteTimeGetCurrent() < outerDeadline else { break }
                 var envelope = ctx
                 envelope.costMode = .balancedResource
                 envelope.variety = usesVariety(seed: sessionSeed, profile: .balanced)
-                envelope.corridorMeters = width > 0 ? width : nil
-                envelope.hardCorridor = width > 0
+                envelope.corridorMeters = width.isFinite ? width : nil
+                envelope.hardCorridor = width.isFinite
                 envelope.boundedSearch = true
-                envelope.timeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
-                envelope.popCap = HopSearchPolicy.pass2PopCap * 10
-                envelope.maxPathMeters = lengthCap
+                envelope.timeCapSeconds = min(
+                    HopSearchPolicy.pass2TimeCapSeconds,
+                    remainingBudgetSeconds()
+                )
+                envelope.popCap = HopSearchPolicy.profileSearchPopCap(
+                    profile: .balanced, nodeCount: nodeCount
+                )
+                if activePathCap.isFinite { envelope.maxPathMeters = activePathCap }
+                if directShortestMeters.isFinite { envelope.shortestMeters = directShortestMeters }
                 lastFailure = .noPath
-                switch runProfile(envelope) {
-                case .success(var route):
-                    route.searchMeta.rideObjective = "surface-balance"
-                    route.searchMeta.corridorMeters = width > 0 ? width : nil
-                    route.searchMeta.corridorWidened = width > base
+                guard case .success(var route) = runProfile(envelope) else { continue }
+                route.searchMeta.rideObjective = "surface-balance"
+                route.searchMeta.corridorMeters = width.isFinite ? width : nil
+                route.searchMeta.corridorWidened = width.isFinite && width > base
+                let quality = HopSearchPolicy.summarizeRouteQuality(
+                    legs: route.legs, start: from, end: to, urbanBoxes: packUrbanCores
+                )
+                let miss = abs(quality.knownDirtPercent - 50)
+                balancedCandidates.append((route, width, quality, miss))
+                if quality.knownDirtPercent >= 45, quality.knownDirtPercent <= 55,
+                   quality.urbanCoreMeters <= 100 {
                     route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
                         coordinates: route.coordinates, start: from, end: to
                     )
-                    let note = "objective=\(route.searchMeta.rideObjective ?? "-") corridor=\(Int(width))m"
-                    route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
                     return .success(route)
-                case .failure(let failure):
-                    lastEnvelopeFailure = failure
                 }
             }
-            return .failure(lastEnvelopeFailure)
+            if !balancedCandidates.isEmpty {
+                balancedCandidates.sort { a, b in
+                    let urbanDelta = a.quality.urbanCoreMeters - b.quality.urbanCoreMeters
+                    if abs(urbanDelta) > 100 { return urbanDelta < 0 }
+                    if abs(a.miss - b.miss) > 0.1 { return a.miss < b.miss }
+                    return a.route.distanceMeters < b.route.distanceMeters
+                }
+                var best = balancedCandidates[0].route
+                best.searchMeta.corridorMeters = balancedCandidates[0].width.isFinite
+                    ? balancedCandidates[0].width : nil
+                best.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
+                    coordinates: best.coordinates, start: from, end: to
+                )
+                return .success(best)
+            }
+            // Balanced fallback: if all profile searches failed but direct
+            // shortest succeeded, return it rather than no-path.
+            if let ds = directShortest {
+                var fallback = ds
+                fallback.searchMeta.rideObjective = "surface-balance-bounded-fallback"
+                return .success(fallback)
+            }
+            return .failure(.noPath)
         }
 
-        // Clean law: one paved fabric search — no corridor ladder, no regression wall.
+        // Clean: one paved fabric search — no corridor ladder.
         if profile == .cleanest {
             var envelope = ctx
             envelope.costMode = .profile
@@ -961,8 +1079,13 @@ nonisolated struct OnDeviceRouter {
             envelope.boundedSearch = true
             envelope.settlementWall = false
             envelope.settlementFallback = false
-            envelope.timeCapSeconds = ctx.pavedOnly ? 12.0 : HopSearchPolicy.pass2TimeCapSeconds
-            envelope.popCap = HopSearchPolicy.pass2PopCap
+            envelope.timeCapSeconds = min(
+                ctx.pavedOnly ? 12.0 : HopSearchPolicy.pass2TimeCapSeconds,
+                remainingBudgetSeconds()
+            )
+            envelope.popCap = HopSearchPolicy.profileSearchPopCap(
+                profile: .cleanest, nodeCount: nodeCount
+            )
             envelope.maxPathMeters = maxRouteMeters
             switch runProfile(envelope) {
             case .success(var route):
@@ -972,94 +1095,17 @@ nonisolated struct OnDeviceRouter {
                 route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
                     coordinates: route.coordinates, start: from, end: to
                 )
-                let note = "objective=practical-pavement pavedOnly=\(ctx.pavedOnly ? 1 : 0)"
-                route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
                 return .success(route)
             case .failure(let failure):
                 return .failure(failure)
             }
         }
 
-        if let policyExtra = HopSearchPolicy.corridorMeters(for: profile) {
-            var shortCtx = ctx
-            shortCtx.costMode = .distance
-            shortCtx.variety = false
-            shortCtx.maxPathMeters = nil
-            let shortest = runProfile(shortCtx)
-            guard case .success(let short) = shortest else {
-                return annotateCorridor(shortest, from: from, to: to, profile: profile, shortestMeters: nil)
-            }
-            let extra = min(
-                policyExtra,
-                maxRouteMeters.map { $0 - short.distanceMeters } ?? policyExtra
-            )
-            guard extra >= 0 else { return .failure(.noPath) }
-            var hunt = ctx
-            hunt.shortestMeters = short.distanceMeters
-            hunt.maxPathMeters = short.distanceMeters + extra
-            switch profile {
-            case .dirt:
-                // Dirt explicitly minimizes pavement inside shortest + 50 km.
-                // Weighted Dijkstra spent the budget without maximizing dirt
-                // and could return less dirt than Balanced on the same graph.
-                hunt.costMode = .balancedResource
-                hunt.variety = usesVariety(seed: sessionSeed, profile: profile)
-            case .balanced:
-                hunt.costMode = .balancedResource
-                hunt.variety = usesVariety(seed: sessionSeed, profile: profile)
-            case .cleanest:
-                break
-            }
-            let huntStarted = CFAbsoluteTimeGetCurrent()
-            let huntResult = runProfile(hunt)
-            switch huntResult {
-            case .success(var hit):
-                hit.searchMeta.extraBudgetMeters = extra
-                let ms = Int((CFAbsoluteTimeGetCurrent() - huntStarted) * 1000)
-                print(
-                    "[DirtRoute] pass2 outcome=\(hit.searchMeta.pass2Outcome.isEmpty ? "completed" : hit.searchMeta.pass2Outcome)"
-                        + " timedOut=\(hit.searchMeta.timedOut ? 1 : 0)"
-                        + " pops=\(hit.searchMeta.pops) ms=\(ms)"
-                        + " extraUsed=\(Int(max(0, hit.distanceMeters - short.distanceMeters)))m"
-                        + " dirt%=\(hit.dirtPercent)"
-                )
-                return annotateCorridor(
-                    .success(hit), from: from, to: to, profile: profile,
-                    shortestMeters: short.distanceMeters
-                )
-            case .failure(let reason):
-                let ms = Int((CFAbsoluteTimeGetCurrent() - huntStarted) * 1000)
-                let outcome: String
-                let timedOut: Bool
-                if case .searchLimit(let limit) = reason {
-                    outcome = limit
-                    timedOut = true
-                } else {
-                    outcome = "noPath"
-                    timedOut = false
-                }
-                print(
-                    "[DirtRoute] pass2 outcome=\(outcome) timedOut=\(timedOut ? 1 : 0) reason=\(reason) ms=\(ms) — surfacing shortest"
-                )
-                var fallback = short
-                fallback.searchMeta.timedOut = timedOut
-                fallback.searchMeta.pass2Outcome = outcome
-                fallback.searchMeta.elapsedMs = ms
-                fallback.searchMeta.shortestMeters = short.distanceMeters
-                fallback.searchMeta.extraBudgetMeters = extra
-                fallback.searchMeta.extraUsedMeters = 0
-                return annotateCorridor(
-                    .success(fallback), from: from, to: to, profile: profile,
-                    shortestMeters: short.distanceMeters
-                )
-            }
-        }
-
+        // Fallback for unknown profiles.
         if let maxRouteMeters {
             ctx.maxPathMeters = maxRouteMeters
             ctx.variety = false
         }
-
         return annotateCorridor(runProfile(ctx), from: from, to: to, profile: profile, shortestMeters: nil)
     }
 
@@ -1095,20 +1141,32 @@ nonisolated struct OnDeviceRouter {
         return .success(route)
     }
 
-    /// Dirt works back from 100%. When percentages are effectively tied, use
-    /// less pavement. Do not prefer the straighter chord — off-axis dirt is the
-    /// product. Total route length is intentionally not an objective.
+    /// Full 8-criterion Dirt candidate selection. Lockstep: find-path-v2.js
+    /// `chooseDirtRideCandidate`. Works back from 100% dirt; when gross
+    /// percentages are within 2 points, urban exposure, section consistency,
+    /// paved-run length, absolute pavement, and meander break ties.
     private func chooseDirtEnvelopeCandidate(
         _ candidates: [(route: Result, width: Double, objective: String)],
         seed: UInt64
     ) -> (route: Result, width: Double, objective: String)? {
-        let summaries = candidates.map { candidate in
+        let startLL = candidates.first?.route.coordinates.first ?? .init()
+        let endLL = candidates.first?.route.coordinates.last ?? .init()
+        struct Summary {
+            let candidate: (route: Result, width: Double, objective: String)
+            let shape: HopSearchPolicy.RouteShape
+            let quality: HopSearchPolicy.RouteQuality
+            let pavedMeters: Double
+        }
+        let summaries: [Summary] = candidates.map { c in
             let shape = HopSearchPolicy.routeShape(
-                coordinates: candidate.route.coordinates,
-                start: candidate.route.coordinates.first ?? .init(),
-                end: candidate.route.coordinates.last ?? .init()
+                coordinates: c.route.coordinates, start: startLL, end: endLL
             )
-            return (candidate: candidate, shape: shape)
+            let quality = HopSearchPolicy.summarizeRouteQuality(
+                legs: c.route.legs, start: startLL, end: endLL,
+                urbanBoxes: packUrbanCores
+            )
+            let paved = c.route.distanceMeters * Double(100 - c.route.dirtPercent) / 100
+            return Summary(candidate: c, shape: shape, quality: quality, pavedMeters: paved)
         }
         let coherent = summaries.filter {
             $0.shape.backwardMeters <= max(5_000, $0.shape.routeMeters * 0.08)
@@ -1116,23 +1174,33 @@ nonisolated struct OnDeviceRouter {
         let bestDirt = summaries.map(\.candidate.route.dirtPercent).max() ?? 0
         let bestCoherentDirt = coherent.map(\.candidate.route.dirtPercent).max() ?? Int.min
         let pool = !coherent.isEmpty && bestDirt - bestCoherentDirt < 10
-            ? coherent
-            : summaries
+            ? coherent : summaries
+
         return pool.min { lhs, rhs in
-            let a = lhs.candidate
-            let b = rhs.candidate
-            let dirtDelta = a.route.dirtPercent - b.route.dirtPercent
+            let a = lhs, b = rhs
+
+            let dirtDelta = a.candidate.route.dirtPercent - b.candidate.route.dirtPercent
             if abs(dirtDelta) > 2 { return dirtDelta > 0 }
-            let pavedA = a.route.distanceMeters * Double(100 - a.route.dirtPercent) / 100
-            let pavedB = b.route.distanceMeters * Double(100 - b.route.dirtPercent) / 100
-            if abs(pavedA - pavedB) > 2_000 { return pavedA < pavedB }
-            if a.route.dirtPercent != b.route.dirtPercent {
-                return a.route.dirtPercent > b.route.dirtPercent
+
+            let urbanDelta = a.quality.urbanCoreMeters - b.quality.urbanCoreMeters
+            if abs(urbanDelta) > 100 { return urbanDelta < 0 }
+
+            let weakSectionDelta = b.quality.minimumSectionDirtPercent - a.quality.minimumSectionDirtPercent
+            if abs(weakSectionDelta) >= 5 { return weakSectionDelta > 0 }
+
+            let pavedRunDelta = a.quality.longestPavedRunMeters - b.quality.longestPavedRunMeters
+            if abs(pavedRunDelta) > 2_000 { return pavedRunDelta < 0 }
+
+            if abs(a.pavedMeters - b.pavedMeters) > 2_000 { return a.pavedMeters < b.pavedMeters }
+
+            let meanderA = a.shape.backwardMeters + a.shape.lateralMeters * 0.25
+            let meanderB = b.shape.backwardMeters + b.shape.lateralMeters * 0.25
+            if abs(meanderA - meanderB) > 1_000 { return meanderA < meanderB }
+
+            if a.candidate.route.dirtPercent != b.candidate.route.dirtPercent {
+                return a.candidate.route.dirtPercent > b.candidate.route.dirtPercent
             }
-            let ha = HopSearchPolicy.hash(seed, Int(a.width), a.route.dirtPercent)
-            let hb = HopSearchPolicy.hash(seed, Int(b.width), b.route.dirtPercent)
-            if ha != hb { return ha < hb }
-            return a.width < b.width
+            return a.candidate.width < b.candidate.width
         }?.candidate
     }
 
@@ -1706,9 +1774,34 @@ nonisolated struct OnDeviceRouter {
             ctx.customerEndEdges = pack.customerEndpointEdges(edgeIndex: endEi,
                 seeds: (virtAdjRev[endVirt] ?? []).filter { $0.to < n }.map { ($0.to, virt[$0.id].meters) }, reverse: true)
         }
-        // Fog of war: do not reverse-search the whole region for remaining
-        // road distance. Geodesic away cost is the soft waypoint pull.
-        ctx.roadRemaining = nil
+        // Road compass: build reverse shortest-path distances from dest when
+        // the search is bounded (has a path cap). This prunes branches that
+        // cannot reach dest within budget, dramatically reducing pops on
+        // province-scale graphs. Lockstep: JS slackToDest / roadRemaining.
+        let isHunt = ctx.maxPathMeters != nil || ctx.boundedSearch
+        let slackToDest: [Double]?
+        if isHunt, let cap = ctx.maxPathMeters, cap.isFinite {
+            slackToDest = fillShortestMeters(
+                from: endVirt,
+                capMeters: cap,
+                nodeCount: n,
+                total: total,
+                virt: virt,
+                virtAdj: virtAdj,
+                from: from, to: to,
+                ctx: ctx,
+                startEi: startEi, endEi: endEi,
+                profile: profile,
+                policyUnknown: policyUnknown,
+                avoidEdgeIds: avoidEdgeIds,
+                coincidentSiblings: coincidentSiblings
+            )
+            ctx.roadRemaining = slackToDest
+        } else {
+            slackToDest = nil
+            ctx.roadRemaining = nil
+        }
+
         func awayExtra(fromNode: Int, toNode: Int) -> Double {
             if let remaining = ctx.roadRemaining,
                fromNode >= 0, fromNode < remaining.count,
@@ -1738,10 +1831,6 @@ nonisolated struct OnDeviceRouter {
                 wander: ctx.wander
             )
         }
-
-        // Fog of war: a whole-pack reverse CSR is not a remaining-distance prune.
-        // The path-length cap still bounds search; geodesic away is the waypoint pull.
-        let slackToDest: [Double]? = nil
 
         if ctx.costMode == .balancedResource {
             return searchVirtualBalanced(
@@ -1809,11 +1898,9 @@ nonisolated struct OnDeviceRouter {
         heap.push(node: startVirt, cost: 0)
 
         let applyAway = ctx.costMode == .profile || ctx.costMode == .pavement
-        // Clean uses toward-B gravity only — no chord XT.
         let applySoftCorridor = applyAway
             && profile != .cleanest
             && (ctx.costMode == .pavement || ctx.corridorMeters == nil)
-        let isHunt = ctx.maxPathMeters != nil || ctx.boundedSearch
         var pops = 0
         var abort = "completed"
         let huntStart = CFAbsoluteTimeGetCurrent()
