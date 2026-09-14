@@ -535,13 +535,9 @@ nonisolated struct OnDeviceRouter {
                 let ei = Int(pack.edgeUndirectedIndex[i])
                 guard ei >= 0, ei < pack.undirectedEdgeCount, toNode >= 0, toNode < n else { continue }
                 if prevEdge[cur.node] == ei { continue }
-                if pack.version >= 4, pack.legalTopology {
-                    // Reachability discovery is an admissible lower bound. It
-                    // may include endpoint-only edges, but never denied,
-                    // impassable, or disabled unknown directions. Exact turn
-                    // and endpoint legality is proved by the final route.
+                if pack.version >= 4 {
                     let code = Int(pack.v4AccessCode(ei: ei, from: cur.node, to: toNode))
-                    if code == 2 || code == 5 || (code == 1 && !policyUnknown) { continue }
+                    if ![0, 1, 3, 4].contains(code) || (code == 1 && !policyUnknown) { continue }
                 } else {
                     let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
@@ -649,7 +645,7 @@ nonisolated struct OnDeviceRouter {
         // Otherwise Banjo Mike–style camps lock onto NSTDB TRACK (motorized_unknown),
         // then Dijkstra with Allow off reports "no route on the eligible graph"
         // while the basemap still draws a continuous white road.
-        let v4 = pack.version >= 4 && pack.legalTopology
+        let v4 = pack.version >= 4
         let tapMeters = TapRadius.meters(
             zoom: mapZoom,
             latitude: to.latitude,
@@ -1551,12 +1547,14 @@ nonisolated struct OnDeviceRouter {
         if let stub = softStitchStub(tap: from, snap: startSnap, idSuffix: "start") {
             legs.append(stub)
         }
+        let sameFrom = alongForward ? startSnap.nodeA : startSnap.nodeB
+        let sameTo   = alongForward ? startSnap.nodeB : startSnap.nodeA
         legs.append(Leg(
             coordinates: between,
             distanceMeters: alongM,
             surfaceName: surface,
             edgeId: id,
-            accessName: accessNameForEdge(ei),
+            accessName: accessNameForEdge(ei, from: sameFrom, to: sameTo),
             roadClassName: roadClassNameForEdge(ei),
             surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
             structureType: structureTypeForEdge(ei),
@@ -2303,12 +2301,19 @@ nonisolated struct OnDeviceRouter {
                     id = pack.edgeId(v.ei)
                 }
                 if coords.count >= 2, v.meters > 0.5 {
+                    let virtFrom: Int
+                    let virtTo: Int
+                    if v.ei >= 0, let ef = pack.edgeFrom, let et = pack.edgeTo,
+                       v.ei < ef.count, v.ei < et.count {
+                        virtFrom = forward ? Int(ef[v.ei]) : Int(et[v.ei])
+                        virtTo   = forward ? Int(et[v.ei]) : Int(ef[v.ei])
+                    } else { virtFrom = -1; virtTo = -1 }
                     legs.append(Leg(
                         coordinates: coords,
                         distanceMeters: v.meters,
                         surfaceName: surface,
                         edgeId: id,
-                        accessName: v.junctionStitch ? "motorized_permissive" : accessNameForEdge(v.ei),
+                        accessName: v.junctionStitch ? "motorized_permissive" : accessNameForEdge(v.ei, from: virtFrom, to: virtTo),
                         roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei),
                         surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : pack.surfaceLeaf(v.ei),
                         structureType: v.junctionStitch ? nil : structureTypeForEdge(v.ei),
@@ -2340,7 +2345,7 @@ nonisolated struct OnDeviceRouter {
                     distanceMeters: m,
                     surfaceName: surface,
                     edgeId: id,
-                    accessName: accessNameForEdge(ei),
+                    accessName: accessNameForEdge(ei, from: aNode, to: bNode),
                     roadClassName: roadClassNameForEdge(ei),
                     surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
                     structureType: structureTypeForEdge(ei),
@@ -2850,12 +2855,19 @@ nonisolated struct OnDeviceRouter {
                     id = pack.edgeId(v.ei)
                 }
                 if coords.count >= 2, v.meters > 0.5 {
+                    let virtFrom: Int
+                    let virtTo: Int
+                    if v.ei >= 0, let ef = pack.edgeFrom, let et = pack.edgeTo,
+                       v.ei < ef.count, v.ei < et.count {
+                        virtFrom = forward ? Int(ef[v.ei]) : Int(et[v.ei])
+                        virtTo   = forward ? Int(et[v.ei]) : Int(ef[v.ei])
+                    } else { virtFrom = -1; virtTo = -1 }
                     legs.append(Leg(
                         coordinates: coords,
                         distanceMeters: v.meters,
                         surfaceName: surface,
                         edgeId: id,
-                        accessName: v.junctionStitch ? "motorized_permissive" : accessNameForEdge(v.ei),
+                        accessName: v.junctionStitch ? "motorized_permissive" : accessNameForEdge(v.ei, from: virtFrom, to: virtTo),
                         roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei),
                         surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : pack.surfaceLeaf(v.ei),
                         structureType: v.junctionStitch ? nil : structureTypeForEdge(v.ei),
@@ -2888,7 +2900,7 @@ nonisolated struct OnDeviceRouter {
                     distanceMeters: m,
                     surfaceName: surface,
                     edgeId: id,
-                    accessName: accessNameForEdge(ei),
+                    accessName: accessNameForEdge(ei, from: aNode, to: bNode),
                     roadClassName: roadClassNameForEdge(ei),
                     surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
                     structureType: structureTypeForEdge(ei),
@@ -2995,17 +3007,14 @@ nonisolated struct OnDeviceRouter {
                     let ei = Int(incomingEdges[i])
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
                     let attr = pack.edgeAttrs[ei]
-                    let access = GraphV2Pack.unpackAccess(attr)
-                    if pack.version >= 4, pack.legalTopology {
-                        // Transpose lower bound: actual travel is toNode ->
-                        // cur.node. Endpoint-only edges remain admissible here;
-                        // the forward search proves exact endpoint intent.
+                    if pack.version >= 4 {
                         let code = Int(pack.v4AccessCode(ei: ei, from: toNode, to: cur.node))
-                        if code == 2 || code == 5 || (code == 1 && !policyUnknown) { continue }
-                    } else if !accessAllowed(
-                        access, allowUnknown: policyUnknown, profile: profile
-                    ) {
-                        continue
+                        if ![0, 1, 3, 4].contains(code) || (code == 1 && !policyUnknown) { continue }
+                    } else {
+                        let access = GraphV2Pack.unpackAccess(attr)
+                        if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) {
+                            continue
+                        }
                     }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
@@ -3592,7 +3601,7 @@ nonisolated struct OnDeviceRouter {
                     distanceMeters: m,
                     surfaceName: surface,
                     edgeId: id,
-                    accessName: accessNameForEdge(ei),
+                    accessName: accessNameForEdge(ei, from: parent, to: node),
                     roadClassName: roadClassNameForEdge(ei),
                     surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
                     structureType: structureTypeForEdge(ei),
@@ -4170,7 +4179,7 @@ nonisolated struct OnDeviceRouter {
             for ei in grid.edgeIndices(nearLat: lat, lon: lon, radiusCells: radius) {
                 if checked.contains(ei) { continue }
                 checked.insert(ei)
-                if pack.version < 4 || !pack.legalTopology {
+                if pack.version < 4 {
                     let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
                     guard accessAllowed(access, allowUnknown: policyUnknown, profile: profile) else { continue }
                 }
@@ -4231,7 +4240,7 @@ nonisolated struct OnDeviceRouter {
         }
 
         let ranked = bestByEdge.values.sorted { $0.distanceMeters < $1.distanceMeters }
-        guard pack.version >= 4, pack.legalTopology else {
+        guard pack.version >= 4 else {
             return Array(ranked.prefix(Self.maxStartSnapCandidates * 2))
         }
         let policyAllow = allowUnknown && profile != .cleanest
@@ -4530,8 +4539,23 @@ nonisolated struct OnDeviceRouter {
         return ""
     }
 
-    private func accessNameForEdge(_ ei: Int) -> String {
+    /// Faithful port of JS find-path-v2 access labelling.
+    /// V4 packs: derive the display name from the *directed* access code so
+    /// edges that v4TransitionState proved allowed are never mislabelled as
+    /// "motorized_unknown".  Non-V4 packs: original undirected lookup.
+    private func accessNameForEdge(_ ei: Int, from fromNode: Int = -1, to toNode: Int = -1) -> String {
         guard ei >= 0, ei < pack.undirectedEdgeCount else { return "motorized_unknown" }
+        if pack.version >= 4,
+           fromNode >= 0, toNode >= 0 {
+            let code = pack.v4AccessCode(ei: ei, from: fromNode, to: toNode)
+            switch code {
+            case 0, 3, 4: return "motorized_verified"
+            case 1:       return "motorized_unknown"
+            case 2:       return "motorized_restricted"
+            case 5:       return "motorized_excluded"
+            default:      return "motorized_unknown"
+            }
+        }
         let name = accessName(GraphV2Pack.unpackAccess(pack.edgeAttrs[ei]))
         return name.isEmpty ? "motorized_unknown" : name
     }

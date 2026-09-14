@@ -875,11 +875,12 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     /// Fail-closed: returns 2 (inaccessible) when the access array is missing,
     /// the edge index is out of range, or directional node arrays are absent.
     /// JS never allows traffic through an unresolvable edge.
+    /// Faithful port of JS find-path-v2 `v4AccessCode`.
+    /// JS returns 0 (allowed) when edgeAccess is absent; Swift matches that.
     func v4AccessCode(ei: Int, from: Int, to: Int) -> UInt8 {
-        guard legalTopology, ei >= 0, ei * 2 + 1 < edgeAccess.count,
-              let edgeFromArr = edgeFrom, let edgeToArr = edgeTo,
-              ei < edgeFromArr.count, ei < edgeToArr.count
-        else { return 2 }
+        guard ei >= 0, !edgeAccess.isEmpty, ei * 2 + 1 < edgeAccess.count else { return 0 }
+        guard let edgeFromArr = edgeFrom, let edgeToArr = edgeTo,
+              ei < edgeFromArr.count, ei < edgeToArr.count else { return 0 }
         let forward = edgeFromArr[ei] == Int32(from) && edgeToArr[ei] == Int32(to)
         return edgeAccess[ei * 2 + (forward ? 0 : 1)]
     }
@@ -888,6 +889,9 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         V4TurnStateSpace.build(pack: self, startNode: startNode, endNode: endNode)
     }
 
+    /// Faithful port of JS find-path-v2 `v4TransitionState` access gate.
+    /// Non-V4 packs skip this entirely (caller uses undirected accessAllowed).
+    /// V4 packs: the directed code is the sole access authority.
     func v4AccessAllowed(
         ei: Int,
         from: Int,
@@ -900,18 +904,20 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         customerStartEdges: Set<Int> = [],
         customerEndEdges: Set<Int> = []
     ) -> Bool {
-        guard version >= 4, legalTopology else { return true }
+        guard version >= 4 else { return true }
         let code = Int(v4AccessCode(ei: ei, from: from, to: to))
         if code == 0 { return true }
         if code == 1 { return allowUnknown }
         if code == 2 || code == 5 { return false }
+        let isStart = ei == startEi || customerStartEdges.contains(ei)
+        let isEnd   = ei == endEi   || customerEndEdges.contains(ei)
         if code == 3 {
-            return (ei == startEi && startEndpointKind != "customers")
-                || (ei == endEi && endEndpointKind != "customers")
+            return (isStart && startEndpointKind != "customers")
+                || (isEnd && endEndpointKind != "customers")
         }
         if code == 4 {
-            return ((ei == startEi || customerStartEdges.contains(ei)) && startEndpointKind == "customers")
-                || ((ei == endEi || customerEndEdges.contains(ei)) && endEndpointKind == "customers")
+            return (isStart && startEndpointKind == "customers")
+                || (isEnd && endEndpointKind == "customers")
         }
         return false
     }
