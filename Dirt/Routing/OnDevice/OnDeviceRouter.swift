@@ -816,6 +816,9 @@ nonisolated struct OnDeviceRouter {
         ctx.wander = activeWander
         ctx.variety = usesVariety(seed: sessionSeed, profile: profile)
         ctx.corridorMeters = HopSearchPolicy.corridorMeters(for: profile, wander: activeWander)
+        let lengthCap = defaultLengthCapMeters(
+            from: from, to: to, profile: profile, requested: maxRouteMeters
+        )
 
         if profile == .dirt {
             let base = ctx.corridorMeters ?? HopSearchPolicy.dirtCorridorMeters
@@ -836,7 +839,7 @@ nonisolated struct OnDeviceRouter {
                 hunt.boundedSearch = true
                 hunt.timeCapSeconds = HopSearchPolicy.dirtCandidateTimeCapSeconds
                 hunt.popCap = HopSearchPolicy.dirtCandidatePopCap
-                hunt.maxPathMeters = maxRouteMeters
+                hunt.maxPathMeters = lengthCap
                 lastFailure = .noPath
                 let initial: Result
                 switch runProfile(hunt) {
@@ -925,7 +928,7 @@ nonisolated struct OnDeviceRouter {
                 envelope.boundedSearch = true
                 envelope.timeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
                 envelope.popCap = HopSearchPolicy.pass2PopCap * 10
-                envelope.maxPathMeters = maxRouteMeters
+                envelope.maxPathMeters = lengthCap
                 lastFailure = .noPath
                 switch runProfile(envelope) {
                 case .success(var route):
@@ -1891,7 +1894,8 @@ nonisolated struct OnDeviceRouter {
                     let newMeters = pathMeters[cur.node] + edgeM
                     if exceedsLengthSlack(
                         newMeters: newMeters, toNode: toNode,
-                        slackToDest: slackToDest, cap: ctx.maxPathMeters
+                        slackToDest: slackToDest, cap: ctx.maxPathMeters,
+                        dest: endLL, nodeCount: n
                     ) { continue }
 
                     let surface = GraphV2Pack.unpackSurface(attr)
@@ -2099,7 +2103,8 @@ nonisolated struct OnDeviceRouter {
                     let newMeters = pathMeters[cur.node] + v.meters
                     if exceedsLengthSlack(
                         newMeters: newMeters, toNode: item.to,
-                        slackToDest: slackToDest, cap: ctx.maxPathMeters
+                        slackToDest: slackToDest, cap: ctx.maxPathMeters,
+                        dest: endLL, nodeCount: n
                     ) { continue }
                     var step = v.meters / 1000.0
                     if v.junctionStitch { step *= Self.junctionStitchCostPremium }
@@ -2462,7 +2467,8 @@ nonisolated struct OnDeviceRouter {
                     let newMeters = metersSoFar + edgeM
                     if exceedsLengthSlack(
                         newMeters: newMeters, toNode: toNode,
-                        slackToDest: slackToDest, cap: cap
+                        slackToDest: slackToDest, cap: cap,
+                        dest: endLL, nodeCount: n
                     ) { continue }
                     let shortDirtPenalized = profile == .dirt
                         && ctx.shortDirtPenaltyEdgeIds.contains(eid)
@@ -2622,7 +2628,8 @@ nonisolated struct OnDeviceRouter {
                     let newMeters = metersSoFar + v.meters
                     if exceedsLengthSlack(
                         newMeters: newMeters, toNode: item.to,
-                        slackToDest: slackToDest, cap: cap
+                        slackToDest: slackToDest, cap: cap,
+                        dest: endLL, nodeCount: n
                     ) { continue }
                     let edgeFrom = node < n
                         ? coordinate(forNode: node)
@@ -2952,19 +2959,46 @@ nonisolated struct OnDeviceRouter {
         return dist
     }
 
+    /// Length slack without a whole-region reverse CSR. Prefer an exact remaining
+    /// field when one exists; otherwise geodesic remaining is a safe prune:
+    /// if metres-so-far + geodesic-to-B already exceeds the cap, no road path can finish.
     private func exceedsLengthSlack(
         newMeters: Double,
         toNode: Int,
         slackToDest: [Double]?,
-        cap: Double?
+        cap: Double?,
+        dest: CLLocationCoordinate2D,
+        nodeCount: Int
     ) -> Bool {
-        if let cap, newMeters > cap { return true }
-        guard let slack = slackToDest, let cap, toNode >= 0, toNode < slack.count else {
-            return false
+        guard let cap, cap.isFinite else { return false }
+        if newMeters > cap { return true }
+        let remaining: Double
+        if let slack = slackToDest, toNode >= 0, toNode < slack.count {
+            let rem = slack[toNode]
+            if !rem.isFinite { return true }
+            remaining = rem
+        } else if toNode >= 0, toNode < nodeCount {
+            remaining = meters(coordinate(forNode: toNode), dest)
+        } else {
+            remaining = 0
         }
-        let rem = slack[toNode]
-        if !rem.isFinite { return true }
-        return newMeters + rem > cap + 1
+        return newMeters + remaining > cap + 1
+    }
+
+    /// Fuel-off and unbounded callers still need a length ceiling so the search
+    /// cannot wander until the time cap. Geodesic × 1.2 stands in for road-shortest
+    /// without decoding a whole-region reverse index.
+    private func defaultLengthCapMeters(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        profile: RouteProfile,
+        requested: Double?
+    ) -> Double? {
+        if let requested, requested.isFinite, requested > 0 { return requested }
+        guard let extra = HopSearchPolicy.corridorMeters(for: profile, wander: activeWander) else {
+            return nil
+        }
+        return meters(from, to) * 1.2 + extra
     }
 
     private func stampHunt(
