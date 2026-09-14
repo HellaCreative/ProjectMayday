@@ -92,6 +92,17 @@ nonisolated struct OnDeviceRouter {
         }
     }
 
+    /// Exact internal matching identity, independent of the first traversed
+    /// edge (which can differ at a genuine node). Not a presentation model.
+    struct MatchedEndpoint: Equatable, Sendable {
+        let sourceEpoch: String
+        enum Location: Equatable, Sendable {
+            case node(Int64)
+            case edge(parent: NativeRoutingContinuation.Road, alongMeters: Double, longitude: Double, latitude: Double)
+        }
+        let location: Location
+    }
+
     struct Result: Sendable {
         var coordinates: [CLLocationCoordinate2D]
         var distanceMeters: Double
@@ -116,6 +127,8 @@ nonisolated struct OnDeviceRouter {
         var debugNote: String = ""
         var searchMeta: SearchMeta = SearchMeta()
         var snapDiagnostics: RouteSnapDiagnostics? = nil
+        var matchedStart: MatchedEndpoint? = nil
+        var matchedEnd: MatchedEndpoint? = nil
         var allowUnknownLogged: Bool? = nil
         var tapRadiusMeters: Double? = nil
         var mapZoom: Double? = nil
@@ -205,6 +218,8 @@ nonisolated struct OnDeviceRouter {
     /// Planning-session seed for controlled variety. New process → new seed.
     /// Internal qualification switch; normal routing uses the identical memoized arithmetic.
     var useDirectedStepMemo = true
+    var useLabelReadPointerCache = true
+    var useReachableCachedMatchesBeforeCoverage = true
     var ridePreferences: RidePreferences?
     private var activeRidePreferences: RidePreferences? {
         guard !initialFuelApproach, let value = ridePreferences else { return nil }
@@ -718,7 +733,14 @@ nonisolated struct OnDeviceRouter {
         for pump in pumps {
             try RoutingWorkContext.check()
             let ll = CLLocationCoordinate2D(latitude: pump.latitude, longitude: pump.longitude)
-            if try stationCoverageCannotReach(ll, distances: dist, nodeOffset: 0,
+            // Existing exact matches are reevaluated against this current field below.
+            let cached = useReachableCachedMatchesBeforeCoverage
+                ? try Self.rangeSnapCache.cached(pack: pack, point: ll,
+                    profile: profile, allowUnknown: allowUnknown) : nil
+            if cached != nil {
+                RoutingWorkContext.measurement?.increment(.rangeSnapCoverageBypasses)
+            }
+            if cached == nil, try stationCoverageCannotReach(ll, distances: dist, nodeOffset: 0,
                 protectedEdges: protectedEdges) {
                 skipped += 1
                 continue
@@ -1262,6 +1284,25 @@ nonisolated struct OnDeviceRouter {
             out.allowUnknownLogged = allowUnknown
             out.tapRadiusMeters = snapCap
             out.mapZoom = mapZoom
+            func anchor(_ snap: EdgeSnap) -> MatchedEndpoint? {
+                guard let epoch = pack.sourceEpoch, !epoch.isEmpty,
+                      pack.osmWayIds.indices.contains(snap.edgeIndex),
+                      pack.osmNodeIds.indices.contains(snap.nodeA), pack.osmNodeIds.indices.contains(snap.nodeB),
+                      snap.distanceAlongM.isFinite,
+                      snap.projected.longitude.isFinite, snap.projected.latitude.isFinite else { return nil }
+                for node in [snap.nodeA, snap.nodeB] {
+                    let point = coordinate(forNode: node)
+                    if snap.projected.longitude == point.longitude, snap.projected.latitude == point.latitude {
+                        return .init(sourceEpoch: epoch, location: .node(pack.osmNodeIds[node]))
+                    }
+                }
+                return .init(sourceEpoch: epoch, location: .edge(
+                    parent: .init(wayID: pack.osmWayIds[snap.edgeIndex],
+                        fromNodeID: pack.osmNodeIds[snap.nodeA], toNodeID: pack.osmNodeIds[snap.nodeB]),
+                    alongMeters: snap.distanceAlongM, longitude: snap.projected.longitude, latitude: snap.projected.latitude))
+            }
+            out.matchedStart = anchor(startSnap)
+            out.matchedEnd = anchor(endSnap)
             out.snapDiagnostics = RouteSnapDiagnostics(
                 start: snapEndpoint(
                     raw: from,
@@ -2336,6 +2377,7 @@ nonisolated struct OnDeviceRouter {
 
         guard let labels = try? DemandSearchLabels(
             stateCount: total, maxPayloadBytes: maximumSearchLabelPayloadBytes,
+            useReadPointerCache: useLabelReadPointerCache,
             shouldStop: { RoutingWorkContext.stopReason != nil }
         ) else { return .failure(.searchLimit("labelStorageConfiguration")) }
         var measuredLabelCapacity = 0
@@ -2388,11 +2430,19 @@ nonisolated struct OnDeviceRouter {
             }
             return row.predecessorKind == 1 ? virt[row.predecessorData].roadSpan : nil
         }
+        var retraceQueries: UInt64 = 0
+        var retracePredecessorVisits: UInt64 = 0
+        defer {
+            measurement?.increment(.singleRetraceQueries, by: retraceQueries)
+            measurement?.increment(.singleRetracePredecessorVisits, by: retracePredecessorVisits)
+        }
         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
             guard pack.version >= 4, let span else { return false }
+            retraceQueries &+= 1
             // Synchronous read-only traversal of the same predecessor chain;
             // no dense array snapshot or cached path history is created.
             return PathRetrace.contains(node: label, span: span, step: { ancestor in
+                retracePredecessorVisits &+= 1
                 let row = labels[ancestor]
                 guard row.predecessor >= 0 else { return (row.predecessor,nil) }
                 let entry = row.predecessorData
@@ -3004,6 +3054,7 @@ nonisolated struct OnDeviceRouter {
 
         guard let labelStore = try? DemandBalancedSearchLabels(
             stateCount: labels, maxPayloadBytes: maximumSearchLabelPayloadBytes,
+            useReadPointerCache: useLabelReadPointerCache,
             shouldStop: { RoutingWorkContext.stopReason != nil }
         ) else { return .failure(.searchLimit("labelStorageConfiguration")) }
         var measuredLabelCapacity = 0
@@ -3056,11 +3107,19 @@ nonisolated struct OnDeviceRouter {
             }
             return row.predecessorKind == 1 ? virt[row.predecessorData].roadSpan : nil
         }
+        var retraceQueries: UInt64 = 0
+        var retracePredecessorVisits: UInt64 = 0
+        defer {
+            measurement?.increment(.resourceRetraceQueries, by: retraceQueries)
+            measurement?.increment(.resourceRetracePredecessorVisits, by: retracePredecessorVisits)
+        }
         func retraces(_ label: Int, _ span: PathRetrace.Span?) -> Bool {
             guard pack.version >= 4, let span else { return false }
+            retraceQueries &+= 1
             // Synchronous read-only traversal retains the same predecessor
             // chain; bucket identities and relaxation order remain unchanged.
             return PathRetrace.contains(node: label, span: span, step: { ancestor in
+                retracePredecessorVisits &+= 1
                 let row = labelStore[ancestor]
                 guard row.predecessor >= 0 else { return (row.predecessor,nil) }
                 let entry = row.predecessorData

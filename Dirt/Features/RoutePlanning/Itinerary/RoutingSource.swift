@@ -561,6 +561,7 @@ final class PackRoutingSource: RoutingSource {
         var carriedArrival = req.options?.arrivalEdgeId
         var carriedContinuation = req.options?.arrivalContinuation
         var roadProgress: FuelItinerary.RoadProgress?
+        let exitReuse = FuelExitReuseScope.current ?? FuelExitReuseHolder()
         let fuelBegan = ProcessInfo.processInfo.systemUptime
         func trace(_ phase: String) {
             RoutingDebugLog.shared.event("pack fuel phase=\(phase) profile=\(req.profile.rawValue) elapsed=\(ProcessInfo.processInfo.systemUptime - fuelBegan)")
@@ -597,19 +598,29 @@ final class PackRoutingSource: RoutingSource {
                 )
             }
 
-            let direct = try await packs.shortestGraphMeters(
-                from: current.locationCoordinate,
-                to: end.locationCoordinate,
-                maxMeters: firstCap,
-                profile: req.profile,
-                allowUnknown: req.accessPolicy.motorizedUnknown
-            )
             let mustPump = stops.count < req.fuel.minimumFuelStops
                 || (stops.isEmpty && (req.fuel.requireFuelStopBeforeEnd || req.fuel.requiredFirstStationId != nil))
             let destinationLimit = Self.destinationApproachCap(
                 usableRangeMeters: req.fuel.usableRangeMeters,
                 remainingMeters: firstCap,
                 arrivalUsedLimitMeters: req.fuel.destinationFuelUsedLimitMeters)
+            let retainedExit: OnDeviceRouter.Result?
+            if !mustPump {
+                retainedExit = try exitReuse.take(request: req, from: current, to: end,
+                    arrival: carriedContinuation, history: carriedHistory,
+                    sourceIdentity: packs.routingCacheIdentity(), cap: destinationLimit)
+            } else { retainedExit = nil }
+            let direct: Double?
+            if let retainedExit { direct = retainedExit.distanceMeters }
+            else {
+                direct = try await packs.shortestGraphMeters(
+                from: current.locationCoordinate,
+                to: end.locationCoordinate,
+                maxMeters: firstCap,
+                profile: req.profile,
+                allowUnknown: req.accessPolicy.motorizedUnknown
+            )
+            }
             var incompleteSearchReason: String?
             var directFallback: Double?
             var directRoute: RouteResponse?
@@ -617,7 +628,12 @@ final class PackRoutingSource: RoutingSource {
             var needsPumpForDestinationEscape = false
             if let direct,
                direct <= destinationLimit + 1 {
-                let routed = await packs.routeOnDeviceDetailed(
+                let routed: Swift.Result<OnDeviceRouter.Result, OnDeviceRouter.Failure>
+                if let retainedExit {
+                    RoutingWorkContext.measurement?.increment(.reusedProofs)
+                    routed = .success(retainedExit)
+                } else {
+                    routed = await packs.routeOnDeviceDetailed(
                     from: current.locationCoordinate,
                     to: end.locationCoordinate,
                     profile: req.profile,
@@ -633,9 +649,11 @@ final class PackRoutingSource: RoutingSource {
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
-                    startEndpointKind: stops.isEmpty ? req.options?.startEndpointKind : "customers",
+                    mapZoom: req.options?.mapZoom, matchLimitMeters: req.options?.matchLimitMeters,
+                        startEndpointKind: stops.isEmpty ? req.options?.startEndpointKind : "customers",
                     endEndpointKind: nil
                 )
+                }
                 if case .failure(.searchLimit(let reason)) = routed { incompleteSearchReason = reason }
                 if case .success(let route) = routed, route.distanceMeters <= destinationLimit + 1,
                    (carriedHistory.isEmpty || retraceMeters(route, history: carriedHistory) <= 1_000) {
@@ -776,6 +794,7 @@ final class PackRoutingSource: RoutingSource {
             let departureID = stops.last?.id ?? "start"
             var evaluated: [FuelItinerary.ProfileFuelCandidate] = []
             var evaluatedRoutesByID: [String: OnDeviceRouter.Result] = [:]
+            var evaluatedExitsByID: [String: (route: OnDeviceRouter.Result, sourceIdentity: String)] = [:]
             // Owner-directed forward ride: accept the first suitable proven leg.
             // Keep early/urban candidates as fallback while checking the existing
             // preferred fuel zone; do not optimize six complete future rides.
@@ -797,7 +816,8 @@ final class PackRoutingSource: RoutingSource {
                     longitude: candidate.longitude
                 )
                 trace("leg-start-\(candidate.id)-road-\(Int(reachable[candidate.id] ?? 0))-cap-\(Int(firstCap))")
-                let firstResult = await packs.routeOnDeviceDetailed(
+                let candidateSourceIdentity = packs.routingCacheIdentity()
+                var firstResult = await packs.routeOnDeviceDetailed(
                     from: current.locationCoordinate,
                     to: candidateCoordinate,
                     profile: req.profile,
@@ -813,9 +833,13 @@ final class PackRoutingSource: RoutingSource {
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
                     preferBackRoads: req.options?.preferBackRoads == true,
-                    startEndpointKind: stops.isEmpty ? req.options?.startEndpointKind : "customers",
+                    mapZoom: req.options?.mapZoom, matchLimitMeters: req.options?.matchLimitMeters,
+                        startEndpointKind: stops.isEmpty ? req.options?.startEndpointKind : "customers",
                     endEndpointKind: "customers"
                 )
+                if packs.routingCacheIdentity() != candidateSourceIdentity {
+                    firstResult = .failure(.searchLimit("fuelApproachSourceChanged"))
+                }
                 try RoutingWorkContext.check()
                 if case .failure(let reason) = firstResult {
                     RoutingDebugLog.shared.event("pack fuel leg-failed station=\(candidate.id) reason=\(reason)")
@@ -861,10 +885,14 @@ final class PackRoutingSource: RoutingSource {
                 // exit. Preserve the same acceptance rule without spending a
                 // second profile search on a station already known to retrace.
                 if destinationMayFit && avoidsMeaningfulRetrace {
-                    let exit = await packs.routeOnDeviceDetailed(
+                    var calculatedExitIdentity: String?
+                    func calculateExit(exclusions: Set<String>) async -> Swift.Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
+                        let bound = await FuelExitAlternative.calculateBoundExit(expectedIdentity: candidateSourceIdentity,
+                            currentIdentity: { self.packs.routingCacheIdentity() }) {
+                            await packs.routeOnDeviceDetailed(
                         from: candidateCoordinate, to: end.locationCoordinate,
                         profile: req.profile, allowUnknown: req.accessPolicy.motorizedUnknown,
-                        avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                        avoidEdgeIds: Array(exclusions),
                         priorEdgeIds: carriedHistory.union(firstRoute.edgeIds),
                         arrivalEdgeId: firstRoute.edgeIds.last ?? carriedArrival,
                         arrivalContinuation: firstRoute.terminalContinuation,
@@ -875,23 +903,47 @@ final class PackRoutingSource: RoutingSource {
                         cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                         avoidMotorways: req.options?.avoidMotorways == true,
                         preferBackRoads: req.options?.preferBackRoads == true,
+                        mapZoom: req.options?.mapZoom, matchLimitMeters: req.options?.matchLimitMeters,
                         startEndpointKind: "customers", endEndpointKind: nil)
+                        }
+                        calculatedExitIdentity = bound.sourceIdentity
+                        return bound.result
+                    }
+                    let originalAvoid = Set(req.options?.avoidEdgeIds ?? [])
+                    let exit = await calculateExit(exclusions: originalAvoid)
                     try RoutingWorkContext.check()
                     if case .success(let route) = exit {
                         let exitRetrace = retraceMeters(route, history: carriedHistory.union(firstRoute.edgeIds))
-                        finalExitAvoidsRetrace = route.distanceMeters <= destinationCap + 1 && exitRetrace <= 1_000
+                        let initialExitAccepted = route.distanceMeters <= destinationCap + 1 && exitRetrace <= 1_000
                         #if DEBUG
-                        if !finalExitAvoidsRetrace {
+                        if !initialExitAccepted {
                             FuelCandidateEvidence.capture(request: req, station: candidate,
                                 approach: firstRoute, exit: route, priorEdgeIDs: carriedHistory,
                                 exitRetraceMeters: exitRetrace, exitCapMeters: destinationCap)
                         }
                         #endif
                         trace("exit-assessed-\(candidate.id)-meters-\(Int(route.distanceMeters))-cap-\(Int(destinationCap))-retrace-\(Int(exitRetrace))")
-                    } else {
-                        finalExitAvoidsRetrace = false
-                        if case .failure(.searchLimit(let reason)) = exit { incompleteSearchReason = reason }
                     }
+                    let exitHistory = carriedHistory.union(firstRoute.edgeIds)
+                    let assessment = try await FuelExitAlternative.assess(initial: exit,
+                        approach: firstRoute, history: exitHistory, originalAvoid: originalAvoid,
+                        cap: destinationCap, maximumRepeatedMeters: maximumFuelRetraceMeters,
+                        repeatedMeters: { retraceMeters($0, history: exitHistory) },
+                        alternate: { exclusions in await calculateExit(exclusions: exclusions) })
+                    switch assessment {
+                    case .accepted(let accepted):
+                        if let identity = calculatedExitIdentity, identity == packs.routingCacheIdentity() {
+                            finalExitAvoidsRetrace = true
+                            evaluatedExitsByID[candidate.id] = (accepted, identity)
+                        } else {
+                            finalExitAvoidsRetrace = false
+                            incompleteSearchReason = "fuelExitSourceChanged"
+                        }
+                    case .unproved(let reason):
+                        finalExitAvoidsRetrace = false
+                        incompleteSearchReason = reason
+                    }
+
                 }
                 let onward: [String: Double]
                 if destinationMayFit || !avoidsMeaningfulRetrace {
@@ -1038,6 +1090,10 @@ final class PackRoutingSource: RoutingSource {
                     overByMeters: max(0, gap - remaining)
                 )
             }
+            if let selected = evaluatedExitsByID[choice.fuel.id],
+               selected.sourceIdentity != packs.routingCacheIdentity() {
+                throw RoutingError.fuelUnknown("Routing data changed before the selected fuel continuation could be committed.")
+            }
             let station = choice.fuel
             let meters = choice.routedMeters
             visited.insert(station.id)
@@ -1060,6 +1116,13 @@ final class PackRoutingSource: RoutingSource {
                 carriedHistory.formUnion(route.edgeIds)
                 carriedArrival = route.edgeIds.last ?? carriedArrival
                 carriedContinuation = route.terminalContinuation
+                exitReuse.saved = nil
+                if let selectedExit = evaluatedExitsByID[station.id],
+                   selectedExit.sourceIdentity == packs.routingCacheIdentity() {
+                    exitReuse.saved = try FuelExitReuseRecord(request: req, from: current, to: end,
+                        arrival: carriedContinuation, history: carriedHistory,
+                        sourceIdentity: selectedExit.sourceIdentity, route: selectedExit.route)
+                }
             }
         }
         let routedPrefix = graphMeters.reduce(0, +)

@@ -185,6 +185,8 @@ extension OnDeviceRouter.Result {
             )
         )
         combined.terminalContinuation = hops.last?.terminalContinuation
+        combined.matchedStart = first.matchedStart
+        combined.matchedEnd = hops.last?.matchedEnd
         return combined
     }
 }

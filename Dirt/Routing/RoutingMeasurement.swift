@@ -24,6 +24,8 @@ nonisolated final class RoutingMeasurement: @unchecked Sendable {
         /// access counts repeated work, not unique storage or physical disk I/O.
         case urbanMemoHits, urbanMemoMisses, urbanMemoEvictions
         case stationCoverageCacheHits, stationCoverageCacheMisses, stationCoverageEdgesScanned, stationCoverageEntriesEvicted
+        case singleRetraceQueries, singleRetracePredecessorVisits
+        case resourceRetraceQueries, resourceRetracePredecessorVisits
         case directedCostMemoHits, directedCostMemoMisses, directedCostMemoEvictions
         case fileBytesAccessed, fileBytesHashed
         case filePageBorrowAcquisitions, filePageBytesBorrowed

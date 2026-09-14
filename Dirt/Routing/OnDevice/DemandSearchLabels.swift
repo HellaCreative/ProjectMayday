@@ -58,24 +58,36 @@ nonisolated final class DemandSearchLabels {
     let maximumPages: Int
     private let shouldStop: () -> Bool
     private var pages: [Int: Page] = [:]
-    // Four fixed cache slots alias existing pages; they never allocate or retain
-    // extra label payload beyond the owning page directory. Negative entries
-    // are replaced immediately when their page is created.
-    private var cached0: (key: Int, page: Page?) = (-1, nil)
-    private var cached1: (key: Int, page: Page?) = (-1, nil)
-    private var cached2: (key: Int, page: Page?) = (-1, nil)
-    private var cached3: (key: Int, page: Page?) = (-1, nil)
+    // Non-owning aliases into directory-owned immutable-lifetime pages. No
+    // Page reference or pointer escapes a getter. The owning synchronous search
+    // never removes a page before this store is destroyed.
+    private struct ReadSlot {
+        var key: Int = -1
+        var values: UnsafeMutablePointer<Label>? = nil
+    }
+    private static var readSlotCount: Int { 256 }
+    private let readSlots: UnsafeMutablePointer<ReadSlot>
+    private let useReadPointerCache: Bool
     private let pageShift: Int
     private(set) var allocationRevision = 0
     private var allocatedLabelCapacity = 0
     private var allocatedPayloadBytes = 0
 
     init(stateCount: Int, maxPayloadBytes: Int, pageCapacity: Int = 256,
+         useReadPointerCache: Bool = true,
          shouldStop: @escaping () -> Bool = { false }) throws {
         guard stateCount >= 0, maxPayloadBytes >= 0, pageCapacity > 0,
               pageCapacity <= Int.max / MemoryLayout<Label>.stride else {
             throw StorageError.invalidConfiguration
         }
+        // Exactly 256 × 16-byte slots on supported 64-bit platforms. This is
+        // metadata payload, separate from label and allocator/object overhead.
+        guard Self.readSlotCount * MemoryLayout<ReadSlot>.stride <= 4_096 else {
+            throw StorageError.invalidConfiguration
+        }
+        readSlots = .allocate(capacity: Self.readSlotCount)
+        readSlots.initialize(repeating: ReadSlot(), count: Self.readSlotCount)
+        self.useReadPointerCache = useReadPointerCache
         self.stateCount = stateCount
         self.pageCapacity = pageCapacity
         pageShift = pageCapacity.nonzeroBitCount == 1 ? pageCapacity.trailingZeroBitCount : -1
@@ -93,8 +105,8 @@ nonisolated final class DemandSearchLabels {
     subscript(state: Int) -> Label {
         @inline(__always) get {
             precondition(state >= 0 && state < stateCount, "Invalid routing label state")
-            guard let page = self.page(for: pageKey(state)) else { return Label() }
-            return page.values[pageOffset(state)]
+            guard let values = readValues(for: pageKey(state)) else { return Label() }
+            return values[pageOffset(state)]
         }
     }
 
@@ -106,25 +118,23 @@ nonisolated final class DemandSearchLabels {
         pageShift >= 0 ? state & (pageCapacity - 1) : state % pageCapacity
     }
 
-    @inline(__always) private func page(for key: Int) -> Page? {
-        switch key & 3 {
-        case 0: if cached0.key == key { return cached0.page }
-        case 1: if cached1.key == key { return cached1.page }
-        case 2: if cached2.key == key { return cached2.page }
-        default: if cached3.key == key { return cached3.page }
-        }
-        let found = pages[key]
-        remember(key, page: found)
-        return found
+    deinit {
+        readSlots.deinitialize(count: Self.readSlotCount)
+        readSlots.deallocate()
+        // Dictionary-owned Page objects release their label payload afterward.
     }
 
-    @inline(__always) private func remember(_ key: Int, page: Page?) {
-        switch key & 3 {
-        case 0: cached0 = (key, page)
-        case 1: cached1 = (key, page)
-        case 2: cached2 = (key, page)
-        default: cached3 = (key, page)
-        }
+    @inline(__always) private func readValues(for key: Int) -> UnsafeMutablePointer<Label>? {
+        guard useReadPointerCache else { return pages[key]?.values }
+        let slot = key & (Self.readSlotCount - 1)
+        if readSlots[slot].key == key { return readSlots[slot].values }
+        let values = pages[key]?.values
+        readSlots[slot] = ReadSlot(key: key, values: values)
+        return values
+    }
+
+    @inline(__always) private func remember(_ key: Int, page: Page) {
+        readSlots[key & (Self.readSlotCount - 1)] = ReadSlot(key: key, values: page.values)
     }
 
     /// The caller should invoke this only for accepted relaxations. Exhausting
@@ -136,7 +146,7 @@ nonisolated final class DemandSearchLabels {
         guard !shouldStop() else { throw StorageError.cancelled }
         let key = pageKey(state)
         let page: Page
-        if let existing = self.page(for: key) {
+        if let existing = pages[key] {
             page = existing
         } else {
             let first = state - pageOffset(state)
@@ -164,7 +174,7 @@ nonisolated final class DemandSearchLabels {
             maximumPayloadBytes: maximumPayloadBytes,
             maximumPages: maximumPages,
             logicalPageDirectoryEntryBytes: pages.count * (MemoryLayout<Int>.stride + MemoryLayout<Page>.stride),
-            logicalLookupCacheBytes: 4 * MemoryLayout<(Int, Page?)>.stride
+            logicalLookupCacheBytes: Self.readSlotCount * MemoryLayout<ReadSlot>.stride
         )
     }
 }
