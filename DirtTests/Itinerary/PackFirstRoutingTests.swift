@@ -290,6 +290,67 @@ struct PackFirstRoutingTests {
         #expect(!coordinator.isInstalling)
     }
 
+    @Test(arguments: [false,true])
+    func checksumFailurePreservesCompleteIntentThenResumesExactlyOnce(automaticFuel: Bool) async {
+        let keys = [FuelRangePrefs.key,FuelRangePrefs.lastEnabledKey,
+            FuelRangePrefs.reservePercentKey,FuelRangePrefs.automaticPlanningKey]
+        let defaults = UserDefaults.standard
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defer {
+            for (key,value) in zip(keys,saved) {
+                if let value { defaults.set(value,forKey: key) } else { defaults.removeObject(forKey: key) }
+            }
+        }
+        FuelRangePrefs.kilometers = 200
+        FuelRangePrefs.reservePercent = 10
+        FuelRangePrefs.automaticPlanningEnabled = automaticFuel
+        let live = NamedFakeRoutingSource(name: "live"), pack = NamedFakeRoutingSource(name: "pack")
+        let coverage = FakePackCoverage(installed: [],published: ["ns"])
+        coverage.installError = PackAcquisitionError.checksumMismatch(regionID: "ns")
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage,installer: coverage)
+        let model = makePackFirstModel(live: live,pack: pack,
+            policy: RoutingSourcePolicy(isOnline: { true },installedPacks: coverage,
+                live: live,pack: pack,onDeviceOnly: true),acquisition: coordinator,
+            requiresInstalledRoutingPacks: true)
+        let preferences = RidePreferences(preferDifferentRoads: true,wander: 0.65,avoidCities: true,avoidHighways: true)
+        model.ridePreferences = preferences
+        model.apply(.replaceAll(waypoints: [halifax,sydney],profile: .balanced,
+            allowUnknown: true,avoidMotorways: true,preferBackRoads: true),source: "fromHere")
+        await model.waitForCanonicalBuildForTesting()
+        let intent = model.itinerary, fuel = model.effectiveFuelSnapshot
+        #expect(fuel.tankMeters == 200_000 && fuel.usableMeters == 180_000 && fuel.reservePercent == 10)
+        #expect(fuel.automaticPlanningEnabled == automaticFuel)
+        #expect(model.packConsent?.regionIDs == ["ns"])
+        #expect(model.canonicalBuildStartCount == 0)
+        #expect(pack.routeRequests.isEmpty && pack.fuelChainRequests.isEmpty)
+        #expect(live.routeRequests.isEmpty && live.fuelChainRequests.isEmpty)
+        await model.acceptPackConsent()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(coverage.installed.isEmpty)
+        #expect(model.packConsent?.regionIDs == ["ns"])
+        #expect(model.errorMessage == PackAcquisitionError.checksumMismatch(regionID: "ns").errorDescription)
+        #expect(model.itinerary == intent) // Includes stable IDs, coordinates and each leg's settings.
+        #expect(model.ridePreferences == preferences)
+        #expect(model.effectiveFuelSnapshot == fuel)
+        #expect(model.canonicalBuildStartCount == 0)
+        #expect(pack.routeRequests.isEmpty && pack.fuelChainRequests.isEmpty)
+        #expect(live.routeRequests.isEmpty && live.fuelChainRequests.isEmpty)
+        coverage.installError = nil
+        await model.acceptPackConsent()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(coverage.installCalls == [["ns"],["ns"]])
+        #expect(model.packConsent == nil && coverage.installed == ["ns"])
+        #expect(model.canonicalBuildStartCount == 1)
+        #expect(!pack.routeRequests.isEmpty || !pack.fuelChainRequests.isEmpty)
+        #expect(live.routeRequests.isEmpty && live.fuelChainRequests.isEmpty)
+        #expect(model.itinerary == intent)
+        #expect(model.ridePreferences == preferences)
+        #expect(model.effectiveFuelSnapshot == fuel)
+        await model.acceptPackConsent() // No pending consent means no duplicate resume.
+        #expect(model.canonicalBuildStartCount == 1)
+        #expect(coverage.installCalls.count == 2)
+    }
+
     @Test func failedPackInstallKeepsConsentAvailableForRetry() async {
         let coverage = FakePackCoverage(installed: [], published: ["ns"])
         coverage.installError = PackAcquisitionError.downloadFailed(
@@ -669,6 +730,7 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
 private final class NamedFakeRoutingSource: RoutingSource {
     let name: String
     var routeRequests: [RouteRequest] = []
+    var fuelChainRequests: [FuelChainRequest] = []
 
     init(name: String) {
         self.name = name
@@ -694,7 +756,8 @@ private final class NamedFakeRoutingSource: RoutingSource {
     }
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
-        FuelChainResponse(
+        fuelChainRequests.append(req)
+        return FuelChainResponse(
             status: "complete", error: nil, message: nil, regionIds: ["ns"],
             stops: [], graphMeters: [100_000],
             diagnostics: FuelChainDiagnostics(

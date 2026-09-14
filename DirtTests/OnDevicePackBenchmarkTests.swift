@@ -335,6 +335,48 @@ struct OnDevicePackBenchmarkTests {
         #expect(enabled == disabled, "Canonical road/fuel/legal data must match apart from measured search timing")
     }
 
+    @Test("Exact owner recovers a timed-out optional destination preprobe through native routing")
+    @MainActor
+    func ownerPhone42MissingDestinationPreprobe() async throws {
+        let priorLogging = RoutingDebugLog.shared.isEnabled
+        RoutingDebugLog.shared.isEnabled = true
+        defer { RoutingDebugLog.shared.isEnabled = priorLogging }
+        try await runOwnerPhone42Requests(repeatFirst: false,
+            onlyRequestID: "20AB1401-6158-52C4-8FF8-572F828EC800",
+            evidenceSuffix: "-missing-destination-preprobe", forceInitialDestinationProbeTimeout: true)
+    }
+
+    @MainActor
+    private final class MissingDestinationPreprobeSource: RoutingSource {
+        let base: PackRoutingSource
+        var name: String { base.name }
+        var supportsCombinedFuelPlanning: Bool { base.supportsCombinedFuelPlanning }
+        private(set) var forcedTimeouts = 0
+        private(set) var requests: [FuelChainRequest] = []
+        private(set) var responses: [FuelChainResponse] = []
+        init(_ base: PackRoutingSource) { self.base = base }
+        func route(_ request: RouteRequest) async throws -> RouteResponse { try await base.route(request) }
+        func fuelChain(_ request: FuelChainRequest) async throws -> FuelChainResponse {
+            requests.append(request)
+            if forcedTimeouts == 0, request.fuel.riderLegId == "destination-escape",
+               request.fuel.probeFirstReachableStation == true, request.fuel.forwardFeeler == true,
+               request.fuel.windowTimeBudgetMs == 2_500 {
+                forcedTimeouts += 1
+                throw RoutingError.fuelUnknown("Fuel planning reached its time budget. A fuel gap has not been proved.")
+            }
+            let response = try await base.fuelChain(request)
+            responses.append(response)
+            return response
+        }
+        func verifiedInitialFuelStation(at point: RouteCoordinate, profile: RouteProfile,
+            allowUnknown: Bool) async throws -> FuelChainStop? {
+            try await base.verifiedInitialFuelStation(at: point, profile: profile, allowUnknown: allowUnknown)
+        }
+        func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
+            try await base.fuelStation(near: point, within: meters)
+        }
+    }
+
     private func canonicalOwnerResultDigest(_ result: BuiltItinerary) throws -> Data {
         let legs = try result.legs.map { leg -> [String: Any] in
             var response = try #require(try object(leg.response) as? [String: Any])
@@ -361,7 +403,8 @@ struct OnDevicePackBenchmarkTests {
     @discardableResult
     private func runOwnerPhone42Requests(repeatFirst: Bool, onlyRequestID: String? = nil,
         coveragePreprobe: Bool = true, evidenceSuffix: String = "",
-        packRegions: [String] = ["ns", "nb"], captureDigest: Bool = false) async throws -> [Data] {
+        packRegions: [String] = ["ns", "nb"], captureDigest: Bool = false,
+        forceInitialDestinationProbeTimeout: Bool = false) async throws -> [Data] {
         let version = "fabric-v4-20260909-02"
         let candidate = root.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(version).appendingPathComponent("packs")
@@ -400,10 +443,16 @@ struct OnDevicePackBenchmarkTests {
                 "seed": String(seed), "profile": "dirt", "allowUnknown": "false",
                 "tankMeters": "200000", "reservePercent": "10"
             ])
+            let nativeSource = PackRoutingSource(packs: store, cache: RouteResponseCache())
+            let probeAdapter = forceInitialDestinationProbeTimeout ? MissingDestinationPreprobeSource(nativeSource) : nil
+            let replaySource: any RoutingSource
+            if let probeAdapter { replaySource = probeAdapter } else { replaySource = nativeSource }
+            let logMarker = "owner-preprobe-regression-" + UUID().uuidString
+            if probeAdapter != nil { RoutingDebugLog.shared.event(logMarker) }
             let result = await RoutingWorkContext.$measurement.withValue(measurement) {
                 await builder.build(itinerary, from: 0, reuse: nil,
                 fuel: FuelRangePrefs.Snapshot(tankMeters: 200_000, usableMeters: 180_000, reservePercent: 10, automaticPlanningEnabled: true),
-                source: .fixed(PackRoutingSource(packs: store, cache: RouteResponseCache())),
+                source: .fixed(replaySource),
                 onFuelStatus: { _ in }, onProgress: { _ in })
             }
             let report = measurement.finish(outcome: String(describing: result.riderLegStatus))
@@ -417,6 +466,27 @@ struct OnDevicePackBenchmarkTests {
                 "routes": try result.legs.map { try object($0.response) },
                 "status": String(describing: result.riderLegStatus),
                 "stops": result.legs.compactMap { $0.endsAtFuelStop?.stationID }], name: "phone42-" + evidenceID)
+            if let probeAdapter {
+                let diagnostic = RoutingDebugLog.shared.text
+                #expect(diagnostic.contains(logMarker), "This calculation's marker must remain in the diagnostic ring")
+                let log = diagnostic.components(separatedBy: logMarker).last ?? ""
+                try saveEvidence(["adapter": "Only the first destination-escape 2500ms preprobe throws its existing timeout; all other calls use native PackRoutingSource unchanged",
+                    "forcedTimeouts": probeAdapter.forcedTimeouts,
+                    "requests": try probeAdapter.requests.map { try object($0) },
+                    "responses": try probeAdapter.responses.map { try object($0) },
+                    "log": log], name: "adapter-phone42-" + evidenceID)
+                #expect(probeAdapter.forcedTimeouts == 1)
+                #expect(log.contains("destination planning reservation retry meters="))
+                #expect(log.contains("arrivalVerified=false"))
+                #expect(result.legs.compactMap { $0.endsAtFuelStop?.stationID } ==
+                    ["osm:a366199684", "osm:a1095466802", "osm:a581652160"])
+                let escape = try #require(probeAdapter.responses.last?.destinationEscapeMeters)
+                let finalMeters = try #require(result.legs.last?.response.distanceMeters)
+                #expect(escape.isFinite && escape > 0 && finalMeters + escape <= 180_000)
+                let rideRequests = probeAdapter.requests.filter { $0.fuel.riderLegId == id }
+                #expect(!rideRequests.isEmpty)
+                #expect(rideRequests.allSatisfy { $0.options?.sessionSeed == seed && $0.fuel.usableRangeMeters == 180_000 })
+            }
             #expect(result.legs.first?.endsAtFuelStop?.stationID != nil)
             #expect(result.legs.last?.toCoordinate == b.coordinate)
             #expect(result.riderLegStatus[leg.id] == .built)

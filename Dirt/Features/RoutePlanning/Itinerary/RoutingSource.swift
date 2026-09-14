@@ -556,6 +556,32 @@ final class PackRoutingSource: RoutingSource {
                 firstReachableStationMeters: first
             )
         }
+        // The optional cold preprobe may have expired before preparing data.
+        // Retry once only when an actual road field makes the final stage
+        // plausible, inside this existing work window (never a fresh deadline).
+        let destinationReservation = DestinationReservationRetry(
+            arrivalUsedLimitMeters: req.fuel.destinationFuelUsedLimitMeters)
+        func prepareDestinationReservation(approachMeters: Double?, availableMeters: Double) async throws {
+            try await destinationReservation.prepareIfNeeded(
+                enabled: req.fuel.ensureDestinationFuelEscape == true,
+                approachMeters: approachMeters, availableMeters: availableMeters,
+                usableMeters: req.fuel.usableRangeMeters) {
+                let estimate = await Self.estimateDestinationFuel(from: end, stations: stations,
+                    usableMeters: req.fuel.usableRangeMeters) { station, cap in
+                    await self.packs.routeOnDeviceDetailed(from: end.locationCoordinate,
+                        to: .init(latitude: station.latitude, longitude: station.longitude),
+                        profile: req.profile, allowUnknown: req.accessPolicy.motorizedUnknown,
+                        avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                        sessionSeed: req.options?.sessionSeed ?? 0, maxRouteMeters: cap,
+                        avoidMotorways: req.options?.avoidMotorways == true,
+                        mapZoom: req.options?.mapZoom, matchLimitMeters: req.options?.matchLimitMeters,
+                        startEndpointKind: end.latitude == station.latitude && end.longitude == station.longitude ? "customers" : nil,
+                        endEndpointKind: "customers", initialFuelApproach: true)
+                }
+                RoutingDebugLog.shared.event("destination planning reservation retry meters=\(estimate.meters.map { String($0) } ?? "-") arrivalVerified=false")
+                return estimate.meters
+            }
+        }
         var current = start
         var visited = Set(req.fuel.excludedStationIds ?? [])
         var stops: [FuelChainStop] = []
@@ -608,17 +634,17 @@ final class PackRoutingSource: RoutingSource {
 
             let mustPump = stops.count < req.fuel.minimumFuelStops
                 || (stops.isEmpty && (req.fuel.requireFuelStopBeforeEnd || req.fuel.requiredFirstStationId != nil))
-            let destinationLimit = Self.destinationApproachCap(
+            var destinationLimit = Self.destinationApproachCap(
                 usableRangeMeters: req.fuel.usableRangeMeters,
                 remainingMeters: firstCap,
-                arrivalUsedLimitMeters: req.fuel.destinationFuelUsedLimitMeters)
-            let retainedExit: OnDeviceRouter.Result?
+                arrivalUsedLimitMeters: destinationReservation.arrivalUsedLimitMeters)
+            var retainedExit: OnDeviceRouter.Result?
             if !mustPump {
                 retainedExit = try exitReuse.take(request: req, from: current, to: end,
                     arrival: carriedContinuation, history: carriedHistory,
                     sourceIdentity: packs.routingCacheIdentity(), cap: destinationLimit)
             } else { retainedExit = nil }
-            let direct: Double?
+            var direct: Double?
             if let retainedExit { direct = retainedExit.distanceMeters }
             else {
                 direct = try await packs.shortestGraphMeters(
@@ -628,6 +654,18 @@ final class PackRoutingSource: RoutingSource {
                 profile: req.profile,
                 allowUnknown: req.accessPolicy.motorizedUnknown
             )
+            }
+            if !mustPump {
+                try await prepareDestinationReservation(approachMeters: direct, availableMeters: firstCap)
+                destinationLimit = Self.destinationApproachCap(
+                    usableRangeMeters: req.fuel.usableRangeMeters, remainingMeters: firstCap,
+                    arrivalUsedLimitMeters: destinationReservation.arrivalUsedLimitMeters)
+                if let saved = retainedExit, saved.distanceMeters > destinationLimit {
+                    retainedExit = nil
+                    direct = try await packs.shortestGraphMeters(from: current.locationCoordinate,
+                        to: end.locationCoordinate, maxMeters: destinationLimit,
+                        profile: req.profile, allowUnknown: req.accessPolicy.motorizedUnknown)
+                }
             }
             var incompleteSearchReason: String?
             var directFallback: Double?
@@ -886,7 +924,10 @@ final class PackRoutingSource: RoutingSource {
                 }
                 trace("leg-proved-\(candidate.id)")
                 evaluatedRoutesByID[candidate.id] = firstRoute
-                let destinationCap = req.fuel.destinationFuelUsedLimitMeters
+                try await prepareDestinationReservation(
+                    approachMeters: guidance.stationRemainingMeters[candidate.id],
+                    availableMeters: req.fuel.usableRangeMeters)
+                let destinationCap = destinationReservation.arrivalUsedLimitMeters
                     ?? req.fuel.usableRangeMeters
                 // The next ride is built in its own window. Road distance is
                 // only a continuation check, never a completed/fuel-proven tail.

@@ -1484,13 +1484,10 @@ final class GraphPackStore {
             return .success(route)
         }
         if maxRouteMeters != nil, RoutingWorkContext.stopReason == nil {
-            let complete: Bool
-            switch computed {
-            case .success(let route): complete = !route.searchMeta.timedOut
-            case .failure(.noPath): complete = true
-            case .failure: complete = false
-            }
-            if complete {
+            // Reuse a proved complete road without hiding unfinished alternative
+            // comparison. The exact key and stored result retain every setting,
+            // continuation, warning and selection-limit detail.
+            if NativeRouteReusePolicy.canReuse(computed) {
                 regionalRoutes[key] = RegionalRouteEntry(pack: pack, result: computed)
                 regionalRouteRecency.removeAll { $0 == key }
                 regionalRouteRecency.append(key)
