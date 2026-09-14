@@ -1779,12 +1779,6 @@ nonisolated struct OnDeviceRouter {
         }
         var slots = SparseDefaultArray(count: total, default: UInt8(0))
         var heap = MinHeap()
-        var fog = FogOfWarNeighborhood(
-            start: startSnap.projected,
-            end: endSnap.projected,
-            workingRadiusMeters: HopSearchPolicy.fogWorkingRadiusMeters,
-            corridorMeters: ctx.corridorMeters ?? HopSearchPolicy.dirtCorridorMeters
-        )
 
         // Preserve the arrival road tier across virtual snap stubs and
         // duplicate-node stitches. The toll belongs at the real transition,
@@ -1842,9 +1836,6 @@ nonisolated struct OnDeviceRouter {
             }
 
             let graphNode = turnState.graphNode(of: cur.node)
-            if pops & 63 == 1, graphNode >= 0, graphNode < n {
-                fog.noteVisited(coordinate(forNode: graphNode))
-            }
 
             if graphNode >= 0, graphNode < n {
                 let arcStart = Int(pack.nodeOffsets[graphNode])
@@ -2300,8 +2291,8 @@ nonisolated struct OnDeviceRouter {
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt,
             fogChargedLabelBytes: dist.chargedBytes + prev.chargedBytes + pathMeters.chargedBytes
                 + prevKind.chargedBytes + prevData.chargedBytes + slots.chargedBytes,
-            fogNeighborhoodSeeds: fog.seedCount,
-            fogNeighborhoodExpansions: fog.expansions
+            fogNeighborhoodSeeds: 0,
+            fogNeighborhoodExpansions: 0
         ))
     }
 
@@ -2391,12 +2382,6 @@ nonisolated struct OnDeviceRouter {
         }
         var slots = SparseDefaultArray(count: labels, default: UInt8(0))
         var heap = MinHeap()
-        var fog = FogOfWarNeighborhood(
-            start: startSnap.projected,
-            end: endSnap.projected,
-            workingRadiusMeters: HopSearchPolicy.fogWorkingRadiusMeters,
-            corridorMeters: ctx.corridorMeters ?? HopSearchPolicy.balancedCorridorMeters
-        )
         let startLab = lab(startVirt, 0)
         dist[startLab] = 0
         pathMeters[startLab] = 0
@@ -2431,9 +2416,6 @@ nonisolated struct OnDeviceRouter {
             if metersSoFar > cap { continue }
             let state = sid(cur.node)
             let node = turnState.graphNode(of: state)
-            if pops & 63 == 1, node >= 0, node < n {
-                fog.noteVisited(coordinate(forNode: node))
-            }
             let dirtSoFar = dirtAt[cur.node]
 
             if node < n {
@@ -2844,8 +2826,8 @@ nonisolated struct OnDeviceRouter {
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt,
             fogChargedLabelBytes: dist.chargedBytes + prev.chargedBytes + pathMeters.chargedBytes
                 + dirtAt.chargedBytes + prevKind.chargedBytes + prevData.chargedBytes + slots.chargedBytes,
-            fogNeighborhoodSeeds: fog.seedCount,
-            fogNeighborhoodExpansions: fog.expansions
+            fogNeighborhoodSeeds: 0,
+            fogNeighborhoodExpansions: 0
         ))
     }
 

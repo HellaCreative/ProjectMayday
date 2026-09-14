@@ -225,6 +225,7 @@ final class PackRoutingSource: RoutingSource {
             return cached
         }
         if req.options?.maxPathMeters != nil { _ = cache.value(for: key) }
+        let coordinates = [endpoints.0.locationCoordinate, endpoints.1.locationCoordinate]
         let result = await packs.routeOnDeviceDetailed(
             from: endpoints.0.locationCoordinate,
             to: endpoints.1.locationCoordinate,
@@ -246,8 +247,29 @@ final class PackRoutingSource: RoutingSource {
             endEndpointKind: req.options?.endEndpointKind,
             ridePreferences: req.options?.ridePreferences
         )
-        guard case .success(let local) = result, local.coordinates.count > 1 else {
-            throw RoutingError.server("No route is available on the installed pack.")
+        let local: OnDeviceRouter.Result
+        switch result {
+        case .success(let route) where route.coordinates.count > 1:
+            local = route
+        case .success:
+            RoutingDebugLog.shared.event("ROUTE fail mode=pack reason=emptyGeometry")
+            throw RoutingError.server(
+                packs.onDeviceRouteFailureMessage(for: coordinates, reason: .noPath)
+            )
+        case .failure(let reason):
+            let reasonTag: String = {
+                switch reason {
+                case .searchLimit(let limit): return "searchLimit:\(limit)"
+                case .noPath: return "noPath"
+                case .cannotSnapStart: return "cannotSnapStart"
+                case .cannotSnapEnd: return "cannotSnapEnd"
+                case .identicalEnds: return "identicalEnds"
+                }
+            }()
+            RoutingDebugLog.shared.event("ROUTE fail mode=pack reason=\(reasonTag)")
+            throw RoutingError.server(
+                packs.onDeviceRouteFailureMessage(for: coordinates, reason: reason)
+            )
         }
         var response = RouteResponse(
             onDevice: local,

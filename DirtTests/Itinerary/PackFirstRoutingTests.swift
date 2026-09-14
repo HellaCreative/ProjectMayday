@@ -413,6 +413,29 @@ struct PackFirstRoutingTests {
         #expect(planModel.itinerary.waypoints.count == 2)
         #expect(fromModel.itinerary.waypoints.count == 2)
     }
+
+    @Test func searchLimitIsNotReportedAsMissingPackData() {
+        let store = GraphPackStore()
+        let timeCap = store.onDeviceRouteFailureMessage(
+            for: [halifax.locationCoordinate, sydney.locationCoordinate],
+            reason: .searchLimit("timeCap")
+        )
+        let popCap = store.onDeviceRouteFailureMessage(
+            for: [halifax.locationCoordinate, sydney.locationCoordinate],
+            reason: .searchLimit("popCap")
+        )
+        let noPath = store.onDeviceRouteFailureMessage(
+            for: [halifax.locationCoordinate, sydney.locationCoordinate],
+            reason: .noPath
+        )
+        #expect(timeCap.localizedCaseInsensitiveContains("couldn't finish"))
+        #expect(timeCap.localizedCaseInsensitiveContains("timeCap"))
+        #expect(timeCap.localizedCaseInsensitiveContains("not missing roads"))
+        #expect(!timeCap.localizedCaseInsensitiveContains("no route is available"))
+        #expect(popCap.localizedCaseInsensitiveContains("couldn't finish"))
+        #expect(popCap != noPath)
+        #expect(!popCap.localizedCaseInsensitiveContains("no on-device path"))
+    }
 }
 
 @MainActor

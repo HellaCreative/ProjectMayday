@@ -2304,7 +2304,10 @@ final class GraphPackStore {
         case .noPath:
             return "No on-device path between those points in \(regionClause). The pack roads near A and B don’t connect under this profile — try Balanced, nudge B onto a through-road, or turn on Allow unknown."
         case .searchLimit(let limit):
-            return "The on-device route search reached its \(limit) safety limit in \(regionClause). Try a shorter stage or add an intermediate waypoint."
+            if limit == "timeCap" || limit == "popCap" {
+                return "Couldn't finish this ride in time on the phone. The \(regionClause) pack is installed — this is a \(limit) search limit, not missing roads. Try a shorter stage or add a waypoint."
+            }
+            return "Couldn't finish this on-device search (\(limit)) in \(regionClause). The pack is installed. Try a shorter stage or add an intermediate waypoint."
         case .none:
             return "Couldn’t build an on-device route in \(regionClause). Check which end is off the roadway and nudge that pin."
         }
