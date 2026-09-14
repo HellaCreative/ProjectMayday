@@ -611,6 +611,23 @@ final class PackRoutingSource: RoutingSource {
                     allowUnknown: req.accessPolicy.motorizedUnknown)
             }
         }
+        let lazyMemo = forwardReuse.lazyGuidance
+        func exactLazyFact(_ queue: FuelLazyGuidanceMemo.Queue,index: Int,origin: RouteCoordinate,cap: Double) async throws -> FuelLazyGuidanceMemo.Fact {
+            let station = stations[index]
+            try await packs.validateLazyFuelCandidate(queue,index: index)
+            let key = FuelLazyGuidanceMemo.Key(epoch: queue.epoch,graph: queue.prepared.request.source.graphSHA256,
+                geometry: queue.prepared.request.source.geometrySHA256,from: origin,to: end,
+                station: .init(longitude: station.longitude,latitude: station.latitude),profile: req.profile.rawValue,
+                allowUnknown: req.accessPolicy.motorizedUnknown,cap: cap)
+            return try await lazyMemo.resolve(key,currentIdentity: { packs.routingCacheIdentity() }) {
+                let reachable = try await packs.reachableFuelMeters(from: origin.locationCoordinate,toward: end.locationCoordinate,
+                    pumps: [station],maxMeters: cap,profile: req.profile,allowUnknown: req.accessPolicy.motorizedUnknown)
+                let progress = try await packs.fuelRoadProgress(from: origin.locationCoordinate,to: end.locationCoordinate,
+                    pumps: [station],profile: req.profile,allowUnknown: req.accessPolicy.motorizedUnknown)
+                return .init(forward: reachable[station.id],originRemaining: progress?.originRemainingMeters,
+                    remaining: progress?.stationRemainingMeters[station.id])
+            }
+        }
         var roadProgress: FuelItinerary.RoadProgress?
         var roadProgressSourceIdentity: String?
         let exitReuse = FuelExitReuseScope.current ?? FuelExitReuseHolder()
@@ -818,7 +835,15 @@ final class PackRoutingSource: RoutingSource {
                     regionIds: nil, stops: stops, graphMeters: graphMeters, diagnostics: nil,
                     routes: plannedRoutes, windowComplete: false)
             }
-            let reachable = try await completedReachability(from: current.locationCoordinate,maxMeters: firstCap)
+            let lazyQueue = try await packs.prepareLazyFuelQueue(from: current.locationCoordinate,to: end.locationCoordinate,
+                pumps: stations,profile: req.profile,allowUnknown: req.accessPolicy.motorizedUnknown,maximumMeters: firstCap)
+            // Old reverse facts cannot acquire the identity of newly prepared data.
+            if let lazyQueue, roadProgress != nil, roadProgressSourceIdentity != lazyQueue.epoch {
+                throw FuelOnwardGuidance.Failure.sourceChanged
+            }
+            var reachable: [String: Double] = [:]
+            if lazyQueue == nil {
+                reachable = try await completedReachability(from: current.locationCoordinate,maxMeters: firstCap)
             let newlyReachable = stations.filter {
                 reachable[$0.id] != nil && roadProgress?.stationRemainingMeters[$0.id] == nil
             }
@@ -843,14 +868,20 @@ final class PackRoutingSource: RoutingSource {
                 } else { roadProgress = nil }
             }
             try RoutingWorkContext.check()
-            guard let guidance = roadProgress else {
+            guard roadProgress != nil else {
                 return FuelChainResponse(status: "unknown", error: "road_progress_unavailable",
                     message: "A connected road direction to the destination has not been established.",
                     regionIds: nil, stops: stops, graphMeters: graphMeters, diagnostics: nil,
                     routes: plannedRoutes, windowComplete: false)
             }
-            trace("guidance-ready")
-            let currentRemaining = stops.last.flatMap { guidance.stationRemainingMeters[$0.id] }
+            } else {
+                // Deliberate station WORK ordering change; profile costs and all
+                // actual route/continuation proofs below remain unchanged.
+                trace("lazy-ordering-v2-stations-\(stations.count)-exact-refinement-required")
+                incompleteSearchReason = "lazy_station_queue_unproved"
+            }
+            var guidance = roadProgress ?? .init(originRemainingMeters: .infinity,stationRemainingMeters: [:])
+            var currentRemaining = stops.last.flatMap { guidance.stationRemainingMeters[$0.id] }
                 ?? guidance.originRemainingMeters
             let currentGuidance = FuelItinerary.RoadProgress(originRemainingMeters: currentRemaining,
                 stationRemainingMeters: guidance.stationRemainingMeters)
@@ -858,7 +889,11 @@ final class PackRoutingSource: RoutingSource {
                 from: current.locationCoordinate,
                 toward: end.locationCoordinate
             )
-            let ranked = FuelItinerary.rankedProgressFuel(
+            let ranked = lazyQueue.map { queue in
+                FuelLazyGuidanceMemo.eligibleIndices(queue.prepared,ids: stations.map(\.id),excluding: visited,
+                    usableRangeMeters: req.fuel.usableRangeMeters,seed: req.options?.sessionSeed ?? 0)
+                    .map { stations[$0] }
+            } ?? FuelItinerary.rankedProgressFuel(
                 fuels: stations,
                 from: current,
                 to: end,
@@ -889,6 +924,20 @@ final class PackRoutingSource: RoutingSource {
             let candidates = required.map { id in ranked.filter { $0.id == id } } ?? (FuelItinerary.distinctStationsFirst(nonUrban) + FuelItinerary.distinctStationsFirst(urban))
             for (rank, candidate) in candidates.enumerated() {
                 try RoutingWorkContext.check()
+                if let lazyQueue,let index = stations.firstIndex(where: { $0.id == candidate.id }) {
+                    let fact = try await exactLazyFact(lazyQueue,index: index,origin: current,cap: firstCap)
+                    guard let originRemaining = fact.originRemaining,let remaining = fact.remaining,let forward = fact.forward else {
+                        trace("lazy-exact-guidance-unavailable-\(candidate.id)");continue
+                    }
+                    reachable[candidate.id] = forward
+                    currentRemaining = originRemaining
+                    var exact = roadProgress?.stationRemainingMeters ?? [:];exact[candidate.id] = remaining
+                    guidance = .init(originRemainingMeters: originRemaining,stationRemainingMeters: exact)
+                    roadProgress = guidance;roadProgressSourceIdentity = lazyQueue.epoch
+                    guard !FuelItinerary.rankedProgressFuel(fuels: [candidate],from: current,to: end,
+                        reachableMeters: [candidate.id: forward],tankMeters: firstCap,usableRangeMeters: req.fuel.usableRangeMeters,
+                        sessionSeed: req.options?.sessionSeed ?? 0,excluding: visited,roadProgress: guidance).isEmpty else { continue }
+                }
                 let urbanEntry = urbanEntries[candidate.id] == true
                 let candidateCoordinate = CLLocationCoordinate2D(
                     latitude: candidate.latitude,
@@ -1029,6 +1078,32 @@ final class PackRoutingSource: RoutingSource {
                     }
 
                 }
+                var hasOnwardPump = false
+                var usedLazyOnward = false
+                if !destinationMayFit && avoidsMeaningfulRetrace,lazyQueue != nil {
+                    if let onwardQueue = try await packs.prepareLazyFuelQueue(from: candidateCoordinate,to: end.locationCoordinate,
+                        pumps: stations,profile: req.profile,allowUnknown: req.accessPolicy.motorizedUnknown,
+                        maximumMeters: req.fuel.usableRangeMeters) {
+                        usedLazyOnward = true
+                        var exclusions = visited;exclusions.insert(candidate.id)
+                        let onwardIndices = FuelLazyGuidanceMemo.eligibleIndices(onwardQueue.prepared,ids: stations.map(\.id),excluding: exclusions,
+                            usableRangeMeters: req.fuel.usableRangeMeters,seed: req.options?.sessionSeed ?? 0)
+                        hasOnwardPump = try await FuelLazyGuidanceMemo.firstProvenIndex(onwardIndices) { index in
+                            let next = stations[index]
+                            let fact = try await exactLazyFact(onwardQueue,index: index,
+                                origin: .init(longitude: candidate.longitude,latitude: candidate.latitude),cap: req.fuel.usableRangeMeters)
+                            guard let distance = fact.forward,let originRemaining = fact.originRemaining,let remaining = fact.remaining else { return false }
+                            if !FuelItinerary.rankedProgressFuel(fuels: [next],from: .init(longitude: candidate.longitude,latitude: candidate.latitude),
+                                to: end,reachableMeters: [next.id: distance],tankMeters: req.fuel.usableRangeMeters,
+                                usableRangeMeters: req.fuel.usableRangeMeters,sessionSeed: req.options?.sessionSeed ?? 0,excluding: exclusions,
+                                roadProgress: .init(originRemainingMeters: originRemaining,stationRemainingMeters: [next.id: remaining])).isEmpty {
+                                return true
+                            }
+                            return false
+                        } != nil
+                    }
+                }
+                if !usedLazyOnward {
                 let onward: [String: Double]
                 if destinationMayFit || !avoidsMeaningfulRetrace {
                     onward = [:]
@@ -1068,7 +1143,7 @@ final class PackRoutingSource: RoutingSource {
                 }
                 var onwardExclusions = visited
                 onwardExclusions.insert(candidate.id)
-                let hasOnwardPump = !destinationMayFit && !FuelItinerary.rankedProgressFuel(
+                hasOnwardPump = !destinationMayFit && !FuelItinerary.rankedProgressFuel(
                     fuels: stations,
                     from: RouteCoordinate(
                         longitude: candidate.longitude,
@@ -1084,6 +1159,7 @@ final class PackRoutingSource: RoutingSource {
                         originRemainingMeters: onwardGuidance.stationRemainingMeters[candidate.id] ?? .infinity,
                         stationRemainingMeters: onwardGuidance.stationRemainingMeters)
                 ).isEmpty
+                }
                 // A forecourt connector may repeat briefly; a meaningful
                 // down-and-back fuel stem is never a valid chain anchor.
                 let validForward = (destinationMayFit || hasOnwardPump)

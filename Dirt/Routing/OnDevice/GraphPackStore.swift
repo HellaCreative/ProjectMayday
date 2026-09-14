@@ -1548,6 +1548,40 @@ final class GraphPackStore {
         }
     }
 
+    /// Supported single-source ordering preparation; nil preserves the existing
+    /// exact regional path. This does not activate a new initial-fill policy.
+    func prepareLazyFuelQueue(from: CLLocationCoordinate2D,to: CLLocationCoordinate2D,
+        pumps: [POIFeature],profile: RouteProfile,allowUnknown: Bool,maximumMeters: Double) async throws -> FuelLazyGuidanceMemo.Queue? {
+        let selected = await fuelDistancePacks(from: from,to: to)
+        guard selected.count == 1,let pack = selected.first else { return nil }
+        _ = try verifiedFuelSeamSnapshots(selected)
+        let epoch = routingCacheIdentity()
+        let points = pumps.map { CLLocationCoordinate2D(latitude: $0.latitude,longitude: $0.longitude) }
+        let result = try await RoutingWorkContext.detachedThrowingSearch {
+            try OnDeviceRouter(pack: pack).prepareLazyOnwardStationHints(from: from,to: to,stations: points,
+                profile: profile,allowUnknown: allowUnknown,usableMeters: maximumMeters)
+        }
+        try RoutingWorkContext.check()
+        guard routingCacheIdentity() == epoch else { throw RoutingPageError.sourceChanged }
+        guard case .prepared(let prepared) = result else { return nil }
+        return .init(prepared: prepared,epoch: epoch)
+    }
+
+    /// Validate the exact source pair and populate only this station's ordinary
+    /// match cache, including on memo hits. A match count is never fuel proof.
+    func validateLazyFuelCandidate(_ queue: FuelLazyGuidanceMemo.Queue,index: Int) async throws {
+        try RoutingWorkContext.check()
+        guard routingCacheIdentity() == queue.epoch else { throw RoutingPageError.sourceChanged }
+        let request = queue.prepared.request
+        let selected = await fuelDistancePacks(from: request.origin.coordinate,to: request.destination.coordinate)
+        guard selected.count == 1,let pack = selected.first,routingCacheIdentity() == queue.epoch else { throw RoutingPageError.sourceChanged }
+        _ = try await RoutingWorkContext.detachedThrowingSearch {
+            try OnDeviceRouter(pack: pack).refineLazyOnwardStationHint(queue.prepared,stationIndex: index)
+        }
+        try RoutingWorkContext.check()
+        guard routingCacheIdentity() == queue.epoch else { throw RoutingPageError.sourceChanged }
+    }
+
     func fuelRoadProgress(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D,
                           pumps: [POIFeature], profile: RouteProfile,
                           allowUnknown: Bool) async throws -> FuelItinerary.RoadProgress? {

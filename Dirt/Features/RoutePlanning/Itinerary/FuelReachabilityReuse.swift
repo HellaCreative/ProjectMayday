@@ -4,6 +4,7 @@ import Foundation
 /// speculative hints. Ordered input identity is compared byte-for-byte.
 @MainActor
 final class FuelReachabilityReuse {
+    let lazyGuidance = FuelLazyGuidanceMemo()
     struct Request {
         let from: RouteCoordinate, toward: RouteCoordinate
         let pumps: [POIFeature]
