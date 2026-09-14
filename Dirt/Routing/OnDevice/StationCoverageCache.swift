@@ -9,7 +9,19 @@ nonisolated final class StationCoverageCache: @unchecked Sendable {
         var maximumEntryEdges=4096
         var maximumConcurrentCaptures=4
     }
-    private struct Key: Equatable { let latitude: Double,longitude: Double,meters: Double; let cellSuperset: Bool }
+    private enum Key: Equatable {
+        case exact(latitude: Double, longitude: Double, meters: Double)
+        case cells(x: Int, y: Int, radius: Int)
+    }
+    /// Must match the complete ring enumeration used by the caller. Sharing
+    /// applies only to unfiltered cell supersets; point bounds are reevaluated.
+    static func coverageRadius(meters: Double) throws -> Int {
+        let radius = max(2, ceil(meters / 1000 / (ExactSnapIndex.cellDegrees * 111)) + 2)
+        guard meters.isFinite, meters >= 0, radius < Double(Int32.max) else {
+            throw ExactSnapIndex.Failure.invalidFormat
+        }
+        return Int(radius)
+    }
     private final class Entry {
         weak var owner: AnyObject?
         weak var index: AnyObject?
@@ -45,7 +57,11 @@ nonisolated final class StationCoverageCache: @unchecked Sendable {
         let measurement=RoutingWorkContext.measurement
         let phase=measurement?.begin(.stationCoverage)
         defer { measurement?.end(phase) }
-        let key=Key(latitude: latitude,longitude: longitude,meters: meters,cellSuperset: cellSuperset)
+        let key: Key
+        if cellSuperset {
+            key = try .cells(x: ExactSnapIndex.cell(longitude), y: ExactSnapIndex.cell(latitude),
+                radius: Self.coverageRadius(meters: meters))
+        } else { key = .exact(latitude: latitude, longitude: longitude, meters: meters) }
         lock.lock()
         if let found=entries.firstIndex(where: { $0.owner === owner && $0.index === index && $0.key == key }) {
             defer { lock.unlock() }

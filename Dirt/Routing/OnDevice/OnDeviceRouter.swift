@@ -868,7 +868,7 @@ nonisolated struct OnDeviceRouter {
                 RoutingWorkContext.measurement?.increment(.stationCoverageEdgesScanned,by: UInt64(examined))
                 RoutingWorkContext.measurement?.increment(.stationCoverageBoundsChecks,by: UInt64(boundsChecks))
             }
-            let radius = max(2,Int(ceil(meters/1000.0/(ExactSnapIndex.cellDegrees*111.0)))+2)
+            let radius = try StationCoverageCache.coverageRadius(meters: meters)
             for ring in 0...radius {
                 try index.forEachEdge(nearLat: point.latitude,lon: point.longitude,radiusCells: ring,
                     query: bounds,cancelled: { RoutingWorkContext.stopReason != nil }) { edge in
