@@ -2293,12 +2293,23 @@ final class GraphPackStore {
         }
         if pack.regionId == nil { pack.regionId = regionId }
         if let identity = sourceIdentity {
+            if pack.version >= 4 {
+                guard pack.pairedGeometrySHA256 == identity.geometrySHA256 else {
+                    throw ExactSnapIndex.Failure.identityMismatch
+                }
+            }
             pack.geometry = try GeometryV1Pack(url: geometryURL,
                 identity: .init(sha256: identity.geometrySHA256, bytes: identity.geometryBytes),
                 expectedEdgeCount: pack.undirectedEdgeCount)
         } else if FileManager.default.fileExists(atPath: geometryURL.path) {
             let geomData = try Data(contentsOf: geometryURL, options: [.mappedIfSafe])
             measurement?.increment(.fileBytesAccessed, by: UInt64(geomData.count))
+            if pack.version >= 4 {
+                measurement?.increment(.fileBytesHashed, by: UInt64(geomData.count))
+                guard pack.pairedGeometrySHA256 == SHA256.hash(data: geomData).map({ String(format: "%02x",$0) }).joined() else {
+                    throw ExactSnapIndex.Failure.identityMismatch
+                }
+            }
             pack.geometry = try GeometryV1Pack(data: geomData)
         }
         pack.exactSnapIndex = exactIndex
