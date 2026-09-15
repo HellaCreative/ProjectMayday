@@ -60,8 +60,21 @@ public struct RoutingEngine: Sendable {
             WeakComponents.of(match: $0.0, pack: pack, ids: components)
                 == WeakComponents.of(match: $0.1, pack: pack, ids: components)
         }
+        var reachability: EndpointReachability?
+        var attempted = false
         for (start,end) in (connected.isEmpty ? pairs : connected) {
                 try budget.check()
+                if attempted {
+                    // After a pair has failed, rule out pairs that cannot connect before
+                    // searching them: each would only flood every corridor to "no path".
+                    let checkStarted = ContinuousClock.now
+                    let checker = try reachability ?? EndpointReachability(graph: pack,budget: budget)
+                    reachability = checker
+                    let possible = try checker.mayConnect(start: start,end: end,budget: budget)
+                    request.options.counter?.recordStage("reachability", since: checkStarted)
+                    guard possible else { lastFailure = .noPath; continue }
+                }
+                attempted = true
                 do { return try route(request,start: start,end: end,budget: budget) }
                 catch let error as RoutingFailure {
                     if error != .noPath { throw error }
@@ -79,7 +92,9 @@ public struct RoutingEngine: Sendable {
         let compassStarted = ContinuousClock.now
         let compass: RoadCompass?
         do {
-            let key = "\(end.edge):\(end.alongMeters):\(request.access.allowUnknown)"
+            // The compass ignores access, so Allow Unknown shares it; the graph size
+            // keeps a store that outlives a region change from reusing another graph's table.
+            let key = "\(pack.nodeCount):\(pack.edgeCount):\(end.edge):\(end.alongMeters)"
             if let store = compassStore {
                 compass = .init(remaining: try store.remaining(for: key) {
                     try RoadCompass.toward(end: end, pack: pack, budget: budget).remaining
@@ -124,6 +139,7 @@ public struct RoutingEngine: Sendable {
         var incomplete: RoutingFailure?
         var comparisonFound = false
         var failedWidth = Double.infinity
+        var repeatable: (width: Double, route: ComputedRoute, quality: RouteQuality)?
         for multiplier in multipliers {
             let width = base*multiplier
             let comparison = !isDirt || multiplier <= 2
@@ -133,19 +149,34 @@ public struct RoutingEngine: Sendable {
             options.objective = isDirt ? .pavement : .balancedResource
             options.maximumMeters = cap
             options.corridorMeters = width
+            let boundary = SearchBoundary()
+            options.boundary = boundary
             do {
-                var route = try run(options)
-                var quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
-                if isDirt && route.limit == nil && quality.knownDirtPercent < 70 {
-                    for _ in 0..<3 {
-                        let penalties = RouteQuality.shortDirtExcursions(route.segments)
-                        if penalties.isSubset(of: options.penalizedDirtEdges) { break }
-                        options.penalizedDirtEdges.formUnion(penalties)
-                        do { route = try run(options) }
-                        catch RoutingFailure.noPath { break }
-                        catch let failure as RoutingFailure { incomplete = failure; break }
-                        quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
-                        if quality.knownDirtPercent >= 70 { break }
+                var route: ComputedRoute
+                var quality: RouteQuality
+                if let repeatable, width >= repeatable.width {
+                    // Every search at a narrower width finished without turning a road away
+                    // at its corridor or progress limit, so this wider pass repeats them exactly.
+                    route = repeatable.route
+                    quality = repeatable.quality
+                } else {
+                    let failureBefore = incomplete
+                    route = try run(options)
+                    quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
+                    if isDirt && route.limit == nil && quality.knownDirtPercent < 70 {
+                        for _ in 0..<3 {
+                            let penalties = RouteQuality.shortDirtExcursions(route.segments)
+                            if penalties.isSubset(of: options.penalizedDirtEdges) { break }
+                            options.penalizedDirtEdges.formUnion(penalties)
+                            do { route = try run(options) }
+                            catch RoutingFailure.noPath { break }
+                            catch let failure as RoutingFailure { incomplete = failure; break }
+                            quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
+                            if quality.knownDirtPercent >= 70 { break }
+                        }
+                    }
+                    if !boundary.touched, route.limit == nil, incomplete == failureBefore {
+                        repeatable = (width,route,quality)
                     }
                 }
                 candidates.append(.init(route: route,width: options.corridorMeters,quality: quality))
@@ -160,6 +191,9 @@ public struct RoutingEngine: Sendable {
                 if !isDirt && (45...55).contains(quality.knownDirtPercent) && quality.urbanMeters <= 100 { return route }
             } catch RoutingFailure.noPath {
                 if width.isFinite { failedWidth = min(failedWidth,width) }
+                // No road was turned away at this width's limits, so every wider corridor
+                // sees the same roads and ends in "no path" too.
+                if !boundary.touched { break }
                 continue
             }
             catch let failure as RoutingFailure { incomplete = failure; break }

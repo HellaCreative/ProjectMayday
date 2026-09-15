@@ -34,7 +34,16 @@ public struct SearchOptions: Sendable {
     public var roadRemaining: [Double]? = nil
     /// Diagnostic totals shared by every search of one request. The search never reads it.
     public var counter: SearchCounter? = nil
+    /// Set when the search turns a road away at its corridor or progress limit.
+    var boundary: SearchBoundary? = nil
     public init() {}
+}
+
+/// Whether a search turned any road away because of its corridor or its progress limit,
+/// the only rules that depend on corridor width. A search that never did would repeat
+/// exactly at any wider corridor.
+final class SearchBoundary: @unchecked Sendable {
+    var touched = false
 }
 
 public struct RouteSegment: Sendable {
@@ -287,9 +296,15 @@ public struct PathSearch: Sendable {
                 let meters = current.meters+arc.meters
                 if meters > options.maximumMeters+0.01 { continue }
                 let fromPoint = point(current.state.node), toPoint = point(arc.target)
-                if options.corridorMeters.isFinite && abs(toPoint.crossTrack(from: start.coordinate,to: end.coordinate)) > options.corridorMeters { continue }
+                if options.corridorMeters.isFinite && abs(toPoint.crossTrack(from: start.coordinate,to: end.coordinate)) > options.corridorMeters {
+                    options.boundary?.touched = true
+                    continue
+                }
                 let progress = RouteQuality.progress(toPoint, start.coordinate, end.coordinate)
-                if current.peakProgress - progress > regression { continue }
+                if current.peakProgress - progress > regression {
+                    options.boundary?.touched = true
+                    continue
+                }
                 let peak = max(current.peakProgress, progress)
                 let urban = cores.contains {
                     !$0.contains(start.coordinate) && !$0.contains(end.coordinate) && $0.intersects(fromPoint,toPoint)

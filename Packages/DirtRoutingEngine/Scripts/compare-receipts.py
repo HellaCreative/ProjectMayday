@@ -3,12 +3,13 @@
 
 usage: compare-receipts.py BEFORE_DIR AFTER_DIR
 
-A case is IDENTICAL when every route-defining field matches: status, metres,
-dirt percentage, the hash of the selected edge IDs, selected and total search
-states, search count, the per-candidate summary, fuel stops and hop metres.
-Timing and memory are reported side by side but never decide identity.
-Cases whose result depends on a time limit are marked TIMED, because the work
-done before the deadline can legitimately vary between runs.
+A case is IDENTICAL when every route-defining field matches: status, limit, metres,
+dirt percentage, the hash of the selected edge IDs, the selected route's search states,
+the per-candidate summary, fuel stops and hop metres and edges.
+Work (search count, total states) is reported before -> after but never decides
+identity: exact speedups are expected to reduce it.
+Cases whose result depends on a time limit are marked TIMED, because the work done
+before the deadline legitimately varies between runs and machines.
 Exit status is 1 when any untimed case differs.
 """
 import json
@@ -16,8 +17,8 @@ import pathlib
 import re
 import sys
 
-IDENTITY = ["status", "distanceMeters", "knownDirtPercent", "edgeIDsSHA256", "pops",
-            "totalPops", "searches", "searchSummary", "fuelStops", "hopMeters", "hopEdgeSHA256"]
+ROUTE = ["status", "limit", "distanceMeters", "knownDirtPercent", "edgeIDsSHA256", "pops",
+         "searchSummary", "fuelStops", "hopMeters", "hopEdgeSHA256"]
 
 
 def load(path):
@@ -36,8 +37,7 @@ def peak_mib(json_path):
 
 
 def timed(receipt):
-    text = f"{receipt.get('limit')} {receipt.get('searchSummary')}"
-    return "time" in text
+    return "time" in f"{receipt.get('limit')} {receipt.get('searchSummary')}"
 
 
 def main():
@@ -48,9 +48,9 @@ def main():
         before, after = load(before_path), load(after_path)
         name = before_path.stem
         if before is None or after is None:
-            print(f"{name:32s} MISSING  before={'ok' if before else 'none'} after={'ok' if after else 'none'}")
+            print(f"{name:32s} MISSING   before={'ok' if before else 'none'} after={'ok' if after else 'none'}")
             continue
-        differences = [key for key in IDENTITY if key in before and before.get(key) != after.get(key)]
+        differences = [key for key in ROUTE if before.get(key) != after.get(key)]
         if not differences:
             verdict = "IDENTICAL"
         elif timed(before) or timed(after):
@@ -60,10 +60,11 @@ def main():
             failures += 1
         b_s, a_s = before.get("seconds", 0), after.get("seconds", 0)
         b_m, a_m = peak_mib(before_path), peak_mib(after_path)
-        memory = f" peakMiB {b_m:.0f}->{a_m:.0f}" if b_m and a_m else ""
-        speed = f" {b_s:.2f}s->{a_s:.2f}s ({b_s / a_s:.1f}x)" if a_s else ""
-        detail = f" differs: {', '.join(differences)}" if differences else ""
-        print(f"{name:32s} {verdict:9s}{speed}{memory}{detail}")
+        speed = f" {b_s:6.2f}s -> {a_s:6.2f}s ({b_s / a_s:4.1f}x)" if a_s else ""
+        work = f" searches {before.get('searches')}->{after.get('searches')}, states {before.get('totalPops')}->{after.get('totalPops')}"
+        memory = f", peakMiB {b_m:.0f}->{a_m:.0f}" if b_m and a_m else ""
+        detail = f"  differs: {', '.join(differences)}" if differences else ""
+        print(f"{name:32s} {verdict:9s}{speed}{work}{memory}{detail}")
     return 1 if failures else 0
 
 

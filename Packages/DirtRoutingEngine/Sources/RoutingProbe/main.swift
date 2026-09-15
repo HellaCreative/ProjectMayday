@@ -110,7 +110,8 @@ do {
             "foundationMeters":plan.foundation?.distanceMeters as Any? ?? NSNull(),
             "pops":plan.routes.reduce(0) { $0+$1.poppedLabels},"limit":plan.limit as Any? ?? NSNull()]) { $1 }
     } else {
-        let result = try RoutingEngine(pack: indexed).route(request,budget: budget)
+        // The app keeps one compass store per routing session; mirror it.
+        let result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore()).route(request,budget: budget)
         let quality = RouteQuality(route: result)
         let edgeIDs = result.segments.map(\.edgeID)
         output.merge(["status":"complete",

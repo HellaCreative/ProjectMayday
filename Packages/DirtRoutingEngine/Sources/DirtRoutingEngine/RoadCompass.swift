@@ -1,16 +1,26 @@
 import Foundation
 
-/// Reuses one destination remaining table across corridor/fuel passes, matching
-/// JS `roadCompassCache`.
+/// Reuses recent destination remaining tables across corridor, endpoint and fuel
+/// passes, matching JS `roadCompassCache`. Keys must identify the graph as well as
+/// the destination, because one store outlives a change of prepared regions.
 public final class RoadCompassStore: @unchecked Sendable {
-    private var key: String?
-    private var remaining: [Double]?
-    public init() {}
+    private let lock = NSLock()
+    private let capacity: Int
+    private var entries: [(key: String, remaining: [Double])] = []
+    public init(capacity: Int = 4) { self.capacity = max(1, capacity) }
     func remaining(for key: String, build: () throws -> [Double]) rethrows -> [Double] {
-        if self.key == key, let remaining { return remaining }
+        lock.lock()
+        if let index = entries.firstIndex(where: { $0.key == key }) {
+            let hit = entries.remove(at: index)
+            entries.append(hit)
+            lock.unlock()
+            return hit.remaining
+        }
+        lock.unlock()
         let built = try build()
-        self.key = key
-        self.remaining = built
+        lock.lock(); defer { lock.unlock() }
+        entries.append((key, built))
+        if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
         return built
     }
 }

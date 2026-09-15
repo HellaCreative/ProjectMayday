@@ -12,6 +12,7 @@ public struct IndexedGraph: RoadGraph {
     private let weakAllow: [Int]
     private let outgoingArcs: [[RoadArc]]
     let predecessors: [[(Int, Double)]]
+    private let arcIndexCache = ArcIndexCache()
     private static let cellDegrees = 0.05
     private static let coincidentMeters = 2.0
     public init(_ graph: any RoadGraph, maximumEntries: Int = 8_000_000,
@@ -114,4 +115,8 @@ public struct IndexedGraph: RoadGraph {
     public func osmNodeID(_ node: Int) -> Int64 { graph.osmNodeID(node) }
     public func coincidentSiblings(_ node: Int) -> [Int] { siblings[node] ?? [] }
     func weakComponentIDs(allowUnknown: Bool) -> [Int] { allowUnknown ? weakAllow : weakStrict }
+    /// Flat arc lists for reachability checks, built on first use.
+    func arcIndex(budget: ComputationBudget) throws -> ArcIndex {
+        try arcIndexCache.value { try ArcIndex(nodeCount: nodeCount, budget: budget) { outgoing($0) } }
+    }
 }
