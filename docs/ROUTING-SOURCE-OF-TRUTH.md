@@ -329,7 +329,11 @@ document or any code comment disagrees, this contract wins.
    nearest reachable mapped pump by the most direct legal route, on any surface,
    even when that pump is behind the direction of travel. That pump is the first
    waypoint, and the ride begins there with the full usable range (tank minus
-   reserve). This is the only leg where the ride does not matter.
+   reserve). This is the only leg where the ride does not matter. It happens once
+   per trip, at the rider's start. Planning the rest of a trip in windows is an
+   internal detail: a window that resumes at a pump already has a full tank and
+   sweeps on (rule 9). It must never send the rider to another nearby pump, and
+   no leg may end at a pump within a few kilometres of the one it started from.
 9. Sweep. From each refill, one ride search in the leg's style moves outward
    ahead, no further than the usable range (the fog of war). It remembers each
    pump it reaches and the ridden distance to it. Range shapes the ride; fuel is
