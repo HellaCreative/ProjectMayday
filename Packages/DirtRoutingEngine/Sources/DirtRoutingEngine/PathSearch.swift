@@ -205,9 +205,13 @@ public struct PathSearch: Sendable {
             if options.objective == .distance {
                 return pathCost + point(node).distance(to: end.coordinate) / 1000
             }
-            if options.objective == .pavement {
-                let left = remaining(of: node)
-                if left.isFinite { return pathCost + left / 1000 * 0.02 }
+            let left = remaining(of: node)
+            if left.isFinite {
+                if options.objective == .pavement { return pathCost + left / 1000 * 0.02 }
+                if policy.style == .cleanest, options.objective == .profile {
+                    // Admissible: cheapest Clean collector is 0.88 × preferBackRoads 0.82.
+                    return pathCost + left / 1000 * 0.72
+                }
             }
             return pathCost
         }

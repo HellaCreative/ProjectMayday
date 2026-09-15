@@ -15,6 +15,9 @@ public struct ProfilePolicy: Sendable {
     /// Balanced dirt mix in [0, 1]. 0 prefers paved, 1 prefers dirt, 0.5 is the
     /// default 50/50 starting weight.
     public var balancedDirtPreference = 0.5
+    /// Clean skips motorway/trunk except the snapped pin roads. RoutingEngine
+    /// retries with this true only when those searches find no path.
+    public var cleanAllowHighways = false
     public init(style: RidingStyle) { self.style = style }
     public var appetite: Double { min(1, max(0, wander.isFinite ? wander : 1)) }
     public static func family(_ leaf: String) -> Surface {
@@ -69,7 +72,7 @@ public struct ProfilePolicy: Sendable {
             let horizon = max(4000, (startRemaining.isFinite ? startRemaining : 0) * 0.2)
             extra = kmAway * (8 + (1 - mix) * 172) + (dFrom < horizon ? kmAway * (20 + pow(1 - dFrom / horizon, 2) * 60) * (1 - mix) : 0)
         case .cleanest:
-            extra = kmAway * (dFrom < max(2500, (startRemaining.isFinite ? startRemaining : 0) * 0.08) ? 2.5 : 2)
+            extra = kmAway * (dFrom < max(2500, (startRemaining.isFinite ? startRemaining : 0) * 0.08) ? 18 : 12)
         }
         guard objective == .pavement && style == .dirt else { return extra }
         let full = max(1, dirtPavementAwayAtFullWander)
@@ -80,6 +83,7 @@ public struct ProfilePolicy: Sendable {
         let family = Self.family(pack.surfaceLeaf(edge)), tier = Self.tier(pack.roadClass(edge))
         let paved = family == .paved || (family == .unknown && ["motorway","trunk","arterial","collector","local_paved"].contains(tier))
         if pavedOnly && !paved { return false }
+        if !cleanAllowHighways, !endpoint, tier == "motorway" || tier == "trunk" { return false }
         if endpoint || !pavedOnly { return true }
         return tier != "destination" && tier != "adventure"
     }
@@ -106,8 +110,8 @@ public struct ProfilePolicy: Sendable {
             let dirtKm = [150.0,0.05,0.02,0.02,0.9]
             cost = km * (penalizedDirt || unknownPaved ? 150 : dirtKm[min(4,surface)])
         } else if style == .cleanest {
-            let tiers = ["collector":0.92,"local_paved":1.0,"arterial":0.96,"service":2.8,
-                         "destination":1.15,"trunk":1.0,"motorway":1.0,"adventure":120.0,"unknown":2.2]
+            let tiers = ["collector":0.88,"local_paved":0.95,"arterial":3.8,"service":2.4,
+                         "destination":1.15,"trunk":40.0,"motorway":80.0,"adventure":120.0,"unknown":2.2]
             let families: [Surface:Double] = [.paved:1,.gravel:14,.loose:90,.unknown:1.05]
             cost = km * tiers[tier,default: 2.2] * families[family,default: 1.05]
             let dTo = to.distance(to: end)
@@ -177,7 +181,7 @@ public struct ProfilePolicy: Sendable {
                 let h = max(4000,ab*0.2)
                 extra = kmAway * ((20 + pull * 160) + (d < h ? 20+pow(1-d/h,2)*60 : 0) * (0.15 + pull * 0.85))
             case .cleanest:
-                extra = kmAway * (d < max(2500,ab*0.08) ? 2.5 : 2)
+                extra = kmAway * (d < max(2500,ab*0.08) ? 18 : 12)
             }
         }
         if style != .cleanest {

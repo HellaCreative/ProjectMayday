@@ -75,6 +75,47 @@ struct RoutingEngineTests {
         }
     }
 
+    @Test func cleanestTakesBackRoadsAndStaysNearTheShortestLegalNonHighway() throws {
+        let pack = PolicyTests.Line(
+            nodes: [
+                .init(longitude: 0,latitude: 0),.init(longitude: 0.015,latitude: 0.02),
+                .init(longitude: 0.045,latitude: 0.02),.init(longitude: 0.06,latitude: 0)
+            ],
+            edges: [(0,1),(1,2),(2,3),(0,3)],
+            surfaces: Array(repeating: "asphalt", count: 4),
+            roads: ["tertiary","tertiary","tertiary","motorway"]
+        )
+        let graph = try IndexedGraph(pack)
+        var clean = RoutingRequest(start: .init(longitude: 0.002,latitude: 0.018),
+                                   end: .init(longitude: 0.058,latitude: 0.018),style: .cleanest)
+        clean.matchRadiusMeters = 2000
+        let backRoad = try RoutingEngine(pack: graph).route(clean,budget: .init(seconds: 20))
+        #expect(!backRoad.segments.contains { ProfilePolicy.tier($0.roadClass) == "motorway" })
+        let local = pack.distance(0)+pack.distance(1)+pack.distance(2)
+        let motorway = pack.distance(3)
+        #expect(motorway < local)
+        #expect(backRoad.distanceMeters <= local * 1.12)
+    }
+
+    @Test func cleanestUsesAHighwayOnlyWhenNoBackRoadConnects() throws {
+        let pack = PolicyTests.Line(
+            nodes: [
+                .init(longitude: 0,latitude: 0.01),.init(longitude: 0.01,latitude: 0.01),
+                .init(longitude: 0.05,latitude: 0.01),.init(longitude: 0.06,latitude: 0.01)
+            ],
+            edges: [(0,1),(2,3),(1,2)],
+            surfaces: ["asphalt","asphalt","asphalt"],
+            roads: ["tertiary","tertiary","motorway"]
+        )
+        let graph = try IndexedGraph(pack)
+        var clean = RoutingRequest(start: .init(longitude: 0.002,latitude: 0.01),
+                                   end: .init(longitude: 0.058,latitude: 0.01),style: .cleanest)
+        clean.matchRadiusMeters = 2000
+        let route = try RoutingEngine(pack: graph).route(clean,budget: .init(seconds: 20))
+        #expect(route.segments.contains { ProfilePolicy.tier($0.roadClass) == "motorway" })
+        #expect(route.distanceMeters > 0)
+    }
+
     @Test func coincidentNodesKeepAPairReachable() throws {
         // Two roads broken at duplicate nodes 1 and 2: only the zero-length transfer joins them.
         let line = PolicyTests.Line(nodes: [.init(longitude: 0,latitude: 0),.init(longitude: 0.01,latitude: 0),
