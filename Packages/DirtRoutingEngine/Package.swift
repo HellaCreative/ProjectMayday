@@ -10,12 +10,7 @@ let package = Package(
         .target(
             name: "DirtRoutingEngine",
             swiftSettings: [
-                // DIRT Dev builds packages incrementally, one file at a time, where the
-                // search loop's generic and protocol calls are never specialized: routes
-                // ran 2.5-4.7x slower than a Release build. Whole-module optimization
-                // restores Release speed. `-num-threads` keeps one object and index file
-                // per source, which debug builds' index-while-building requires.
-                .unsafeFlags(["-O", "-wmo", "-num-threads", "4", "-cross-module-optimization"])
+                .unsafeFlags(["-O", "-cross-module-optimization"])
             ]
         ),
         .executableTarget(name: "RoutingProbe", dependencies: ["DirtRoutingEngine"]),
