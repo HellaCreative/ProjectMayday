@@ -94,6 +94,21 @@ nonisolated enum NativeRoutingAdapter {
     }
 }
 
+/// Current and peak physical footprint: the figure iOS uses for its memory limit.
+nonisolated enum ProcessMemory {
+    static func megabytes() -> (current: Int, peak: Int) {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let status = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard status == KERN_SUCCESS else { return (0, 0) }
+        return (Int(info.phys_footprint / 1_048_576), Int(info.ledger_phys_footprint_peak / 1_048_576))
+    }
+}
+
 /// A dedicated executor keeps pack preparation/search away from app UI work.
 /// Only local directories enter this boundary; it cannot fetch missing packs.
 actor NativeRoutingSession {
@@ -101,18 +116,24 @@ actor NativeRoutingSession {
     private var cachedGraph: IndexedGraph?
     private var cachedFuel: [DirtRoutingEngine.FuelStation] = []
     private let compassStore = RoadCompassStore()
-    private func prepare(_ directories: [String:URL],budget: ComputationBudget) throws -> IndexedGraph {
+    /// Returns the prepared graph and, when this call built it, how long opening packs,
+    /// joining regions, indexing and decoding fuel took.
+    private func prepare(_ directories: [String:URL],budget: ComputationBudget) throws -> (graph: IndexedGraph, detail: String?) {
         let regions = directories.keys.sorted()
         let key = try regions.map { id in
             let manifest = directories[id]!.appendingPathComponent("pack-manifest.v2.json")
             return id+":"+manifest.path+":"+(try Data(contentsOf: manifest)).base64EncodedString()
         }.joined(separator: "|")
-        if key == cachedKey, let cachedGraph { return cachedGraph }
+        if key == cachedKey, let cachedGraph { return (cachedGraph, nil) }
+        let started = ContinuousClock.now
         let repository = try PackRepository(installedDirectories: directories)
         let installed = try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
+        let openedMs = elapsedMs(from: started)
         guard let first = installed.first else { throw RoutingFailure.missingPacks(regions) }
         let graph: any RoadGraph = installed.count == 1 ? first.graph : try RegionalGraph(packs: installed,budget: budget)
+        let joinedMs = elapsedMs(from: started)
         let indexed = try IndexedGraph(graph,budget: budget)
+        let indexedMs = elapsedMs(from: started)
         var fuel: [String:DirtRoutingEngine.FuelStation] = [:]
         for item in installed {
             guard let file = PackedFuel.decodeFile(item.fuelData) else { throw RoutingFailure.invalidPack("fuel data") }
@@ -124,51 +145,77 @@ actor NativeRoutingSession {
             }
         }
         cachedKey = key; cachedGraph = indexed; cachedFuel = fuel.values.sorted { $0.id < $1.id }
-        return indexed
+        let detail = "open:\(openedMs),join:\(joinedMs-openedMs),index:\(indexedMs-joinedMs),fuel:\(elapsedMs(from: started)-indexedMs)"
+        return (indexed, detail)
     }
     private func elapsedMs(from start: ContinuousClock.Instant) -> Int {
         let d = start.duration(to: .now).components
         return max(0, Int(Double(d.seconds) * 1_000 + Double(d.attoseconds) / 1e15))
     }
+    /// One diagnostic line per request, written for successes and failures alike.
+    /// `searches`, `pops` and `usPerPop` cover every search the request ran (failed
+    /// corridor widths, penalty reruns, recovery and endpoint retries included), not
+    /// only the returned route, whose own count is `selectedPops`.
+    private func log(_ label: String,started: ContinuousClock.Instant,prepared: Int,prepareDetail: String?,
+                     counter: SearchCounter,outcome: String) {
+        let total = elapsedMs(from: started)
+        let searchMs = max(0, total - prepared)
+        let pops = counter.pops
+        let usPerPop = pops > 0 ? Int(Double(searchMs) * 1000.0 / Double(pops)) : 0
+        let memory = ProcessMemory.megabytes()
+        let line = "\(label) elapsedMs=\(total) prepareMs=\(prepared)" +
+            (prepareDetail.map { " prepare=[\($0)]" } ?? "") +
+            " searchMs=\(searchMs) searches=\(counter.searches) pops=\(pops) usPerPop=\(usPerPop)" +
+            " peakLabels=\(counter.peakLabels) stages=[\(counter.stageSummary)]" +
+            " footprintMB=\(memory.current) peakFootprintMB=\(memory.peak) \(outcome)"
+        Task { @MainActor in RoutingDebugLog.shared.event(line) }
+    }
     func route(_ request: DirtRoutingEngine.RoutingRequest,directories: [String:URL]) throws -> ComputedRoute {
         let started = ContinuousClock.now
         let budget = ComputationBudget(seconds: 60)
-        let graph = try prepare(directories,budget: budget)
-        let prepared = elapsedMs(from: started)
-        let result = try RoutingEngine(pack: graph, compassStore: compassStore).route(request,budget: budget)
-        let total = elapsedMs(from: started)
-        let searchMs = total - prepared
-        let usPerPop = result.poppedLabels > 0 ? Int(Double(searchMs) * 1000.0 / Double(result.poppedLabels)) : 0
-        Task { @MainActor in
-            RoutingDebugLog.shared.event(
-                "pack route elapsedMs=\(total) prepareMs=\(prepared) searchMs=\(searchMs) " +
-                "pops=\(result.poppedLabels) usPerPop=\(usPerPop) " +
-                "meters=\(Int(result.distanceMeters.rounded())) limit=\(result.limit ?? "-") " +
-                "candidates=[\(result.searchSummary ?? "-")]"
-            )
+        let counter = SearchCounter()
+        var request = request
+        request.options.counter = counter
+        var prepared = 0, prepareDetail: String?
+        do {
+            let preparation = try prepare(directories,budget: budget)
+            prepared = elapsedMs(from: started); prepareDetail = preparation.detail
+            let result = try RoutingEngine(pack: preparation.graph, compassStore: compassStore).route(request,budget: budget)
+            log("pack route",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
+                outcome: "selectedPops=\(result.poppedLabels) meters=\(Int(result.distanceMeters.rounded())) " +
+                    "limit=\(result.limit ?? "-") candidates=[\(result.searchSummary ?? "-")]")
+            return result
+        } catch {
+            log("pack route failed",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
+                outcome: "error=\(error)")
+            throw error
         }
-        return result
     }
     func fuel(_ request: DirtRoutingEngine.RoutingRequest,requirements: FuelRequirements,directories: [String:URL],seconds: Double) throws -> FuelPlan {
         let started = ContinuousClock.now
         let budget = ComputationBudget(seconds: seconds)
-        let graph = try prepare(directories,budget: budget)
-        let prepared = elapsedMs(from: started)
-        let plan = try FuelPlanner(graph: graph,stations: cachedFuel,compassStore: compassStore)
-            .plan(request,requirements: requirements,budget: budget)
-        let total = elapsedMs(from: started)
-        let hopMeters = plan.routes.map { Int($0.distanceMeters.rounded()) }
-        let hopPops = plan.routes.map(\.poppedLabels)
-        Task { @MainActor in
-            RoutingDebugLog.shared.event(
-                "pack fuel elapsedMs=\(total) prepareMs=\(prepared) complete=\(plan.complete ? 1 : 0) " +
-                "stops=\(plan.stops.count) hops=\(plan.routes.count) " +
-                "hopMeters=[\(hopMeters.map(String.init).joined(separator: ","))] " +
-                "hopPops=[\(hopPops.map(String.init).joined(separator: ","))] " +
-                "limit=\(plan.limit ?? "-")"
-            )
+        let counter = SearchCounter()
+        var request = request
+        request.options.counter = counter
+        var prepared = 0, prepareDetail: String?
+        do {
+            let preparation = try prepare(directories,budget: budget)
+            prepared = elapsedMs(from: started); prepareDetail = preparation.detail
+            let plan = try FuelPlanner(graph: preparation.graph,stations: cachedFuel,compassStore: compassStore)
+                .plan(request,requirements: requirements,budget: budget)
+            let hopMeters = plan.routes.map { Int($0.distanceMeters.rounded()) }
+            let hopPops = plan.routes.map(\.poppedLabels)
+            log("pack fuel",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
+                outcome: "complete=\(plan.complete ? 1 : 0) stops=\(plan.stops.count) hops=\(plan.routes.count) " +
+                    "hopMeters=[\(hopMeters.map(String.init).joined(separator: ","))] " +
+                    "hopPops=[\(hopPops.map(String.init).joined(separator: ","))] " +
+                    "limit=\(plan.limit ?? "-")")
+            return plan
+        } catch {
+            log("pack fuel failed",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
+                outcome: "error=\(error)")
+            throw error
         }
-        return plan
     }
 }
 
