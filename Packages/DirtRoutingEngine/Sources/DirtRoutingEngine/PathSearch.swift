@@ -134,10 +134,10 @@ public struct PathSearch: Sendable {
         let startAlong = start.alongMeters
         let startLength = start.geometryMeters
         var virtual: [Int:[Arc]] = [:]
-        func add(_ source: Int, _ target: Int, _ edge: Int, _ forward: Bool, _ lower: Double, _ upper: Double,
-                 requiredEndForward: Bool? = nil) {
+        // A destination match's direction only ranks which road the pin snaps to. Arrival
+        // may use either legal direction of that road, as in JS find-path-v4.
+        func add(_ source: Int, _ target: Int, _ edge: Int, _ forward: Bool, _ lower: Double, _ upper: Double) {
             if source == startNode, let required = start.forward, required != forward { return }
-            if target == endNode, let required = requiredEndForward ?? end.forward, required != forward { return }
             let code = pack.accessCode(edge,forward: forward)
             guard [0,1,3,4].contains(code) else { return }
             virtual[source,default: []].append(.init(target: target,edge: edge,forward: forward,
@@ -147,12 +147,11 @@ public struct PathSearch: Sendable {
         add(startNode,sb,start.edge,true,startAlong,startLength)
         func attachEnd(_ match: RoadMatch) {
             let a = pack.endpoint(match.edge,from: true), b = pack.endpoint(match.edge,from: false)
-            add(a,endNode,match.edge,true,0,match.alongMeters,requiredEndForward: match.forward)
-            add(b,endNode,match.edge,false,match.alongMeters,match.geometryMeters,requiredEndForward: match.forward)
+            add(a,endNode,match.edge,true,0,match.alongMeters)
+            add(b,endNode,match.edge,false,match.alongMeters,match.geometryMeters)
             if start.edge == match.edge {
                 add(startNode,endNode,start.edge,startAlong <= match.alongMeters,
-                    min(startAlong,match.alongMeters),max(startAlong,match.alongMeters),
-                    requiredEndForward: match.forward)
+                    min(startAlong,match.alongMeters),max(startAlong,match.alongMeters))
             }
         }
         attachEnd(end)

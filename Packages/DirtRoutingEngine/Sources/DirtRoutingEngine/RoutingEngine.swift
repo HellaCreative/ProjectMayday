@@ -62,8 +62,11 @@ public struct RoutingEngine: Sendable {
         }
         var reachability: EndpointReachability?
         var attempted = false
+        var triedPairs = Set<String>()
         for (start,end) in (connected.isEmpty ? pairs : connected) {
                 try budget.check()
+                // Matches that differ only in destination direction now search identically.
+                guard triedPairs.insert("\(start.edge):\(String(describing: start.forward)):\(start.alongMeters)|\(end.edge):\(end.alongMeters)").inserted else { continue }
                 if attempted {
                     // After a pair has failed, rule out pairs that cannot connect before
                     // searching them: each would only flood every corridor to "no path".
