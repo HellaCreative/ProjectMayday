@@ -204,7 +204,7 @@ public struct RoutingEngine: Sendable {
             catch let failure as RoutingFailure { incomplete = failure; break }
         }
         if comparisonFound, incomplete == nil, budget.remainingSeconds >= 5,
-           let best = candidates.map(\.quality.knownDirtPercent).max(), best < 70, best >= 40 {
+           let best = candidates.map(\.quality.knownDirtPercent).max(), best < 50, best >= 40 {
             var recovery = request.options
             recovery.objective = .balancedResource; recovery.corridorMeters = base
             if let primary = chooseDirt(candidates) {
