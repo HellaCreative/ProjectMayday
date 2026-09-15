@@ -571,11 +571,16 @@ public struct FuelPlanner: Sendable {
             let tank = current.stops.isEmpty
                 ? min(fuel.firstLegMaxMeters, fuel.usableRangeMeters)
                 : fuel.usableRangeMeters
+            // Plan targets with slack so a Dirt hop can meander inside the real
+            // tank. Style searches still use `tank`; only target selection /
+            // reachability feelers use `planTank`.
+            let planStyleSlack = 1.4
+            let planTank = tank / planStyleSlack
             let requiredSatisfied = fuel.requiredFirstStationID == nil || !current.stops.isEmpty
             if !destHopFailedFromCurrent,
                current.stops.count >= fuel.minimumStops && requiredSatisfied {
                 let endCap = min(tank, fuel.destinationUsedLimitMeters ?? .infinity)
-                if destLikelyReachable(from: current, cap: endCap),
+                if destLikelyReachable(from: current, cap: min(endCap, planTank)),
                    let tail = try hop(current, to: request.end, endMatches: destinationMatches, cap: endCap,
                                       customer: request.access.endIsCustomer, label: "dest") {
                     var escape: Double? = fuel.ensureDestinationEscape ? nil : 0
@@ -600,7 +605,7 @@ public struct FuelPlanner: Sendable {
                     if fuel.ensureDestinationEscape {
                         return failure("no fuel stop found within range near \(placeName(request.end))", state: current)
                     }
-                } else if destLikelyReachable(from: current, cap: min(tank, fuel.destinationUsedLimitMeters ?? .infinity)) {
+                } else if destLikelyReachable(from: current, cap: min(planTank, fuel.destinationUsedLimitMeters ?? .infinity)) {
                     destHopFailedFromCurrent = true
                 }
             }
@@ -677,13 +682,15 @@ public struct FuelPlanner: Sendable {
             let onward = eligible.filter { station in
                 let geo = current.point.distance(to: request.end)
                     > station.coordinate.distance(to: request.end) + 500
-                guard geo, current.point.distance(to: station.coordinate) <= tank + 300 else { return false }
+                // Geo must fit the planning slack — prefix(48) of stations nearest
+                // the destination are often all beyond planTank on long trips.
+                guard geo, current.point.distance(to: station.coordinate) <= planTank + 300 else { return false }
                 if hereRemaining.isFinite {
                     let there = ((try? matches(station)) ?? []).map { roadRemaining(at: $0) }.min() ?? .infinity
                     // Keep compass-progressing stations; also keep geo-only when
                     // compass has no reading for the candidate (joined-pack holes).
                     if there.isFinite {
-                        return there < hereRemaining - 500 && (hereRemaining - there) <= tank + 1_000
+                        return there < hereRemaining - 500 && (hereRemaining - there) <= planTank + 1_000
                     }
                 }
                 return true
@@ -705,7 +712,7 @@ public struct FuelPlanner: Sendable {
                 continue chain
             }
             if !onwardSlice.isEmpty,
-               let nearest = try nearestReachable(current, stations: onwardSlice, cap: tank) {
+               let nearest = try nearestReachable(current, stations: onwardSlice, cap: planTank) {
                 if let styled = try hop(current, to: nearest.0.coordinate, endMatches: matches(nearest.0),
                                         cap: tank, customer: true, label: "onward:\(nearest.0.id)"),
                    styled.distanceMeters <= tank + 1 {
@@ -721,6 +728,7 @@ public struct FuelPlanner: Sendable {
                 continue chain
             }
 
+            note("onward:noPick eligible=\(eligible.count) onward=\(onward.count) hereRemaining=\(Int(hereRemaining))m planTank=\(Int(planTank))m")
             let starts = current.match.map { [$0] } ?? initialMatches
             guard let start = starts.first else {
                 return failure("no fuel stop found within range near \(placeName(current.point))", state: current)

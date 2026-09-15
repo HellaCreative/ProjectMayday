@@ -331,6 +331,9 @@ public struct PathSearch: Sendable {
                     if policy.style == .balanced && abs((options.precedingDirtMeters+current.dirtMeters)/max(1,options.precedingMeters+current.meters)-0.5) <= 0.005 { break }
                     continue
                 }
+                // Multi-goal (additionalEnds): keep searching so the picker can
+                // choose the most progressing pump, not whichever is popped first.
+                if !options.additionalEnds.isEmpty { continue }
                 break
             }
             var arcs = virtual[current.state.node] ?? []
@@ -468,8 +471,29 @@ public struct PathSearch: Sendable {
                 if !prior.isEmpty && pack.matches(e, identities: prior) { step *= max(1,options.backtrackFactor) }
                 let cost = current.cost+step
                 guard cost.isFinite, step >= 0 else { throw RoutingFailure.invalidPack("nonfinite search cost") }
-                let state = State(node: arc.target,incoming: physicalEdge,restrictions: nextRestrictions,bucket: bucket)
-                if let previous = bestIndex(state), labels[previous].cost <= cost { continue }
+                // Under a finite tank/fog cap, a cheap short label must not dominate
+                // a longer dirt label at the same node — otherwise personality
+                // never reaches the pump inside maximumMeters (Yarmouth fuel).
+                // Uncapped searches keep a single bucket and stay byte-identical.
+                let bandCount = 8
+                let banded = !resource && options.maximumMeters.isFinite && options.maximumMeters > 0
+                let band = banded
+                    ? min(bandCount, max(0, Int(meters / (options.maximumMeters / Double(bandCount)))))
+                    : bucket
+                let state = State(node: arc.target,incoming: physicalEdge,restrictions: nextRestrictions,bucket: band)
+                if banded {
+                    var dominated = false
+                    for b in 0...band {
+                        let probe = State(node: arc.target,incoming: physicalEdge,
+                                          restrictions: nextRestrictions,bucket: b)
+                        if let previous = bestIndex(probe), labels[previous].cost <= cost {
+                            dominated = true; break
+                        }
+                    }
+                    if dominated { continue }
+                } else if let previous = bestIndex(state), labels[previous].cost <= cost {
+                    continue
+                }
                 if labels.count >= budget.maximumLabels { limit = "labels"; break search }
                 let index = labels.count
                 labels.append(.init(state: state,cost: cost,meters: meters,dirtMeters: dirt,
@@ -485,6 +509,13 @@ public struct PathSearch: Sendable {
         guard let chosen = goals.min(by: { a,b in
             // Short dirt is taxed per arc during expansion; no extra goal clawback.
             func adjusted(_ index: Int) -> Double { labels[index].cost }
+            // Multi-goal fuel: prefer the pump with the least remaining road to
+            // the trip destination (most progress); cost is the tie-break.
+            if !options.additionalEnds.isEmpty {
+                let ra = labels[a].parent.map { remaining(of: labels[$0].state.node) } ?? .infinity
+                let rb = labels[b].parent.map { remaining(of: labels[$0].state.node) } ?? .infinity
+                if ra.isFinite, rb.isFinite, abs(ra - rb) > 1_000 { return ra < rb }
+            }
             if resource {
                 let ra = (options.precedingDirtMeters+labels[a].dirtMeters)/max(1,options.precedingMeters+labels[a].meters)
                 let rb = (options.precedingDirtMeters+labels[b].dirtMeters)/max(1,options.precedingMeters+labels[b].meters)

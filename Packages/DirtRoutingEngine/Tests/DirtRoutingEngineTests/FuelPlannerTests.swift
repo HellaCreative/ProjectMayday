@@ -32,12 +32,14 @@ struct FuelPlannerTests {
     var request: RoutingRequest { .init(start: .init(longitude: 0.01,latitude: 0),end: .init(longitude: 1.19,latitude: 0),style: .cleanest) }
     @Test func everyPumpHasAnActualBoundedRoadApproachAndOnwardRoute() throws {
         let graph = try IndexedGraph(Road())
-        let plan = try FuelPlanner(graph: graph,stations: pumps).plan(request,requirements: .init(usableRangeMeters: 45_000,firstLegMaxMeters: 40_000))
+        // Hops are ~33 km on this graph; planTank = usable/1.4 must still clear
+        // that geo so onward stations are eligible under style slack.
+        let plan = try FuelPlanner(graph: graph,stations: pumps).plan(request,requirements: .init(usableRangeMeters: 50_000,firstLegMaxMeters: 45_000))
         #expect(plan.complete)
         #expect(plan.stops.map(\.id) == pumps.map(\.id))
         #expect(plan.routes.count == 4)
         for (i,route) in plan.routes.enumerated() {
-            #expect(route.distanceMeters <= (i == 0 ? 40_000 : 45_000))
+            #expect(route.distanceMeters <= (i == 0 ? 45_000 : 50_000))
             if i > 0 { #expect(route.start.coordinate == plan.routes[i-1].end.coordinate) }
         }
         #expect(plan.routes.last!.end.coordinate.distance(to: request.end) < 0.01)

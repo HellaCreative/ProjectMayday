@@ -783,6 +783,11 @@ From Here is the two-`.rider` case of the same list (origin, destination).
 Do not handle these inside Stages 0–3. After Stages 0–3 are phone-tested,
 resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
 
+- Stage 1 fuel/dirt residual (15 Sep structural fuel fix): leg0 known-dirt still
+  ~0–19% on the short first approach (~16–35 km); last leg to destination often
+  19–33% dirt or `distanceFallback` after `planTank` target picks (owner-fuel
+  28.9%→23.2% because dest lost its prior 55% styleOk). Do not reopen
+  fuelGoalPull / transition tuning — fix target/dest slack or dest style next.
 - Wander slider: needs a real, monotonic, visibly-scaling effect anchored
   around a sensible median default, not the current near-flat 0%–100%
   behavior. Do not tweak weights ad hoc until that design is settled.
