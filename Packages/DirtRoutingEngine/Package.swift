@@ -10,7 +10,7 @@ let package = Package(
         .target(
             name: "DirtRoutingEngine",
             swiftSettings: [
-                .unsafeFlags(["-O"])
+                .unsafeFlags(["-O", "-cross-module-optimization"])
             ]
         ),
         .executableTarget(name: "RoutingProbe", dependencies: ["DirtRoutingEngine"]),

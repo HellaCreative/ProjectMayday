@@ -48,9 +48,7 @@ final class RoutingDebugLog {
         if entries.count > maxEntries {
             entries.removeFirst(entries.count - maxEntries)
         }
-        #if DEBUG
         print("[DirtDebug]", message)
-        #endif
     }
 
     func routeAttempt(
