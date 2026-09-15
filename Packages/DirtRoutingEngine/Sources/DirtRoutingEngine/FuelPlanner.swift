@@ -185,9 +185,11 @@ public struct FuelPlanner: Sendable {
             request.options.counter?.recordStage("fuel-foundation", since: foundationStarted)
         }
         func destLikelyReachable(from state: State, cap: Double) -> Bool {
-            let left = roadRemaining(at: state.match)
-            if left.isFinite { return left <= cap + 50 }
-            return state.point.distance(to: request.end) <= cap + 50
+            // Crow-flies is not a tank check: Porters Lake → Canso is ~194 km
+            // straight and ~356 km on roads. Use the destination compass from the
+            // current (or start) match only.
+            let left = roadRemaining(at: state.match ?? initialMatches.first)
+            return left.isFinite && left <= cap + 50
         }
         /// One tank-bounded distance flood. Later hops only try pumps this flood can reach.
         func tankReachable(from state: State, tank: Double, among: [FuelStation]) throws -> Set<String> {
@@ -266,7 +268,7 @@ public struct FuelPlanner: Sendable {
                 let endCap = min(tank, fuel.destinationUsedLimitMeters ?? .infinity)
                 if destLikelyReachable(from: current, cap: endCap),
                    let tail = try hop(current, to: request.end, endMatches: destinationMatches, cap: endCap,
-                                      customer: request.access.endIsCustomer, shortest: false) {
+                                      customer: request.access.endIsCustomer, shortest: true) {
                     var escape: Double? = fuel.ensureDestinationEscape ? nil : 0
                     if fuel.ensureDestinationEscape {
                         let arrived = stateAfter(current, station: nil, route: tail, destination: request.end)
@@ -333,7 +335,9 @@ public struct FuelPlanner: Sendable {
                 guard here.isFinite, there.isFinite else { return .infinity }
                 return max(0, here - there)
             }
-            let reachable = try tankReachable(from: current, tank: tank, among: eligible)
+            let reachable = destCompass == nil
+                ? (try tankReachable(from: current, tank: tank, among: eligible))
+                : []
             let progressing = eligible.filter { station in
                 let there = towardDest(station)
                 guard there.isFinite, here.isFinite else { return false }
@@ -348,7 +352,7 @@ public struct FuelPlanner: Sendable {
                 if abs(aLeft - bLeft) > 1_000 { return aLeft < bLeft }
                 return a.id < b.id
             }
-            for station in ranked.prefix(40) {
+            for station in ranked.prefix(8) {
                 try budget.check()
                 guard let approach = try hop(current, to: station.coordinate, endMatches: matches(station),
                                              cap: tank, customer: true, shortest: true) else { continue }
