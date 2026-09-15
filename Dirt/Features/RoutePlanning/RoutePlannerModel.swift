@@ -79,7 +79,9 @@ final class RoutePlannerModel {
             self.builtLegIndex = builtLegIndex
             let suffix = builtLeg.endsAtFuelStop?.stationID
                 ?? "\(builtLeg.toCoordinate.latitude),\(builtLeg.toCoordinate.longitude)"
-            id = "\(riderLeg.id.uuidString):\(suffix)"
+            // builtLegIndex is unique within the built itinerary — stationID alone
+            // repeats when a replan revisits the same pump and SwiftUI ForEach faults.
+            id = "\(riderLeg.id.uuidString)#\(builtLegIndex):\(suffix)"
         }
 
         init(

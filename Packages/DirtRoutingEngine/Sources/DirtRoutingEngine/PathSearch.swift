@@ -39,11 +39,33 @@ public struct SearchOptions: Sendable {
     /// prefers progress toward the hop end without drowning the dirt-rate cost
     /// (see `heapCost` — pull is 2× dirtWeight × geoKm, not raw geoKm).
     public var fuelGoalPull = false
+    /// Optional per-search reject/time profile. Filled by the search; never read
+    /// for routing decisions.
+    public var profile: SearchProfile? = nil
     /// Diagnostic totals shared by every search of one request. The search never reads it.
     public var counter: SearchCounter? = nil
     /// Set when the search turns a road away at its corridor or progress limit.
     var boundary: SearchBoundary? = nil
     public init() {}
+}
+
+/// Per-search expansion profile for fuel hop diagnostics. Recording only.
+public final class SearchProfile: @unchecked Sendable {
+    public var pops = 0
+    public var labels = 0
+    public var elapsedMs = 0.0
+    public var regressionRejects = 0
+    public var corridorRejects = 0
+    public var cityWallRejects = 0
+    public var meterRejects = 0
+    public var limit: String?
+    public init() {}
+    public var summary: String {
+        "pops=\(pops) labels=\(labels) ms=\(Int(elapsedMs.rounded())) " +
+            "regReject=\(regressionRejects) corrReject=\(corridorRejects) " +
+            "wallReject=\(cityWallRejects) meterReject=\(meterRejects)" +
+            (limit.map { " limit=\($0)" } ?? "")
+    }
 }
 
 /// Whether a search turned any road away because of its corridor or its progress limit,
@@ -269,7 +291,16 @@ public struct PathSearch: Sendable {
         heap.push(.init(label: 0,cost: heapCost(0, startNode)))
         var goals: [Int] = [], pops = 0, limit: String?
         var frontierHits: [(label: Int, meters: Double, node: Int)] = []
-        defer { options.counter?.recordSearch(pops: pops, labels: labels.count, since: searchStarted) }
+        defer {
+            options.counter?.recordSearch(pops: pops, labels: labels.count, since: searchStarted)
+            if let profile = options.profile {
+                profile.pops = pops
+                profile.labels = labels.count
+                let parts = searchStarted.duration(to: ContinuousClock.now).components
+                profile.elapsedMs = Double(parts.seconds) * 1000 + Double(parts.attoseconds) / 1e15
+                profile.limit = limit
+            }
+        }
         let startHighway = start.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(start.edge)))
         let endHighway = end.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(end.edge)))
         let resource = options.objective == .balancedResource
@@ -357,24 +388,30 @@ public struct PathSearch: Sendable {
                 if meters > options.maximumMeters+0.01 {
                     if options.maximumMeters.isFinite {
                         frontierHits.append((entry.label, current.meters, current.state.node))
+                        options.profile?.meterRejects += 1
                     }
                     continue
                 }
                 let fromPoint = point(current.state.node), toPoint = point(arc.target)
                 if options.corridorMeters.isFinite && abs(toPoint.crossTrack(from: start.coordinate,to: end.coordinate)) > options.corridorMeters {
                     options.boundary?.touched = true
+                    options.profile?.corridorRejects += 1
                     continue
                 }
                 let progress = RouteQuality.progress(toPoint, start.coordinate, end.coordinate)
                 if current.peakProgress - progress > regression {
                     options.boundary?.touched = true
+                    options.profile?.regressionRejects += 1
                     continue
                 }
                 let peak = max(current.peakProgress, progress)
                 let urban = cores.contains {
                     !$0.contains(start.coordinate) && !$0.contains(end.coordinate) && $0.intersects(fromPoint,toPoint)
                 }
-                if urban && options.cityWall { continue }
+                if urban && options.cityWall {
+                    options.profile?.cityWallRejects += 1
+                    continue
+                }
                 let family = ProfilePolicy.family(pack.surfaceLeaf(e))
                 let isDirt = family == .gravel || family == .loose
                 let dirt = current.dirtMeters + (isDirt && pack.structure(e) != "ferry" ? arc.meters : 0)

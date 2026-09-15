@@ -212,39 +212,45 @@ public struct FuelPlanner: Sendable {
                 // and the remaining heuristic would fight the pump being routed to.
                 return try RoadCompass.toward(end: end, pack: graph, budget: hopBudget()).remaining
             }
-            func run(start: RoadMatch, end: RoadMatch, shortest: Bool) throws -> BoundedSearchResult {
+            func run(start: RoadMatch, end: RoadMatch, shortest: Bool) throws -> (BoundedSearchResult, SearchProfile) {
+                let profile = SearchProfile()
                 var (options, policy) = styleOptions(from: state, cap: cap, shortest: shortest,
                                                      toward: point,
                                                      roadRemaining: try compassForHop(shortest: shortest, end: end))
                 options.arrival = departureArrival
                 options.additionalEnds = endMatches.filter { $0.edge != end.edge || $0.alongMeters != end.alongMeters }
+                options.profile = profile
                 if !shortest, request.profile.style == .dirt {
                     // Pavement's dirt-rate heuristic alone floods the tank before
                     // reaching a paved pump; pull toward the hop end.
                     options.fuelGoalPull = true
                 }
-                return try search.boundedSearch(start: start, end: end, policy: policy,
-                                                access: access, options: options, budget: hopBudget())
+                let result = try search.boundedSearch(start: start, end: end, policy: policy,
+                                                      access: access, options: options, budget: hopBudget())
+                return (result, profile)
             }
             try budget.check()
             let startCandidates = Array(starts.prefix(4))
             if shortest {
                 for start in startCandidates {
-                    if case .reached(let route) = try run(start: start, end: primaryEnd, shortest: true),
+                    if case .reached(let route) = try run(start: start, end: primaryEnd, shortest: true).0,
                        route.distanceMeters <= cap + 1 { return route }
                 }
                 return nil
             }
             do {
                 var sawStopped = false, sawOverCap: Double? = nil, lastError: Error? = nil
+                var lastProfile: SearchProfile? = nil
                 for start in startCandidates {
                     do {
-                        switch try run(start: start, end: primaryEnd, shortest: false) {
+                        let (result, profile) = try run(start: start, end: primaryEnd, shortest: false)
+                        lastProfile = profile
+                        switch result {
                         case .reached(let route) where route.distanceMeters <= cap + 1:
                             styleOk += 1
                             let dirt = knownDirt(route)
                             let pct = route.distanceMeters > 0 ? Int((dirt / route.distanceMeters * 100).rounded()) : 0
-                            note("\(label):styleOk geo=\(Int(geo))m route=\(Int(route.distanceMeters))m dirt=\(pct)% cap=\(Int(cap))m")
+                            note("\(label):styleOk geo=\(Int(geo))m route=\(Int(route.distanceMeters))m dirt=\(pct)% cap=\(Int(cap))m \(profile.summary)")
                             return route
                         case .reached(let route):
                             sawOverCap = max(sawOverCap ?? 0, route.distanceMeters)
@@ -259,13 +265,15 @@ public struct FuelPlanner: Sendable {
                 }
                 if let over = sawOverCap {
                     styleOverCap += 1
-                    note("\(label):styleOverCap geo=\(Int(geo))m route=\(Int(over))m cap=\(Int(cap))m")
+                    note("\(label):styleOverCap geo=\(Int(geo))m route=\(Int(over))m cap=\(Int(cap))m \(lastProfile?.summary ?? "")")
                 } else if sawStopped {
                     styleStoppedAtBudget += 1
-                    note("\(label):styleStoppedAtBudget geo=\(Int(geo))m cap=\(Int(cap))m")
+                    let reason = lastProfile?.limit
+                        ?? ((lastProfile?.meterRejects ?? 0) > 0 ? "meterCap" : "exhausted")
+                    note("\(label):styleStoppedAtBudget reason=\(reason) geo=\(Int(geo))m cap=\(Int(cap))m \(lastProfile?.summary ?? "")")
                 } else {
                     styleThrown += 1
-                    note("\(label):styleThrown geo=\(Int(geo))m cap=\(Int(cap))m err=\(lastError.map { "\($0)" } ?? "noPath")")
+                    note("\(label):styleThrown geo=\(Int(geo))m cap=\(Int(cap))m err=\(lastError.map { "\($0)" } ?? "noPath") \(lastProfile?.summary ?? "")")
                 }
             } catch is CancellationError {
                 throw CancellationError()
@@ -290,7 +298,7 @@ public struct FuelPlanner: Sendable {
                 var lastError: Error? = nil
                 for start in startCandidates {
                     do {
-                        if case .reached(let route) = try run(start: start, end: primaryEnd, shortest: true),
+                        if case .reached(let route) = try run(start: start, end: primaryEnd, shortest: true).0,
                            route.distanceMeters <= cap + 1 {
                             distanceFallback += 1
                             note("\(label):distanceFallback geo=\(Int(geo))m route=\(Int(route.distanceMeters))m")
@@ -451,7 +459,10 @@ public struct FuelPlanner: Sendable {
                 if state.point.distance(to: station.coordinate) > cap + 300 { continue }
                 for match in try matches(station) { goals.append((station, match)) }
             }
-            guard let first = goals.first else { return nil }
+            guard let first = goals.first else {
+                note("styleMulti:noGoals cap=\(Int(cap))m stations=\(stations.count)")
+                return nil
+            }
             var (options, policy) = styleOptions(from: state, cap: cap, shortest: false,
                                                  toward: request.end, roadRemaining: destCompass?.remaining)
             options.additionalEnds = goals.dropFirst().map(\.1)
@@ -474,8 +485,12 @@ public struct FuelPlanner: Sendable {
                 departureArrival = nil
             }
             options.arrival = departureArrival
+            var sawStopped = false, sawOverCap: Double? = nil, lastError: Error? = nil
+            var lastProfile: SearchProfile? = nil
             for start in startCandidates {
                 try budget.check()
+                let profile = SearchProfile()
+                options.profile = profile
                 do {
                     switch try PathSearch(pack: graph).boundedSearch(
                         start: start, end: first.1, policy: policy, access: access,
@@ -483,12 +498,33 @@ public struct FuelPlanner: Sendable {
                     case .reached(let route) where route.distanceMeters <= cap + 1:
                         let station = goals.first { $0.1.edge == route.end.edge && $0.1.alongMeters == route.end.alongMeters }?.0
                             ?? goals.first { $0.1.edge == route.end.edge }?.0 ?? first.0
+                        let dirt = knownDirt(route)
+                        let pct = route.distanceMeters > 0 ? Int((dirt / route.distanceMeters * 100).rounded()) : 0
+                        note("styleMulti:ok station=\(station.id) goals=\(goals.count) route=\(Int(route.distanceMeters))m dirt=\(pct)% \(profile.summary)")
                         return (station, route)
-                    case .reached, .stoppedAtBudget:
-                        continue
+                    case .reached(let route):
+                        sawOverCap = max(sawOverCap ?? 0, route.distanceMeters)
+                        lastProfile = profile
+                    case .stoppedAtBudget:
+                        sawStopped = true
+                        lastProfile = profile
                     }
                 } catch is CancellationError { throw CancellationError() }
-                catch { continue }
+                catch {
+                    lastError = error
+                    lastProfile = profile
+                }
+            }
+            if let over = sawOverCap {
+                note("styleMulti:overCap goals=\(goals.count) route=\(Int(over))m cap=\(Int(cap))m \(lastProfile?.summary ?? "")")
+            } else if sawStopped {
+                let reason = lastProfile?.limit
+                    ?? ((lastProfile?.meterRejects ?? 0) > 0 ? "meterCap" : "exhausted")
+                note("styleMulti:stoppedAtBudget reason=\(reason) goals=\(goals.count) cap=\(Int(cap))m \(lastProfile?.summary ?? "")")
+            } else if let lastError {
+                note("styleMulti:thrown goals=\(goals.count) cap=\(Int(cap))m err=\(lastError) \(lastProfile?.summary ?? "")")
+            } else {
+                note("styleMulti:nil goals=\(goals.count) cap=\(Int(cap))m \(lastProfile?.summary ?? "")")
             }
             return nil
         }
