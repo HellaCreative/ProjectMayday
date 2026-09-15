@@ -35,9 +35,9 @@ public struct SearchOptions: Sendable {
     /// When true, skip the geodesic progress-regression gate (fuel feelers and
     /// diagnostic shadows). Personality costs still apply.
     public var disableProgressRegression = false
-    /// Fuel hops: pavement's dirt-rate heuristic alone floods the tank before
-    /// reaching a paved pump. Blend a geodesic pull so the search still prefers
-    /// progress toward the hop end (station or destination).
+    /// Fuel hops: blend a dirt-scaled geodesic pull so pavement search still
+    /// prefers progress toward the hop end without drowning the dirt-rate cost
+    /// (see `heapCost` — pull is 2× dirtWeight × geoKm, not raw geoKm).
     public var fuelGoalPull = false
     /// Diagnostic totals shared by every search of one request. The search never reads it.
     public var counter: SearchCounter? = nil
@@ -239,24 +239,29 @@ public struct PathSearch: Sendable {
             return compass[node]
         }
         func heapCost(_ pathCost: Double, _ node: Int) -> Double {
-            let geoPull = point(node).distance(to: end.coordinate) / 1000
+            let geoKm = point(node).distance(to: end.coordinate) / 1000
             if options.objective == .distance {
-                return pathCost + geoPull
+                return pathCost + geoKm
             }
             let left = remaining(of: node)
+            // Pavement dirt-rate (~0.02/km). Fuel goal pull must stay on this
+            // scale — an unscaled geoKm term (~50× larger on long hops) stops
+            // the flood by cancelling dirt-seeking and yields near-pavement
+            // styleOk routes. 2× dirt-rate is enough progress bias to reach
+            // the pump without pricing out a dirt detour.
+            let dirtWeight = 0.02
+            let fuelPull = options.fuelGoalPull ? geoKm * dirtWeight * 2 : 0
             if left.isFinite {
                 if options.objective == .pavement {
-                    // Dirt-rate remaining is admissible but too weak for pump
-                    // hops that finish on pavement; fuelGoalPull adds progress.
-                    let road = left / 1000 * 0.02
-                    return pathCost + road + (options.fuelGoalPull ? geoPull : 0)
+                    let road = left / 1000 * dirtWeight
+                    return pathCost + road + fuelPull
                 }
                 if policy.style == .cleanest, options.objective == .profile {
                     // Collector 0.82 × variety floor 0.96.
                     return pathCost + left / 1000 * 0.69
                 }
             } else if options.fuelGoalPull, options.objective == .pavement {
-                return pathCost + geoPull
+                return pathCost + fuelPull
             }
             return pathCost
         }

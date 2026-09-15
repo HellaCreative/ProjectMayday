@@ -209,7 +209,8 @@ actor NativeRoutingSession {
                 outcome: "complete=\(plan.complete ? 1 : 0) stops=\(plan.stops.count) hops=\(plan.routes.count) " +
                     "hopMeters=[\(hopMeters.map(String.init).joined(separator: ","))] " +
                     "hopPops=[\(hopPops.map(String.init).joined(separator: ","))] " +
-                    "limit=\(plan.limit ?? "-")")
+                    "limit=\(plan.limit ?? "-") " +
+                    "style=\(plan.styleSummary ?? "-")")
             return plan
         } catch {
             log("pack fuel failed",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
