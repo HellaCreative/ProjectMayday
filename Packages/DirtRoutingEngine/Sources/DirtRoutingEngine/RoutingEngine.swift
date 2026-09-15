@@ -109,10 +109,10 @@ public struct RoutingEngine: Sendable {
         catch is CancellationError { throw CancellationError() }
         catch { compass = nil }
         request.options.counter?.recordStage("compass", since: compassStarted)
-        func run(_ options: SearchOptions) throws -> ComputedRoute {
+        func run(_ options: SearchOptions, policy: ProfilePolicy? = nil) throws -> ComputedRoute {
             var options = options
             options.roadRemaining = compass?.remaining
-            return try search.search(start: start,end: end,policy: request.profile,access: request.access,options: options,budget: budget)
+            return try search.search(start: start,end: end,policy: policy ?? request.profile,access: request.access,options: options,budget: budget)
         }
         if request.profile.style == .cleanest {
             var clean = request.options
@@ -123,21 +123,16 @@ public struct RoutingEngine: Sendable {
             clean.cityWall = false
             return try run(clean)
         }
-        var candidateLog: [String] = []
-        var direct: ComputedRoute?
-        var cap = request.options.maximumMeters
         if request.profile.style == .balanced {
-            var shortest = request.options
-            shortest.objective = .distance; shortest.corridorMeters = .infinity
-            direct = try run(shortest)
-            cap = min(cap,(direct?.distanceMeters ?? .infinity)+40_000)
+            return try balanced(request, run: run, budget: budget)
         }
-        let isDirt = request.profile.style == .dirt
+        var candidateLog: [String] = []
+        var cap = request.options.maximumMeters
         let base = request.profile.corridorMeters(straightLine: request.start.distance(to: request.end))
         // Dirt scores 120 km then 60 km. Wider bands are connectivity only:
         // stop at the first one that connects. Repeating 180/240/∞ on the owner
         // replay produced the identical 63.3% ride and burned the phone's 60 s.
-        let multipliers: [Double] = isDirt ? [2,1,3,4,.infinity] : request.start.distance(to: request.end) > 500_000 ? [2,3,4,6,8,.infinity] : [1,2,3,4,6,8,.infinity]
+        let multipliers: [Double] = [2,1,3,4,.infinity]
         var candidates: [Candidate] = []
         var incomplete: RoutingFailure?
         var comparisonFound = false
@@ -145,11 +140,11 @@ public struct RoutingEngine: Sendable {
         var repeatable: (width: Double, route: ComputedRoute, quality: RouteQuality)?
         for multiplier in multipliers {
             let width = base*multiplier
-            let comparison = !isDirt || multiplier <= 2
+            let comparison = multiplier <= 2
             if failedWidth.isFinite, width < failedWidth { continue }
-            if isDirt, !comparison, !candidates.isEmpty { break }
+            if !comparison, !candidates.isEmpty { break }
             var options = request.options
-            options.objective = isDirt ? .pavement : .balancedResource
+            options.objective = .pavement
             options.maximumMeters = cap
             options.corridorMeters = width
             let boundary = SearchBoundary()
@@ -166,7 +161,7 @@ public struct RoutingEngine: Sendable {
                     let failureBefore = incomplete
                     route = try run(options)
                     quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
-                    if isDirt && route.limit == nil && quality.knownDirtPercent < 70 {
+                    if route.limit == nil && quality.knownDirtPercent < 70 {
                         for _ in 0..<3 {
                             let penalties = RouteQuality.shortDirtExcursions(route.segments)
                             if penalties.isSubset(of: options.penalizedDirtEdges) { break }
@@ -188,10 +183,9 @@ public struct RoutingEngine: Sendable {
                 if ProcessInfo.processInfo.environment["DIRT_ROUTE_CANDIDATES"] == "1" {
                     FileHandle.standardError.write(Data("candidate width=\(options.corridorMeters) dirt=\(quality.knownDirtPercent) m=\(route.distanceMeters) pops=\(route.poppedLabels) urban=\(quality.urbanMeters) back=\(quality.backwardMeters)\n".utf8))
                 }
-                if isDirt && quality.knownDirtPercent >= 70 { break }
-                if isDirt && !comparison { break }
-                if isDirt, !candidates.isEmpty, budget.remainingSeconds < 8 { break }
-                if !isDirt && (45...55).contains(quality.knownDirtPercent) && quality.urbanMeters <= 100 { return route }
+                if quality.knownDirtPercent >= 70 { break }
+                if !comparison { break }
+                if !candidates.isEmpty, budget.remainingSeconds < 8 { break }
             } catch RoutingFailure.noPath {
                 if width.isFinite { failedWidth = min(failedWidth,width) }
                 // No road was turned away at this width's limits, so every wider corridor
@@ -201,7 +195,7 @@ public struct RoutingEngine: Sendable {
             }
             catch let failure as RoutingFailure { incomplete = failure; break }
         }
-        if isDirt, comparisonFound, incomplete == nil, budget.remainingSeconds >= 5,
+        if comparisonFound, incomplete == nil, budget.remainingSeconds >= 5,
            let best = candidates.map(\.quality.knownDirtPercent).max(), best < 70, best >= 40 {
             var recovery = request.options
             recovery.objective = .balancedResource; recovery.corridorMeters = base
@@ -230,27 +224,71 @@ public struct RoutingEngine: Sendable {
         }
         let summary = candidateLog.isEmpty ? nil : candidateLog.joined(separator: ",")
         let limitNote = incomplete.map { "comparison incomplete: \($0)" }
-        if isDirt, let selected = chooseDirt(candidates) {
+        if let selected = chooseDirt(candidates) {
             var result = selected.route.reportingLimit(limitNote)
-            result.searchSummary = summary
-            return result
-        }
-        if let selected = candidates.min(by: {
-            if abs($0.quality.urbanMeters-$1.quality.urbanMeters) > 100 { return $0.quality.urbanMeters < $1.quality.urbanMeters }
-            let a = abs($0.quality.knownDirtPercent-50), b = abs($1.quality.knownDirtPercent-50)
-            return a == b ? $0.route.distanceMeters < $1.route.distanceMeters : a < b
-        }) {
-            var result = selected.route.reportingLimit(limitNote)
-            result.searchSummary = summary
-            return result
-        }
-        if let direct, direct.distanceMeters <= request.options.maximumMeters+0.01 {
-            var result = direct.reportingLimit(limitNote ?? "no balanced candidate; shortest legal route")
             result.searchSummary = summary
             return result
         }
         if let incomplete { throw incomplete }
         throw RoutingFailure.noPath
+    }
+    /// Bounded 50/50 Balanced: shortest path plus at most two profile searches
+    /// whose dirt weight is steered toward 45–55%. Stops at B; no resource flood.
+    private func balanced(_ request: RoutingRequest,
+                          run: (SearchOptions, ProfilePolicy?) throws -> ComputedRoute,
+                          budget: ComputationBudget) throws -> ComputedRoute {
+        var shortest = request.options
+        shortest.objective = .distance
+        shortest.corridorMeters = .infinity
+        let direct = try run(shortest, nil)
+        let boxes = UrbanCores.boxes(in: pack)
+        func quality(_ route: ComputedRoute) -> RouteQuality {
+            RouteQuality(route: route, urbanBoxes: boxes)
+        }
+        func note(_ mix: String, _ route: ComputedRoute, _ quality: RouteQuality) -> String {
+            "\(mix)/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p"
+        }
+        var candidates: [Candidate] = [.init(route: direct, width: .infinity, quality: quality(direct))]
+        var log = [note("shortest", direct, candidates[0].quality)]
+        func profile(_ mix: Double) throws -> Candidate {
+            try budget.check()
+            var options = request.options
+            options.objective = .profile
+            options.maximumMeters = .infinity
+            options.corridorMeters = .infinity
+            var policy = request.profile
+            policy.balancedDirtPreference = mix
+            let route = try run(options, policy)
+            return .init(route: route, width: .infinity, quality: quality(route))
+        }
+        func inBand(_ quality: RouteQuality) -> Bool {
+            (45...55).contains(quality.knownDirtPercent) && quality.urbanMeters <= 100
+        }
+        if !inBand(candidates[0].quality) {
+            let firstMix = candidates[0].quality.knownDirtPercent < 45 ? 1.0 : 0.0
+            do {
+                let first = try profile(firstMix)
+                candidates.append(first)
+                log.append(note(firstMix == 1 ? "mix1" : "mix0", first.route, first.quality))
+                if !inBand(first.quality) {
+                    do {
+                        let mid = try profile(0.5)
+                        candidates.append(mid)
+                        log.append(note("mix0.5", mid.route, mid.quality))
+                    } catch RoutingFailure.noPath { }
+                }
+            } catch RoutingFailure.noPath { }
+        }
+        let band = candidates.filter { inBand($0.quality) }
+        let pool = band.isEmpty ? candidates : band
+        let selected = pool.min { a, b in
+            let da = abs(a.quality.knownDirtPercent - 50), db = abs(b.quality.knownDirtPercent - 50)
+            if abs(da - db) > 2 { return da < db }
+            return a.route.distanceMeters < b.route.distanceMeters
+        } ?? candidates[0]
+        var result = selected.route
+        result.searchSummary = log.joined(separator: ",")
+        return result
     }
     private func chooseDirt(_ candidates: [Candidate]) -> Candidate? {
         let coherent = candidates.filter { $0.quality.backwardMeters <= max(5000,$0.quality.totalMeters*0.08) }

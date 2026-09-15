@@ -17,7 +17,8 @@ struct RoutingEngineTests {
     @Test func balancedSummaryNamesTheUnboundedCorridorWithoutTrapping() throws {
         let route = try RoutingEngine(pack: pavedLine()).route(request,budget: .init(seconds: 20))
         #expect(route.distanceMeters > 0)
-        #expect(route.searchSummary?.contains("∞") == true)
+        #expect(route.searchSummary?.contains("shortest") == true)
+        #expect(route.searchSummary?.contains("∞") != true)
     }
 
     @Test func counterIncludesEverySearchNotJustTheSelectedRoute() throws {
@@ -25,12 +26,22 @@ struct RoutingEngineTests {
         let counter = SearchCounter()
         counted.options.counter = counter
         let route = try RoutingEngine(pack: pavedLine()).route(counted,budget: .init(seconds: 20))
-        // A shortest-distance search and the first corridor run; no road meets that
-        // corridor's limit, so the six wider corridors reuse its result.
-        #expect(counter.searches == 2)
-        #expect(route.searchSummary?.split(separator: ",").count == 7)
-        #expect(counter.pops > route.poppedLabels)
+        // Shortest path plus a 50/50 profile search; an all-paved line then tries
+        // the dirt-preferring correction. None of those flood past B.
+        #expect(counter.searches == 3)
+        #expect(route.searchSummary?.split(separator: ",").count == 3)
+        #expect(counter.pops >= route.poppedLabels)
         #expect(counter.stageSummary.contains("compass"))
+    }
+
+    @Test func balancedStopsAtTheDestinationInsteadOfFloodingForFiftyPercent() throws {
+        var counted = request
+        let counter = SearchCounter()
+        counted.options.counter = counter
+        let route = try RoutingEngine(pack: pavedLine()).route(counted,budget: .init(seconds: 20))
+        #expect(route.distanceMeters > 0)
+        #expect(counter.peakLabels < 1_000)
+        #expect(counter.pops < 1_000)
     }
 
     @Test func destinationDirectionDoesNotForceAWrongWayArrival() throws {

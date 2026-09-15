@@ -12,6 +12,9 @@ public struct ProfilePolicy: Sendable {
     /// Sweep 10/4/2/1 on Dirt matrix routes; 4 keeps detours cheaper than paved
     /// (38/km away vs 150/km paved) without the loop-prone ×1 floor.
     public var dirtPavementAwayAtFullWander = 4.0
+    /// Balanced dirt mix in [0, 1]. 0 prefers paved, 1 prefers dirt, 0.5 is the
+    /// default 50/50 starting weight.
+    public var balancedDirtPreference = 0.5
     public init(style: RidingStyle) { self.style = style }
     public var appetite: Double { min(1, max(0, wander.isFinite ? wander : 1)) }
     public static func family(_ leaf: String) -> Surface {
@@ -62,8 +65,9 @@ public struct ProfilePolicy: Sendable {
         case .dirt:
             extra = kmAway * 9.5 + (dFrom < 2500 ? kmAway * (2 + pow(1 - dFrom / 2500, 2) * 6) : 0)
         case .balanced:
+            let mix = min(1, max(0, balancedDirtPreference.isFinite ? balancedDirtPreference : 0.5))
             let horizon = max(4000, (startRemaining.isFinite ? startRemaining : 0) * 0.2)
-            extra = kmAway * 180 + (dFrom < horizon ? kmAway * (20 + pow(1 - dFrom / horizon, 2) * 60) : 0)
+            extra = kmAway * (8 + (1 - mix) * 172) + (dFrom < horizon ? kmAway * (20 + pow(1 - dFrom / horizon, 2) * 60) * (1 - mix) : 0)
         case .cleanest:
             extra = kmAway * (dFrom < max(2500, (startRemaining.isFinite ? startRemaining : 0) * 0.08) ? 2.5 : 2)
         }
@@ -111,7 +115,16 @@ public struct ProfilePolicy: Sendable {
                 cost *= 1 + 2.4 * min(1,(dTo-2500)/8000)
             }
         } else {
-            let weights = style == .dirt ? [16.0,0.1624,0.0456,0.0168,0.154] : [1.42,0.98,0.92,0.88,0.96]
+            let mix = min(1, max(0, balancedDirtPreference.isFinite ? balancedDirtPreference : 0.5))
+            let dirtWeights = [16.0,0.1624,0.0456,0.0168,0.154]
+            let avoid = [1.05, 1.25, 1.30, 1.25, 1.10]
+            let mid = [1.42, 0.98, 0.92, 0.88, 0.96]
+            let prefer = [8.0, 0.08, 0.05, 0.05, 0.70]
+            func lerp(_ a: [Double], _ b: [Double], _ t: Double) -> [Double] {
+                zip(a, b).map { $0 + ($1 - $0) * t }
+            }
+            let balancedWeights = mix <= 0.5 ? lerp(avoid, mid, mix * 2) : lerp(mid, prefer, (mix - 0.5) * 2)
+            let weights = style == .dirt ? dirtWeights : balancedWeights
             let dirtRoads = ["freeway":14.0,"arterial":9.5,"collector":2.4,"ramp":12,"local":0.78,
                              "service":1.4,"resource":0.4,"recreation":0.38,"track":0.3,"double_track":0.3,"unknown":0.95]
             let balancedRoads = ["freeway":3.2,"arterial":2.4,"collector":1.08,"ramp":2.8,"local":1,
