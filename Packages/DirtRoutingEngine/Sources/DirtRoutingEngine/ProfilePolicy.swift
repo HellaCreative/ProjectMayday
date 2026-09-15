@@ -8,6 +8,10 @@ public struct ProfilePolicy: Sendable {
     /// wide corridor, soft waypoint pull, substantial coherent dirt detours.
     /// Zero tightens the pull without converting Dirt into Balanced or Clean.
     public var wander = 1.0
+    /// Pavement-mode away multiplier at full wander. Zero wander restores the JS ×10.
+    /// Sweep 10/4/2/1 on Dirt matrix routes; 4 keeps detours cheaper than paved
+    /// (38/km away vs 150/km paved) without the loop-prone ×1 floor.
+    public var dirtPavementAwayAtFullWander = 4.0
     public init(style: RidingStyle) { self.style = style }
     public var appetite: Double { min(1, max(0, wander.isFinite ? wander : 1)) }
     public static func family(_ leaf: String) -> Surface {
@@ -63,7 +67,9 @@ public struct ProfilePolicy: Sendable {
         case .cleanest:
             extra = kmAway * (dFrom < max(2500, (startRemaining.isFinite ? startRemaining : 0) * 0.08) ? 2.5 : 2)
         }
-        return objective == .pavement && style == .dirt ? extra * 10 : extra
+        guard objective == .pavement && style == .dirt else { return extra }
+        let full = max(1, dirtPavementAwayAtFullWander)
+        return extra * (full + (1 - appetite) * (10 - full))
     }
     func cleanEligible(pack: any RoadGraph, edge: Int, endpoint: Bool, pavedOnly: Bool) -> Bool {
         if pack.structure(edge) == "ferry" { return true }

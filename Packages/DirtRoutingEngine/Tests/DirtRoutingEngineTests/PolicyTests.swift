@@ -129,16 +129,21 @@ struct PolicyTests {
         #expect(ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: 60_000, hasRoadCompass: true) == 15_000)
     }
 
-    @Test func dirtPavementAwayUsesJavaScriptRoadCompassScale() {
-        let policy = ProfilePolicy(style: .dirt)
-        let mid = policy.approachAway(fromRemaining: 80_000, toRemaining: 81_000, startRemaining: 200_000, objective: .pavement)
-        #expect(abs(mid - 95) < 0.01)
+    @Test func dirtPavementAwayScalesWithWander() {
+        var policy = ProfilePolicy(style: .dirt)
+        policy.wander = 0
+        let tight = policy.approachAway(fromRemaining: 80_000, toRemaining: 81_000, startRemaining: 200_000, objective: .pavement)
+        #expect(abs(tight - 95) < 0.01)
+        policy.wander = 1
+        let full = policy.approachAway(fromRemaining: 80_000, toRemaining: 81_000, startRemaining: 200_000, objective: .pavement)
+        #expect(abs(full - 9.5 * policy.dirtPavementAwayAtFullWander) < 0.01)
+        #expect(full < tight)
         let geodesic = policy.waypointPull(from: .init(longitude: 0, latitude: 0),
                                            to: .init(longitude: -0.01, latitude: 0),
                                            start: .init(longitude: 0, latitude: 0),
                                            end: .init(longitude: 0.2, latitude: 0),
                                            meters: 1000, objective: .pavement)
-        #expect(mid > geodesic)
+        #expect(tight > geodesic)
     }
 
     @Test func roadCompassIsExactDistanceOnALine() throws {

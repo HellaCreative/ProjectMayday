@@ -10,6 +10,7 @@ import DirtRoutingEngine
 //   DIRT_FUEL_MIN_STOPS=<n>, DIRT_FUEL_MAX_STOPS=<n>, DIRT_FUEL_ALLOW_PARTIAL=1,
 //   DIRT_FUEL_ESCAPE=0             fuel window options (escape defaults to on)
 //   DIRT_PROBE_COMPACT=1           omit geometry and edge IDs; their hash is always printed
+//   DIRT_DIRT_PAVEMENT_AWAY=<n>    Dirt pavement away multiplier at full wander (10/4/2/1)
 let arguments = Array(CommandLine.arguments.dropFirst())
 let environment = ProcessInfo.processInfo.environment
 guard (8...12).contains(arguments.count),
@@ -82,6 +83,9 @@ do {
     let allowUnknown = environment["DIRT_ALLOW_UNKNOWN"] == "1"
     var request = RoutingRequest(start: .init(longitude: lonA,latitude: latA),end: .init(longitude: lonB,latitude: latB),
                                  style: style,allowUnknown: allowUnknown,seed: seed)
+    if let scale = environment["DIRT_DIRT_PAVEMENT_AWAY"].flatMap(Double.init), scale.isFinite, scale > 0 {
+        request.profile.dirtPavementAwayAtFullWander = scale
+    }
     request.mapZoom = zoom
     request.options.counter = counter
     request.options.arrivalEdgeID = environment["DIRT_ARRIVAL_EDGE"]
@@ -119,7 +123,9 @@ do {
             "matchedEnd":[result.end.coordinate.longitude,result.end.coordinate.latitude],
             "matchedStartEdge":indexed.edgeID(result.start.edge),"matchedEndEdge":indexed.edgeID(result.end.edge),
             "distanceMeters":result.distanceMeters,"knownDirtPercent":quality.knownDirtPercent,
-            "unknownSurfacePercent":quality.unknownPercent,"edgeIDsSHA256":sha256(edgeIDs),
+            "unknownSurfacePercent":quality.unknownPercent,
+            "backwardMeters":quality.backwardMeters,"lateralMeters":quality.lateralMeters,
+            "longestPavedRunMeters":quality.longestPavedRunMeters,"edgeIDsSHA256":sha256(edgeIDs),
             "searchSummary":result.searchSummary as Any? ?? NSNull(),
             "pops":result.poppedLabels,"limit":result.limit as Any? ?? NSNull()]) { $1 }
         if !compact {
