@@ -97,6 +97,23 @@ struct FuelPlannerTests {
         #expect(plan.complete)
         #expect(plan.stops.first?.id == pumps[0].id)
     }
+    @Test func laterStopsPreferUsefulOnwardProgressOverANearbyCluster() throws {
+        var graph = Road()
+        graph.nodes = (0...10).map { .init(longitude: Double($0)*0.1,latitude: 0) }
+        let cluster = [0.05,0.051,0.052].map {
+            FuelStation(id: "cluster-\($0)",coordinate: .init(longitude: $0,latitude: 0))
+        }
+        let onward = FuelStation(id: "onward",coordinate: .init(longitude: 0.55,latitude: 0))
+        var request = RoutingRequest(start: .init(longitude: 0.01,latitude: 0),
+                                     end: .init(longitude: 0.99,latitude: 0),style: .cleanest)
+        request.matchRadiusMeters = 1_000
+        let plan = try FuelPlanner(graph: graph,stations: cluster+[onward]).plan(request,
+            requirements: .init(usableRangeMeters: 80_000,firstLegMaxMeters: 80_000))
+        #expect(plan.complete)
+        #expect(plan.stops.first?.id == "cluster-0.05")
+        #expect(plan.stops.contains { $0.id == "onward" })
+        #expect(plan.stops.filter { $0.id.hasPrefix("cluster-") }.count == 1)
+    }
     @Test func preferredStationsAreTriedBeforeOrdinaryCandidates() throws {
         var fuel = FuelRequirements(usableRangeMeters: 80_000,firstLegMaxMeters: 80_000)
         fuel.preferredStationIDs = [pumps[1].id]
