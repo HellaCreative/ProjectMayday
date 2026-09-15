@@ -67,6 +67,52 @@ public struct ComputationBudget: Sendable {
     }
 }
 
+/// Totals across every search one request runs, including failed and discarded
+/// attempts, so diagnostics never divide elapsed time by the selected route alone.
+/// Recording only: nothing here influences a routing decision.
+public final class SearchCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var searchCount = 0
+    private var popCount = 0
+    private var labelPeak = 0
+    private var searchNanoseconds: UInt64 = 0
+    private var stages: [(name: String, nanoseconds: UInt64)] = []
+    public init() {}
+
+    func recordSearch(pops: Int, labels: Int, since start: ContinuousClock.Instant) {
+        let elapsed = Self.nanoseconds(since: start)
+        locked {
+            searchCount += 1
+            popCount += pops
+            labelPeak = max(labelPeak, labels)
+            searchNanoseconds += elapsed
+        }
+    }
+    func recordStage(_ name: String, since start: ContinuousClock.Instant) {
+        let elapsed = Self.nanoseconds(since: start)
+        locked {
+            if let index = stages.firstIndex(where: { $0.name == name }) { stages[index].nanoseconds += elapsed }
+            else { stages.append((name, elapsed)) }
+        }
+    }
+    public var searches: Int { locked { searchCount } }
+    public var pops: Int { locked { popCount } }
+    public var peakLabels: Int { locked { labelPeak } }
+    public var searchMilliseconds: Double { locked { Double(searchNanoseconds) / 1e6 } }
+    /// Stage totals in first-seen order, in whole milliseconds: "match:12,compass:85".
+    public var stageSummary: String {
+        locked { stages.map { "\($0.name):\(Int((Double($0.nanoseconds) / 1e6).rounded()))" }.joined(separator: ",") }
+    }
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock(); defer { lock.unlock() }
+        return body()
+    }
+    private static func nanoseconds(since start: ContinuousClock.Instant) -> UInt64 {
+        let parts = start.duration(to: .now).components
+        return UInt64(max(0, parts.seconds)) * 1_000_000_000 + UInt64(max(0, parts.attoseconds / 1_000_000_000))
+    }
+}
+
 public struct Traversal: Codable, Equatable, Sendable {
     public let edge: Int
     public let forward: Bool

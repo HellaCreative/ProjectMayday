@@ -32,6 +32,8 @@ public struct SearchOptions: Sendable {
     /// Remaining road meters to B from each graph node. When present, JS
     /// disables the hard progress gate and taxes walking away from B instead.
     public var roadRemaining: [Double]? = nil
+    /// Diagnostic totals shared by every search of one request. The search never reads it.
+    public var counter: SearchCounter? = nil
     public init() {}
 }
 
@@ -111,6 +113,7 @@ public struct PathSearch: Sendable {
                        access: AccessPolicy, options: SearchOptions = .init(),
                        budget: ComputationBudget = .init()) throws -> ComputedRoute {
         try budget.check()
+        let searchStarted = ContinuousClock.now
         guard start.edge >= 0, end.edge >= 0, start.edge < pack.edgeCount, end.edge < pack.edgeCount,
               start.coordinate.isValid, end.coordinate.isValid,
               options.maximumMeters >= 0, options.corridorMeters >= 0 else {
@@ -203,6 +206,7 @@ public struct PathSearch: Sendable {
         var heap = BinaryHeap<Entry> { $0.cost == $1.cost ? $0.label < $1.label : $0.cost < $1.cost }
         heap.push(.init(label: 0,cost: heapCost(0, startNode)))
         var goals: [Int] = [], pops = 0, limit: String?
+        defer { options.counter?.recordSearch(pops: pops, labels: labels.count, since: searchStarted) }
         let startHighway = start.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(start.edge)))
         let endHighway = end.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(end.edge)))
         let resource = options.objective == .balancedResource

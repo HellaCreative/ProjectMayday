@@ -140,11 +140,13 @@ public struct FuelPlanner: Sendable {
         // preview. Tiny-label tests still keep that foundation.
         let skipPreview = budget.maximumLabels > 10_000 && budget.remainingSeconds <= 22
         if !skipPreview {
+            let foundationStarted = ContinuousClock.now
             do {
                 foundation = try engine.route(request,budget: budget.limited(to: max(1,min(6,budget.remainingSeconds*0.15))))
             } catch is CancellationError { throw CancellationError() }
             catch RoutingFailure.noPath { }
             catch RoutingFailure.resourceLimit { }
+            request.options.counter?.recordStage("fuel-foundation", since: foundationStarted)
         }
         func destLikelyReachable(from state: State, cap: Double) -> Bool {
             let straight = state.point.distance(to: request.end)

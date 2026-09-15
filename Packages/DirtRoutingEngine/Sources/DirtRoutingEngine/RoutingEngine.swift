@@ -29,6 +29,11 @@ public struct RoutingEngine: Sendable {
         let width: Double
         let quality: RouteQuality
     }
+    /// Corridor width for diagnostics. The widest pass is unbounded, and converting
+    /// infinity to an integer traps.
+    static func widthLabel(_ meters: Double) -> String {
+        meters.isFinite ? "\(Int(meters))m" : "∞"
+    }
     public func route(_ request: RoutingRequest,budget: ComputationBudget = .init(seconds: 45)) throws -> ComputedRoute {
         try budget.check()
         let matcher = RoadMatcher(pack: pack)
@@ -37,8 +42,10 @@ public struct RoutingEngine: Sendable {
         // faces the pin. Using the same bearing for both ends selected the wrong
         // carriageway on the short NS comparison.
         let intent = request.start.bearing(to: request.end)*180 / .pi
+        let matchStarted = ContinuousClock.now
         let starts = try matcher.matches(at: request.start,radius: radius,start: true,policy: request.access,intent: intent,budget: budget)
         let ends = try matcher.matches(at: request.end,radius: radius,start: false,policy: request.access,intent: intent+180,budget: budget)
+        request.options.counter?.recordStage("match", since: matchStarted)
         guard !starts.isEmpty, !ends.isEmpty else { throw RoutingFailure.noMatch }
         // JS `selectConnectedSnapPair`: score stays on each directed candidate;
         // connectivity is a later filter, not a rescore. Prefer the same weak
@@ -69,6 +76,7 @@ public struct RoutingEngine: Sendable {
             request.options.cityWall = false
         }
         let search = PathSearch(pack: pack)
+        let compassStarted = ContinuousClock.now
         let compass: RoadCompass?
         do {
             let key = "\(end.edge):\(end.alongMeters):\(request.access.allowUnknown)"
@@ -82,6 +90,7 @@ public struct RoutingEngine: Sendable {
         }
         catch is CancellationError { throw CancellationError() }
         catch { compass = nil }
+        request.options.counter?.recordStage("compass", since: compassStarted)
         func run(_ options: SearchOptions) throws -> ComputedRoute {
             var options = options
             options.roadRemaining = compass?.remaining
@@ -141,7 +150,7 @@ public struct RoutingEngine: Sendable {
                 }
                 candidates.append(.init(route: route,width: options.corridorMeters,quality: quality))
                 if comparison { comparisonFound = true }
-                candidateLog.append("\(Int(options.corridorMeters))m/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p\(route.limit.map { "/\($0)" } ?? "")")
+                candidateLog.append("\(Self.widthLabel(options.corridorMeters))/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p\(route.limit.map { "/\($0)" } ?? "")")
                 if ProcessInfo.processInfo.environment["DIRT_ROUTE_CANDIDATES"] == "1" {
                     FileHandle.standardError.write(Data("candidate width=\(options.corridorMeters) dirt=\(quality.knownDirtPercent) m=\(route.distanceMeters) pops=\(route.poppedLabels) urban=\(quality.urbanMeters) back=\(quality.backwardMeters)\n".utf8))
                 }
@@ -169,10 +178,12 @@ public struct RoutingEngine: Sendable {
                 return try search.search(start: start,end: end,policy: request.profile,access: request.access,options: options,budget: recoveryBudget)
             }
             do {
+                let recoveryStarted = ContinuousClock.now
+                defer { request.options.counter?.recordStage("recovery", since: recoveryStarted) }
                 let route = try runRecovery(recovery)
                 let quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
                 candidates.append(.init(route: route,width: base,quality: quality))
-                candidateLog.append("R:\(Int(base))m/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p")
+                candidateLog.append("R:\(Self.widthLabel(base))/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p")
                 if ProcessInfo.processInfo.environment["DIRT_ROUTE_CANDIDATES"] == "1" {
                     FileHandle.standardError.write(Data("candidate recovery width=\(base) dirt=\(quality.knownDirtPercent) m=\(route.distanceMeters) pops=\(route.poppedLabels) urban=\(quality.urbanMeters) back=\(quality.backwardMeters)\n".utf8))
                 }
