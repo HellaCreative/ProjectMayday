@@ -123,9 +123,10 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 - Rider points and generated fuel stops have distinct stable identities. A
   rider-selected station remains a rider point; generated stops remain F1, F2,
   and so on. Internal regional boundaries are not extra rider waypoints.
-- Generated fuel points remain bound to mapped stations rather than freely
-  draggable locations. A replacement must verify legal incoming and onward
-  routing/fuel, retain unaffected earlier stages, and reject stale results.
+- Fuel stops and distance breaks are movable like rider waypoints (see the owner
+  contract in §5, rule 14). A dropped fuel stop snaps to a mapped pump when one
+  is under it. A replacement must verify legal incoming and onward routing/fuel,
+  retain unaffected earlier stages, and reject stale results.
 - A selected rider waypoint highlights and can be dragged. After movement and
   release, ask the rider to confirm placement. Yes initiates rebuilding; No
   permits further refinement. Inserting a draft into a leg alone does not show
@@ -291,30 +292,97 @@ Source provenance and required licensing/attribution survive this consolidation.
 
 ## 5. Fuel belongs to the whole journey
 
-With automatic fuel enabled, first approach the closest legally reachable mapped
-station, even when it is nearby. Being at a mapped station can satisfy that
-approach. This is a separate distance/reachability phase; recreational routing
-begins at that planned refill. Preserve the legal arrival orientation while
-resetting recreational history appropriately. Do not assume an arbitrary origin
-has a full tank. A planned approach is not knowledge of actual starting fuel.
+### Owner contract: legs, fuel, and waypoints (15 Sep)
+
+This contract governs routing and fuel. Where any other sentence in this
+document or any code comment disagrees, this contract wins.
+
+**The ride**
+
+1. The ride is the product. Every leg between two waypoints is the best, most
+   interesting ride in that leg's style. It is never the simplest or shortest
+   route.
+2. Every leg is selectable, whatever its waypoints are (rider, fuel, or distance
+   break). Each leg has its own style and is held to that style's target:
+   - Dirt: strive for 100% dirt.
+   - Balanced: strive for 50% dirt and 50% pavement on that leg.
+   - Clean: strive for 100% pavement on back roads, no highways.
+   A route may mix styles leg by leg (for example leg 1 Dirt, leg 2 Balanced).
+3. Leg shape. S-curves and wide swings are good. No loops. No out-and-back or W
+   shape into or out of any waypoint on the same road. Re-ride a road only when
+   absolutely necessary.
+4. Dirt means real riding. Dirt runs under 1 km do not count and are not worth a
+   detour.
+5. Direction of travel follows the roads, not the straight line. "Ahead" means
+   closer to the next waypoint by road, so a lake or bay is ridden around, not
+   treated as a wall.
+6. Wander sets how far the ride may roam: tight and direct at low wander, big
+   S-curves and wide swings at high wander. It limits sideways and backward
+   swing measured against road progress, not a straight band between waypoints.
+   Wander never decides whether fuel is found.
+
+**Fuel**
+
+7. Fuel is part of the ride. Every fuel stop is a waypoint. There is no separate
+   fuel plan with a route drawn afterwards.
+8. First pump. Never assume a full tank. From the rider's start, go to the
+   nearest reachable mapped pump by the most direct legal route, on any surface,
+   even when that pump is behind the direction of travel. That pump is the first
+   waypoint, and the ride begins there with the full usable range (tank minus
+   reserve). This is the only leg where the ride does not matter.
+9. Sweep. From each refill, one ride search in the leg's style moves outward
+   ahead, no further than the usable range (the fog of war). It remembers each
+   pump it reaches and the ridden distance to it. Range shapes the ride; fuel is
+   chosen from where the rider would actually be on that ride.
+10. Pump choice. Near the end of the range, consider the pumps the sweep reached
+    in a fan of about 45 to 60 degrees around the road direction of travel.
+    Choose the one whose leg is the best ride in the leg's style and fits the
+    tank, far enough along that stops stay few. Pumps are never ranked by
+    closeness to the final destination, and shortest distance never picks a pump
+    after the first one.
+11. Empty fan. Widen the fan step by step. If no pump is reachable within range
+    by a leg in the leg's style, show the fuel range gap card. Never substitute a
+    shortest route or a route that ignores fuel.
+12. Destination. The next rider waypoint (or final destination) sets direction.
+    It becomes the leg's end only when a leg in that style reaches it inside the
+    range.
+13. Fuel planning off. The same sweep with no pumps: place a distance-break
+    waypoint where the ride reaches 350 to 400 km, then sweep again from there.
+
+**Waypoints and experience**
+
+14. Waypoint kinds are rider, fuelStop, and distanceBreak. All three are movable
+    with the same drag and confirm. Moving one rebuilds only the legs on either
+    side. A dropped fuel stop snaps to a mapped pump when one is under it. All
+    three are saved and restored with the route.
+15. Legs appear one after another as they are built. A long trip may take longer
+    to finish; the rider watches it grow.
+
+**Tests before any phone build of a routing or fuel change**
+
+Routes: Porters Lake to Cape Breton, to Yarmouth, and to north New Brunswick,
+each in Dirt, Balanced, and Clean, with fuel on. Report per leg: waypoint kinds,
+km, dirt %, and that style's target (100 / 50 / 0), plus stops and total
+seconds. A leg after the first pump built as a shortest route fails.
+
+Being at a mapped station can satisfy the first-pump approach. Preserve the
+legal arrival orientation while resetting recreational history appropriately. A
+planned approach is not knowledge of actual starting fuel.
 
 After a planned refill, use the configured range minus reserve. Count actual
 selected road distance, including approaches, connectors, and seam tails.
 Ordinary rider points and regional boundaries do not reset the tank. A proposed
 stop or passing a pump does not prove a physical refill or current availability.
 
-Select reachable mapped stations that support useful onward progress and the
-selected riding style. Among the reachable legal stations, prefer the one whose
-approach best expresses the selected style — the pump is a pivot of the ride, a
-reason to ride out to it, not the nearest convenient interruption of it —
-provided it still supports useful onward progress. Earlier refuelling is valid
-where needed. Do not impose
-historical 75-percent barriers, fixed candidate counts, or a global minimum-stop
-objective that overrides the ride. Do not exclude a necessary refill by an
-absolute minimum stage distance or a fixed exclusion zone around the destination.
-Avoid needless repetitive stops and preserve
-already proved useful stages. Reconsider a prior choice when its downstream
-region or station exit makes the rest infeasible.
+Pumps after the first are chosen by the sweep and fan in the owner contract
+(rules 9 to 11): the pump is a pivot of the ride, a reason to ride out to it, not
+the nearest convenient interruption of it. Earlier refuelling is valid where
+needed. Do not impose historical 75-percent barriers, shortest-distance slack
+factors, or a global minimum-stop objective that overrides the ride. Do not
+exclude a necessary refill by an absolute minimum stage distance or a fixed
+exclusion zone around the destination. Avoid needless repetitive stops and
+preserve already proved useful stages. Reconsider a prior choice when its
+downstream region or station exit makes the rest infeasible.
 
 Before declaring fuel coverage, verify the actual connected chain. Include legal
 station approach/exit, reserve across the full stage, and the final destination.
@@ -722,23 +790,16 @@ From Here is the two-`.rider` case of the same list (origin, destination).
 
 #### Leg budget and prepare (Stage 1)
 
+- Superseded by the §5 owner contract (15 Sep). First pump: nearest reachable
+  pump by the most direct legal route (rule 8). After that: the sweep and fan
+  choose pumps (rules 9 to 11); shortest distance and `nearestReachable` never
+  pick a pump after the first one; no `planTank` slack factor. Fuel off:
+  distance breaks at 350 to 400 km (rule 13).
 - Fuel on: `legBudgetMeters = FuelRangePrefs.snapshot.usableMeters` after a
   refill; at trip start do **not** invent a remaining-fuel UX (see Backlog).
-  Until that exists, leg 0 uses the same bounded search toward the nearest
-  reasonable on-heading pump with `legBudgetMeters = usableMeters` (today’s
-  first-leg cap), then refills and continues.
-- Fuel off: `nominalLegBudgetMeters ≈ 325_000` (tune in one place). Same
-  cutoff, candidate is the search frontier at the cutoff → `.distanceBreak`.
 - Hard cutoff: do not expand a `PathSearch` label whose accumulated meters
-  exceed `legBudgetMeters`. Candidate is taken from that frontier; do not
-  rank a pump set. Mid-chain must not retry a progressing pump list with
-  separate style hops (phone Stage 1: ~7 searches/hop). Walk at most a few
-  frontier snaps; if none hop, one multi-goal `nearestReachable` distance
-  search among progressing stations is the fallback — still one search, not
-  N ranked hops. Corridor stays the profile wander band; do not inflate it
-  to the tank (that disabled progress-regression and allowed out-and-back
-  nibbles). Distance-objective fuel feelers skip progress-regression so
-  joined-pack seam wiggles remain reachable.
+  exceed `legBudgetMeters`. Dominance under that cutoff must respect meters
+  (a cheaper but longer label may not discard a shorter one).
 - **Window size.** Pack/combined fuel planning sizes `windowMaxStops` from
   remaining straight-line distance / (0.75 × tank), capped at 12 — including
   cross-province joined packs and hop-override replans. Do not force
