@@ -114,6 +114,7 @@ do {
             "fuelComplete":plan.complete,"fuelStops":plan.stops.map(\.id),"fuelLimit":plan.limit as Any? ?? NSNull(),
             "hopMeters":plan.routes.map(\.distanceMeters),
             "hopEdgeSHA256":sha256(plan.routes.map { $0.segments.map(\.edgeID).joined(separator: ",") }),
+            "styleSummary":plan.styleSummary as Any? ?? NSNull(),
             "destinationEscapeMeters":plan.destinationEscapeMeters as Any? ?? NSNull(),
             "foundationMeters":plan.foundation?.distanceMeters as Any? ?? NSNull(),
             "pops":plan.routes.reduce(0) { $0+$1.poppedLabels},"limit":plan.limit as Any? ?? NSNull()]) { $1 }

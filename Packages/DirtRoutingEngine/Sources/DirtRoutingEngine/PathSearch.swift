@@ -32,6 +32,13 @@ public struct SearchOptions: Sendable {
     /// Remaining road meters to B from each graph node. When present, JS
     /// disables the hard progress gate and taxes walking away from B instead.
     public var roadRemaining: [Double]? = nil
+    /// When true, skip the geodesic progress-regression gate (fuel feelers and
+    /// diagnostic shadows). Personality costs still apply.
+    public var disableProgressRegression = false
+    /// Fuel hops: pavement's dirt-rate heuristic alone floods the tank before
+    /// reaching a paved pump. Blend a geodesic pull so the search still prefers
+    /// progress toward the hop end (station or destination).
+    public var fuelGoalPull = false
     /// Diagnostic totals shared by every search of one request. The search never reads it.
     public var counter: SearchCounter? = nil
     /// Set when the search turns a road away at its corridor or progress limit.
@@ -232,16 +239,24 @@ public struct PathSearch: Sendable {
             return compass[node]
         }
         func heapCost(_ pathCost: Double, _ node: Int) -> Double {
+            let geoPull = point(node).distance(to: end.coordinate) / 1000
             if options.objective == .distance {
-                return pathCost + point(node).distance(to: end.coordinate) / 1000
+                return pathCost + geoPull
             }
             let left = remaining(of: node)
             if left.isFinite {
-                if options.objective == .pavement { return pathCost + left / 1000 * 0.02 }
+                if options.objective == .pavement {
+                    // Dirt-rate remaining is admissible but too weak for pump
+                    // hops that finish on pavement; fuelGoalPull adds progress.
+                    let road = left / 1000 * 0.02
+                    return pathCost + road + (options.fuelGoalPull ? geoPull : 0)
+                }
                 if policy.style == .cleanest, options.objective == .profile {
                     // Collector 0.82 × variety floor 0.96.
                     return pathCost + left / 1000 * 0.69
                 }
+            } else if options.fuelGoalPull, options.objective == .pavement {
+                return pathCost + geoPull
             }
             return pathCost
         }
@@ -261,7 +276,7 @@ public struct PathSearch: Sendable {
         let startRemaining = remaining(of: startNode)
         // Distance / fuel-feeler searches must cross regional seams and coastal
         // wiggles; style progress-regression is for personality floods only.
-        let regression = options.objective == .distance
+        let regression = (options.objective == .distance || options.disableProgressRegression)
             ? Double.infinity
             : ProfilePolicy.progressRegressionMeters(
                 style: policy.style, corridorMeters: options.corridorMeters, hasRoadCompass: compass != nil)
