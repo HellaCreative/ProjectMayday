@@ -46,8 +46,10 @@ struct FuelPlannerTests {
         let planner = try FuelPlanner(graph: Road(),stations: [pumps[0],pumps[2]])
         let plan = try planner.plan(request,requirements: .init(usableRangeMeters: 45_000,firstLegMaxMeters: 40_000))
         #expect(!plan.complete)
-        #expect(plan.routes.isEmpty)
-        #expect(plan.foundation != nil)
+        #expect(plan.foundation == nil)
+        #expect(plan.limit?.contains("no fuel stop found within range") == true)
+        // Proven hops before the gap may be retained; they are not an advisory A→B.
+        #expect(plan.stops.count <= 1)
     }
     @Test func firstStationProbeRespectsRemainingFuel() throws {
         var fuel = FuelRequirements(usableRangeMeters: 45_000,firstLegMaxMeters: 10_000)
@@ -77,7 +79,7 @@ struct FuelPlannerTests {
         #expect(plan.stops.map(\.id) == stations.map(\.id))
         #expect(plan.routes.allSatisfy { $0.distanceMeters <= 40 })
     }
-    @Test func fuelResourceExhaustionRetainsTheCompletedRoadFoundation() throws {
+    @Test func fuelResourceExhaustionReportsExplicitFailureWithoutAdvisoryRoute() throws {
         let stations = (1...50).map {
             FuelStation(id: "dense-\($0)",coordinate: .init(longitude: Double($0)*0.02,latitude: 0))
         }
@@ -86,10 +88,8 @@ struct FuelPlannerTests {
         let plan = try FuelPlanner(graph: Road(),stations: stations).plan(request,requirements: fuel,
             budget: .init(seconds: 10,maximumLabels: 32))
         #expect(!plan.complete)
-        #expect(plan.foundation != nil)
-        #expect(plan.foundation?.end.coordinate.distance(to: request.end) ?? .infinity < 0.01)
-        #expect(plan.limit?.contains("incomplete") == true)
-        #expect(plan.routes.isEmpty)
+        #expect(plan.foundation == nil)
+        #expect(plan.limit?.contains("no fuel stop found within range") == true)
     }
     @Test func firstAutomaticStopIsTheNearestReachableStation() throws {
         let plan = try FuelPlanner(graph: Road(),stations: pumps).plan(request,

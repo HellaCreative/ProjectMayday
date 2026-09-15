@@ -529,13 +529,9 @@ in code (task 7).
    bound as the A* heuristic), exclude motorway/trunk except pin access, penalise
    arterials heavily, prefer collector and local paved roads, and add a distance
    regression test against the shortest legal route.
-5. **Fuel (approved, fewest stops).** Replace the breadth-first-by-stop-count
-   queue with depth-first, progress-ordered search with backtracking; one
-   tank-bounded forward flood per decision to prune unreachable pumps; the
-   destination compass lower bound instead of the detour-ratio guess; prove each
-   leg with the chosen riding-style route rather than the shortest path (§5);
-   return a proven partial window promptly; build the A→B foundation only when
-   planning fails. The first stop stays the closest reachable pump.
+5. **Fuel — superseded 15 Sep by waypoint-chaining Stages 0–3 below.** Do not
+   tune `FuelPlanner`'s DFS/flood/shortest-hop search. The 45 s / 98-search /
+   0-stop phone result is the shape failing, not a missing prune.
 6. **Dirt recovery search.** 2.2–2.8 s of about 5.7 s on the phone and often
    discarded. Bound or replace it, in the same way as task 3.
 7. **Per-state cost and memory (exact).** Precompute per-edge tables (surface
@@ -550,11 +546,237 @@ in code (task 7).
 
 ### Owner decisions (15 Sep)
 
-Fuel: fewest stops. Pack verification: once at install or update. Balanced:
-redesign approved, 50/50 target. Re-riding the same road only when absolutely
-necessary, because the ride is about interest and quality rather than efficiency;
-the 128-step overlap window from `fd73b76` contradicts that, so confirm with the
-owner before restoring whole-route overlap checking as its own tested change.
+Fuel search shape: superseded by waypoint-chaining (this subsection). Pack
+verification: once at install or update. Balanced: redesign approved, 50/50
+target. Re-riding the same road only when absolutely necessary, because the ride
+is about interest and quality rather than efficiency; the 128-step overlap window
+from `fd73b76` contradicts that, so confirm with the owner before restoring
+whole-route overlap checking as its own tested change.
+
+### Waypoint-chaining redesign (Stage 0 approved 15 Sep; Stage 1 in progress)
+
+Waypoints are the only mechanism. Rider taps, fuel stops, and distance-based
+breaks are the same kind of object: a point the route passes through. Some are
+rider-movable; all are built with the same bounded, personality-aware per-leg
+search. This replaces “solve fuel as a separate reachability problem.”
+
+Owner approved Stage 0 with two Stage 1 fold-ins (below). Persistence formats
+are still proposal-only until Stage 3.
+
+#### What exists today (this checkout)
+
+| Surface | Type / field | Role |
+| --- | --- | --- |
+| Plan itinerary | `RiderItinerary.waypoints: [RiderWaypoint]` | Rider taps only. `id: UUID`, `coordinate: RouteCoordinate`. Comment in `RiderItinerary.swift`: fuel never appears here. |
+| Plan spans | `RiderItinerary.legs: [RiderLeg]` | One `RiderLeg` per consecutive rider pair. `from`/`to` are waypoint UUIDs. `id = RiderItinerary.legID(from:to)`. Owns `profile`, `allowUnknown`, `avoidMotorways`, `hopOverrides`, `hopAllowUnknown`, `hopAvoidMotorways`, `fuelStopOverrides`. |
+| Built hops | `BuiltLeg` | Geometry between two coordinates. Optional `endsAtFuelStop: FuelStop?`. Several `BuiltLeg`s can sit under one `RiderLeg`. |
+| Generated pump | `FuelStop` | `coordinate`, `stationID`, `name`, `afterRiderLegID`, `resetsTank`. Lives on `BuiltLeg`, not on `RiderItinerary`. Display marker id `fuel:{riderLegID}:{builtLegIndex}`, `MapState.MarkerKind.fuel`, label `F1`… |
+| Rider-on-pump | `BuiltItinerary.waypointFuelStops: [UUID: FuelStop]` | Derived each build by snapping a rider waypoint to a packed station (`ItineraryRangeArithmetic.fuelWaypointSnapMeters`). Not persisted on `RiderWaypoint`. |
+| Pump pick | `RiderLeg.fuelStopOverrides: [String: String]` | Departure anchor (`from.uuidString` or previous `stationID`) → chosen `stationID`. |
+| Rider drag | `ItineraryAction.move(waypointID:to:)` | Marker `wp:{UUID}`. Confirm-then-rebuild. `reduce` sets `rebuildFromLegIndex = max(0, waypointIndex-1)` and `rebuildThroughLegIndex = nil` → rebuilds the **suffix**, then fuel re-solves. |
+| Fuel “drag” | `RoutePlannerModel.moveFuelStop` / `beginPlannerPinDrag` | Separate path. Drop must land on `validFuelTargets` within 5 km (or a probed replacement). Writes `setFuelStopOverride`. Not free placement. |
+| Loop (Generate) | `LoopPlan.anchors` → `ItineraryAction.replaceAll` | Five rider coordinates `[start, left, far, right, start]` (or mirrored). Last point is a **new** `RiderWaypoint` whose coordinate equals the first; two UUIDs, same place. Fuel then runs per `RiderLeg`. |
+| Loop (Plan close) | `closeLoop()` → `.append(coordinate: start)` | Same: extra rider waypoint at the start pin, not a special route type. |
+| Saved library | `SavedRoute` (`SwiftData`) | `coordinatesData` (full polyline), `segmentsData?`, `profileRawValue` (one profile for the whole record), `ridePreferencesData?`, `routeSeedsData?`, stats. **No `RiderItinerary`.** |
+| Reopen | `loadSavedRoute` → `applyStoredRouteGeometry` | Frozen `.saved` track with pins `start`/`dest`. Does not restore waypoints or fuel stops. Re-planning requires a new From Here / Plan. |
+| Current fuel | `FuelRangePrefs` | `kilometers` (tank), `reservePercent` (default 10), `automaticPlanningEnabled`. Snapshot: `tankMeters`, `usableMeters = tank * (1 - reserve/100)`. **No remaining-fuel-now field.** Trip-start `firstLegMaxMeters` is `usableMeters` (full usable tank). |
+
+§2 still says generated fuel points stay bound to mapped stations and are not
+freely draggable. This redesign **supersedes that sentence** if approved: fuel
+and distance-break pins use the same drag/confirm path as rider pins. A fuel
+stop should still prefer a mapped `stationID` when the drop is on a pump.
+
+#### 1. Single waypoint list
+
+Keep one ordered array. Do not keep generated pumps only on `BuiltLeg`.
+
+```
+enum RouteWaypointKind: String, Codable {
+    case rider
+    case fuelStop
+    case distanceBreak
+}
+
+struct RouteWaypoint {
+    let id: UUID
+    var coordinate: RouteCoordinate
+    var kind: RouteWaypointKind
+    /// Nil on `.rider`. On generated points: the two rider endpoints of the
+    /// span this point was inserted into. Never skip or merge those riders.
+    var spanFromRiderID: UUID?
+    var spanToRiderID: UUID?
+    /// `.fuelStop` only. Mapped pump when the pin is on a station; nil if the
+    /// rider dragged it off a pump (Stage 2 surfaces range failure; do not
+    /// silently pick another station).
+    var stationID: String?
+    var stationName: String?
+    /// Tank resets only for `.fuelStop`. `.distanceBreak` and `.rider` do not
+    /// refill unless `waypointFuelStops` still snaps a rider pin onto a pump.
+    var resetsTank: Bool { kind == .fuelStop }
+    /// True after the rider moved this generated pin. Saved so reopen keeps
+    /// the drag rather than re-chaining.
+    var riderAdjusted: Bool
+}
+```
+
+Display labels stay derived, not stored: rider pins `1…n` in rider-only order;
+fuel `F1…`; distance-breaks `D1…`. Stable identity is `id`.
+
+`RiderLeg` stays the **span** between consecutive `.rider` waypoints (including
+a loop return pin). Generated points do not create new spans and do not restart
+Balanced mix (§2). Search legs are consecutive pairs in the mixed list:
+
+`waypoints[i] → waypoints[i+1]` → one personality-aware `PathSearch` (Stage 1).
+
+`hopOverrides` / `hopAllowUnknown` / `hopAvoidMotorways` key by departing
+`RouteWaypoint.id.uuidString` (today: rider UUID or pump `stationID`). Drop
+`fuelStopOverrides`; replacing a pump is moving or replacing that `.fuelStop`
+row.
+
+Invariants: mixed `waypoints` unique `id`s; `legs.count` equals consecutive
+`.rider` pairs, not mixed-list count minus one; a generated point’s
+`spanFromRiderID`/`spanToRiderID` always name existing `.rider` rows; a `.rider`
+is never deleted by chaining.
+
+#### 2. Which kinds move, and what rebuilds
+
+| `kind` | Movable | Gesture |
+| --- | --- | --- |
+| `.rider` | yes (except a live GPS From-Here origin while navigating) | today’s `wp:{id}` drag → confirm Yes/No |
+| `.fuelStop` | yes | **same** `ItineraryAction.move`, not `moveFuelStop` |
+| `.distanceBreak` | yes | same `move` |
+
+On `move(waypointID:to:)`:
+
+- Rebuild **only** the search legs that share that waypoint: incoming
+  `waypoints[i-1]→[i]` and outgoing `[i]→[i+1]` (0, 1, or 2 legs).
+- Set `rebuildFromLegIndex` / `rebuildThroughLegIndex` to that mixed-list
+  window. Do **not** pass `rebuildThrough = nil` (today’s suffix rebuild).
+- Do not re-chain other generated points in the span. Do not re-run fuel for
+  untouched spans.
+- After a `.fuelStop` move: if either adjacent search exceeds the leg budget
+  (usable range when fuel is on; nominal budget when off), stop with an
+  explicit `LegStatus.gap` / failure string such as `"no fuel stop found
+  within range near <location>"`. No `fuel advisory fallback`, no keep-the-A→B-
+  line-anyway path.
+- Marker rendering: distinct `MapState.MarkerKind` (keep `.fuel`; add
+  `.distanceBreak`). Drag code path is shared.
+
+This is also the speed rule: a drag is one or two bounded personality searches,
+not a 45 s fuel DFS.
+
+#### 3. Save / reopen (proposal only; Stage 3 implements)
+
+Add optional SwiftData column, same pattern as `segmentsData`:
+
+```
+SavedRoute.itineraryData: Data?   // JSON SavedItineraryV1
+```
+
+```
+struct SavedItineraryV1: Codable {
+    var schemaVersion: Int          // 1
+    var waypoints: [RouteWaypoint]
+    var spans: [RiderLeg]           // rider-to-rider only; existing Codable
+    var generation: Int
+    var impassableEdgeIDs: Set<String>
+}
+```
+
+Keep `coordinatesData` / `segmentsData` as the assembled polyline for overview,
+GPX, and old clients.
+
+- Save writes the mixed waypoint list **in the current (possibly dragged)
+  positions**, including `.fuelStop` / `.distanceBreak`.
+- Reopen with `itineraryData != nil`: restore that list into Plan (or From Here
+  if only two rider pins), restore polyline, **do not re-solve fuel**.
+- Reopen with `itineraryData == nil` (today’s library rows): keep frozen
+  `.saved` overview; no invented waypoints.
+- GPX: still the track; optional `<wpt>` for `.fuelStop` / `.distanceBreak` can
+  wait (backlog) so Stage 3 stays on the in-app library.
+
+§2 “Save, reopen, and start preserve … fuel identities” becomes this list,
+not a re-solve.
+
+#### 4. Loops
+
+No loop-specific fuel type. Generate Loop already materializes rider waypoints
+`[start, side, far, side, start]`. Plan “close loop” already `.append`s the
+start coordinate as a new `.rider` with a new `id`.
+
+The “final destination” is that last `.rider` row. Chaining in §1 runs inside
+each rider-to-rider span, including the return span. Initial refuel does not
+replace the return pin (§2).
+
+#### 5. Multi-waypoint Plan
+
+Chaining is per span: for each consecutive `.rider` pair `(A, B)`, while the
+personality search toward B exceeds the leg budget, insert `.fuelStop` or
+`.distanceBreak` **between** A and B. Then continue from the new point toward
+the same B.
+
+A rider-placed waypoint is never skipped, merged, reordered, or converted to
+`.fuelStop`. Fuel/distance points never jump into another span.
+
+From Here is the two-`.rider` case of the same list (origin, destination).
+
+#### Leg budget and prepare (Stage 1)
+
+- Fuel on: `legBudgetMeters = FuelRangePrefs.snapshot.usableMeters` after a
+  refill; at trip start do **not** invent a remaining-fuel UX (see Backlog).
+  Until that exists, leg 0 uses the same bounded search toward the nearest
+  reasonable on-heading pump with `legBudgetMeters = usableMeters` (today’s
+  first-leg cap), then refills and continues.
+- Fuel off: `nominalLegBudgetMeters ≈ 325_000` (tune in one place). Same
+  cutoff, candidate is the search frontier at the cutoff → `.distanceBreak`.
+- Hard cutoff: do not expand a `PathSearch` label whose accumulated meters
+  exceed `legBudgetMeters`. Candidate is taken from that frontier; do not
+  rank a pump set.
+- **Frontier → station (named mapping).** For `.fuelStop`, the frontier label’s
+  coordinate is snapped to a packed station with
+  `FuelPlanner.fuelStationSnapMeters` (= 150, same contract as
+  `ItineraryRangeArithmetic.fuelWaypointSnapMeters`). Try on-heading frontier
+  labels near the cutoff until one snaps. A Stage 1 `.fuelStop` always has a
+  non-nil `stationID`. `stationID == nil` is reserved for Stage 2 after the
+  rider drags a fuel pin off a pump.
+- **Balanced mix continuity across chained sub-legs.** A rider-to-rider span
+  owns one 50/50 target. Carry `precedingDirtMeters` / `precedingMeters` across
+  every sub-leg of that span (already on `SearchOptions`). Before each Balanced
+  sub-leg search, set `ProfilePolicy.balancedDirtPreference` so the sub-leg
+  corrects the running span ratio toward 0.5 (for example if the span so far is
+  70% dirt, prefer paved; if 30% dirt, prefer dirt). Do not reset the mix at
+  each fuel/distance waypoint.
+- `IndexedGraph` + `RoadCompass` toward the **span’s rider destination** once
+  per span (or once per trip if the destination is unchanged). Do not reopen
+  packs per hop.
+- Failure: explicit, no advisory A→B / `fuel-foundation` / `fuel advisory
+  fallback`.
+
+#### Backlog
+
+Do not handle these inside Stages 0–3. After Stages 0–3 are phone-tested,
+resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
+
+- Remaining fuel now: no rider input exists (`FuelRangePrefs` is tank + reserve
+  only). Add a control later; until then Stage 1 uses `usableMeters` for leg 0
+  and does not guess a “current level” UI.
+- Stage 1 phone-fuel-yarmouth-window: after the nearest first pump (~16 km),
+  onward hops within a 270 km tank still fail to prove a second stop (explicit
+  `no fuel stop found within range near …`). Canso and owner St Stephen chains
+  complete. Investigate departure rematch / progressing selection before Stage 2.
+- App `fuel advisory fallback` in `ItineraryBuilder` still exists; engine no
+  longer returns a foundation. Remove/replace the advisory path when Stage 2
+  wires the waypoint list so a failed chain cannot draw a fuel-ignorant A→B.
+- Task 4 Clean still highway-heavy / loop-prone on some pins.
+- Dirt wander still weaker than the owner goal on some corridors.
+- Balanced still not reliably nearest-50% on every pin.
+- Cape Breton unknown-access exclusions.
+- Dirt recovery-search cost (partially bounded in Task 6; still on the phone
+  budget when it runs).
+- Matcher opposite-carriageway suppression.
+- GPX `<wpt>` export for saved fuel / distance-break pins.
+- §2 sentence “generated fuel points remain bound to mapped stations rather
+  than freely draggable locations” — delete or rewrite when Stage 2 ships.
 
 ## 9. Existing V4 data format reference
 

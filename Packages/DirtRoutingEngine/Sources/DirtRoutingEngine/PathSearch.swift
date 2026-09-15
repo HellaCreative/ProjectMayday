@@ -84,6 +84,22 @@ public struct ComputedRoute: Sendable {
     }
 }
 
+/// A label the fog-of-war distance cutoff blocked from expanding further.
+public struct FrontierSample: Sendable {
+    public let coordinate: Coordinate
+    public let meters: Double
+    public let node: Int
+    /// Road-compass remaining to the search destination when available.
+    public let remainingToDestination: Double
+}
+
+/// Personality search that either reaches the destination inside the distance
+/// budget or reports the frontier at the cutoff for fuel/distance chaining.
+public enum BoundedSearchResult: Sendable {
+    case reached(ComputedRoute)
+    case stoppedAtBudget([FrontierSample])
+}
+
 public struct PathSearch: Sendable {
     let pack: any RoadGraph
     public init(pack: any RoadGraph) { self.pack = pack }
@@ -121,6 +137,17 @@ public struct PathSearch: Sendable {
     public func search(start: RoadMatch, end: RoadMatch, policy: ProfilePolicy,
                        access: AccessPolicy, options: SearchOptions = .init(),
                        budget: ComputationBudget = .init()) throws -> ComputedRoute {
+        switch try boundedSearch(start: start, end: end, policy: policy, access: access,
+                                 options: options, budget: budget) {
+        case .reached(let route): return route
+        case .stoppedAtBudget:
+            throw RoutingFailure.noPath
+        }
+    }
+
+    public func boundedSearch(start: RoadMatch, end: RoadMatch, policy: ProfilePolicy,
+                              access: AccessPolicy, options: SearchOptions = .init(),
+                              budget: ComputationBudget = .init()) throws -> BoundedSearchResult {
         try budget.check()
         let searchStarted = ContinuousClock.now
         guard start.edge >= 0, end.edge >= 0, start.edge < pack.edgeCount, end.edge < pack.edgeCount,
@@ -218,6 +245,7 @@ public struct PathSearch: Sendable {
         var heap = BinaryHeap<Entry> { $0.cost == $1.cost ? $0.label < $1.label : $0.cost < $1.cost }
         heap.push(.init(label: 0,cost: heapCost(0, startNode)))
         var goals: [Int] = [], pops = 0, limit: String?
+        var frontierHits: [(label: Int, meters: Double, node: Int)] = []
         defer { options.counter?.recordSearch(pops: pops, labels: labels.count, since: searchStarted) }
         let startHighway = start.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(start.edge)))
         let endHighway = end.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(end.edge)))
@@ -297,7 +325,12 @@ public struct PathSearch: Sendable {
                     if overlaps { continue }
                 }
                 let meters = current.meters+arc.meters
-                if meters > options.maximumMeters+0.01 { continue }
+                if meters > options.maximumMeters+0.01 {
+                    if options.maximumMeters.isFinite {
+                        frontierHits.append((entry.label, current.meters, current.state.node))
+                    }
+                    continue
+                }
                 let fromPoint = point(current.state.node), toPoint = point(arc.target)
                 if options.corridorMeters.isFinite && abs(toPoint.crossTrack(from: start.coordinate,to: end.coordinate)) > options.corridorMeters {
                     options.boundary?.touched = true
@@ -346,6 +379,9 @@ public struct PathSearch: Sendable {
                                     peakProgress: peak,parent: entry.label,arc: arc))
                 storeBest(state, index)
                 heap.push(.init(label: index,cost: heapCost(cost, arc.target)))
+                if options.maximumMeters.isFinite, meters >= options.maximumMeters * 0.85 {
+                    frontierHits.append((index, meters, arc.target))
+                }
             }
         }
         guard let chosen = goals.min(by: { a,b in
@@ -361,6 +397,31 @@ public struct PathSearch: Sendable {
             }
             return labels[a].cost < labels[b].cost
         }) else {
+            if options.maximumMeters.isFinite, !frontierHits.isEmpty {
+                let nearCutoff = options.maximumMeters * 0.8
+                var seen = Set<Int>()
+                var samples: [FrontierSample] = []
+                let ranked = frontierHits.sorted {
+                    let ra = remaining(of: $0.node), rb = remaining(of: $1.node)
+                    if ra.isFinite && rb.isFinite && abs(ra - rb) > 1 { return ra < rb }
+                    return $0.meters > $1.meters
+                }
+                for hit in ranked where hit.meters >= nearCutoff {
+                    guard seen.insert(hit.node).inserted else { continue }
+                    samples.append(.init(coordinate: point(hit.node), meters: hit.meters, node: hit.node,
+                                         remainingToDestination: remaining(of: hit.node)))
+                    if samples.count >= 32 { break }
+                }
+                if samples.isEmpty {
+                    for hit in ranked {
+                        guard seen.insert(hit.node).inserted else { continue }
+                        samples.append(.init(coordinate: point(hit.node), meters: hit.meters, node: hit.node,
+                                             remainingToDestination: remaining(of: hit.node)))
+                        if samples.count >= 16 { break }
+                    }
+                }
+                if !samples.isEmpty { return .stoppedAtBudget(samples) }
+            }
             if let limit { throw RoutingFailure.resourceLimit(limit) }
             throw RoutingFailure.noPath
         }
@@ -392,7 +453,7 @@ public struct PathSearch: Sendable {
                              searchCost: labels[chosen].cost,poppedLabels: pops,limit: limit,
                              arrivalRestrictions: labels[chosen].state.restrictions)
         result.maneuvers = NavigationCues.make(route: result,graph: pack,access: access,arrival: options.arrival)
-        return result
+        return .reached(result)
     }
 
     private func clippedGeometry(_ arc: Arc) -> [Coordinate] {
