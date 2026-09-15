@@ -128,6 +128,8 @@ public struct PathSearch: Sendable {
         let cost: Double
         let meters: Double
         let dirtMeters: Double
+        /// Continuous dirt/gravel run ending at this label; resets on pavement.
+        let contiguousDirtMeters: Double
         let peakProgress: Double
         let parent: Int?
         let arc: Arc?
@@ -205,7 +207,8 @@ public struct PathSearch: Sendable {
         let carriedRestrictions = options.arrival?.restrictions ?? options.arrivalRestrictions
         let initial = State(node: startNode,incoming: resolvedArrival,
                             restrictions: carriedRestrictions,bucket: 0)
-        var labels = [Label(state: initial,cost: 0,meters: 0,dirtMeters: 0,peakProgress: 0,parent: nil,arc: nil)]
+        var labels = [Label(state: initial,cost: 0,meters: 0,dirtMeters: 0,contiguousDirtMeters: 0,
+                            peakProgress: 0,parent: nil,arc: nil)]
         var bestSimple: [SimpleKey:Int] = [:]
         var bestFull: [State:Int] = [:]
         if let key = initial.simple { bestSimple[key] = 0 } else { bestFull[initial] = 0 }
@@ -289,7 +292,9 @@ public struct PathSearch: Sendable {
                     if labels.count >= budget.maximumLabels { limit = "labels"; break search }
                     let index = labels.count
                     labels.append(.init(state: state,cost: current.cost,meters: current.meters,
-                                        dirtMeters: current.dirtMeters,peakProgress: current.peakProgress,
+                                        dirtMeters: current.dirtMeters,
+                                        contiguousDirtMeters: current.contiguousDirtMeters,
+                                        peakProgress: current.peakProgress,
                                         parent: entry.label,arc: nil))
                     storeBest(state, index)
                     heap.push(.init(label: index,cost: heapCost(current.cost, sibling)))
@@ -349,6 +354,25 @@ public struct PathSearch: Sendable {
                 let family = ProfilePolicy.family(pack.surfaceLeaf(e))
                 let isDirt = family == .gravel || family == .loose
                 let dirt = current.dirtMeters + (isDirt && pack.structure(e) != "ferry" ? arc.meters : 0)
+                let contiguousDirt: Double
+                var clawback = 0.0
+                let minDirt = policy.minimumMeaningfulDirtMeters.isFinite
+                    ? max(0, policy.minimumMeaningfulDirtMeters) : 1_000
+                if pack.structure(e) == "ferry" {
+                    // Ferry breaks continuity; short dirt already taxed per arc.
+                    contiguousDirt = 0
+                } else if isDirt {
+                    contiguousDirt = current.contiguousDirtMeters + arc.meters
+                    // Tax short dirt immediately so cheap nibbles cannot dominate
+                    // paved alternatives before a leave-clawback would fire.
+                    if current.contiguousDirtMeters < minDirt {
+                        let taxable = min(arc.meters, max(0, minDirt - current.contiguousDirtMeters))
+                        clawback = policy.shortDirtClawback(contiguousDirtMeters: taxable,
+                                                           objective: options.objective)
+                    }
+                } else {
+                    contiguousDirt = 0
+                }
                 let bucket = resource ? min(19,max(0,Int((options.precedingDirtMeters+dirt)/max(1,options.precedingMeters+meters)*20))) : 0
                 let previousTier = current.state.incoming >= 0 && current.state.incoming < pack.edgeCount
                     ? ProfilePolicy.tier(pack.roadClass(current.state.incoming)) : nil
@@ -358,6 +382,7 @@ public struct PathSearch: Sendable {
                     from: fromPoint,to: toPoint,start: start.coordinate,end: end.coordinate,startOnHighway: startHighway,
                     endOnHighway: endHighway,penalizedDirt: penalizedDirt,previousTier: previousTier,
                     applyGeodesicPull: compass == nil)
+                step += clawback
                 if compass != nil, options.objective != .distance, options.objective != .balancedResource {
                     step += policy.approachAway(fromRemaining: remaining(of: current.state.node),
                                                 toRemaining: remaining(of: arc.target),
@@ -376,6 +401,7 @@ public struct PathSearch: Sendable {
                 if labels.count >= budget.maximumLabels { limit = "labels"; break search }
                 let index = labels.count
                 labels.append(.init(state: state,cost: cost,meters: meters,dirtMeters: dirt,
+                                    contiguousDirtMeters: contiguousDirt,
                                     peakProgress: peak,parent: entry.label,arc: arc))
                 storeBest(state, index)
                 heap.push(.init(label: index,cost: heapCost(cost, arc.target)))
@@ -385,6 +411,8 @@ public struct PathSearch: Sendable {
             }
         }
         guard let chosen = goals.min(by: { a,b in
+            // Short dirt is taxed per arc during expansion; no extra goal clawback.
+            func adjusted(_ index: Int) -> Double { labels[index].cost }
             if resource {
                 let ra = (options.precedingDirtMeters+labels[a].dirtMeters)/max(1,options.precedingMeters+labels[a].meters)
                 let rb = (options.precedingDirtMeters+labels[b].dirtMeters)/max(1,options.precedingMeters+labels[b].meters)
@@ -392,10 +420,10 @@ public struct PathSearch: Sendable {
                 let mb = policy.style == .dirt ? -rb : abs(rb-0.5)
                 if ma != mb { return ma < mb }
             } else if policy.style == .dirt, options.objective == .pavement,
-                      abs(labels[a].cost-labels[b].cost) <= 0.5 {
+                      abs(adjusted(a)-adjusted(b)) <= 0.5 {
                 return labels[a].dirtMeters > labels[b].dirtMeters
             }
-            return labels[a].cost < labels[b].cost
+            return adjusted(a) < adjusted(b)
         }) else {
             if options.maximumMeters.isFinite, !frontierHits.isEmpty {
                 let nearCutoff = options.maximumMeters * 0.8

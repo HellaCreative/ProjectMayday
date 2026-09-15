@@ -15,6 +15,10 @@ public struct ProfilePolicy: Sendable {
     /// Balanced dirt mix in [0, 1]. 0 prefers paved, 1 prefers dirt, 0.5 is the
     /// default 50/50 starting weight.
     public var balancedDirtPreference = 0.5
+    /// Continuous dirt shorter than this is not meaningful (§2). A detour that
+    /// only nibble-grabs below this length is clawed back to paved cost so it
+    /// loses to the direct alternative.
+    public var minimumMeaningfulDirtMeters = 1_000.0
     public init(style: RidingStyle) { self.style = style }
     public var appetite: Double { min(1, max(0, wander.isFinite ? wander : 1)) }
     public static func family(_ leaf: String) -> Surface {
@@ -188,6 +192,27 @@ public struct ProfilePolicy: Sendable {
         let xt = abs(to.crossTrack(from: start, to: end)) / 1000
         let k = style == .dirt ? (0.0006 + pull * 0.0044) : (0.002 + pull * 0.012)
         return (meters / 1000) * xt * xt * k
+    }
+    /// Extra cost for dirt meters that do not yet form a meaningful contiguous
+    /// run. Callers pass only the meters still under `minimumMeaningfulDirtMeters`.
+    /// Prices those meters as paved so a 200–300 m nibble cannot beat staying
+    /// on the direct alternative.
+    func shortDirtClawback(contiguousDirtMeters: Double, objective: SearchObjective) -> Double {
+        guard style != .cleanest, objective != .distance, contiguousDirtMeters > 0 else { return 0 }
+        let km = contiguousDirtMeters / 1000
+        switch objective {
+        case .pavement:
+            // Dirt-mode cheap rates are ~0.02–0.05/km; paved is 150/km.
+            return km * (150 - 0.05)
+        case .profile, .balancedResource:
+            let mix = min(1, max(0, balancedDirtPreference.isFinite ? balancedDirtPreference : 0.5))
+            // Prefer-dirt profile weight ~0.05; paved weight ~8–16.
+            let paved = style == .dirt ? 16.0 : (1.05 + mix * 6.95)
+            let dirt = style == .dirt ? 0.05 : (0.98 - mix * 0.9)
+            return km * max(0, paved - dirt)
+        case .distance:
+            return 0
+        }
     }
     // Ordinals come from pack-v2.js, not from display classifications.
     static let roadNames = ["unknown","freeway","arterial","collector","local","service","resource","recreation","track","double_track","ramp"]

@@ -135,6 +135,22 @@ struct PolicyTests {
         #expect(ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: 60_000, hasRoadCompass: true) == 15_000)
     }
 
+    @Test func shortDirtClawbackPricesNibblesAsPaved() {
+        var dirt = ProfilePolicy(style: .dirt)
+        dirt.minimumMeaningfulDirtMeters = 1_000
+        let nibble = dirt.shortDirtClawback(contiguousDirtMeters: 300, objective: .pavement)
+        let km = dirt.shortDirtClawback(contiguousDirtMeters: 1_000, objective: .pavement)
+        #expect(nibble > 40) // ~0.3 km × (150 − 0.05)
+        #expect(abs(km - 149.95) < 0.01)
+        #expect(dirt.shortDirtClawback(contiguousDirtMeters: 0, objective: .pavement) == 0)
+        #expect(dirt.shortDirtClawback(contiguousDirtMeters: 300, objective: .distance) == 0)
+        var balanced = ProfilePolicy(style: .balanced)
+        balanced.balancedDirtPreference = 0.5
+        let mix = balanced.shortDirtClawback(contiguousDirtMeters: 300, objective: .profile)
+        #expect(mix > 0)
+        #expect(mix < nibble) // profile gap is smaller than dirt pavement gap
+    }
+
     @Test func dirtPavementAwayScalesWithWander() {
         var policy = ProfilePolicy(style: .dirt)
         policy.wander = 0

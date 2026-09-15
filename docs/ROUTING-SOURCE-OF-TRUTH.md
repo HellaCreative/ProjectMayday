@@ -731,7 +731,13 @@ From Here is the two-`.rider` case of the same list (origin, destination).
   cutoff, candidate is the search frontier at the cutoff → `.distanceBreak`.
 - Hard cutoff: do not expand a `PathSearch` label whose accumulated meters
   exceed `legBudgetMeters`. Candidate is taken from that frontier; do not
-  rank a pump set.
+  rank a pump set. Mid-chain must not retry a progressing pump list with
+  separate style hops (phone Stage 1: ~7 searches/hop). Walk at most a few
+  frontier snaps; if none hop, one multi-goal `nearestReachable` distance
+  search among progressing stations is the fallback — still one search, not
+  N ranked hops. Corridor stays the profile wander band; do not inflate it
+  to the tank (that disabled progress-regression and allowed out-and-back
+  nibbles).
 - **Frontier → station (named mapping).** For `.fuelStop`, the frontier label’s
   coordinate is snapped to a packed station with
   `FuelPlanner.fuelStationSnapMeters` (= 150, same contract as
@@ -739,6 +745,12 @@ From Here is the two-`.rider` case of the same list (origin, destination).
   labels near the cutoff until one snaps. A Stage 1 `.fuelStop` always has a
   non-nil `stationID`. `stationID == nil` is reserved for Stage 2 after the
   rider drags a fuel pin off a pump.
+- **Meaningful dirt floor (Stage 1 phone fix).** Dirt/Balanced tax contiguous
+  dirt shorter than `ProfilePolicy.minimumMeaningfulDirtMeters` (1 km) at
+  paved rates during expansion (`shortDirtClawback`), so 200–300 m nibble
+  detours lose to the direct alternative. Prior-edge `backtrackFactor` still
+  applies across hops; within a hop, wander-band corridor + progress
+  regression block out-and-back.
 - **Balanced mix continuity across chained sub-legs.** A rider-to-rider span
   owns one 50/50 target. Carry `precedingDirtMeters` / `precedingMeters` across
   every sub-leg of that span (already on `SearchOptions`). Before each Balanced
