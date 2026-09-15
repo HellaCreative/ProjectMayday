@@ -1,6 +1,6 @@
 # DIRT routing — source of truth
 
-Updated: 2026-09-14. Owner: Richard Smith.
+Updated: 2026-09-15. Owner: Richard Smith.
 
 ## 1. Authority and purpose
 
@@ -758,9 +758,13 @@ From Here is the two-`.rider` case of the same list (origin, destination).
   paved rates during expansion (`shortDirtClawback`), so 200–300 m nibble
   detours lose to the direct alternative. Each paved→dirt entry also pays
   `dirtEnterTransitionCost` so many separate >1 km grabs lose to fewer,
-  longer connected runs. Prior-edge `backtrackFactor` still applies across
-  hops; within a hop, wander-band corridor + progress regression block
-  out-and-back.
+  longer connected runs. That enter tax dilutes past
+  `dirtEnterTransitionReferenceMeters` (50 km) using the hop's
+  `maximumMeters` or geodesic span, so a flat per-transition constant cannot
+  starve dirt preference on 200 km+ fuel/A→B legs. Prior-edge
+  `backtrackFactor` still applies across hops (FuelPlanner unions every prior
+  hop's edge IDs into `priorEdges`); within a hop, wander-band corridor +
+  progress regression block out-and-back.
 - **Balanced mix continuity across chained sub-legs.** A rider-to-rider span
   owns one 50/50 target. Carry `precedingDirtMeters` / `precedingMeters` across
   every sub-leg of that span (already on `SearchOptions`). Before each Balanced
@@ -784,13 +788,12 @@ resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
   behavior. Do not tweak weights ad hoc until that design is settled.
 - Avoid-highways / avoid-cities (audit 15 Sep Stage 1 phone): both toggles
   are wired into `ProfilePolicy` / `SearchOptions.cityWall` via
-  `RidePreferences`, but Dirt’s displayed default for avoid-highways is
-  **off**, and `FuelPlanner.styleOptions` forces `cityWall = false` on every
-  fuel hop so avoid-cities does not apply during Stage 1 chaining. Soft
-  urban ×120 still applies when a search enters a core. Follow-up: stop
-  forcing `cityWall = false` on fuel hops; confirm Dirt/Balanced sheet
-  defaults; if highways still look unchanged with the toggle on, raise the
-  Dirt/Balanced motorway/trunk/arterial multipliers (currently ×40/×18/×8).
+  `RidePreferences`. Dirt’s displayed default for avoid-highways is **off**.
+  Fuel hops inherit `cityWall` and `avoidMajorHighways` from the rider
+  request (no `cityWall = false` override in `FuelPlanner`). Soft urban ×120
+  still applies when a search enters a core. If highways still look unchanged
+  with the toggle on, raise the Dirt/Balanced motorway/trunk/arterial
+  multipliers (currently ×40/×18/×8).
 - Remaining fuel now: no rider input exists (`FuelRangePrefs` is tank + reserve
   only). Add a control later; until then Stage 1 uses `usableMeters` for leg 0
   and does not guess a “current level” UI.

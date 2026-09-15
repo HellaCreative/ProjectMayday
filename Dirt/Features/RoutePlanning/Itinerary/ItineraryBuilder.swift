@@ -996,14 +996,35 @@ final class ItineraryBuilder {
             var advisoryFoundationRoute: RouteResponse?
             var advisoryFoundationStart: RouteCoordinate?
             func finishWithFuelAdvisory(_ issue: FuelAdvisoryIssue) async -> BuiltItinerary {
-                await buildAdvisoryRemainder(
+                // "no fuel stop found" is an explicit range gap even if a transport
+                // wrapper labeled it unknown — never silent A→B without the gap card.
+                let surfaced: FuelAdvisoryIssue = {
+                    if case .unknown(let message) = issue {
+                        let lower = message.lowercased()
+                        if lower.contains("no fuel stop")
+                            || lower.contains("no forward fuel")
+                            || lower.contains("no_forward_fuel")
+                            || lower.contains("fuel_not_proven") {
+                            return .gap(message)
+                        }
+                    }
+                    return issue
+                }()
+                if case .gap = surfaced {
+                    RoutingDebugLog.shared.event(
+                        "fuel gap card required gen=\(itinerary.generation) "
+                            + "riderLeg=\(riderLeg.id) issue=\(surfaced.logValue) "
+                            + "detail=\(surfaced.logDetail)"
+                    )
+                }
+                return await buildAdvisoryRemainder(
                     itinerary: itinerary,
                     startIndex: index,
                     endIndex: endIndex,
                     current: current,
                     builtLegPrefix: builtLegs,
                     fuelUsedAtCurrent: fuelUsed,
-                    issue: issue,
+                    issue: surfaced,
                     committed: committed,
                     preservedSuffix: preservedSuffix,
                     preservedStatuses: preservedStatuses,

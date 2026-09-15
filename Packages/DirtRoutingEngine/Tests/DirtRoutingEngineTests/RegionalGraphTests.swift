@@ -12,11 +12,13 @@ struct RegionalGraphTests {
         let anchors: [SeamDocument.Anchor] = (0..<graph.nodeCount).compactMap { n in
             guard let arc = graph.outgoing(n).first else { return nil }
             let e = arc.edge, p = graph.coordinate(node: n), structure = graph.structure(e)
-            let edge = SeamDocument.EdgeProof(osmWayId: String(graph.osmWayID(e)),
+            // Corrupt OSM way identity (topology). Layer/access drift alone must
+            // not reject a reciprocal seam after the Maine pack join fix.
+            let edge = SeamDocument.EdgeProof(osmWayId: corrupt ? "999999999" : String(graph.osmWayID(e)),
                 fromOsmNodeId: String(graph.osmNodeID(graph.endpoint(e,from: true))),
                 toOsmNodeId: String(graph.osmNodeID(graph.endpoint(e,from: false))),
                 accessForward: graph.accessCode(e,forward: true),accessReverse: graph.accessCode(e,forward: false),
-                layer: corrupt ? 99 : Int(graph.layers[e]),structureLeaf: structure.isEmpty ? nil : structure)
+                layer: Int(graph.layers[e]),structureLeaf: structure.isEmpty ? nil : structure)
             return .init(coordinate: [p.longitude,p.latitude],gapMeters: 0,osmNodeId: String(graph.osmNodeID(n)),
                          osmWayId: edge.osmWayId,proof: "shared-osm-node-way-edge-legal-topology.v1",edge: edge,
                          barrierDecision: graph.barriers[n,default: 0])

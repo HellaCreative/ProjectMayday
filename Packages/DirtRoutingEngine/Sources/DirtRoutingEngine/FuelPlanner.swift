@@ -127,7 +127,8 @@ public struct FuelPlanner: Sendable {
             options.precedingMeters = state.meters
             options.precedingDirtMeters = state.dirt
             options.maximumMeters = cap
-            options.cityWall = false
+            // Inherit rider avoid-cities; do not force the wall off on fuel hops.
+            options.cityWall = request.options.cityWall
             // Fog-of-war is maximumMeters (tank). Corridor stays the wander band
             // so progress-regression actually blocks out-and-back nibbles; do not
             // inflate the corridor to the full tank.
@@ -138,6 +139,8 @@ public struct FuelPlanner: Sendable {
             options.arrival = state.arrival
             options.roadRemaining = destCompass?.remaining
             options.backtrackFactor = max(4, request.options.backtrackFactor)
+            // Carry every prior hop's edges so hop N+1 cannot reverse back out
+            // the road hop N just used to arrive at the pump.
             for route in state.routes { options.priorEdges.formUnion(route.segments.map(\.edgeID)) }
             var policy = request.profile
             if shortest {
@@ -300,16 +303,28 @@ public struct FuelPlanner: Sendable {
             options.precedingDirtMeters = state.dirt
             options.maximumMeters = cap
             options.objective = .distance
-            options.cityWall = false
+            options.cityWall = request.options.cityWall
             options.corridorMeters = cap.isFinite ? cap + 20_000 : .infinity
             options.varietyEnabled = false
             options.additionalEnds = goals.dropFirst().map(\.1)
             options.roadRemaining = destCompass?.remaining
+            options.backtrackFactor = max(4, request.options.backtrackFactor)
+            for route in state.routes { options.priorEdges.formUnion(route.segments.map(\.edgeID)) }
             let starts = state.match.map { [$0] } ?? initialMatches
             var access = request.access
             access.startIsCustomer = !state.stops.isEmpty || request.access.startIsCustomer
             access.endIsCustomer = true
-            for start in starts {
+            // Prefer a departure match that faces away from the arrival road.
+            var startCandidates = starts
+            if !state.stops.isEmpty, let intentMatch = try? matcher.matches(
+                at: state.point, radius: request.matchRadiusMeters, start: true,
+                policy: access,
+                intent: state.point.bearing(to: first.0.coordinate) * 180 / .pi,
+                budget: budget
+            ), !intentMatch.isEmpty {
+                startCandidates = intentMatch
+            }
+            for start in startCandidates {
                 try budget.check()
                 do {
                     let route = try PathSearch(pack: graph).search(start: start, end: first.1,
@@ -354,6 +369,7 @@ public struct FuelPlanner: Sendable {
             current = stateAfter(current, station: station, route: route)
             destHopFailedFromCurrent = false
         }
+        do {
         chain: while true {
             try budget.check()
             visited += 1
@@ -537,6 +553,17 @@ public struct FuelPlanner: Sendable {
             catch { }
 
             return failure("no fuel stop found within range near \(placeName(current.point))", state: current)
+        }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as RoutingFailure {
+            // Time/label limits mid-chain are incomplete fuel proof, not an
+            // opaque engine crash. Surface as an explicit gap with any proven
+            // hops retained — never throw through to a silent unknown advisory.
+            if case .resourceLimit = error {
+                return failure("no fuel stop found within range near \(placeName(current.point))", state: current)
+            }
+            throw error
         }
     }
 }

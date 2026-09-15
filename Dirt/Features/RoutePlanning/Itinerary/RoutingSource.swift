@@ -258,7 +258,18 @@ final class PackRoutingSource: RoutingSource {
                 firstReachableStationMeters: plan.firstReachableStationMeters,destinationEscapeMeters: plan.destinationEscapeMeters,
                 windowComplete: plan.complete)
         } catch let failure as RoutingFailure {
-            return FuelChainResponse(status: "unknown",error: "fuel_not_proven",message: NativeRoutingAdapter.message(failure),
+            // Resource limits during fuel proof are incomplete coverage (gap),
+            // not "fuel data unknown". Keep the rider-facing Fuel range gap card.
+            let message = NativeRoutingAdapter.message(failure)
+            if case .resourceLimit = failure {
+                return FuelChainResponse(
+                    status: "gap", error: "fuel_not_proven",
+                    message: message.lowercased().contains("no fuel")
+                        ? message
+                        : "no fuel stop found within range (planning limit)",
+                    regionIds: nil, stops: [], graphMeters: [], diagnostics: nil)
+            }
+            return FuelChainResponse(status: "unknown",error: "fuel_not_proven",message: message,
                                      regionIds: nil,stops: [],graphMeters: [],diagnostics: nil)
         }
     }

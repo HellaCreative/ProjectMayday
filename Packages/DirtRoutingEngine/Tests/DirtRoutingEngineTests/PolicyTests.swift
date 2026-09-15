@@ -163,6 +163,18 @@ struct PolicyTests {
         #expect(mix < enter)
     }
 
+    @Test func dirtEnterTransitionDilutesOnLongHops() {
+        var dirt = ProfilePolicy(style: .dirt)
+        let short = dirt.dirtEnterTransitionCost(objective: .pavement, hopMeters: 40_000)
+        let long = dirt.dirtEnterTransitionCost(objective: .pavement, hopMeters: 200_000)
+        #expect(abs(short - 280) < 0.01)
+        #expect(long < short)
+        #expect(abs(long - 280 * (50_000 / 200_000)) < 0.01)
+        // Dilution is linear in hop length past the reference; five enters at the
+        // long-hop rate remain cheaper in absolute terms than five at the short rate.
+        #expect(long * 5 < short * 5)
+    }
+
     @Test func dirtPavementAwayScalesWithWander() {
         var policy = ProfilePolicy(style: .dirt)
         policy.wander = 0

@@ -139,7 +139,11 @@ struct ItineraryBuilderTests {
         #expect(result.legs.count == 1)
         #expect(source.routeRequests.isEmpty)
         #expect(source.fuelChainRequests.count == 1)
-        #expect(source.fuelChainRequests[0].fuel.windowMaxStops == 12)
+        // Combined windows size from remaining distance / (0.75×tank), capped at 12.
+        let stops = source.fuelChainRequests[0].fuel.windowMaxStops
+        #expect(stops != nil)
+        #expect((stops ?? 0) >= 2)
+        #expect((stops ?? 0) <= 12)
         #expect(source.fuelChainRequests[0].fuel.forwardFeeler != true)
         #endif
     }
@@ -155,8 +159,12 @@ struct ItineraryBuilderTests {
 
         #expect(result.legs.count == 1)
         #expect(source.fuelChainRequests.count == 1)
-        #expect(source.fuelChainRequests[0].fuel.windowMaxStops == 1)
-        #expect(source.fuelChainRequests[0].fuel.forwardFeeler == true)
+        // Cross-province joined packs still get a sized multi-stop window — do
+        // not force windowStops=1 (that aborted after the first pump).
+        let stops = source.fuelChainRequests[0].fuel.windowMaxStops
+        #expect(stops != nil)
+        #expect((stops ?? 0) >= 2)
+        #expect(source.fuelChainRequests[0].fuel.forwardFeeler != true)
     }
 
     @Test func crossProvinceRejectedPumpUsesRetainedAlternativeWithoutRepeatingFuelSearch() async throws {
@@ -313,7 +321,7 @@ struct ItineraryBuilderTests {
         #expect(plans.count == 2)
         #expect(plans[0].accessPolicy.motorizedUnknown == true)
         #expect(plans[1].accessPolicy.motorizedUnknown == false)
-        #expect(plans.allSatisfy { $0.fuel.windowMaxStops == 1 })
+        #expect(plans.allSatisfy { ($0.fuel.windowMaxStops ?? 0) >= 1 })
         #expect(change.itinerary.legs.first?.allowUnknown == false)
     }
 
@@ -502,6 +510,32 @@ struct ItineraryBuilderTests {
             #expect(gap.message.contains("Carry extra fuel or reshape this leg"))
         } else {
             Issue.record("Expected a visible fuel-gap warning on the completed route")
+        }
+    }
+
+    @Test func noFuelStopUnknownStillSurfacesFuelRangeGapCard() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(points[0], points[1])] = 280_000
+        source.fuelUnknownNoStopMessage = "no fuel stop found within range near 45.163,-69.356"
+        let itinerary = makeItinerary(points)
+
+        let result = await ItineraryBuilder().build(
+            itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 150_000,
+                usableMeters: 150_000, reservePercent: 0
+            ),
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(result.legs.count == 1)
+        #expect(result.legs.compactMap(\.endsAtFuelStop).isEmpty)
+        if case .gap(let gap) = result.riderLegStatus[itinerary.legs[0].id] {
+            #expect(gap.reason.contains("no fuel stop found"))
+        } else {
+            Issue.record("Expected Fuel range gap — not a silent fuel-blind route")
         }
     }
 
@@ -1354,6 +1388,9 @@ private final class FakeRoutingSource: RoutingSource {
     var gapWhenFirstLegMaxBelow: [String: Double] = [:]
     var failKey: String?
     var fuelFailureFoundation: RouteResponse?
+    /// Script an unknown-status response whose message must still surface as a
+    /// Fuel range gap card (no silent A→B).
+    var fuelUnknownNoStopMessage: String?
     var fuelChainError: Error?
     var fuelChainErrorAfterPlanCount: Int?
     var fuelChainPlanCount = 0
@@ -1400,6 +1437,12 @@ private final class FakeRoutingSource: RoutingSource {
             return FuelChainResponse(status: "unknown", error: "window_time_budget",
                 message: "Fuel proof timed out", regionIds: ["test"], stops: [], graphMeters: [],
                 diagnostics: nil, foundationRoute: fuelFailureFoundation, windowComplete: false)
+        }
+        if let fuelUnknownNoStopMessage {
+            return FuelChainResponse(
+                status: "unknown", error: "fuel_not_proven",
+                message: fuelUnknownNoStopMessage, regionIds: ["test"],
+                stops: [], graphMeters: [], diagnostics: nil, windowComplete: false)
         }
         fuelChainPlanCount += 1
         if let limit = fuelChainErrorAfterPlanCount,

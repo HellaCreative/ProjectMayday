@@ -196,22 +196,35 @@ public struct ProfilePolicy: Sendable {
     /// Extra cost each time the search enters dirt from a non-dirt surface.
     /// Stacks with `shortDirtClawback` so many separate >1 km grabs lose to
     /// fewer, longer connected dirt runs.
-    func dirtEnterTransitionCost(objective: SearchObjective) -> Double {
+    ///
+    /// `hopMeters` is the search's fog-of-war / geodesic span. A flat enter tax
+    /// overcorrects on 200 km+ legs (many potential paved→dirt joins make
+    /// "stay paved" look cheaper than connected dirt). Dilute past
+    /// `dirtEnterTransitionReferenceMeters` so relative preference for one
+    /// connected run over many grabs is preserved while absolute tax vs the
+    /// paved corridor stays proportional to hop length.
+    func dirtEnterTransitionCost(objective: SearchObjective, hopMeters: Double = .infinity) -> Double {
         guard style != .cleanest, objective != .distance else { return 0 }
+        let base: Double
         switch objective {
         case .pavement:
-            // ~1.9 km of paved at 150/km — enough that an isolated 1–2 km dirt
-            // patch via a detour loses to staying on the corridor.
-            return 280
+            // ~1.9 km of paved at 150/km on a short hop — enough that an
+            // isolated 1–2 km dirt patch via a detour loses to the corridor.
+            base = 280
         case .profile, .balancedResource:
             let mix = min(1, max(0, balancedDirtPreference.isFinite ? balancedDirtPreference : 0.5))
             // Profile surface gap is smaller than pavement-mode; keep the same
             // qualitative barrier at that scale.
-            return 8 + mix * 10
+            base = 8 + mix * 10
         case .distance:
             return 0
         }
+        let reference = Self.dirtEnterTransitionReferenceMeters
+        guard hopMeters.isFinite, hopMeters > reference, hopMeters > 0 else { return base }
+        return base * (reference / hopMeters)
     }
+    /// Hop length at which `dirtEnterTransitionCost` is still the full barrier.
+    static let dirtEnterTransitionReferenceMeters = 50_000.0
     /// Extra cost for dirt meters that do not yet form a meaningful contiguous
     /// run. Callers pass only the meters still under `minimumMeaningfulDirtMeters`.
     /// Prices those meters as paved so a 200–300 m nibble cannot beat staying

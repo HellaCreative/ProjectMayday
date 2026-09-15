@@ -376,8 +376,14 @@ public struct PathSearch: Sendable {
                     }
                     // Entering a new dirt run (paved→dirt) costs a transition so
                     // many separate >1 km grabs lose to one connected corridor.
+                    // Scale by hop span so long fuel/A→B legs are not starved
+                    // of dirt by a flat per-enter constant.
                     if current.contiguousDirtMeters <= 0 {
-                        clawback += policy.dirtEnterTransitionCost(objective: options.objective)
+                        let hopSpan = options.maximumMeters.isFinite
+                            ? options.maximumMeters
+                            : start.coordinate.distance(to: end.coordinate)
+                        clawback += policy.dirtEnterTransitionCost(
+                            objective: options.objective, hopMeters: hopSpan)
                     }
                 } else {
                     contiguousDirt = 0

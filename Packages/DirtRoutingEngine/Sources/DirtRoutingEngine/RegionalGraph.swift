@@ -93,21 +93,51 @@ public final class RegionalGraph: RoadGraph {
                          accessForward: g.accessCode(edge,forward: true),accessReverse: g.accessCode(edge,forward: false),
                          layer: Int(g.layers[edge]),structureLeaf: structure.isEmpty ? nil : structure)
         }
+        /// OSM topology only — access/layer/structure can drift between
+        /// independently packed border regions for the same way and must not
+        /// reject a seam that the sidecar already proved reciprocal.
+        /// Endpoint order is normalized: packs may store the same way reversed.
+        struct EdgeTopology: Hashable {
+            let osmWayId: String
+            let nodeLo: String
+            let nodeHi: String
+            init(_ edge: SeamDocument.EdgeProof) {
+                osmWayId = edge.osmWayId
+                let a = edge.fromOsmNodeId, b = edge.toOsmNodeId
+                if a <= b { nodeLo = a; nodeHi = b } else { nodeLo = b; nodeHi = a }
+            }
+        }
+        /// OSM identity for turn restrictions at a seam. Endpoint node IDs are
+        /// omitted: border ways are often clipped differently in each pack, so
+        /// the same OSM restriction can reference different local endpoints
+        /// while still being the same legal rule.
         struct RestrictionProof: Hashable {
             let relation: Int64
-            let from: SeamDocument.EdgeProof
-            let to: SeamDocument.EdgeProof
-            let via: [SeamDocument.EdgeProof]
+            let fromWay: String
+            let toWay: String
+            let viaWays: [String]
             let only: Bool
             let mask: UInt16
+            init(relation: Int64, from: SeamDocument.EdgeProof, to: SeamDocument.EdgeProof,
+                 via: [SeamDocument.EdgeProof], only: Bool, mask: UInt16) {
+                self.relation = relation
+                self.fromWay = from.osmWayId
+                self.toWay = to.osmWayId
+                self.viaWays = via.map(\.osmWayId)
+                self.only = only
+                self.mask = mask
+            }
         }
         func relevant(_ p: Int,_ node: Int) -> Set<RestrictionProof> {
             let incident = Set(graphs[p].outgoing(node).map(\.edge))
             return Set(graphs[p].restrictions.filter { r in
                 r.viaNode == node || incident.contains(r.fromEdge) || incident.contains(r.toEdge) || !incident.isDisjoint(with: r.viaEdges)
             }.map { r in
-                RestrictionProof(relation: r.relationID,from: proof(p,r.fromEdge),to: proof(p,r.toEdge),
-                                 via: r.viaEdges.map { proof(p,$0) },only: r.only,mask: r.vehicleMask)
+                RestrictionProof(relation: r.relationID,
+                                 from: proof(p,r.fromEdge),
+                                 to: proof(p,r.toEdge),
+                                 via: r.viaEdges.map { proof(p,$0) },
+                                 only: r.only, mask: r.vehicleMask)
             })
         }
         var parent: [Int:Int] = [:], linkedRegions: [Int:Set<Int>] = [:]
@@ -128,14 +158,38 @@ public final class RegionalGraph: RoadGraph {
                           }) == true else { throw RoutingFailure.invalidPack("unreciprocated seam proof") }
                     let lg = graphs[left], rg = graphs[right]
                     let stated = Coordinate(longitude: anchor.coordinate[0],latitude: anchor.coordinate[1])
-                    guard stated.isValid, lg.coordinate(node: ln).distance(to: rg.coordinate(node: rn)) <= 2,
-                          lg.coordinate(node: ln).distance(to: stated) <= 2,
-                          lg.barriers[ln,default: 0] == anchor.barrierDecision,
-                          rg.barriers[rn,default: 0] == anchor.barrierDecision,
-                          lg.outgoing(ln).contains(where: { proof(left,$0.edge) == anchor.edge }),
-                          rg.outgoing(rn).contains(where: { proof(right,$0.edge) == anchor.edge }),
-                          relevant(left,ln) == relevant(right,rn) else {
-                        throw RoutingFailure.invalidPack("seam does not match graph legality")
+                    let leftPoint = lg.coordinate(node: ln), rightPoint = rg.coordinate(node: rn)
+                    let leftBarrier = lg.barriers[ln,default: 0], rightBarrier = rg.barriers[rn,default: 0]
+                    let leftHasEdge = lg.outgoing(ln).contains(where: {
+                        EdgeTopology(proof(left,$0.edge)) == EdgeTopology(anchor.edge)
+                    })
+                    let rightHasEdge = rg.outgoing(rn).contains(where: {
+                        EdgeTopology(proof(right,$0.edge)) == EdgeTopology(anchor.edge)
+                    })
+                    let leftRelevant = relevant(left,ln), rightRelevant = relevant(right,rn)
+                    guard stated.isValid else {
+                        throw RoutingFailure.invalidPack("seam does not match graph legality: invalid coordinate node=\(anchor.osmNodeId)")
+                    }
+                    guard leftPoint.distance(to: rightPoint) <= 2 else {
+                        throw RoutingFailure.invalidPack("seam does not match graph legality: node gap \(leftPoint.distance(to: rightPoint))m node=\(anchor.osmNodeId)")
+                    }
+                    guard leftPoint.distance(to: stated) <= 2 else {
+                        throw RoutingFailure.invalidPack("seam does not match graph legality: stated gap \(leftPoint.distance(to: stated))m node=\(anchor.osmNodeId)")
+                    }
+                    guard leftBarrier == anchor.barrierDecision, rightBarrier == anchor.barrierDecision else {
+                        throw RoutingFailure.invalidPack("seam does not match graph legality: barrier left=\(leftBarrier) right=\(rightBarrier) seam=\(anchor.barrierDecision) node=\(anchor.osmNodeId)")
+                    }
+                    guard leftHasEdge, rightHasEdge else {
+                        throw RoutingFailure.invalidPack("seam does not match graph legality: missing edge proof way=\(anchor.edge.osmWayId) node=\(anchor.osmNodeId) left=\(leftHasEdge) right=\(rightHasEdge)")
+                    }
+                    guard leftRelevant == rightRelevant else {
+                        let leftDesc = leftRelevant.map {
+                            "\($0.relation):\($0.fromWay)>\($0.toWay) only=\($0.only) mask=\($0.mask) via=\($0.viaWays)"
+                        }.sorted().joined(separator: ";")
+                        let rightDesc = rightRelevant.map {
+                            "\($0.relation):\($0.fromWay)>\($0.toWay) only=\($0.only) mask=\($0.mask) via=\($0.viaWays)"
+                        }.sorted().joined(separator: ";")
+                        throw RoutingFailure.invalidPack("seam does not match graph legality: restriction mismatch node=\(anchor.osmNodeId) left=[\(leftDesc)] right=[\(rightDesc)]")
                     }
                     // A prohibited/conditional barrier cannot become a passage merely
                     // because both regions agree it exists.
