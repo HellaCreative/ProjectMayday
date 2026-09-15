@@ -29,6 +29,7 @@ CASES[owner-balanced]="ns,nb $PL -67.29131337653283 45.262939746458734 balanced 
 CASES[owner-clean]="ns,nb $PL -67.29131337653283 45.262939746458734 cleanest 3806057305948982 12.5"
 # Destinations and zooms from the 2026-09-15 phone logs (app session seeds are not logged).
 CASES[phone-capebreton-dirt]="ns $PL -60.497036 46.884834 dirt 1 10.5"
+CASES[phone-capebreton-clean]="ns $PL -60.497036 46.884834 cleanest 1 10.5"
 CASES[phone-antigonish-dirt]="ns $PL -61.715371 45.598475 dirt 1 7.5"
 CASES[phone-yarmouth-unknown-dirt]="ns $PL -66.134042 43.844148 dirt 1 8.7"
 # Fuel: 200 km at 10% reserve (probe default), and the phone's 300 km at 10% in app windows.

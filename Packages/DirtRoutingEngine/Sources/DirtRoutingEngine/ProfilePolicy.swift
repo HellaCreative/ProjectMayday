@@ -80,8 +80,8 @@ public struct ProfilePolicy: Sendable {
         let family = Self.family(pack.surfaceLeaf(edge)), tier = Self.tier(pack.roadClass(edge))
         let paved = family == .paved || (family == .unknown && ["motorway","trunk","arterial","collector","local_paved"].contains(tier))
         if pavedOnly && !paved { return false }
-        if endpoint || !pavedOnly { return true }
-        return tier != "destination" && tier != "adventure"
+        if pavedOnly && !endpoint && tier == "adventure" { return false }
+        return true
     }
     func step(pack: any RoadGraph, edge: Int, meters: Double, objective: SearchObjective,
               from: Coordinate, to: Coordinate, start: Coordinate, end: Coordinate,

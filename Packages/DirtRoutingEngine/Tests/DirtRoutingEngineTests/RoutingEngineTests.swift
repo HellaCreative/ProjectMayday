@@ -97,6 +97,29 @@ struct RoutingEngineTests {
         #expect(backRoad.distanceMeters <= local * 1.12)
     }
 
+    @Test func cleanestDoesNotTakeDirtWhenAPavedBackRoadExists() throws {
+        let pack = PolicyTests.Line(
+            nodes: [
+                .init(longitude: 0,latitude: 0),.init(longitude: 0.015,latitude: 0.02),
+                .init(longitude: 0.045,latitude: 0.02),.init(longitude: 0.06,latitude: 0)
+            ],
+            edges: [(0,1),(1,2),(2,3),(0,3)],
+            surfaces: ["asphalt","asphalt","asphalt","dirt"],
+            roads: ["residential","residential","residential","track"]
+        )
+        let graph = try IndexedGraph(pack)
+        var clean = RoutingRequest(start: .init(longitude: 0.002,latitude: 0.018),
+                                   end: .init(longitude: 0.058,latitude: 0.018),style: .cleanest)
+        clean.matchRadiusMeters = 2000
+        let backRoad = try RoutingEngine(pack: graph).route(clean,budget: .init(seconds: 20))
+        let dirtShortcut = pack.distance(3)
+        let paved = pack.distance(0)+pack.distance(1)+pack.distance(2)
+        #expect(dirtShortcut < paved)
+        let dirtMeters = backRoad.segments.filter { $0.surface == .gravel || $0.surface == .loose }.reduce(0) { $0+$1.meters }
+        #expect(dirtMeters / max(1,backRoad.distanceMeters) < 0.05)
+        #expect(!backRoad.segments.contains { $0.surface == .loose || $0.surface == .gravel })
+    }
+
     @Test func cleanestUsesAHighwayOnlyWhenNoBackRoadConnects() throws {
         let pack = PolicyTests.Line(
             nodes: [
