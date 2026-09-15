@@ -39,6 +39,9 @@ public struct SearchOptions: Sendable {
     /// prefers progress toward the hop end without drowning the dirt-rate cost
     /// (see `heapCost` — pull is 2× dirtWeight × geoKm, not raw geoKm).
     public var fuelGoalPull = false
+    /// Fuel sweep: keep expanding after the first goal and reconstruct every
+    /// pump (and the destination) the search actually reached inside the cap.
+    public var collectEveryGoal = false
     /// Optional per-search reject/time profile. Filled by the search; never read
     /// for routing decisions.
     public var profile: SearchProfile? = nil
@@ -59,6 +62,8 @@ public final class SearchProfile: @unchecked Sendable {
     public var cityWallRejects = 0
     public var meterRejects = 0
     public var limit: String?
+    /// Routes reconstructed for every goal when `collectEveryGoal` is set.
+    public var collectedRoutes: [ComputedRoute] = []
     public init() {}
     public var summary: String {
         "pops=\(pops) labels=\(labels) ms=\(Int(elapsedMs.rounded())) " +
@@ -331,9 +336,11 @@ public struct PathSearch: Sendable {
                     if policy.style == .balanced && abs((options.precedingDirtMeters+current.dirtMeters)/max(1,options.precedingMeters+current.meters)-0.5) <= 0.005 { break }
                     continue
                 }
-                // Multi-goal (additionalEnds): keep searching so the picker can
-                // choose the most progressing pump, not whichever is popped first.
-                if !options.additionalEnds.isEmpty { continue }
+                // Distance multi-goal (first pump) stops at the first, shortest
+                // arrival. A style sweep keeps every goal so the fan can choose.
+                if options.collectEveryGoal || (options.objective != .distance && !options.additionalEnds.isEmpty) {
+                    continue
+                }
                 break
             }
             var arcs = virtual[current.state.node] ?? []
@@ -506,16 +513,73 @@ public struct PathSearch: Sendable {
                 }
             }
         }
-        guard let chosen = goals.min(by: { a,b in
-            // Short dirt is taxed per arc during expansion; no extra goal clawback.
-            func adjusted(_ index: Int) -> Double { labels[index].cost }
-            // Multi-goal fuel: prefer the pump with the least remaining road to
-            // the trip destination (most progress); cost is the tie-break.
-            if !options.additionalEnds.isEmpty {
-                let ra = labels[a].parent.map { remaining(of: labels[$0].state.node) } ?? .infinity
-                let rb = labels[b].parent.map { remaining(of: labels[$0].state.node) } ?? .infinity
-                if ra.isFinite, rb.isFinite, abs(ra - rb) > 1_000 { return ra < rb }
+        func reconstruct(_ chosen: Int) -> ComputedRoute? {
+            var path: [Arc] = [], cursor: Int? = chosen
+            while let i = cursor { if let arc = labels[i].arc { path.append(arc) }; cursor = labels[i].parent }
+            path.reverse()
+            let meaningful = path.filter { $0.meters > 0.01 }
+            var i = 0
+            while i < meaningful.count {
+                guard pack.accessCode(meaningful[i].edge,forward: meaningful[i].forward) == 4 else { i += 1; continue }
+                let first = i
+                var distance = 0.0
+                while i < meaningful.count && pack.accessCode(meaningful[i].edge,forward: meaningful[i].forward) == 4 {
+                    distance += meaningful[i].meters; i += 1
+                }
+                guard distance <= 200.01, (first == 0 && access.startIsCustomer) || (i == meaningful.count && access.endIsCustomer) else {
+                    return nil
+                }
             }
+            let segments = meaningful.map { arc in
+                RouteSegment(edge: arc.edge,edgeID: pack.edgeID(arc.edge),forward: arc.forward,meters: arc.meters,
+                             surface: ProfilePolicy.family(pack.surfaceLeaf(arc.edge)),surfaceLeaf: pack.surfaceLeaf(arc.edge),
+                             roadClass: pack.roadClass(arc.edge),structure: pack.structure(arc.edge),
+                             access: pack.accessCode(arc.edge,forward: arc.forward),geometry: clippedGeometry(arc))
+            }
+            let lastArc = meaningful.last
+            let lastEdge = lastArc?.edge ?? end.edge
+            let ends = [end] + options.additionalEnds
+            var arrived = ends.first { $0.edge == lastEdge }
+            if arrived == nil, let lastArc {
+                let coord = clippedGeometry(lastArc).last ?? end.coordinate
+                if let nearest = ends.min(by: {
+                    $0.coordinate.distance(to: coord) < $1.coordinate.distance(to: coord)
+                }), nearest.coordinate.distance(to: coord) <= 150 {
+                    arrived = nearest
+                }
+            }
+            if arrived == nil {
+                if options.collectEveryGoal { return nil }
+                arrived = end
+            }
+            guard let arrived else { return nil }
+            var result = ComputedRoute(start: start,end: arrived,segments: segments,distanceMeters: labels[chosen].meters,
+                                 searchCost: labels[chosen].cost,poppedLabels: pops,limit: limit,
+                                 arrivalRestrictions: labels[chosen].state.restrictions)
+            result.maneuvers = NavigationCues.make(route: result,graph: pack,access: access,arrival: options.arrival)
+            return result
+        }
+        if options.collectEveryGoal {
+            var collected: [ComputedRoute] = []
+            var bestByEnd: [Int:ComputedRoute] = [:]
+            for goal in goals {
+                guard let route = reconstruct(goal), route.distanceMeters <= options.maximumMeters + 1 else { continue }
+                if let previous = bestByEnd[route.end.edge], previous.searchCost <= route.searchCost { continue }
+                bestByEnd[route.end.edge] = route
+            }
+            collected = Array(bestByEnd.values)
+            options.profile?.collectedRoutes = collected
+            if let dest = collected.first(where: {
+                $0.end.edge == end.edge && abs($0.end.alongMeters - end.alongMeters) < 1
+            }) {
+                return .reached(dest)
+            }
+            if let any = collected.min(by: { $0.searchCost < $1.searchCost }) {
+                return .reached(any)
+            }
+        }
+        guard let chosen = goals.min(by: { a,b in
+            func adjusted(_ index: Int) -> Double { labels[index].cost }
             if resource {
                 let ra = (options.precedingDirtMeters+labels[a].dirtMeters)/max(1,options.precedingMeters+labels[a].meters)
                 let rb = (options.precedingDirtMeters+labels[b].dirtMeters)/max(1,options.precedingMeters+labels[b].meters)
@@ -527,7 +591,7 @@ public struct PathSearch: Sendable {
                 return labels[a].dirtMeters > labels[b].dirtMeters
             }
             return adjusted(a) < adjusted(b)
-        }) else {
+        }), let result = reconstruct(chosen) else {
             if options.maximumMeters.isFinite, !frontierHits.isEmpty {
                 let nearCutoff = options.maximumMeters * 0.8
                 var seen = Set<Int>()
@@ -556,34 +620,6 @@ public struct PathSearch: Sendable {
             if let limit { throw RoutingFailure.resourceLimit(limit) }
             throw RoutingFailure.noPath
         }
-        var path: [Arc] = [], cursor: Int? = chosen
-        while let i = cursor { if let arc = labels[i].arc { path.append(arc) }; cursor = labels[i].parent }
-        path.reverse()
-        let meaningful = path.filter { $0.meters > 0.01 }
-        // Customer access must be an actual endpoint run, never a through shortcut.
-        var i = 0
-        while i < meaningful.count {
-            guard pack.accessCode(meaningful[i].edge,forward: meaningful[i].forward) == 4 else { i += 1; continue }
-            let first = i
-            var distance = 0.0
-            while i < meaningful.count && pack.accessCode(meaningful[i].edge,forward: meaningful[i].forward) == 4 {
-                distance += meaningful[i].meters; i += 1
-            }
-            guard distance <= 200.01, (first == 0 && access.startIsCustomer) || (i == meaningful.count && access.endIsCustomer) else {
-                throw RoutingFailure.noPath
-            }
-        }
-        let segments = meaningful.map { arc in
-            RouteSegment(edge: arc.edge,edgeID: pack.edgeID(arc.edge),forward: arc.forward,meters: arc.meters,
-                         surface: ProfilePolicy.family(pack.surfaceLeaf(arc.edge)),surfaceLeaf: pack.surfaceLeaf(arc.edge),
-                         roadClass: pack.roadClass(arc.edge),structure: pack.structure(arc.edge),
-                         access: pack.accessCode(arc.edge,forward: arc.forward),geometry: clippedGeometry(arc))
-        }
-        let arrived = ([end]+options.additionalEnds).first { $0.edge == (meaningful.last?.edge ?? end.edge) } ?? end
-        var result = ComputedRoute(start: start,end: arrived,segments: segments,distanceMeters: labels[chosen].meters,
-                             searchCost: labels[chosen].cost,poppedLabels: pops,limit: limit,
-                             arrivalRestrictions: labels[chosen].state.restrictions)
-        result.maneuvers = NavigationCues.make(route: result,graph: pack,access: access,arrival: options.arrival)
         return .reached(result)
     }
 

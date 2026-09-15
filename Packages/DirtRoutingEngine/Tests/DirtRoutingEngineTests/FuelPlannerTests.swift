@@ -32,14 +32,14 @@ struct FuelPlannerTests {
     var request: RoutingRequest { .init(start: .init(longitude: 0.01,latitude: 0),end: .init(longitude: 1.19,latitude: 0),style: .cleanest) }
     @Test func everyPumpHasAnActualBoundedRoadApproachAndOnwardRoute() throws {
         let graph = try IndexedGraph(Road())
-        // Hops are ~33 km on this graph; planTank = usable/1.4 must still clear
-        // that geo so onward stations are eligible under style slack.
-        let plan = try FuelPlanner(graph: graph,stations: pumps).plan(request,requirements: .init(usableRangeMeters: 50_000,firstLegMaxMeters: 45_000))
+        // Hops are ~33 km on this graph; usable range must cover a real approach
+        // with no planTank slack.
+        let plan = try FuelPlanner(graph: graph,stations: pumps).plan(request,requirements: .init(usableRangeMeters: 45_000,firstLegMaxMeters: 45_000))
         #expect(plan.complete)
         #expect(plan.stops.map(\.id) == pumps.map(\.id))
         #expect(plan.routes.count == 4)
         for (i,route) in plan.routes.enumerated() {
-            #expect(route.distanceMeters <= (i == 0 ? 45_000 : 50_000))
+            #expect(route.distanceMeters <= 45_000)
             if i > 0 { #expect(route.start.coordinate == plan.routes[i-1].end.coordinate) }
         }
         #expect(plan.routes.last!.end.coordinate.distance(to: request.end) < 0.01)
@@ -122,7 +122,8 @@ struct FuelPlannerTests {
         fuel.requiredFirstStationID = pumps[0].id
         let plan = try FuelPlanner(graph: Road(),stations: pumps).plan(request,requirements: fuel)
         #expect(plan.complete)
-        #expect(plan.stops.contains { $0.id == pumps[1].id })
+        #expect(plan.stops.first?.id == pumps[0].id)
+        #expect(plan.stops.contains { $0.id == pumps[1].id || $0.id == pumps[2].id })
     }
     @Test func indexPreservesExactMatcherResults() throws {
         let fixtures = ReferenceTests()

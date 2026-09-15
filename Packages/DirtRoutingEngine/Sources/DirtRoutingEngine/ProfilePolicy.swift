@@ -85,7 +85,7 @@ public struct ProfilePolicy: Sendable {
         if pack.structure(edge) == "ferry" { return true }
         let family = Self.family(pack.surfaceLeaf(edge)), tier = Self.tier(pack.roadClass(edge))
         let paved = family == .paved || (family == .unknown && ["motorway","trunk","arterial","collector","local_paved"].contains(tier))
-        if pavedOnly && !paved { return false }
+        if pavedOnly && !paved && !endpoint { return false }
         if pavedOnly && !endpoint && tier == "adventure" { return false }
         return true
     }

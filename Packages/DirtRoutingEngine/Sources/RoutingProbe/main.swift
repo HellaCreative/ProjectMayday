@@ -113,6 +113,10 @@ do {
             "distanceMeters":total,"knownDirtPercent": total > 0 ? (known/total*1000).rounded()/10 : 0,
             "fuelComplete":plan.complete,"fuelStops":plan.stops.map(\.id),"fuelLimit":plan.limit as Any? ?? NSNull(),
             "hopMeters":plan.routes.map(\.distanceMeters),
+            "hopDirtPercent":plan.routes.map { route -> Double in
+                let dirt = route.segments.filter { $0.structure != "ferry" && ($0.surface == .gravel || $0.surface == .loose) }.reduce(0) { $0+$1.meters }
+                return route.distanceMeters > 0 ? (dirt/route.distanceMeters*1000).rounded()/10 : 0
+            },
             "hopEdgeSHA256":sha256(plan.routes.map { $0.segments.map(\.edgeID).joined(separator: ",") }),
             "styleSummary":plan.styleSummary as Any? ?? NSNull(),
             "destinationEscapeMeters":plan.destinationEscapeMeters as Any? ?? NSNull(),

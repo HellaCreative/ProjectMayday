@@ -844,11 +844,17 @@ From Here is the two-`.rider` case of the same list (origin, destination).
 Do not handle these inside Stages 0–3. After Stages 0–3 are phone-tested,
 resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
 
-- Stage 1 fuel/dirt residual (15 Sep structural fuel fix): leg0 known-dirt still
-  ~0–19% on the short first approach (~16–35 km); last leg to destination often
-  19–33% dirt or `distanceFallback` after `planTank` target picks (owner-fuel
-  28.9%→23.2% because dest lost its prior 55% styleOk). Do not reopen
-  fuelGoalPull / transition tuning — fix target/dest slack or dest style next.
+- Stage 1 fuel/dirt residual (15 Sep): first-pump approaches remain short
+  distance legs (rule 8). Later `planTank` / `distanceFallback` / dest-closeness
+  picks are removed in Step B (sweep + fan). Do not reopen fuelGoalPull /
+  transition tuning. Step C (wander vs road progress) and Step D (fuel-off
+  350–400 km breaks) wait on phone tests. Still deferred: loops/W at waypoints
+  (rule 3), 1 km dirt rule (rule 4), movable fuel/distance-break save/restore
+  (rule 14), legs appearing as they build (rule 15). `preferredStationIDs` is
+  unused. Clean fuel sweeps turn `pavedOnly` off so they can leave an unpaved
+  first pump; Clean cost still prefers pavement. Contract probes (180 km
+  usable): Yarmouth Dirt/Balanced and north-NB Dirt/Balanced empty-fan gaps;
+  Cape Breton Balanced gap near the dest. Do not put shortest back.
 - Wander slider: needs a real, monotonic, visibly-scaling effect anchored
   around a sensible median default, not the current near-flat 0%–100%
   behavior. Do not tweak weights ad hoc until that design is settled.
