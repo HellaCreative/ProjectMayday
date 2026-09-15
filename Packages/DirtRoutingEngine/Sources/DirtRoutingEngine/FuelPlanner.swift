@@ -161,7 +161,7 @@ public struct FuelPlanner: Sendable {
             if current.stops.count >= fuel.minimumStops && requiredSatisfied {
                 let endCap = min(tank,fuel.destinationUsedLimitMeters ?? .infinity)
                 if let tail = try hop(current,to: request.end,endMatches: destinationMatches,cap: endCap,
-                                      customer: request.access.endIsCustomer) {
+                                      customer: request.access.endIsCustomer,shortest: true) {
                     var escape: Double? = fuel.ensureDestinationEscape ? nil : 0
                     if fuel.ensureDestinationEscape {
                         let arrived = stateAfter(current,station: nil,route: tail)
