@@ -61,7 +61,7 @@ final class ArcIndexCache: @unchecked Sendable {
 final class EndpointReachability {
     private let graph: any RoadGraph
     private let arcs: ArcIndex
-    private struct EndKey: Hashable { let edge: Int; let forward: Bool? }
+    private struct EndKey: Hashable { let edge: Int }
     /// `arrival[arc]`: the end is reachable after arriving along that arc.
     /// `free[node]`: reachable after a coincident-node transfer, when any road may follow.
     private struct Marks { let arrival: [Bool]; let free: [Bool] }
@@ -80,7 +80,7 @@ final class EndpointReachability {
         if start.edge == end.edge {
             // PathSearch adds a direct arc between two positions on one road.
             let forward = start.alongMeters <= end.alongMeters
-            if start.forward != !forward && end.forward != !forward { return true }
+            if start.forward != !forward { return true }
         }
         let marks = try marks(for: end, budget: budget)
         let a = graph.endpoint(start.edge, from: true), b = graph.endpoint(start.edge, from: false)
@@ -89,9 +89,9 @@ final class EndpointReachability {
         return false
     }
 
+    /// Arrival may use either direction of the destination road.
     private func finishes(_ node: Int, _ end: RoadMatch) -> Bool {
-        (end.forward != false && node == graph.endpoint(end.edge, from: true))
-            || (end.forward != true && node == graph.endpoint(end.edge, from: false))
+        node == graph.endpoint(end.edge, from: true) || node == graph.endpoint(end.edge, from: false)
     }
 
     private func canContinue(from node: Int, arrivedBy edge: Int, end: RoadMatch, marks: Marks) -> Bool {
@@ -105,7 +105,7 @@ final class EndpointReachability {
     }
 
     private func marks(for end: RoadMatch, budget: ComputationBudget) throws -> Marks {
-        let key = EndKey(edge: end.edge, forward: end.forward)
+        let key = EndKey(edge: end.edge)
         if let cached = cache[key] { return cached }
         let nodeCount = graph.nodeCount
         var arrival = [Bool](repeating: false, count: arcs.outEdge.count)
@@ -120,9 +120,8 @@ final class EndpointReachability {
                 if !arrival[arc], Int(arcs.outEdge[arc]) != edge { arrival[arc] = true; arcQueue.append(Int32(arc)) }
             }
         }
-        for (node, allowed) in [(graph.endpoint(end.edge, from: true), end.forward != false),
-                                (graph.endpoint(end.edge, from: false), end.forward != true)]
-        where allowed && node >= 0 && node < nodeCount {
+        for node in [graph.endpoint(end.edge, from: true), graph.endpoint(end.edge, from: false)]
+        where node >= 0 && node < nodeCount {
             markFree(node)
             markArrivals(at: node, except: end.edge)
         }

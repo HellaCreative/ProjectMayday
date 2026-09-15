@@ -100,8 +100,11 @@ public struct FuelPlanner: Sendable {
             for route in state.routes { next.options.priorEdges.formUnion(route.segments.map(\.edgeID)) }
             let starts = state.match.map { [$0] } ?? initialMatches
             let sub = hopBudget(shortest: shortest)
+            var tried = Set<String>()
             for start in starts {
                 for end in endMatches {
+                    // Matches that differ only in destination direction search identically.
+                    guard tried.insert("\(start.edge):\(String(describing: start.forward)):\(start.alongMeters)|\(end.edge):\(end.alongMeters)").inserted else { continue }
                     try budget.check()
                     do {
                         if shortest {
