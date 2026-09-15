@@ -317,9 +317,9 @@ document or any code comment disagrees, this contract wins.
    closer to the next waypoint by road, so a lake or bay is ridden around, not
    treated as a wall.
 6. Wander sets how far the ride may roam: tight and direct at low wander, big
-   S-curves and wide swings at high wander. It limits sideways and backward
-   swing measured against road progress, not a straight band between waypoints.
-   Wander never decides whether fuel is found.
+   S-curves and wide swings at high wander. It sets how much of each leg's
+   ridden distance may go sideways instead of toward the next rider waypoint
+   (rule 10). Wander never decides whether fuel is found (rule 11).
 
 **Fuel**
 
@@ -334,15 +334,20 @@ document or any code comment disagrees, this contract wins.
    ahead, no further than the usable range (the fog of war). It remembers each
    pump it reaches and the ridden distance to it. Range shapes the ride; fuel is
    chosen from where the rider would actually be on that ride.
-10. Pump choice. Near the end of the range, consider the pumps the sweep reached
-    in a fan of about 45 to 60 degrees around the road direction of travel.
-    Choose the one whose leg is the best ride in the leg's style and fits the
-    tank, far enough along that stops stay few. Pumps are never ranked by
-    closeness to the final destination, and shortest distance never picks a pump
-    after the first one.
-11. Empty fan. Widen the fan step by step. If no pump is reachable within range
-    by a leg in the leg's style, show the fuel range gap card. Never substitute a
-    shortest route or a route that ignores fuel.
+10. Pump choice. From each refill, look in a 120 degree fan (60 degrees either
+    side) pointed straight at the next rider-placed waypoint. Consider the pumps
+    the sweep reached inside that fan. A pump counts only if its leg earns its
+    distance: the reduction in road distance to the next rider waypoint must be
+    at least half of the km ridden on that leg at the default wander (higher
+    wander may lower that share, lower wander raises it). Among pumps that
+    count, choose the one whose leg is the best ride in the leg's style and fits
+    the tank; on a tie, the one that makes more progress. Pumps are never ranked
+    by closeness to the final destination, and shortest distance never picks a
+    pump after the first one.
+11. Nothing counts. First lower the progress share step by step, then widen the
+    fan in modest steps (never past 180 degrees). If still no pump is reachable
+    within range by a leg in the leg's style, show the fuel range gap card.
+    Never substitute a shortest route or a route that ignores fuel.
 12. Destination. The next rider waypoint (or final destination) sets direction.
     It becomes the leg's end only when a leg in that style reaches it inside the
     range.
