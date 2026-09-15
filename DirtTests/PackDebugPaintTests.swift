@@ -1,11 +1,12 @@
 import Testing
+import DirtRoutingEngine
 @testable import Dirt
 
 struct PackDebugPaintTests {
     @Test func surfaceAndRoadKeysMatchEnums() {
         #expect(PackDebugPaint.surfaceFamilyKey(.gravel) == "gravel")
-        #expect(PackDebugPaint.roadTierKey(.collector) == "collector")
-        #expect(PackDebugPaint.roadTierKey(.localPaved) == "local_paved")
+        #expect(ProfilePolicy.tier("secondary") == "collector")
+        #expect(ProfilePolicy.tier("tertiary") == "local_paved")
     }
 
     @Test func legendsCoverPaintModes() {

@@ -1,117 +1,66 @@
-import CoreLocation
 import Foundation
 import Testing
+import DirtRoutingEngine
 @testable import Dirt
 
-/// Fuel-off owner replay against immutable `fabric-v4-20260909-02`.
-/// Records riding character; does not freeze routing or start fuel work.
-@MainActor
+/// Opt-in replay of immutable local packs. Never installs into the rider's cache.
+/// Set DIRT_OWNER_REPLAY_PACK_ROOT to a directory containing ns/ and nb/ manifests.
 @Suite(.serialized)
 struct Phase1OwnerFuelOffReplayTests {
-    private let release = "fabric-v4-20260909-02"
-    private let packRoot = URL(
-        fileURLWithPath: "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/scripts/pack-fabric/routing/candidates/fabric-v4-20260909-02/packs",
-        isDirectory: true
-    )
-
-    @Test func portersLakeToStStephenDirtFuelOff() async throws {
-        let origin = CLLocationCoordinate2D(latitude: 44.764804567541226, longitude: -63.34024797349485)
-        let destination = CLLocationCoordinate2D(latitude: 45.262939746458734, longitude: -67.29131337653283)
-        try installPacks(["ns", "nb"])
-        let store = GraphPackStore()
-        #expect(store.isInstalled("ns"))
-        #expect(store.isInstalled("nb"))
-
-        let started = CFAbsoluteTimeGetCurrent()
-        let result = await store.routeOnDeviceDetailed(
-            from: origin,
-            to: destination,
-            profile: .dirt,
-            allowUnknown: false,
-            sessionSeed: 3_806_057_305_948_982,
-            mapZoom: 12.5
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_OWNER_REPLAY_PACK_ROOT"] != nil))
+    func portersLakeToStStephenDirtFuelOff() throws {
+        let root = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["DIRT_OWNER_REPLAY_PACK_ROOT"]), isDirectory: true)
+        let started = ContinuousClock.now
+        let budget = ComputationBudget(seconds: 60)
+        let repository = try PackRepository(installedDirectories: ["ns": root.appendingPathComponent("ns"), "nb": root.appendingPathComponent("nb")])
+        let packs = try ["ns", "nb"].map { try repository.open($0, requireSeams: true, budget: budget) }
+        for pack in packs { #expect(pack.manifest.fabricReleaseId == "fabric-v4-20260909-02") }
+        let graph = try IndexedGraph(RegionalGraph(packs: packs, budget: budget), budget: budget)
+        var request = RoutingRequest(
+            start: .init(longitude: -63.34024797349485, latitude: 44.764804567541226),
+            end: .init(longitude: -67.29131337653283, latitude: 45.262939746458734),
+            style: .dirt, allowUnknown: false, seed: 3_806_057_305_948_982
         )
-        let elapsed = CFAbsoluteTimeGetCurrent() - started
-
-        let payload: [String: Any]
-        switch result {
-        case .success(let route):
-            payload = [
-                "status": "success",
-                "elapsedSeconds": elapsed,
+        request.mapZoom = 12.5
+        do {
+            let route = try RoutingEngine(pack: graph).route(request, budget: budget)
+            let quality = RouteQuality(route: route, urbanBoxes: graph.urbanCores)
+            let duration = started.duration(to: .now).components
+            let payload: [String: Any] = [
+                "status": "road-complete",
+                "elapsedSeconds": Double(duration.seconds) + Double(duration.attoseconds) / 1e18,
                 "distanceMeters": route.distanceMeters,
-                "dirtPercent": route.dirtPercent,
-                "pavedPercent": route.pavedPercent,
-                "unknownSurfacePercent": route.unknownSurfacePercent,
-                "reportedDirtPercent": route.reportedDirtPercent,
-                "coordinateCount": route.coordinates.count,
-                "legCount": route.legs.count,
-                "debugNote": route.debugNote,
-                "searchMeta": [
-                    "pops": route.searchMeta.pops,
-                    "timedOut": route.searchMeta.timedOut,
-                    "pass2Outcome": route.searchMeta.pass2Outcome,
-                    "elapsedMs": route.searchMeta.elapsedMs,
-                    "corridorMeters": route.searchMeta.corridorMeters as Any? ?? NSNull(),
-                    "maxCrossTrackMeters": route.searchMeta.maxCrossTrackMeters as Any? ?? NSNull(),
-                    "fogChargedLabelBytes": route.searchMeta.fogChargedLabelBytes,
-                    "fogNeighborhoodSeeds": route.searchMeta.fogNeighborhoodSeeds,
-                    "fogNeighborhoodExpansions": route.searchMeta.fogNeighborhoodExpansions,
-                    "rideObjective": route.searchMeta.rideObjective as Any? ?? NSNull()
-                ] as [String: Any],
-                "packRelease": release,
-                "seed": 3_806_057_305_948_982,
-                "profile": "dirt",
-                "fuel": "off"
+                "knownDirtPercent": quality.knownDirtPercent,
+                "unknownSurfacePercent": quality.unknownPercent,
+                "coordinateCount": route.geometry.count,
+                "pops": route.poppedLabels,
+                "limit": route.limit as Any? ?? NSNull(),
+                "geometry": route.geometry.map { [$0.longitude, $0.latitude] },
+                "edgeIDs": route.segments.map(\.edgeID),
+                "packIdentities": packs.map { ["region": $0.manifest.regionId, "graph": $0.graph.graphSHA256, "geometry": $0.graph.geometrySHA256] },
+                "seed": request.options.seed,
+                "mapZoom": 12.5,
+                "profile": "dirt", "allowUnknown": false, "fuel": "off"
             ]
-            #expect(route.coordinates.count > 1)
+            try writeEvidence(payload)
+            #expect(route.geometry.count > 1)
             #expect(route.distanceMeters > 100_000)
-        case .failure(let failure):
-            payload = [
-                "status": "failure",
-                "elapsedSeconds": elapsed,
-                "failure": String(describing: failure),
-                "packRelease": release,
-                "seed": 3_806_057_305_948_982,
-                "profile": "dirt",
-                "fuel": "off"
-            ]
-            Issue.record("Porters Lake→St Stephen Dirt fuel-off failed: \(failure) after \(elapsed)s")
-        }
-        try writeEvidence(payload, name: "porters-lake-st-stephen-dirt")
-    }
-
-    private func installPacks(_ regions: [String]) throws {
-        let fm = FileManager.default
-        let support = try #require(
-            fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        )
-        let cache = support.appendingPathComponent("dirt-graph-packs", isDirectory: true)
-        for region in regions {
-            let source = packRoot.appendingPathComponent(region)
-            let dest = cache.appendingPathComponent(release).appendingPathComponent(region)
-            try fm.createDirectory(at: dest, withIntermediateDirectories: true)
-            for name in [
-                "graph.v4.bin", "geometry.v1.bin", "fuel.v1.json",
-                "cross-pack-seams.v2.json", "pack-manifest.v2.json"
-            ] {
-                let from = source.appendingPathComponent(name)
-                let to = dest.appendingPathComponent(name)
-                guard fm.fileExists(atPath: from.path) else {
-                    throw CocoaError(.fileNoSuchFile)
-                }
-                if fm.fileExists(atPath: to.path) { try fm.removeItem(at: to) }
-                try fm.copyItem(at: from, to: to)
-            }
+            #expect(route.start.coordinate.distance(to: request.start) <= 600)
+            #expect(route.end.coordinate.distance(to: request.end) <= 600)
+            // A low-dirt route is evidence, not successful owner qualification.
+            #expect(quality.knownDirtPercent >= 70, "Owner Dirt qualification requires substantial connected known dirt")
+            #expect(route.limit == nil, "An incomplete comparison is not a qualified replay")
+        } catch {
+            try writeEvidence(["status": "failure", "failure": String(describing: error), "seed": request.options.seed])
+            throw error
         }
     }
 
-    private func writeEvidence(_ value: [String: Any], name: String) throws {
-        let data = try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys])
-        let tmp = URL(fileURLWithPath: "/tmp/Dirt-Phase1-Owner-FuelOff-20260914-\(name).json")
-        try data.write(to: tmp)
-        let repo = URL(fileURLWithPath: "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/.build/recovery-evidence/phase1-routing-fuel-off")
-        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
-        try data.write(to: repo.appendingPathComponent("\(name).json"))
+    private func writeEvidence(_ payload: [String: Any]) throws {
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+        let path = ProcessInfo.processInfo.environment["DIRT_OWNER_REPLAY_OUTPUT"]
+        let output = path.map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("Dirt-greenfield-owner-replay.json")
+        try data.write(to: output, options: .atomic)
     }
 }

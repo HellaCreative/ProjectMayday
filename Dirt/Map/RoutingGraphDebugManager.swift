@@ -147,7 +147,7 @@ final class RoutingGraphDebugManager {
             }.value
             guard mapState.showRoutingGraphDebug else { return }
             let capped = pool.count >= cap
-            let fmt = pack.hasLeaves ? "v3" : "v2"
+            let fmt = "v4"
             let mode = mapState.debugGraphPaintMode.title
             let status = capped
                 ? "PACK \(fmt) · \(mode) · \(pool.count) edges (capped — zoom in)"

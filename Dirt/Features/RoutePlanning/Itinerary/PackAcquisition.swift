@@ -48,7 +48,7 @@ struct PackConsentPrompt: Equatable, Sendable {
         let names = PackAcquisitionEvaluator.joinedTitles(regionTitles)
         switch kind {
         case .download:
-            return "Installing \(names) improves routing speed and enables offline rerouting."
+            return "Download \(names) once to create and reroute rides on your device without an internet connection."
         case .update:
             return "A newer approved \(names) pack is available. Updating is recommended. You can keep using the installed revision."
         }
@@ -79,9 +79,9 @@ struct PackRoutingWarning: Equatable, Identifiable, Sendable {
         let names = PackAcquisitionEvaluator.joinedTitles(regionTitles)
         switch reason {
         case .declinedDownload:
-            return "Offline rerouting will not be available for \(names)."
+            return "Download \(names) before calculating this ride. Your rider points are preserved."
         case .packUnavailable:
-            return "\(names) is not available as an approved pack. Offline rerouting will not be available for this region."
+            return "A routing pack for \(names) is not available. This ride cannot be calculated yet; your points are preserved."
         }
     }
 }
@@ -89,7 +89,7 @@ struct PackRoutingWarning: Equatable, Identifiable, Sendable {
 enum PackAcquisitionDecision: Equatable, Sendable {
     case useInstalledPacks
     case requestConsent(PackConsentPrompt)
-    case useLive(PackRoutingWarning)
+    case unavailable(PackRoutingWarning)
 }
 
 @MainActor
@@ -118,7 +118,7 @@ enum PackAcquisitionEvaluator {
     static func requiredRegionIDs(
         for coordinates: [CLLocationCoordinate2D]
     ) -> [String] {
-        GraphPackStore.regionIds(containingAny: coordinates)
+        GraphPackStore.requiredRoutingRegions(for: coordinates)
     }
 
     static func decide(
@@ -132,7 +132,7 @@ enum PackAcquisitionEvaluator {
         let titles = { (ids: [String]) in ids.map { registry.displayTitle(forRegionId: $0) } }
 
         if needed.isEmpty {
-            return .useLive(PackRoutingWarning(
+            return .unavailable(PackRoutingWarning(
                 regionIDs: [],
                 regionTitles: ["this pin"],
                 reason: .packUnavailable
@@ -159,7 +159,7 @@ enum PackAcquisitionEvaluator {
         }
 
         if !unpublished.isEmpty {
-            return .useLive(PackRoutingWarning(
+            return .unavailable(PackRoutingWarning(
                 regionIDs: unpublished,
                 regionTitles: titles(unpublished),
                 reason: .packUnavailable
@@ -167,7 +167,7 @@ enum PackAcquisitionEvaluator {
         }
 
         if !missingApproved.isEmpty {
-            return .useLive(PackRoutingWarning(
+            return .unavailable(PackRoutingWarning(
                 regionIDs: missingApproved,
                 regionTitles: titles(missingApproved),
                 reason: .declinedDownload
@@ -184,7 +184,7 @@ enum PackAcquisitionEvaluator {
 
         let covered = needed.allSatisfy { registry.isRoutingPackInstalled($0) }
         if covered { return .useInstalledPacks }
-        return .useLive(PackRoutingWarning(
+        return .unavailable(PackRoutingWarning(
             regionIDs: needed,
             regionTitles: titles(needed),
             reason: .packUnavailable
@@ -236,7 +236,7 @@ final class PackAcquisitionCoordinator {
         switch result {
         case .requestConsent(let prompt):
             consent = prompt
-        case .useLive(let warning):
+        case .unavailable(let warning):
             record(warning)
         case .useInstalledPacks:
             break

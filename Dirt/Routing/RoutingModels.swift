@@ -89,6 +89,12 @@ struct AccessPolicy: Codable, Sendable {
     let motorizedUnknown: Bool
 }
 
+/// Carried via-way / turn restriction progress between rider stages.
+struct RouteArrivalRestriction: Codable, Sendable, Equatable {
+    var pattern: Int
+    var progress: Int
+}
+
 /// Optional per-request routing options. `avoidEdgeIds` is honored on-device
 /// (route incident recovery). Requests without it omit `options`.
 struct RouteRequestOptions: Codable, Sendable {
@@ -117,6 +123,7 @@ struct RouteRequestOptions: Codable, Sendable {
     /// service/fuel endpoint; ordinary rider pins omit these fields.
     var startEndpointKind: String?
     var endEndpointKind: String?
+    var arrivalRestrictions: [RouteArrivalRestriction]?
 
     init(
         avoidEdgeIds: [String] = [],
@@ -133,7 +140,8 @@ struct RouteRequestOptions: Codable, Sendable {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        arrivalRestrictions: [RouteArrivalRestriction] = []
     ) {
         self.ridePreferences = RidePreferenceContext.current
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
@@ -156,6 +164,7 @@ struct RouteRequestOptions: Codable, Sendable {
         self.matchLimitMeters = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
         self.startEndpointKind = startEndpointKind == "customers" ? "customers" : nil
         self.endEndpointKind = endEndpointKind == "customers" ? "customers" : nil
+        self.arrivalRestrictions = arrivalRestrictions.isEmpty ? nil : arrivalRestrictions
     }
 }
 
@@ -184,7 +193,8 @@ struct RouteRequest: Codable, Sendable {
         mapZoom: Double? = nil,
         matchLimitMeters: Double? = nil,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        arrivalRestrictions: [RouteArrivalRestriction] = []
     ) {
         self.profile = profile
         self.locations = locations
@@ -199,7 +209,7 @@ struct RouteRequest: Codable, Sendable {
         let scopedPrefer = false
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
         let matchLimit = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
-        if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
+        if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil, arrivalRestrictions.isEmpty,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
            !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil,
@@ -221,7 +231,8 @@ struct RouteRequest: Codable, Sendable {
                 mapZoom: zoom,
                 matchLimitMeters: matchLimit,
                 startEndpointKind: startEndpointKind,
-                endEndpointKind: endEndpointKind
+                endEndpointKind: endEndpointKind,
+                arrivalRestrictions: arrivalRestrictions
             )
         }
     }
@@ -295,7 +306,8 @@ struct FuelChainRequest: Codable, Sendable {
         forwardFeeler: Bool = false,
         routeFirstPlan: Bool = false,
         ensureDestinationFuelEscape: Bool = false,
-        mapZoom: Double? = nil
+        mapZoom: Double? = nil,
+        arrivalRestrictions: [RouteArrivalRestriction] = []
     ) {
         self.profile = profile
         locations = [
@@ -310,7 +322,7 @@ struct FuelChainRequest: Codable, Sendable {
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
-        options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
+        options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil && arrivalRestrictions.isEmpty
             && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil && RidePreferenceContext.current == nil
             ? nil
             : RouteRequestOptions(
@@ -320,7 +332,8 @@ struct FuelChainRequest: Codable, Sendable {
                 backtrackFactor: backtrackFactor,
                 cleanMetroMultiplier: metro,
                 avoidMotorways: scopedAvoid,
-                mapZoom: zoom
+                mapZoom: zoom,
+                arrivalRestrictions: arrivalRestrictions
             )
         fuel = FuelChainConstraint(
             usableRangeMeters: usableRangeMeters,
@@ -648,7 +661,7 @@ struct RouteSegment: Codable, Identifiable, Sendable {
         let raw = (surfaceClass ?? trackClass ?? "connector").lowercased()
         let key = raw.isEmpty ? "connector" : raw
         if key == "unknown" {
-            return OnDeviceProfileCosts.riderPaintSurface(
+            return RouteSurfacePresentation.riderPaintSurface(
                 surfaceName: key,
                 roadClassName: (trackClass ?? "").lowercased()
             )
@@ -659,7 +672,7 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     /// Map paint key that preserves unknown motorized access independently of
     /// surface. Purple means access is unproven; it never means "paved".
     var selectedRoutePaintKey: String {
-        OnDeviceProfileCosts.selectedRoutePaintKey(
+        RouteSurfacePresentation.selectedRoutePaintKey(
             surfaceName: (surfaceClass ?? "unknown").lowercased(),
             roadClassName: (trackClass ?? "unknown").lowercased(),
             // Older saved/API segments predate accessClass; preserve their
@@ -672,10 +685,10 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     /// are present. Coarse classes remain a rollback path for v2/legacy data.
     func presentationSurfaceFamily(usesSurfaceLeaves: Bool) -> SurfaceFamily {
         if usesSurfaceLeaves {
-            return SurfaceFamilyStats.family(of: surfaceLeaf)
+            return RouteSurfacePresentation.family(of: surfaceLeaf)
         }
         let coarse = paintSurfaceKey.lowercased()
-        let leafFamily = SurfaceFamilyStats.family(of: coarse)
+        let leafFamily = RouteSurfacePresentation.family(of: coarse)
         if leafFamily != .unknown { return leafFamily }
         switch coarse {
         case "paved": return .paved
@@ -705,7 +718,7 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     }
 
     static func isAdventureSurface(_ key: String) -> Bool {
-        OnDeviceProfileCosts.isAdventureSurface(key)
+        RouteSurfacePresentation.isAdventureSurface(key)
     }
 }
 
@@ -982,6 +995,8 @@ struct RouteResponse: Codable, Sendable {
     var debug: RouteResponseDebug? = nil
     var serviceContract: String? = nil
     var serviceBuild: String? = nil
+    var arrivalEdgeId: String? = nil
+    var arrivalRestrictions: [RouteArrivalRestriction]? = nil
 
     enum CodingKeys: String, CodingKey {
         case status, error, message, distanceMeters, geometry, segments, stats, maneuvers, warnings, debug
@@ -991,6 +1006,7 @@ struct RouteResponse: Codable, Sendable {
         case estimatedMovingSeconds, estimatedElapsedSeconds
         case dirtPercentValue = "dirtPercent"
         case pavedPercentValue = "pavedPercent"
+        case arrivalEdgeId, arrivalRestrictions
     }
 
     var isComplete: Bool { status == "complete" }

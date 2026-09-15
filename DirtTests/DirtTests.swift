@@ -343,12 +343,12 @@ struct DirtTests {
     }
 
     @Test func surfaceFamiliesAreSpecificWithoutGuessing() {
-        #expect(SurfaceFamilyStats.family(of: "asphalt") == .paved)
-        #expect(SurfaceFamilyStats.family(of: "fine_gravel") == .gravel)
-        #expect(SurfaceFamilyStats.family(of: "unpaved") == .gravel)
-        #expect(SurfaceFamilyStats.family(of: "mud") == .loose)
-        #expect(SurfaceFamilyStats.family(of: nil) == .unknown)
-        #expect(SurfaceFamilyStats.family(of: "mystery_mix") == .unknown)
+        #expect(RouteSurfacePresentation.family(of: "asphalt") == .paved)
+        #expect(RouteSurfacePresentation.family(of: "fine_gravel") == .gravel)
+        #expect(RouteSurfacePresentation.family(of: "unpaved") == .gravel)
+        #expect(RouteSurfacePresentation.family(of: "mud") == .loose)
+        #expect(RouteSurfacePresentation.family(of: nil) == .unknown)
+        #expect(RouteSurfacePresentation.family(of: "mystery_mix") == .unknown)
     }
 
     @Test @MainActor func routeCompositionKeepsFourFamiliesAndTwoTotalsConsistent() throws {
@@ -373,7 +373,7 @@ struct DirtTests {
         #expect(mix.gravelMeters == 300)
         #expect(mix.looseMeters == 200)
         #expect(mix.unknownMeters == 100)
-        #expect(mix.dirtPercent == 60)
+        #expect(mix.dirtPercent == 50)
         #expect(mix.pavedPercent == 40)
         #expect(mix.gravelPercent == 30)
         #expect(mix.loosePercent == 20)

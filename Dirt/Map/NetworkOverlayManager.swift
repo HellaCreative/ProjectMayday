@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import DirtRoutingEngine
 import Observation
 
 struct NetworkLineFeature: Sendable {
@@ -311,94 +312,27 @@ final class NetworkOverlayManager {
 }
 
 nonisolated enum PackNetworkOverlay {
-    static func features(
-        from pack: GraphV2Pack,
-        minLon: Double,
-        minLat: Double,
-        maxLon: Double,
-        maxLat: Double,
-        province: String,
-        cap: Int
-    ) -> [NetworkLineFeature] {
-        var out: [NetworkLineFeature] = []
-        out.reserveCapacity(min(cap, 512))
-        let from = pack.edgeFrom
-        let to = pack.edgeTo
-        for ei in 0..<pack.undirectedEdgeCount {
-            var hit = false
-            if let from, let to, ei < from.count, ei < to.count {
-                hit = nodeIn(pack, Int(from[ei]), minLon, minLat, maxLon, maxLat)
-                    || nodeIn(pack, Int(to[ei]), minLon, minLat, maxLon, maxLat)
-            } else if let geom = pack.geometry {
-                let line = geom.polyline(edgeIndex: ei)
-                if let p = line.first {
-                    hit = p.longitude >= minLon && p.longitude <= maxLon
-                        && p.latitude >= minLat && p.latitude <= maxLat
-                }
-            }
-            guard hit else { continue }
-            let coords: [NetworkLineFeature.Point]
-            if let geom = pack.geometry {
-                let line = geom.polyline(edgeIndex: ei)
-                coords = line.map { NetworkLineFeature.Point(lat: $0.latitude, lon: $0.longitude) }
-            } else if let from, let to, ei < from.count, ei < to.count,
-                      let a = nodeCoord(pack, Int(from[ei])),
-                      let b = nodeCoord(pack, Int(to[ei])) {
-                coords = [
-                    NetworkLineFeature.Point(lat: a.latitude, lon: a.longitude),
-                    NetworkLineFeature.Point(lat: b.latitude, lon: b.longitude)
-                ]
-            } else {
-                continue
-            }
-            guard coords.count >= 2 else { continue }
-            let attr = pack.edgeAttrs[ei]
-            let surface = OnDeviceProfileCosts.surfaceName(code: GraphV2Pack.unpackSurface(attr))
-            let accessCode = GraphV2Pack.unpackAccess(attr)
-            let access = (accessCode >= 0 && accessCode < pack.accessNames.count)
-                ? pack.accessNames[accessCode]
-                : "motorized_unknown"
-            let leaves = pack.edgeLeaves(ei)
-            out.append(
-                NetworkLineFeature(
-                    edgeId: pack.edgeId(ei),
-                    coordinates: coords,
-                    surfaceClass: surface,
-                    accessClass: access,
-                    structureType: GraphV2Pack.structureName(GraphV2Pack.unpackStructure(attr)),
-                    province: province,
-                    roadClass: GraphV2Pack.roadClassName(GraphV2Pack.unpackRoadClass(attr)),
-                    surfaceLeaf: leaves.surfaceLeaf ?? "",
-                    surfaceFamily: PackDebugPaint.surfaceFamilyKey(
-                        pack.hasLeaves ? pack.surfaceFamily(ei) : nil
-                    ),
-                    roadClassLeaf: leaves.roadClassLeaf ?? "",
-                    roadTier: PackDebugPaint.roadTierKey(
-                        pack.hasLeaves ? pack.roadTier(ei) : nil
-                    ),
-                    accessLeaf: leaves.accessLeaf ?? "",
-                    atvDesignated: leaves.atvDesignated
-                )
-            )
-            if out.count >= cap { break }
+    static func features(from pack: GraphPack,minLon: Double,minLat: Double,maxLon: Double,maxLat: Double,
+                         province: String,cap: Int) -> [NetworkLineFeature] {
+        var result: [NetworkLineFeature] = []
+        for edge in 0..<pack.edgeCount {
+            if Task.isCancelled { break }
+            let line = pack.polyline(edge)
+            guard line.count >= 2,
+                  let west = line.map(\.longitude).min(), let east = line.map(\.longitude).max(),
+                  let south = line.map(\.latitude).min(), let north = line.map(\.latitude).max(),
+                  east >= minLon, west <= maxLon, north >= minLat, south <= maxLat else { continue }
+            let surface = ProfilePolicy.family(pack.surfaceLeaf(edge))
+            result.append(NetworkLineFeature(edgeId: pack.edgeID(edge),
+                coordinates: line.map { .init(lat: $0.latitude,lon: $0.longitude) },
+                surfaceClass: surface == .loose ? "dirt" : surface.rawValue,
+                accessClass: NativeRoutingAdapter.accessName(pack.accessCode(edge,forward: true)),
+                structureType: pack.structure(edge),province: province,roadClass: pack.roadClass(edge),
+                surfaceLeaf: pack.surfaceLeaf(edge),surfaceFamily: surface.rawValue,
+                roadClassLeaf: pack.roadClass(edge),roadTier: ProfilePolicy.tier(pack.roadClass(edge)),
+                accessLeaf: pack.accessLeaf(edge),atvDesignated: pack.atvDesignated(edge)))
+            if result.count >= cap { break }
         }
-        return out
-    }
-
-    private static func nodeIn(
-        _ pack: GraphV2Pack, _ i: Int,
-        _ minLon: Double, _ minLat: Double, _ maxLon: Double, _ maxLat: Double
-    ) -> Bool {
-        guard let c = nodeCoord(pack, i) else { return false }
-        return c.longitude >= minLon && c.longitude <= maxLon
-            && c.latitude >= minLat && c.latitude <= maxLat
-    }
-
-    private static func nodeCoord(_ pack: GraphV2Pack, _ i: Int) -> CLLocationCoordinate2D? {
-        guard i >= 0, i < pack.nodeCount else { return nil }
-        return CLLocationCoordinate2D(
-            latitude: Double(pack.nodeCoords[i * 2 + 1]),
-            longitude: Double(pack.nodeCoords[i * 2])
-        )
+        return result
     }
 }

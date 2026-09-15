@@ -97,7 +97,7 @@ struct RoutePlannerModelItineraryTests {
         ) == nil)
     }
 
-    @Test func planModeSelectsLiveWhileOnline() async {
+    @Test func planModeSelectsLocalRoutingWhileOnline() async {
         let live = PlannerFakeRoutingSource(name: "live")
         let pack = PlannerFakeRoutingSource(name: "pack")
         let registry = FakeInstalledPackRegistry(installedRegionIDs: ["ns"])
@@ -127,14 +127,9 @@ struct RoutePlannerModelItineraryTests {
 
         await model.waitForCanonicalBuildForTesting()
 
-        #expect(policyReports.contains { report in
-            report.contains("packsCover=true")
-                && report.contains("installed=[ns]")
-                && report.contains("online=true")
-                && report.contains("selected=live")
-        })
-        #expect(live.routeRequests.isEmpty == false)
-        #expect(pack.routeRequests.isEmpty)
+        #expect(policyReports.contains { $0.contains("source=pack") })
+        #expect(live.routeRequests.isEmpty)
+        #expect(!pack.routeRequests.isEmpty)
     }
 
     @Test func fromHereFuelBuildSwitchesToPlanWithoutNetworkCalls() async throws {

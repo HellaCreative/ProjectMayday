@@ -74,3 +74,7 @@ Routing architecture, current qualification gaps, and repair priority are mainta
 ## CarPlay follow-up
 
 Apple requested additional screenshots illustrating CPManeuver instruction variants. Richard supplied landscape app screenshots for the response. These are app screenshots, not evidence of an implemented CarPlay template or an approved entitlement. Final App Review submission/public release remains deferred.
+
+## CarPlay approval and account configuration — September 14
+
+Apple assigned the CarPlay entitlement to the developer account (Case-ID 22137173). At Richard’s request, CarPlay Navigation was enabled and verified on production App ID `com.mayday.dirt`. The new App Store profile **DIRT Production CarPlay App Store 2026-09-14** was generated and downloaded. Xcode installation/signing and the CarPlay app implementation remain unverified/uncompleted by this setup session. DEV App ID unchanged; no archive, upload, or submission. See [CarPlay setup record](CARPLAY-FOUNDATION-2026-09-10.md) for exact identifiers, scope, and remaining work. Earlier pending-approval entries are superseded.

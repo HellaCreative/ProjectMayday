@@ -1,0 +1,2244 @@
+{
+  "schemaVersion": 1,
+  "gitSha": "71aa7fd",
+  "generatedAt": "2026-09-07T00:56:34.955Z",
+  "sessionSeed": 3511091208,
+  "source": {
+    "region": "ns",
+    "graphBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ns-osm-20260821-02",
+    "releaseRecord": "scripts/pack-fabric/routing/data/releases/ns-osm-20260821-02.json",
+    "releaseId": "ns-osm-20260821-02",
+    "graphFile": "graph.v2.bin",
+    "graphSha256": "a9c5cb27eba2dc298344d9c80298881e1e0cfc0d40435d17cd9c4e210d1bef51",
+    "geometrySha256": "01e2741006ae4ee2e4324e2254ca21d6e5ced7cdc2f3c16d0c07688cc09decc6",
+    "fuelSha256": "999e1cbd5901b2bb28f7c09d7578abe2e7c69ad3e68c25b0b776c0172305fdd2"
+  },
+  "fuel": {
+    "tankMeters": 250000,
+    "reservePercent": 5,
+    "usableMeters": 237500
+  },
+  "summary": {
+    "total": 48,
+    "passed": 24,
+    "failed": 24
+  },
+  "cases": [
+    {
+      "id": "short-no-fuel/dirt/unknown-off/fuel-planned",
+      "routeID": "short-no-fuel",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 9942,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 9942,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 793,
+      "maxHopMs": 793,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "9942m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "793ms"
+        }
+      ]
+    },
+    {
+      "id": "short-no-fuel/dirt/unknown-on/fuel-planned",
+      "routeID": "short-no-fuel",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 35652,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 35652,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 304,
+      "maxHopMs": 303,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "303ms"
+        }
+      ]
+    },
+    {
+      "id": "short-no-fuel/balanced/unknown-off/fuel-planned",
+      "routeID": "short-no-fuel",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 9938,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 9938,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 436,
+      "maxHopMs": 436,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "436ms"
+        }
+      ]
+    },
+    {
+      "id": "short-no-fuel/clean/unknown-off/fuel-planned",
+      "routeID": "short-no-fuel",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 7486,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 7486,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 364,
+      "maxHopMs": 364,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "364ms"
+        }
+      ]
+    },
+    {
+      "id": "dartmouth-capebreton/dirt/unknown-off/fuel-planned",
+      "routeID": "dartmouth-capebreton",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 409328,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 237429,
+      "backtrackPct": 0.1,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 1,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 9881,
+      "maxHopMs": 5130,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "237429m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.1% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "5130ms"
+        }
+      ]
+    },
+    {
+      "id": "dartmouth-capebreton/dirt/unknown-on/fuel-planned",
+      "routeID": "dartmouth-capebreton",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 425576,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 237109,
+      "backtrackPct": 0.1,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 1,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 5554,
+      "maxHopMs": 1699,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.1% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1699ms"
+        }
+      ]
+    },
+    {
+      "id": "dartmouth-capebreton/balanced/unknown-off/fuel-planned",
+      "routeID": "dartmouth-capebreton",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 335832,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 211671,
+      "backtrackPct": 0.1,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 1,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 5902,
+      "maxHopMs": 1931,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.1% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1931ms"
+        }
+      ]
+    },
+    {
+      "id": "dartmouth-capebreton/clean/unknown-off/fuel-planned",
+      "routeID": "dartmouth-capebreton",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 308645,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 222026,
+      "backtrackPct": 0.1,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route,dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 3,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 1742,
+      "maxHopMs": 1066,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.1% no_route,dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1066ms"
+        }
+      ]
+    },
+    {
+      "id": "dartmouth-antigonish/dirt/unknown-off/fuel-planned",
+      "routeID": "dartmouth-antigonish",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 292759,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 292759,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "fuel_gap:leg_1:window_time_budget",
+      "stationCandidates": {
+        "count": 6,
+        "chosenDirtPct": []
+      },
+      "ms": 10747,
+      "maxHopMs": 3221,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": true,
+      "gapReason": "leg_1:window_time_budget",
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel gap labelled",
+          "pass": true,
+          "detail": "leg_1:window_time_budget"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "3221ms"
+        }
+      ]
+    },
+    {
+      "id": "dartmouth-antigonish/dirt/unknown-on/fuel-planned",
+      "routeID": "dartmouth-antigonish",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 280116,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 223066,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 6,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 6904,
+      "maxHopMs": 4588,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "4588ms"
+        }
+      ]
+    },
+    {
+      "id": "dartmouth-antigonish/balanced/unknown-off/fuel-planned",
+      "routeID": "dartmouth-antigonish",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 210238,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 210238,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 1316,
+      "maxHopMs": 1315,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1315ms"
+        }
+      ]
+    },
+    {
+      "id": "dartmouth-antigonish/clean/unknown-off/fuel-planned",
+      "routeID": "dartmouth-antigonish",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 205857,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 205857,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route",
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 125,
+      "maxHopMs": 126,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "126ms"
+        }
+      ]
+    },
+    {
+      "id": "musq-sherbrooke/dirt/unknown-off/fuel-planned",
+      "routeID": "musq-sherbrooke",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 64232,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 64232,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 29,
+      "maxHopMs": 29,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "64232m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "29ms"
+        }
+      ]
+    },
+    {
+      "id": "musq-sherbrooke/dirt/unknown-on/fuel-planned",
+      "routeID": "musq-sherbrooke",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 64232,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 64232,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 28,
+      "maxHopMs": 28,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "28ms"
+        }
+      ]
+    },
+    {
+      "id": "musq-sherbrooke/balanced/unknown-off/fuel-planned",
+      "routeID": "musq-sherbrooke",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 73599,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 73599,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 2215,
+      "maxHopMs": 2214,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "2214ms"
+        }
+      ]
+    },
+    {
+      "id": "musq-sherbrooke/clean/unknown-off/fuel-planned",
+      "routeID": "musq-sherbrooke",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 56912,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 56912,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 10,
+      "maxHopMs": 10,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "10ms"
+        }
+      ]
+    },
+    {
+      "id": "antigonish-sydney/dirt/unknown-off/fuel-planned",
+      "routeID": "antigonish-sydney",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 316672,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 237270,
+      "backtrackPct": 1.3,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 8,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 10628,
+      "maxHopMs": 3992,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "237270m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "1.3% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "3992ms"
+        }
+      ]
+    },
+    {
+      "id": "antigonish-sydney/dirt/unknown-on/fuel-planned",
+      "routeID": "antigonish-sydney",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 319080,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 231182,
+      "backtrackPct": 1.3,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 8,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 9597,
+      "maxHopMs": 3222,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "1.3% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "3222ms"
+        }
+      ]
+    },
+    {
+      "id": "antigonish-sydney/balanced/unknown-off/fuel-planned",
+      "routeID": "antigonish-sydney",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 254045,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 227569,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 1,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 7188,
+      "maxHopMs": 2706,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "2706ms"
+        }
+      ]
+    },
+    {
+      "id": "antigonish-sydney/clean/unknown-off/fuel-planned",
+      "routeID": "antigonish-sydney",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 231682,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 231682,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route",
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 111,
+      "maxHopMs": 111,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "111ms"
+        }
+      ]
+    },
+    {
+      "id": "through-halifax/dirt/unknown-off/fuel-planned",
+      "routeID": "through-halifax",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 208642,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 208642,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 4372,
+      "maxHopMs": 4372,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "208642m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "4372ms"
+        }
+      ]
+    },
+    {
+      "id": "through-halifax/dirt/unknown-on/fuel-planned",
+      "routeID": "through-halifax",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 180705,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 180705,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 521,
+      "maxHopMs": 521,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "521ms"
+        }
+      ]
+    },
+    {
+      "id": "through-halifax/balanced/unknown-off/fuel-planned",
+      "routeID": "through-halifax",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 119264,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 119264,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "corridor_exhausted",
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 1303,
+      "maxHopMs": 1303,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1303ms"
+        }
+      ]
+    },
+    {
+      "id": "through-halifax/clean/unknown-off/fuel-planned",
+      "routeID": "through-halifax",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 126979,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 126979,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route",
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 85,
+      "maxHopMs": 85,
+      "shortestMeters": null,
+      "urbanWall": "held",
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "urban wall",
+          "pass": true,
+          "detail": "held"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "85ms"
+        }
+      ]
+    },
+    {
+      "id": "white-fuel-20260823/dirt/unknown-off/fuel-planned",
+      "routeID": "white-fuel-20260823",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 282256,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 225664,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 1,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 8582,
+      "maxHopMs": 5059,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "225664m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "5059ms"
+        }
+      ]
+    },
+    {
+      "id": "white-fuel-20260823/dirt/unknown-on/fuel-planned",
+      "routeID": "white-fuel-20260823",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 331749,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 331749,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "fuel_gap:leg_1:window_time_budget",
+      "stationCandidates": {
+        "count": 6,
+        "chosenDirtPct": []
+      },
+      "ms": 10482,
+      "maxHopMs": 380,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": true,
+      "gapReason": "leg_1:window_time_budget",
+      "assertions": [
+        {
+          "name": "fuel gap labelled",
+          "pass": true,
+          "detail": "leg_1:window_time_budget"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "380ms"
+        }
+      ]
+    },
+    {
+      "id": "white-fuel-20260823/balanced/unknown-off/fuel-planned",
+      "routeID": "white-fuel-20260823",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 232711,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 232711,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 1185,
+      "maxHopMs": 1184,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1184ms"
+        }
+      ]
+    },
+    {
+      "id": "white-fuel-20260823/clean/unknown-off/fuel-planned",
+      "routeID": "white-fuel-20260823",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 253660,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 222019,
+      "backtrackPct": 0.2,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route,dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 4,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 2051,
+      "maxHopMs": 1381,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.2% no_route,dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1381ms"
+        }
+      ]
+    },
+    {
+      "id": "device-loop-20260823/dirt/unknown-off/fuel-planned",
+      "routeID": "device-loop-20260823",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 397796,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 225660,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 1,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 11920,
+      "maxHopMs": 4331,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "225660m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "4331ms"
+        }
+      ]
+    },
+    {
+      "id": "device-loop-20260823/dirt/unknown-on/fuel-planned",
+      "routeID": "device-loop-20260823",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 390453,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 237124,
+      "backtrackPct": 0.1,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 1,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 3369,
+      "maxHopMs": 943,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.1% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "943ms"
+        }
+      ]
+    },
+    {
+      "id": "device-loop-20260823/balanced/unknown-off/fuel-planned",
+      "routeID": "device-loop-20260823",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 317486,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 211661,
+      "backtrackPct": 0.1,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 1,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 5396,
+      "maxHopMs": 1804,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.1% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1804ms"
+        }
+      ]
+    },
+    {
+      "id": "device-loop-20260823/clean/unknown-off/fuel-planned",
+      "routeID": "device-loop-20260823",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 324492,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 234860,
+      "backtrackPct": 0.4,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route",
+      "stationCandidates": {
+        "count": 8,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 4129,
+      "maxHopMs": 3007,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.4% no_route"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "3007ms"
+        }
+      ]
+    },
+    {
+      "id": "fuel-overshoot-20260826/dirt/unknown-off/fuel-planned",
+      "routeID": "fuel-overshoot-20260826",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 229363,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 229363,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 372,
+      "maxHopMs": 371,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "229363m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "371ms"
+        }
+      ]
+    },
+    {
+      "id": "fuel-overshoot-20260826/dirt/unknown-on/fuel-planned",
+      "routeID": "fuel-overshoot-20260826",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 196563,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 196563,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 400,
+      "maxHopMs": 400,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "400ms"
+        }
+      ]
+    },
+    {
+      "id": "fuel-overshoot-20260826/balanced/unknown-off/fuel-planned",
+      "routeID": "fuel-overshoot-20260826",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 154504,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 154504,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 1179,
+      "maxHopMs": 1178,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1178ms"
+        }
+      ]
+    },
+    {
+      "id": "fuel-overshoot-20260826/clean/unknown-off/fuel-planned",
+      "routeID": "fuel-overshoot-20260826",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 171058,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 171058,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route",
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 97,
+      "maxHopMs": 97,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "97ms"
+        }
+      ]
+    },
+    {
+      "id": "fuel-early-stop-20260827/dirt/unknown-off/fuel-planned",
+      "routeID": "fuel-early-stop-20260827",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 351072,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 229628,
+      "backtrackPct": 3.4,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 8,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 8537,
+      "maxHopMs": 4296,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "229628m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "3.4% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "4296ms"
+        }
+      ]
+    },
+    {
+      "id": "fuel-early-stop-20260827/dirt/unknown-on/fuel-planned",
+      "routeID": "fuel-early-stop-20260827",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 225286,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 225286,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 121,
+      "maxHopMs": 121,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "121ms"
+        }
+      ]
+    },
+    {
+      "id": "fuel-early-stop-20260827/balanced/unknown-off/fuel-planned",
+      "routeID": "fuel-early-stop-20260827",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 176619,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 176619,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 979,
+      "maxHopMs": 978,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "978ms"
+        }
+      ]
+    },
+    {
+      "id": "fuel-early-stop-20260827/clean/unknown-off/fuel-planned",
+      "routeID": "fuel-early-stop-20260827",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 199028,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 199028,
+      "backtrackPct": 0,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": null,
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 100,
+      "maxHopMs": 100,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0%"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "100ms"
+        }
+      ]
+    },
+    {
+      "id": "three-waypoint/dirt/unknown-off/fuel-planned",
+      "routeID": "three-waypoint",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 564951,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 2,
+      "maxHopMeters": 225681,
+      "backtrackPct": 1.1,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 5,
+        "chosenDirtPct": [
+          100,
+          100
+        ]
+      },
+      "ms": 13467,
+      "maxHopMs": 1494,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "225681m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "1.1% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1494ms"
+        }
+      ]
+    },
+    {
+      "id": "three-waypoint/dirt/unknown-on/fuel-planned",
+      "routeID": "three-waypoint",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 555996,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 2,
+      "maxHopMeters": 232689,
+      "backtrackPct": 0.3,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 2,
+        "chosenDirtPct": [
+          100,
+          100
+        ]
+      },
+      "ms": 14606,
+      "maxHopMs": 1587,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.3% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1587ms"
+        }
+      ]
+    },
+    {
+      "id": "three-waypoint/balanced/unknown-off/fuel-planned",
+      "routeID": "three-waypoint",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 377740,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 181612,
+      "backtrackPct": 0.7,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector,fuel_gap:leg_1:window_time_budget",
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 22404,
+      "maxHopMs": 4869,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": true,
+      "gapReason": "leg_1:window_time_budget",
+      "assertions": [
+        {
+          "name": "fuel gap labelled",
+          "pass": true,
+          "detail": "leg_1:window_time_budget"
+        },
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.7% dead_end_or_only_connector,fuel_gap:leg_1:window_time_budget"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "4869ms"
+        }
+      ]
+    },
+    {
+      "id": "three-waypoint/clean/unknown-off/fuel-planned",
+      "routeID": "three-waypoint",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 429143,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 140388,
+      "backtrackPct": 1.5,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route",
+      "stationCandidates": {
+        "count": 6,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 6066,
+      "maxHopMs": 1921,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "1.5% no_route"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1921ms"
+        }
+      ]
+    },
+    {
+      "id": "phase10-104745/dirt/unknown-off/fuel-planned",
+      "routeID": "phase10-104745",
+      "profile": "dirt",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 564951,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 2,
+      "maxHopMeters": 225681,
+      "backtrackPct": 1.1,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 5,
+        "chosenDirtPct": [
+          100,
+          100
+        ]
+      },
+      "ms": 13507,
+      "maxHopMs": 1532,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "dirt ≥70",
+          "pass": true,
+          "detail": "100%"
+        },
+        {
+          "name": "fuel hops ≤237500",
+          "pass": true,
+          "detail": "225681m"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "1.1% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1532ms"
+        }
+      ]
+    },
+    {
+      "id": "phase10-104745/dirt/unknown-on/fuel-planned",
+      "routeID": "phase10-104745",
+      "profile": "dirt",
+      "allowUnknown": true,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 555996,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 2,
+      "maxHopMeters": 232689,
+      "backtrackPct": 0.3,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector",
+      "stationCandidates": {
+        "count": 2,
+        "chosenDirtPct": [
+          100,
+          100
+        ]
+      },
+      "ms": 14651,
+      "maxHopMs": 1585,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.3% dead_end_or_only_connector"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1585ms"
+        }
+      ]
+    },
+    {
+      "id": "phase10-104745/balanced/unknown-off/fuel-planned",
+      "routeID": "phase10-104745",
+      "profile": "balanced",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 377740,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 0,
+      "maxHopMeters": 181612,
+      "backtrackPct": 0.7,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "dead_end_or_only_connector,fuel_gap:leg_1:window_time_budget",
+      "stationCandidates": {
+        "count": 0,
+        "chosenDirtPct": []
+      },
+      "ms": 22248,
+      "maxHopMs": 4862,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": true,
+      "gapReason": "leg_1:window_time_budget",
+      "assertions": [
+        {
+          "name": "fuel gap labelled",
+          "pass": true,
+          "detail": "leg_1:window_time_budget"
+        },
+        {
+          "name": "balanced 45–55",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "0.7% dead_end_or_only_connector,fuel_gap:leg_1:window_time_budget"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "4862ms"
+        }
+      ]
+    },
+    {
+      "id": "phase10-104745/clean/unknown-off/fuel-planned",
+      "routeID": "phase10-104745",
+      "profile": "clean",
+      "allowUnknown": false,
+      "fuelOn": true,
+      "status": "complete",
+      "meters": 429143,
+      "dirtPct": 100,
+      "pavedPct": 0,
+      "unknownPct": 100,
+      "fuelStops": 1,
+      "maxHopMeters": 140388,
+      "backtrackPct": 1.5,
+      "restrictedMeters": 0,
+      "lowDirt": false,
+      "fallbackReason": "no_route",
+      "stationCandidates": {
+        "count": 6,
+        "chosenDirtPct": [
+          100
+        ]
+      },
+      "ms": 6031,
+      "maxHopMs": 1888,
+      "shortestMeters": null,
+      "urbanWall": null,
+      "fuelGap": false,
+      "gapReason": null,
+      "assertions": [
+        {
+          "name": "clean ≤15",
+          "pass": false,
+          "detail": "100%"
+        },
+        {
+          "name": "no unexplained backtrack",
+          "pass": true,
+          "detail": "1.5% no_route"
+        },
+        {
+          "name": "≤6000ms per hop",
+          "pass": true,
+          "detail": "1888ms"
+        }
+      ]
+    }
+  ]
+}

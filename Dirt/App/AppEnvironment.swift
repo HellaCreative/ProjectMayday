@@ -91,6 +91,7 @@ final class AppEnvironment {
             UserDefaults.standard.removeObject(forKey: TesterKey.bypassAuth)
             UserDefaults.standard.removeObject(forKey: TesterKey.bypassSubscription)
         }
+        UserDefaults.standard.removeObject(forKey: "dirt.routing.useLive")
 
         planner = RoutePlannerModel(
             routing: routing,

@@ -13,8 +13,10 @@ Richard's current instructions take precedence over this document.
 
 Routing is being rebuilt from a fresh statement of the vision. Existing code,
 packs, tests, and measured experiments are assets to evaluate, not obligations
-to preserve an unsuccessful architecture. This reset does not authorize erasing
-code, rebuilding data, reverting the app, or changing the accepted interface.
+to preserve an unsuccessful architecture. Richard subsequently authorized deleting the old Swift routing implementation
+and rebuilding it greenfield from the successful JavaScript live-pack pipeline.
+Preserve Swift infrastructure supporting the JavaScript/app flow. This does not
+authorize rebuilding published data, reverting the app, or changing its interface.
 
 There is no requirement to use live server routing, keep complete regional
 graphs in a persistent service, publish every experiment, maintain identical
@@ -377,53 +379,25 @@ per-request memory, cancellations, and cold behavior on the actual service class
 
 ### Active owner-directed sequence — September 14
 
-Stop fuel development and fuel-enabled qualification while repairing routing.
-First qualify ordinary rider-to-rider routes with automatic fuel OFF: Dirt
-strives for 100% known dirt with substantial coherent dirt detours, Balanced
-seeks its intended roughly half-and-half mix, and Clean prefers pavement.
-Verify Wander, settlement avoidance, legal access, regional continuity,
-completion, riding character and practical performance on those actual routes.
-Current routing-only evidence: the exact Porters Lake–St Stephen request with
-fuel off completes with no generated stops at 892,898.858 m, 71% reported dirt,
-and 2,211 m repeated roads. The first routing-only run takes 10.551 s inside the
-measured calculation (12.698 s including test setup). Full-Wander Dirt no longer
-pays straight-chord/away costs, but comparisons still report a resource limit.
-The settlement shape correction passes its six focused checks and retains this
-same route, while increasing calculation time to 21.999 s (24.178 s including
-setup). Its performance needs repair before acceptance. Approximate attribution
-identifies Nackawic exposure and an exact 2,210.899 m reversed road sequence at
-the NS/NB join. Cross-pack canonical identities already translate correctly;
-loss of identity has NOT been established as its cause. Existing seam selection
-and finite prior-road penalties remain under investigation. Raw evidence:
-`.build/recovery-evidence/phone44-fuel-off-routing-r1` and
-`.build/recovery-evidence/fuel-off-settlement-shape-r1`.
+Work in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, branch
+`cursor/on-device-routing-speed-37c5`, starting commit `5f7cb8d`.
+Richard's latest instruction replaces the earlier incremental native-repair and
+routing-before-fuel sequence: remove the old Swift routing implementation and
+its lockstep copies, and build a fresh implementation from the JavaScript
+live-pack reference. Port the complete pipeline, including fuel and regional
+continuity. Preserve native app infrastructure required by the successful live
+flow. The new routing path must use installed packs without network access;
+network access is for pack acquisition, never an automatic routing fallback.
 
-Owner clarification, September 14: this routing-only pass targets the ride
-between waypoints as defined in section 2. Concretely — Dirt strives for 100% and
-counts only continuous dirt runs of about a kilometre or more between pavement,
-rejecting sub-500 m dirt dips that merely pad the percentage; a Dirt result
-approaching half pavement has failed. Balanced holds its roughly even mix, and a
-Balanced or Dirt ride that drifts toward the other's surface share has missed its
-style. Clean stays on paved back roads. Every style avoids highways and major
-thoroughfares and unnecessary large-city passage while keeping small towns usable,
-except where a rider's own point requires otherwise. Replace the straight-chord
-and steep away-from-waypoint costs with the soft waypoint preference and wide
-tolerance corridor of "Progress without a straight line", so substantial dirt off
-the direct line is found rather than priced out. Fuel-stop placement — the pump as
-a pivot of the ride — is the next objective once these rides are accepted and
-frozen; it is not tuned in this pass. Acceptance is judged on riding quality and
-route-to-route uniqueness first; the section 6 second-level targets are
-engineering budgets to optimize toward — the sub-second aspiration included — and
-never a reason to flatten the ride back toward a straight line. Each fresh
-generation should aim for a different, equally interesting ride where the network
-supports one; saved and resumed routes stay frozen.
+The build-45 rollback is `8a7bc98` (restoring `0da738f`). The checked-in JavaScript
+reference at this task's starting commit is recorded with per-file hashes in
+`Packages/DirtRoutingEngine/ReferenceIdentity.json`. Those source hashes do not
+by themselves prove the exact server deployment used in the successful phone
+test. Keep that distinction explicit in acceptance evidence.
 
-Freeze the exact routing source and configuration after Richard reviews and
-accepts the rides. Only then resume fuel integration against that frozen routing
-behavior. Do not tune routing and fuel simultaneously or use a fuel success as
-routing-quality acceptance. Existing fuel work and requirements are preserved,
-but are inactive in this phase. Record the accepted routing freeze here in
-place; do not create a separate specification or freeze document.
+Correct JavaScript defects and improve efficiency where justified. Record and
+test deliberate behavioral changes rather than describing different behavior as
+exact parity. No implementation can be called perfected from small fixtures.
 
 Continue the authorized build → review → test → repair cycle until a coherent
 candidate meets its declared acceptance criteria or a specific external blocker
@@ -461,73 +435,335 @@ does not require rebuilding a shipped app when only an already-used server
 changes, but native binary changes do require a new build to reach a device.
 Verify the actual path; never promise a server fix reaches a local-only binary.
 
-## 8. Current state and next work
+## 8. Current state and Cursor handoff — September 14
 
-This section is a dated starting inventory, not a claim that the vision is
-implemented. Update it as results change instead of adding another status file.
+### Read this before changing code
 
-| Item, as reviewed 2026-09-14 | State |
+Richard requested this handoff because he may need to continue in Cursor. The
+replacement is **unfinished and not qualified for a phone release**. Continue
+from the actual working tree; do not restart the rewrite or restore the old
+Swift engine. The owner's instruction is to delete the old native routing and
+rebuild greenfield from the successful JavaScript. Improve justified defects,
+but do not claim exact parity, full feature coverage, perfection, or device
+acceptance without evidence.
+
+- Checkout: `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`.
+- Branch: `cursor/on-device-routing-speed-37c5`.
+- Starting/current HEAD: `5f7cb8df465310e7690369457c4e27fbf2a74157`.
+- All work from this task is **uncommitted**, including important **untracked**
+  package and adapter files. A clean checkout of HEAD will lose this work.
+- Read `AGENTS.md` and this document. This remains the sole routing authority.
+  Do not resume `.build/engine-architecture` or another historical worktree.
+- Preserve other work. `.build/`, `.impeccable/`, `.wrangler/`, `internal/`, and
+  `scripts/pack-fabric/bench/results/71aa7fd-20260907T005634Z.json` pre-existed.
+  Changes appeared in `docs/CARPLAY-FOUNDATION-2026-09-10.md` and
+  `docs/LAUNCH-PREPARATION-2026-09-10.md` during this task but were not made by this
+  routing agent. Leave them alone. Xcode also changed the user scheme-management
+  plist during package resolution; inspect that separately from source changes.
+- No device/simulator was created or cloned. The existing iPhone 17 simulator
+  `CC6035EE-9C03-48A2-ACBA-DDE3B068642A` is reused for focused app tests, with
+  parallel testing disabled and shutdown arranged after the run. No physical
+  device installation, production deployment or pack rebuild occurred. Two
+  existing published packs were downloaded for desktop verification.
+
+### What is implemented and where
+
+`Packages/DirtRoutingEngine` is an independent Swift 6 package, linked as a local
+package in `Dirt.xcodeproj`. It contains no HTTP client, download callback,
+JavaScript execution, or wrapper around the deleted native engine.
+
+| New code | Current responsibility |
 | --- | --- |
-| Main product checkout | `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, app checkpoint `91cc3cc`; preserve the accepted app rather than restoring an older shell. |
-| Existing native candidate | `.build/engine-architecture`, branch `audit/baseline-recovery-20260913`. Recovery checkpoints `b7c7c44`, `864493a`, `7de5bd5`, `cfad1d7` and `aa4e348` remain preserved. `864493a` reuses a completed initial-station bound vector only for identical validated inputs; it preserves the existing closest-station selection. This is not the final qualified candidate; inspect status before editing. |
-| Device checkpoint | DIRT Dev 2 (44), source `60cc909`, was installed in place and launched on white with Richard’s explicit authorization on September 14. Build 43 was not installed. Physical route feedback is pending; installation does not establish routing acceptance. Receipts: `.build/recovery-evidence/phone-review-44`. |
-| Physical build 44 acceptance failure | Richard rejects Porters Lake–St Stephen (~675 km, reported 47% dirt and major-town traversal). Supplied September 14 09:55:57–10:02:13 log confirms NS/NB download consent and completion, local calculation, initial fill and one further pump, then a fuel timeout and 492,214 m road-only fallback with fuel unknown. Southwest NS requests also exhaust fuel planning after repeated candidate failures. This is failed riding-quality and fuel acceptance, despite road completion. Exact St Stephen endpoint 45.262939746458734,-67.29131337653283, seed 3806057305948982, Dirt, Allow Unknown off, 200 km / 10% reserve. Reproduce before claiming repair; no geographic rescue logic or pack publication is authorized. |
-| Candidate data | Phone catalog `fabric-v4-20260909-02`; some historical fixtures use `fabric-v4-20260908-02`. Results against one do not automatically qualify the other. |
-| Verified acquisition repair | DEV planning now waits for the existing pack prompt and verified installation, then resumes the same pins; missing data is not reported as disconnected roads. The real planning model now completes empty-directory → current public catalog → consent → verified NS download → native ride. Delayed catalog, cancel, stale reply, and retry model tests pass. The real notification presentation test also passes: consent, progress, cancel and retry preserve pins (`/tmp/Dirt-Pack-Acquisition-UI-20260913.xcresult`, one UI test). The UI fixture suspends installation; real network qualification is the separate planning-model test. |
-| Recoverable-checkpoint owner replay | At checkpoint `95158d6`, all four exact build-42 requests passed with initial fuel and actual arrival-aware destination escape: `/tmp/Dirt-Journey-Checkpoint-20260913.xcresult` (13 tests in three suites, including saved-route and legal-continuation tests). Current catalog, coordinates/seeds, 200 km / 10% settings and outputs are preserved in `.build/recovery-evidence/journey-checkpoint`. Escape ordering and verified unrestricted same-road reversal repair the earlier timeout. This is simulator qualification of these requests, not phone or broad regional acceptance. |
-| Earlier broad-suite evidence | `/tmp/Dirt-DEV43-Readiness-Full-Serial-20260913.xcresult`: 345/350 tests pass; failures include two full fuel aggregates, a now-removed duplicate focused aggregate, and two UI checks. Historical and initial-fill fuel replays each complete 17/21. All 19 direct comparisons preserve geometry and reported dirt; two completed Clean cross-region fuel shapes differ by exact border-node matching. |
-| Known qualification gaps | Whole-region decoding/indexing/search allocation is still present. Successful fuel continuations no longer consume the failed-attempt quota; same-leg pump reconsideration and actual destination-arrival distance caps have focused coverage. Explicit legal-arrival tokens now preserve node-turn/via-way state in focused split-route tests across Dirt, Balanced and Clean; real regional and fuel replay remains unqualified. Unrestricted bidirectional mid-edge reversal now has native coverage; active restriction context remains explicitly incomplete for reversal. Positive sub-metre initial fuel approaches are retained; other omitted traversal still needs coverage. Wander and full riding-character qualification remain open. Directed V4 access reporting was corrected without changing the four owner route geometries or fuel stops. Single-objective and Balanced labels now allocate bounded pages on demand. Whole-graph decoding, indexes and guidance still require selective loading; this does not yet bound whole-journey residency. |
-| Current full oracle replay | `/tmp/Dirt-Current-Oracle-Builder-20260914.xcresult` runs all six exact JSON cases, three profiles, fuel off/on and two requests: 72 actual builder calculations. Source is `864493a` plus the preserved coverage qualification hooks and new harness; raw outputs and source identity are in `.build/recovery-evidence/current-oracle-builder-before`. The single test records eight assertions across six failed calculations. Cross-province fuel-on Clean and Balanced fail first use; Dirt fails both requests. They preserve the requested destination road and initial stop, with fuel unknown. Multi-fuel-stop Balanced with fuel off fails both requests at about 112 seconds: seven bounded searches restart after limits, with no complete road returned. These are current-pack simulator failures, not disconnected-road proofs. No phone acceptance is claimed. |
-| New focused repairs under qualification | `/tmp/Dirt-Cross-Province-Envelope-R2-20260914.xcresult`: 15 focused tests pass; the exact Clean crossing A/B test still fails cold fuel completion with the shortcut off and on. First/repeat off 30.085/17.099 s, on 29.718/16.876 s; sampled footprints off 202.0/144.8 MiB, on 216.8/119.6 MiB. Both repeated calculations complete with identical route digest and verified actual routed fuel accounting. Cold routes remain preserved with fuel unknown. Pack-wide exclusion removes 1,369 irrelevant queries but does not solve cold fuel preparation. Four assertions represent the two incomplete cold fuel plans and their unverified range, not four distinct defects. Raw source and results are in `.build/recovery-evidence/cross-province-envelope`. |
-| Current border-tail repair | Source-verified portal guidance reserves a conservative road tail (node 1626239164 → station 45.870167,-64.279432 measures 1,568 m). Actual-tail refinement now reserves a concrete suffix, rebuilds the approach and re-proves the suffix with the new arrival state and actual remaining range within the unchanged window/quota. `/tmp/Dirt-Station-Endpoint-First-R2-20260914.xcresult` passes 18 focused tests and both Clean crossing requests: first/repeat 19.680/4.522 s, sampled footprint 202.3/88.3 MiB. Repeated Balanced completes (15.711 s); cold Balanced and both Dirt requests retain the destination road with fuel unknown. Dirt diagnostics identify a 54,924.808 m suffix reservation leaving an infeasible 152,075.192 m approach budget. Coordinating both halves before choosing the suffix remains necessary. Full regional residency and dense reverse guidance remain unqualified. Raw outputs and exact source are in `.build/recovery-evidence/station-endpoint-first`. |
-| Forward-stop consumption barrier removed | A proved earlier refill is no longer excluded when another candidate exceeds 75% consumption, and a valid non-urban candidate no longer forces continued searching just to reach that fraction. Existing candidate ordering and legal/range/continuation checks remain. `/tmp/Dirt-Forward-Station-Carrier-20260914.xcresult`: 38 tests in seven suites; all focused fuel/accounting tests, native initial-plus-twenty-refill journey (4.480 s), owner cold/repeat and Clean crossing pass. Six assertions still fail across cold Balanced and both Dirt crossing calculations. Owner 21.323/1.861 s, sampled footprint 114.3/81.3 MiB and RSS 488.2/444.9 MiB; routes and three pump IDs match the preceding checkpoint apart from timing/work counters and the new exact surface metadata. Cross Clean 22.252/4.472 s; Balanced 35.666/16.141 s; Dirt 34.743/20.280 s. This does not fix serial regional prefix/tail selection. Exact source/results: `.build/recovery-evidence/forward-station-carrier`. |
-| Shared station spatial coverage | `/tmp/Dirt-Shared-Station-Coverage-20260914.xcresult`: all eleven tests in five suites pass. Complete, unfiltered cell coverage can be shared by nearby stations in the same index cell/radius; each station still evaluates its own exact bounds and current distance field. Incomplete scans are never cached; memory limits and weak pack/index ownership remain. Clean crossing cold coverage misses fall 3,275→2,564 and scanned memberships 17,465,747→16,986,542; total 20.559/4.399 s. Owner 21.164/1.795 s, sampled footprint 111.4/74.0 MiB, RSS 511.8/508.1 MiB. Owner/Clean road responses and pumps remain equivalent apart from timing/search-work counters. This is modest preparation reuse, not achievement of the cold target. A diagnostic native probe at verified node 6952913085 shows both Dirt/Balanced spend about 206.689 km on the prefix, leaving only 311–312 m; its tail cannot fit. That probe passing means its assertions/classification passed, not a completed cross-border fuel route. Exact source/results: `.build/recovery-evidence/shared-station-coverage`. |
-| Range-first station screening | Completed forward fields exclude stations beyond actual road range before reverse progress matching, preserving direct same-edge possibilities and leaving reverse guidance unchanged. Sparse preparation hits its 32,768-state bound in the current crossing and falls back to the complete existing field; incomplete fields never exclude stations. Detailed match misses fall from 1,248 to 438. Endpoint reachability now precedes detailed bounds reads, reducing cold Clean total bounds checks from 16.27 million to 8.80 million and improving cold completion from 23.692 to 19.680 s. Exact completed-route comparisons and final integrated qualification remain required. The separate 32 KiB duplicate filter removed only 2.1% of checks without timing benefit and was removed with its obsolete fixture. The stricter directed station-approach correction passes all 72 native policy/path combinations. Pack bytes and profile costs remain unchanged. |
-| Rejected additional border reservations | Additional origin-bound and feasible-prefix reservation probes compiled and passed their focused tests but did not fix either Dirt request or cold Balanced, and regressed repeated Balanced. `/tmp/Dirt-Regional-Feasible-Prefix-R2-20260914.xcresult`: Clean 19.930/4.811 s built; Balanced 35.305/20.342 s and Dirt 33.979/20.280 s retain roads with fuel unknown. These extra probes are removed from active source; exact attempted source/results remain in `.build/recovery-evidence/regional-feasible-prefix` and `regional-origin-reservation`. The existing verified Clean tail repair remains. Serial regional winner selection loses alternative prefix lengths/arrivals before evaluating the actual pump; a connected stage search over pack-local storage is the required structural repair, without copying complete graphs. Current evidence does not prove the first NB pump unreachable. |
-| Verified destination retry and incumbent reuse | Forward distance guidance now enumerates reached CSR rows without a full adjacency copy; reverse distance-only guidance omits unused edge IDs. A completed route with only disclosed alternative-search limits may be reused under the unchanged exact source/settings/seed/arrival/cap key; its warnings remain intact and incomplete searches remain retryable. Missing optional destination reservation is retried once when the final stage becomes plausible, inside its existing window, before cap-consuming route/exit selection; actual arrival-aware escape remains mandatory. `/tmp/Dirt-Destination-Retry-Native-20260914.xcresult` passes the forced initial-preprobe-timeout owner replay (21.080 s, sampled footprint 120.8 MiB, original three pumps and verified actual escape), reuse/destination tests and all pack-readiness tests including checksum failure/retry with fuel on/off. The native twenty-refill fixture is now qualified by the later forward-continuation run below; its initial identity failure was test transport mixing synthetic packs with the public catalog, repaired with a session-local fixture catalog and unchanged production validation. `/tmp/Dirt-Regional-Feasible-Prefix-R2-20260914.xcresult` owner first/repeat 20.886/1.729 s preserves canonical routes/stops, but that run included subsequently removed border probes and is not final combined qualification. These do not meet the cold target or qualify the regional architecture. Raw exact source/results are in `.build/recovery-evidence/destination-retry-native`, `native-incumbent-reuse` and `forward-guidance-streaming`. |
-| Current forward-fuel checkpoint | `/tmp/Dirt-Forward-Fuel-Continuation-20260914.xcresult`: all 80 tests in five suites pass, including the actual native two-region twenty-refill chain, fuel ranking, builder recovery and the first owner request cold/repeat. The native chain retains its 500 m closest initial approach, twenty further refills after an ordinary rider point, actual regional tail, 18 km usable range and 10 km final leg plus 5 km legal destination escape. It takes 4.838 s on the named simulator; this is a synthetic legal-network integration test, not country-scale or physical-device acceptance. The unchanged exact 8 km next-pump fixture now passes. Absolute 8 km minimum-stage and 5 km destination-clearance exclusions are removed from native ranking; positive connected progress, actual range, approach/exit proof and preference ordering remain. Reverse guidance now expands lazily to pumps newly reachable after a candidate refill, fixing a missing-continuation proof introduced by range-first screening. Downstream rewind preserves the closest initial approach and its legal arrival. |
-| Latest owner comparison | The same forward-continuation run completes the first owner request in 21.447/1.808 s cold/repeat, sampled footprint 130.1/92.0 MiB and RSS 418.4/410.3 MiB. Roads, geometry, legal continuation, fuel metrics and three refill identities match the prior forward-guidance output; timing and search-work counters differ. Cold remains above the 8 s target. Exact source, fixture identities, responses and comparison are in `.build/recovery-evidence/forward-fuel-continuation`. The subsequent regional-fuel-repair run replays all four owner requests; the final integrated matrix remains unqualified. |
-| Road-detail paging under qualification | File-backed V4 decoding now omits seven leaf arrays and crossing-time arrays before allocation, reading requested fields through one bounded shared 512-row/16 KiB cache and eight page borrows under a 1.125 MiB charged page budget. Whole core graphs and reverse guidance remain resident; this is not whole-journey selective loading. `/tmp/Dirt-Selective-Leaf-20260914.xcresult` passes all twelve pager/integration checks; Ontario Dirt remains 519.609 km/79% dirt, Balanced 418.232 km/52%, Clean 379.971 km/0%, all with zero repeated metres. First/repeat times: Dirt 30.375/13.942 s, Balanced 18.029/18.044 s (both limited), Clean 4.374/4.189 s. Sampled footprint: 273.2/194.6, 288.2/284.2, 226.7/196.5 MiB respectively. Clean is slower than the older array baseline (~2.5 s), while approximately 20.44 MiB of Ontario leaf-array payload is avoided. Full-row paging regressed Clean to ~10.5 s; larger row/page caches did not repair it and were removed. Selective field reads reduced page borrows from ~900,000 to ~255,000. Source/results are in `.build/recovery-evidence/selective-leaf`; the contemporaneous failed fuel fixture has since been repaired by the later run. |
-| Selective core access under qualification | Unactivated `PagedV4Core` reads immutable V4 topology through bounded descriptor pages without constructing `GraphV2Pack`. The first exact topology proof scans all core rows; reuse is currently an in-memory hash/version-bound proof, not persisted preparation. `/tmp/Dirt-Paged-Core-Column-Banks-20260914.xcresult` passes twelve tests in four suites. On the named M1 simulator, NS first/reuse preparation takes 1.106/0.025 s and Ontario 11.557/0.098 s. Sampled footprint is 64.7/64.0 MiB and 64.6/63.9 MiB; sampled RSS is 375.5/374.2 MiB and 374.4/356.5 MiB respectively. Charged page peak is 327,680 bytes under a 393,216-byte limit. Each preparation is followed by only three node and three edge queries: these are not completed-route or application peak-memory results. Dedicated bounded column borrows repaired Ontario's previous 15-second preparation failure without increasing the cap. Exact source and measurements: `.build/recovery-evidence/paged-core-column-banks`. |
-| Paged continuation and policy parity | The existing array reference is retained for qualification. `/tmp/Dirt-Paged-Continuation-Policy-20260914.xcresult` passes nine tests; `/tmp/Dirt-Paged-Road-Legality-20260914.xcresult` passes fourteen. The native outer-cost and seam checks also pass in `Dirt-Paged-Legal-Full-Policy-20260914.xcresult`; that run failed only the subsequently repaired Ontario preparation checks. Together these cover exact continuation tokens, Clean base costs, outer native cost order, directed access, endpoint/customer scopes, full-geometry urban/town checks, bounded policy metadata, cancellation, malformed data and expired queries. The later demand-turn run compares semantic continuation tokens rather than allocation-specific state numbers. These helpers and the connected source view are unactivated in ordinary app routing. Raw source/results: `.build/recovery-evidence/paged-continuation-policy`, `paged-road-legality`, and `demand-turn-connected`. |
-| Demand-driven legal states | `/tmp/Dirt-Demand-Turn-Connected-R2-20260914.xcresult` passes ten tests in five suites. The paged connected source now uses exact scoped topology and identity reads; turn states/transitions are created only when requested, with stable live IDs and the native restriction law. NS first/reuse preparation: 1.154/0.017 s, sampled footprint 64.3/63.5 MiB, RSS 382.2/377.3 MiB. Ontario: 11.609/0.135 s, footprint 63.5/63.1 MiB, RSS 380.5/380.5 MiB. No turn states/transitions or edge queries are created during these rule-only preparations; charged retained preparation reservations are 1,224,464/9,164,480 bytes. Initial core topology validation still scans source topology with bounded memory. This repairs the earlier Ontario eager-state preparation resource failures (12.971/0.647 s) without raising the 16 MiB reservation cap. It does not measure a complete ride, original-ID index construction, whole-journey residency or phone behavior. Exact evidence: `.build/recovery-evidence/demand-turn-connected`; failed predecessor: `paged-legal-full-policy`. |
-| Paged legal and identity preparation | Unactivated bounded raw legal reads preserve restriction flags, exceptions, conditional references and ordered via members. A throwing turn-state builder matches the retained native array reference in focused fixtures; unsupported semantics and resource limits fail explicitly. A private, source-hash/version-bound disk index maps original node/way identities without whole-region identity arrays, preserves duplicate way matches, and rejects ambiguous node identity. Four original-ID tests pass in `/tmp/Dirt-Paged-Core-Preparation-20260914.xcresult`, covering signed IDs, multiple sort runs, duplicates, source changes, cancellation and publication limits. These helpers do not yet replace current app graph loading or qualify regional routing. |
-| Complete-stage reservation diagnostic | The test-only native probe of recorded seam node 6952913085 computes a legal physical tail, reserves its actual distance, then reroutes both selected-style prefix and tail with the resulting legal arrival and remaining range. Both profiles complete in `/tmp/Dirt-Paged-Core-Preparation-20260914.xcresult`: Balanced 206,633.757 m and Dirt 206,987.757 m within 207,000 m. The measured tail is 5,050.808 m, not a hardcoded geographic allowance. Dirt's resulting prefix has only 4% known dirt and uses settlement fallback; this is evidence of feasible continuity, not acceptable riding quality or a general app repair. Earlier pump choices and whole-stage alternatives remain necessary. Exact requests, tokens, preferences, source hashes and responses: `.build/recovery-evidence/paged-core-preparation`. |
-| Connected-stage prototype | The unactivated recorded-node Clean calculation now uses either the array reference or bounded paged topology, exact local IDs, legal continuation and shared native policy reads without constructing `GraphV2Pack` on the paged path. It exposes the existing Clean pass sequence explicitly; only completed pass exhaustion allows relaxation, never a limit or data error. Fifteen tests in six suites pass in `/tmp/Dirt-Connected-History-Geometry-20260914.xcresult`: the paged two-region result retains the exact 190 km reference roads/cost/geometry under a 207 km cap; strict unknown-service handling, bounded failures, source mutation, exact IDs, turn telemetry, immutable history reuse and per-road geometry endpoints are checked. Actual NS recorded-node origin 7411741589 to seam 6952913085 on current 09-09-02 data still fails with a resource limit after the strict Clean pass exhausts and the native unpaved fallback begins. Caching immutable road history reduces that same 55,860-arc failed search from 3.644/3.692 seconds to 1.750/1.631 seconds; inclusive cold/repeat 5.208/1.631 seconds, sampled footprint 112.0/137.7 MiB and RSS 427.4/423.5 MiB. These are faster failed diagnostics, not completed rides. Exact history-subset dominance was subsequently tested and removed from active source: 402,851 comparisons and 15,705,612 history-row visits rejected only 41 labels, slowed the same failed calculation to 2.267/2.306 seconds, and still hit the resource bound. Ten focused tests pass; the two real cold/repeat completion assertions fail in `/tmp/Dirt-Connected-Exact-Subset-R2-20260914.xcresult`. Its source and results remain under `.build/recovery-evidence/connected-exact-subset` for review; it is not enabled. The prototype still lacks tap/fractional/customer matching, all-profile integration and production fuel orchestration. Exact evidence: `.build/recovery-evidence/connected-history-geometry`, `paged-clean-rungs`, `paged-clean-cached-history`; current app routing is unchanged by this prototype. |
-| Retired queue-guidance experiment | Cost/metres Pareto histories alone still exhaust the recorded-node NS diagnostic: 1,033 approximate history merges, no incumbent, 2.502/2.574 seconds calculation in `/tmp/Dirt-Pareto-Consumer-R2-20260914.xcresult`. A source-scanned geodesic cost-priority guide also fails both completion assertions: 1,021 merges, 4.323 seconds extra cold preparation, 10.274/2.514 seconds inclusive in `/tmp/Dirt-Clean-Queue-Guidance-R1-20260914.xcresult`. Its five focused tests pass, but these are failed long routes. The guide has been removed from active source and preserved under `.build/retired-clean-queue-guidance` and `.build/recovery-evidence/clean-queue-guidance`. Further tuning of this separate Clean consumer is stopped. Existing paged readers and exact indexes remain useful for adapting the current native consumer rather than changing profile behavior. |
-| Selective turn initialization and current regional replay | `/tmp/Dirt-Regional-Fuel-Repair-20260914.xcresult`: seven exact turn-seeding tests and all four owner requests pass. Verified CSR endpoints allow initialization to read only rows incident to restriction edges; source topology is still verified once during eager decoding, and legal closure expansion remains unchanged. All four owner road responses and refill identities match `station-coverage-dedup` after removing timing/debug-note/search-pop fields; generated waypoint UUIDs differ, requested coordinates do not. Times in owner order: 21.263, 14.602, 9.361, 16.256 s; sampled footprint 100.2, 88.8, 78.3, 128.8 MiB, RSS 502.0, 482.7, 465.5, 466.2 MiB. Cross-region Clean completes in 20.839/4.455 s; Balanced cold remains fuel unknown (34.837 s), repeat completes (15.627 s); Dirt remains fuel unknown (34.033/20.278 s). Six assertions fail across those three incomplete calculations. Initial refill and destination survive; the remaining selected regional tail does not fit the near-exhausted prefix budget. This is unfinished search, not a demonstrated fuel gap. Evidence and exact source: `.build/recovery-evidence/regional-fuel-repair`. |
-| Actual installed graph/geometry pairing | Both asynchronous installed-pack activation and synchronous loading now require the V4 graph’s embedded geometry hash to match the verified geometry being assigned. Independently valid, manifest-hashed but mismatched files are rejected before routing. The actual-loader positive and corrupted-pair cases pass in `/tmp/Dirt-Source-Pair-R2-20260914.xcresult` after correcting the new fixture’s cache directory. The same native implementation also passes the first-owner cold/repeat ride in `/tmp/Dirt-Source-Pair-Owner-R1-20260914.xcresult`, with unchanged road responses except debug timing and unchanged pumps/settings: 21.540/1.530 seconds, sampled footprint 130.4/93.6 MiB and RSS 491.0/466.6 MiB. R1’s combined result is failed solely because that new fixture was initially installed in the wrong directory; its owner replay passes. Legacy V2/V3 behavior, published data and UI are unchanged. Evidence: `.build/recovery-evidence/source-pair-r2` and `source-pair-owner-r1`. |
-| Current app fuel screening | The app now orders both current-pump and onward-pump candidates using bounded source-paired samples, retains all eligible/unknown stations, and requests exact forward/reverse facts only as each candidate is considered. Only completed exact facts are reused within the build; source changes cannot relabel previous progress. Initial nearest refuelling and actual approach, range, retrace, exit and destination-escape proofs are unchanged. Eighteen tests in five suites pass in `/tmp/Dirt-Lazy-Fuel-App-R2-20260914.xcresult`, including all four owner requests and twenty refills. Owner times are 17.943/16.713/10.892/16.479 seconds in log order; sampled footprints 126.0/128.0/91.3/121.4 MiB, RSS 404.3/395.4/404.1/405.3 MiB on the named M1 simulator. First-use detailed matching falls from 484 calls/5.35 seconds to 20 calls/0.119 seconds, but initial-station lower-bound coverage still costs about five seconds. The first total improves from 21.153 seconds; the other cases are slower than their preceding 14.576/9.433/15.948-second results, so this is not finished performance qualification. All destinations and surface percentages are preserved; selected pumps are the same physical stations, with some area/way aliases changing and coordinate differences confined to their approaches/exits (same point counts; one to four coordinates per affected leg). Exact differences: `.build/recovery-evidence/lazy-fuel-app-r2/route-comparison.json`. No fuel gap or lost range is hidden. The single-source preparation has bounded support; unsupported regional/large sources retain the existing exact path. This does not establish selective core loading, cross-region completion or phone acceptance. Richard explicitly requested physical testing on September 14. DIRT Dev 2 (44), built by Xcode 26.6 from committed source `60cc909` with a build-number override to 44 and no pending experimental changes, was installed in place and launched on white (iPhone 16, iOS 26.6.2). Receipts and binary hash: `.build/recovery-evidence/phone-review-44`. Immutable pack configuration remains `fabric-v4-20260909-02`; production and source packs were not changed. This is an owner evaluation build, not a qualified release; physical route acceptance and cross-region/performance repairs remain outstanding. |
-| Completed forward-fuel preparation reuse | A build retains at most one completed station reachability vector under an exact request key (ordered station identities/coordinates, origin, destination, range, profile/access and current loaded-source identity), with a 1 MiB retained payload cap. The next committed pump stage can reuse that result; cancellation, failed or empty preparation and changed sources cannot publish a hit. This does not cache speculative feasibility or alter initial refuelling. Fifteen tests in six suites pass in `/tmp/Dirt-Lazy-Fuel-Preparation-R2-20260914.xcresult`; the actual first owner cold/repeat route takes 20.851/1.442 seconds and matches all preceding road responses except debug timing, all refill identities, rider coordinates and settings. Fixture-created waypoint UUIDs differ. Cold latency still fails the 8-second target. Exact source/results: `.build/recovery-evidence/lazy-fuel-preparation-r2`. The same run tests an unactivated lazy-preparation prototype: it scans 18.6 million parent memberships and takes 13.813/11.205 seconds for preparation plus one match, so it is not a demonstrated performance improvement or enabled app behavior. |
-| Station projection work | Native road matching now keeps the closest geometry segment locally and constructs one snap/bearing per road, preserving strict-distance ties, coordinates, fractions, radius and subsequent directed/profile ranking. Twelve tests in four suites pass in `/tmp/Dirt-Road-Projection-Choice-20260914.xcresult`, including nearest initial-station proof, restricted/ferry approaches and the actual first owner cold/repeat ride. All route fields except debug timing match the preceding four-owner replay, including surfaces, repetition, legal continuation, geometry and three station identities. Cold matching examines 348,319 segments and 242,026 in-radius projections but constructs 78,628 road snaps. Total cold/repeat 21.072/1.759 seconds, footprint 119.9/87.8 MiB and RSS 464.7/465.1 MiB; this removes redundant construction but does not materially solve first-use latency. Exact source/results: `.build/recovery-evidence/road-projection-choice`. |
-| Reconstructed route range validation | The native success boundary now checks actual reconstructed distance against the caller’s cap. Mutable predecessor rewrites can invalidate a descendant’s earlier distance label; an over-cap result is unfinished search, never proof of disconnection. The focused reproduction, all three native profiles and fractional initial-approach accounting pass in `/tmp/Dirt-Cap-Clean-Rungs-20260914.xcresult`. The twenty-refill native fixture and all four exact owner requests also pass: 21.153, 14.576, 9.433 and 15.948 seconds in owner order; sampled footprint 124.7, 87.8, 97.1 and 90.8 MiB, RSS 447.1, 450.3, 455.3 and 452.5 MiB on the named M1 simulator. This does not establish faster first use or repair predecessor search quality. The combined run has one unrelated new Clean fixture metadata failure, repaired and passed in the subsequent Clean-rungs run. Exact source/results: `.build/recovery-evidence/cap-clean-rungs`. |
-| Current cumulative Balanced accounting | Exact local known-surface distances now travel separately from recent roads through rider-leg ownership, fuel, regional hops, resume and rewind. Initial fill is excluded; a new rider leg resets the mix but not the tank. Cache keys include the prefix; old/missing contributions remain unavailable. Native scored-dirt metadata remains separate from known leaf facts and cannot silently substitute for them. Seven exact-contribution tests, two ownership/cache tests and the actual builder four-stage carrier test pass in `/tmp/Dirt-Forward-Station-Carrier-20260914.xcresult`. Balanced selection is not activated: cumulative bucket/ranking/termination repair remains necessary. The owner has been asked whether unknown distance belongs in the mix denominator; this is unresolved, not silently decided. |
-| Bounded search and disclosure repairs | Native response conversion now carries existing Clean, town and urban fallback warnings. Discarded Dirt alternative/repair limits remain visible even when the selected search completed; selected-search timing remains separate from whole calculation timing. The existing warning now truthfully says comparison could not finish, including underlying data-unavailable reasons. Balanced uses one existing 18-second window across matching, snap pairs and corridor attempts, widening only after proved noPath and retaining valid limited incumbents. Focused tests pass; real long Balanced completion and timing remain unqualified. No profile costs, pack bytes or interface layout changed. |
-| Current focused evidence | `/tmp/Dirt-Journey-Repairs-20260913.xcresult`: 82 tests; `/tmp/Dirt-Label-Lookup-20260913.xcresult`: 33 tests; `/tmp/Dirt-Initial-Fuel-Presence-20260913.xcresult`: 77 tests. They cover canonical save/reopen, border frontier classification, demand labels, legal arrival, exact mapped initial fuel presence, short station approaches and carried range. The final 13-test checkpoint replay includes all four owner routes, saved Loop edit provenance and denied reverse access. Tests overlap and are not a unique aggregate count. |
-| Measured preparation baseline | M1 MacBookPro17,1 / 16 GiB, existing iPhone17 iOS26.5 simulator: four owner requests took 8.725–11.486 seconds before demand labels; sampled process RSS peaks 658–667 MiB, footprint 261–284 MiB. These are request samples after fixture setup, not a qualified cold application startup. Inclusive phases overlap; allocation and lifetime peaks are reported separately in `.build/recovery-evidence/measured-dense-labels`. |
-| Pre-private-index owner baseline | `/tmp/Dirt-Legal-ColdWarm-20260913.xcresult` passes the exact first owner request twice: first use 20.949 s, repeat 4.650 s, identical repeated geometry/stops. First-use sampled footprint 170.3 MiB / heap 124.1 MiB / RSS 511.5 MiB; repeat 130.0 / 89.1 / 482.1 MiB. First-use latency misses the 8 s target. The legal-arrival correction changes some intermediate geometry; pack bytes remain unchanged. Raw phases, tokens and geometry are in `.build/recovery-evidence/legal-cold-warm`. |
-| Current Ontario baseline | `/tmp/Dirt-Balanced-Read-Cache-20260914.xcresult`: four tests in three suites pass, including exact native equivalence and the warm current-pack Ontario ABBA benchmark. The 256/4096/4096/256-slot comparisons take 18.026/18.028/18.030/18.035 s because all reach the existing 18-second limit. They examine 756,224/922,880/915,712/746,752 queue entries: about 22% more work with 64 KiB rather than 4 KiB pointer metadata. All four return identical geometry, roads and legs: 418.232 km, 52% dirt, zero repeated distance and unknown access. Sampled footprints are 280.9/292.6/306.4/285.9 MiB. Balanced now uses 4096 slots; Dirt resource searches keep 256. This improves search throughput but does not finish comparison or meet the 10-second warm target. Raw source/output is in `.build/recovery-evidence/balanced-read-cache-slots`. Earlier Dirt first/repeat31.481/14.045 s and Clean measurements require final-candidate replay. |
-| Private-index and memory work | Production V4 matching uses an exact graph/geometry-hash-bound private disk index. Geometry is paged with charged borrowed-page lifetime; station coverage and urban checks reuse bounded exact preparation. Cancellation and corrupt/stale identities remain distinct from disconnected roads. Full graph decoding and region-wide reverse guidance still remain: this is not yet selective whole-journey loading. Ontario index creation/reuse measured 21.175/0.209 s, cancellation 0.0016 s; cold preparation fails the latency target. |
-| Private-index Ontario comparison | `.build/recovery-evidence/ontario-private-index`: same M1 simulator/current immutable pack, fuel off. Dirt first/repeat 30.879/10.019 s; Balanced 18.401/18.360 s still times out; Clean 2.490/2.349 s. Peak footprint first/repeat: Dirt 298.5/231.5 MiB, Balanced 349.2/282.2 MiB, Clean 266.0/236.2 MiB. These precede the latest memo changes and require final-candidate replay. |
-| Active correctness changes | Fractional resource costs now use consistent distance units; unknown surface is excluded from proven dirt. Initial refuelling uses physical distance under preferred legal matching and proves the closest choice with conservative bounds; the first owner request now needs three actual station attempts. Same-edge station guidance preserves legal direction. Exact consumed seam bytes are checked, not merely an earlier file snapshot. These are deliberate correctness changes and may change generated routes; source packs are unchanged. |
-| Latest first-owner cold/repeat replay | `/tmp/Dirt-Initial-Bound-Memo-R2-20260914.xcresult`: nine tests in three suites pass. Exact first-owner first/repeat calculations take 20.581/0.891 s, sampled footprints 120.5/92.8 MiB on the named M1 simulator. The complete route responses match the preceding lazy-destination result apart from timing, including all refill identities. Reuse eliminates the repeated initial proof scan: one completed-bound cache hit and one remaining station-coverage call. First-use remains above the 8 s target; repeat meets the 5 s target. Cold means application preparation, not empty OS file cache. |
-| Current four-owner qualification | `/tmp/Dirt-Station-Coverage-Dedup-20260914.xcresult` passes all four exact owner requests with initial refuelling, actual destination escape and preserved requested points. Times are 21.118, 14.626, 9.109 and 16.105 s in owner-log order; roads, geometry, metrics, legal continuation and refill IDs match the prior qualified outputs. Existing search-limit warnings now disclose unfinished comparison. These are simulator results, not broad regional or phone acceptance. The same run fails the two Clean crossing fuel calculations and one duplicate-count fixture assertion; duplicate suppression saved only 2.1% of bounds checks and did not improve total time. That duplicate filter and its obsolete fixture have since been removed; the endpoint-first replacement passes its focused tests. These owner routes require replay against the final combined candidate. Exact outputs/source are in `.build/recovery-evidence/station-coverage-dedup`. |
-| Latest focused work | Owner replay evidence now records the exact source and copied-file manifest identities (region/release/epoch/hash/bytes); absent catalog state is separately null. Earlier `{}` installedIdentity artifacts had incomplete provenance recording despite fixture-source verification. Initial-station bounds retain one completed vector under exact origin, ordered station coordinates/radii, incumbent distance, field limits and source identity. Pack/index ownership is weak; stale data, incomplete results and cancellation cannot publish a hit. The 256 KiB limit is retained logical cache payload, not total process memory or caller-held results. Actual station approach selection remains unchanged. Destination fuel is still screened lazily; memory-limited Balanced completion remains honestly marked as unfinished search. Pack bytes and approved UI are unchanged. |
-| Rejected performance experiment | `.build/recovery-evidence/ancestry-index-fourth`: a bounded per-pop ancestry table preserved focused route equivalence but slowed the actual first pump calculation to about 12.8 s from about 8 s. It was removed from active source; staged prototype and measurements are retained. Instrumentation observed about 302 million predecessor visits before this experiment. Fixed label-page read caches reduce lookup overhead without changing search decisions (64 KiB for Balanced, 4 KiB for Dirt resource search); predecessor traversal itself remains. |
-| Legacy hosted services | DEV was last audited at `139a173`; production at `af96ca97`. These are observations, not desired architecture or current deployment proof. Recheck only when relevant. |
-| Release | No deployment, archive, device replacement, or App Review submission is part of documentation consolidation. |
+| `BinaryFile.swift`, `GraphPack.swift` | Local mapped V4/geometry decoder, graph/geometry SHA pairing, bounds/access/restriction validation. |
+| `PackRepository.swift` | Local manifest/artifact verification and missing-region demand; simple regional download-chain helper. |
+| `RoadGraph.swift`, `RegionalGraph.swift` | Search graph abstraction; independently reprove reciprocal OSM seams against both graphs; carry one search and restriction state through regions. |
+| `Restrictions.swift`, `PathSearch.swift` | Directed legal search, endpoint fragments, destination/customer access, turn/via-way state, distance caps, profile/resource labels, deadline/cancellation. |
+| `Matching.swift`, `IndexedGraph.swift` | Directed road matching and a reusable geometry-bounds index. The index is in memory, not the old private disk index. |
+| `ProfilePolicy.swift`, `RoutingEngine.swift`, `RouteQuality.swift` | Initial profile costs, staged candidate search/selection, known/unknown surface reporting, corrected weakest-section comparison. Full policy coverage is NOT finished. |
+| `FuelPlanner.swift` | Initial bounded fuel-chain search over the same graph, road-proven approaches, tank limits and destination escape. This is a provisional implementation, NOT a complete port of `fuel-chain.js`. |
+| `NavigationCues.swift` | Initial graph-junction cues and arrival cues. Full navigation acceptance is outstanding. |
+| `Sources/RoutingProbe/main.swift` | Desktop local-file CLI for real-pack checks. |
 
-The next implementation pass is routing-only with automatic fuel OFF, under
-section 7’s owner-directed sequence. Fuel repair, fuel selection experiments,
-and fuel-enabled test runs are paused until routing has been qualified and
-accepted. Preserve the existing app and all pending fuel work.
+App integration:
 
-Raw evidence remains under `.build/` and benchmark/test fixtures. Historical
-worktrees there are code/evidence snapshots, not current documentation sources.
-Do not load their AGENTS/specifications as routing instructions or resume an old
-checkout without applying this current authority. Main and the active candidate
-carry the same canonical document; keep this path synchronized when accepted
-decisions move between them. Do not create separately evolving routing guides.
+- `Dirt/Routing/NativeRoutingAdapter.swift`: new app request/response bridge,
+  shared presentation mapping, and `NativeRoutingSession` actor. It opens local
+  verified packs and reuses one prepared graph/index/fuel set.
+- `Dirt/Features/RoutePlanning/Itinerary/RoutingSource.swift`: old native
+  `PackRoutingSource` was removed and replaced. Production source selection now
+  always selects the pack source. `LiveRoutingSource`/live client infrastructure
+  remains available as the owner requested, but is not the automatic fallback.
+- `GraphPackStore.swift`: removed old routing, decoding and seam-hop chaining;
+  retained acquisition/UI infrastructure. Routing no longer silently tops up
+  geometry/fuel/seams. Explicit installation now downloads and checks the small
+  per-region `pack-manifest.v2.json` alongside catalog-verified artifacts.
+  Previously installed files without a complete manifest need installation
+  migration. This acquisition path still needs end-to-end testing.
+- `RoutePlannerModel.swift` and `PackAcquisition.swift`: restore the existing
+  consent flow, include intermediate regions, preserve pins on unavailable or
+  declined downloads, route navigation recovery locally, and use local fuel
+  data for replacement candidates. Removed silent server routing fallback.
+- `ItineraryRangeArithmetic.swift` retains the two arithmetic helpers needed by
+  the shared/live itinerary builder. `SurfacePresentation.swift` retains shared
+  display models; unknown is no longer counted as proven Dirt. Pack overlays
+  now read the new decoder. These are app-support functions, not preserved old
+  pathfinding.
+- `ReferenceIdentity.json` lists deleted native implementation/test files and
+  hashes all 124 checked-in JavaScript routing reference files. The hashes were
+  rechecked unchanged at handoff. Do not modify JS to make Swift tests pass.
+
+### Verified results and exact limits of the evidence
+
+1. `swift test --package-path Packages/DirtRoutingEngine --jobs 2` passed **24
+   Swift tests in five suites**. Internally these include **312 turn checks and
+   1,216 executed-JavaScript inner-search route comparisons** over four existing
+   legal-topology binary fixtures. These are NOT 1,216 independent Swift tests
+   and do NOT establish full matching/orchestration/fuel/large-pack parity.
+2. Other package checks cover cancelled/expired computation, malformed headers,
+   paired-file mismatch, rejecting remote URLs, missing intermediate data,
+   weakest-section selection, synthetic two-pack restriction preservation,
+   indexed matching equivalence on a fixture, and synthetic fuel-chain/tank/
+   destination-escape outcomes.
+3. The unsigned **app build succeeds** for generic iOS. Command and latest log:
+
+   ```sh
+   xcodebuild -project Dirt.xcodeproj -scheme 'DIRT Dev' -configuration Debug -destination 'generic/platform=iOS' -disableAutomaticPackageResolution CODE_SIGNING_ALLOWED=NO build
+   ```
+
+   Log: `.build/greenfield-routing-evidence/app-build.log`.
+4. **App test compilation now succeeds** for generic iOS (`build-for-testing`,
+   `-parallel-testing-enabled NO`, unsigned). Log:
+   `.build/greenfield-routing-evidence/app-tests-build.log`. The two old-API
+   compilation failures have been migrated without restoring deleted routing.
+   `Phase1OwnerFuelOffReplayTests` reads explicit local files using opt-in
+   `DIRT_OWNER_REPLAY_PACK_ROOT`; optional `DIRT_OWNER_REPLAY_OUTPUT` chooses its
+   evidence file. It never overwrites the rider's cache. It now asserts at least
+   70% known dirt and no incomplete comparison, so the current owner result
+   below FAILS its acceptance requirements. The ordinary suite skips this large
+   external-data replay unless its pack root is explicitly supplied.
+   Focused simulator testing passed **38 tests in three suites**:
+   `PackFirstRoutingTests`, `RoutePlannerModelItineraryTests`, and
+   `PackDebugPaintTests` (10.977 s test execution). Log:
+   `.build/greenfield-routing-evidence/app-offline-tests.log`. This uses fake
+   routing sources for app orchestration; it is not physical-device routing or
+   a network-denied full native-app replay. The existing simulator was shut down
+   afterward and its shutdown state verified. No clones were created.
+5. Current release `fabric-v4-20260909-02` NS/NB graph, geometry, fuel, seams and
+   manifests were downloaded from the public pack CDN and all artifact hashes
+   verified. Files: `.build/greenfield-routing-evidence/packs/{ns,nb}`. These
+   are test inputs, not a modified or republished pack. Do not commit them.
+
+Desktop release-probe results below include preparation, use local files only,
+and have **no phone-performance or riding-quality acceptance**:
+
+| Evidence JSON under `.build/greenfield-routing-evidence/` | Result |
+| --- | --- |
+| `ns-clean-current.json` | A `(-63.340265,44.764830)` to B `(-63.574,44.666)`, Clean, seed 1: 39,697.915 m, 0% known dirt, 0% unknown surface, 9,125 pops, 1.183 s preparation, 2.829 s total, no reported limit. |
+| `ns-nb-clean-current.json` | Same A to B `(-67.29131337653283,45.262939746458734)`, Clean, seed 1: 770,948.368 m, 0% known dirt, 3% unknown, 116,899 pops, 0.826 s preparation, 8.871 s total, no reported limit. Connectivity demonstrated; the long chosen route still needs quality comparison. |
+| `ns-dirt-current.json` | Same short NS endpoints, Dirt, seed 1: 59,915.915 m, **10.1% known dirt**, 0.4% unknown, 229,404 pops, 0.181 s preparation, 2.401 s total, no reported limit. This is **not qualified Dirt behavior**. Compare the identical JS request before claiming either parity or a regression; do not assume the available dirt was exhausted. |
+
+An earlier arbitrary B `(-63.3,44.8)` produced `noMatch`; the JS matcher also
+found no candidate within 2 km there. That was not a useful route acceptance
+case. The old checked-in NS sample pack has a different epoch from the current
+published pack; do not mix their receipts.
+
+Additional evidence from continued work after the first handoff:
+
+- `scripts/native-routing-full-reference.cjs` executes actual JS `routeOnRuntime`
+  on a single local V4 pack, verifies graph/geometry hashes, and rejects HTTP
+  before loading reference modules. It accepts `PACK_DIRECTORY REQUEST_JSON
+  [SECONDS]`. This adds full single-pack orchestration comparison; multi-pack
+  JS and full fuel comparison are still outstanding. Preserve the untouched JS.
+- `ns-short-request.json` → `ns-dirt-full-js.json`: same short NS points, seed 1,
+  250 m match limit, Allow Unknown off, current NS pack. JS returned 34,486 m,
+  **4.3% known dirt**, degraded quality, 2.999 s total (1.201 s preparation), zero
+  network attempts. Its endpoint road is `w364195767:62537:126846`.
+- `ns-dirt-full-swift.json` is the pre-variety Swift comparison: 59,915.915 m,
+  **10.1% known dirt**, 2.445 s total, endpoint road
+  `w159933737:62537:105303`. Start edge agrees with JS. Both fail Dirt acceptance;
+  endpoint selection already differs, so this is not a search-only comparison.
+  The new matcher scores arriving travel direction toward B, whereas the JS
+  outer router supplies reversed intent for its destination match. Investigate
+  directed matching explicitly before changing either behavior.
+- `owner-dirt-seeded-swift.json` uses the EXACT owner coordinates, seed and zoom
+  with the new variety implementation: **968,578.496 m, 53.8% known dirt, 0.7%
+  unknown**, 250,438 selected-search pops, 60.006 s total, 2.244 s preparation.
+  It reaches B but reports `comparison incomplete: resourceLimit("time")`.
+  This FAILS owner Dirt and performance acceptance. No fuel proof was run in
+  this replay. The probe's `status: complete` means road connectivity only.
+
+- CPU sampling (`owner-cpu-sample.txt`, first eight seconds of a separate
+  30-second diagnostic run) identified repeated regional edge canonicalization
+  inside ancestor overlap checks as the dominant cost. `PathSearch` now computes
+  the candidate's canonical edge once and reads each ancestor's already-stored
+  canonical incoming edge. The overlap predicate and search costs are unchanged;
+  this requires no new retained cache or working-set allocation.
+- `owner-dirt-hotloop-swift.json`: same exact owner replay after that change,
+  **17.663 s total, 0.499 s preparation**, with the **identical selected geometry,
+  road-ID sequence, distance, dirt percentage and 250,438 pops** as the 60-second
+  run. Preparation is warmer, so do not attribute the entire end-to-end delta
+  to the inner-loop change; nevertheless search drops from approximately 57.8 s
+  to 17.2 s and completes the attempted recovery instead of exhausting time.
+  Dirt quality still FAILS. Its saved diagnostic says `comparison incomplete:
+  noPath`; a subsequent classification fix now treats an exhausted no-path
+  recovery as no candidate, not a timed-out comparison. Final verified replay `owner-dirt-final-swift.json` is **19.531 s total,
+  2.248 s preparation**, identical selected geometry/IDs/250,438 pops, and no
+  limit. The approximately 17.28 s search compares with the original 57.76 s
+  search window. **53.8% known dirt still fails acceptance**. This is desktop
+  evidence, not a phone timing claim.
+- Fuel request policy now preserves explicit highway and city preferences as
+  well as Wander when converting to native road/fuel requests. Low-dirt native
+  responses carry an explicit `low_dirt` warning instead of silently presenting
+  a sub-70% candidate as satisfying the Dirt target. This does not qualify them.
+
+Final verification before pausing for credits:
+
+- Package: **24 tests / five suites passed** after the final engine changes.
+- Generic-iOS **test build succeeded** after the final app preference/warning
+  changes. The 38 simulator tests passed earlier in this continuation; they
+  were not rerun after those last adapter changes.
+- `ns-dirt-final-swift.json`: seeded short NS route, 59,933.915 m, 10.1% known
+  dirt, 1.910 s total, no limit. Still below Dirt acceptance.
+- All **124 JavaScript source hashes remain unchanged**. Local
+  `.build/greenfield-routing-evidence/greenfield-receipt.json` records source
+  hashes, pack identities, final owner metrics and exact before/after geometry
+  equality. Keep this local evidence; do not stage all of `.build`.
+- No active simulator remains. The existing simulator was shut down and verified.
+  All work remains uncommitted, including important untracked files. Nothing was
+  deployed or installed to a physical phone.
+
+- Additional memory repeat: `owner-dirt-memory-swift.json` and
+  `owner-memory.txt` retain the desktop timing and process memory measurement.
+  They are not physical-device acceptance.
+
+### Cursor: do these steps in this order
+
+**1. Preserve and recheck the current baseline.** Inspect `git status`, the
+untracked package and both reference runners. The two app test compilation
+migrations are complete. Re-run the package and relevant app tests when code
+changes. Keep the owner replay's original settings and stronger qualification
+assertions; do not remove the test or weaken its assertions to accept 53.8% dirt.
+
+**2. Audit missing policy before adding optimization.** This is the highest
+priority substantive work. Known gaps in the current new code:
+
+- Seed variety is now implemented in `RouteVariety.swift` as a deterministic
+  per-edge cost multiplier in [0.96, 1.04), using all 64 seed bits. It preserves
+  nonnegative static costs instead of JS's history-dependent near-cost label
+  stealing. Exact-distance probes exclude it. Four tests verify repeatability,
+  both legal fork alternatives, prohibited-road exclusion, and unchanged exact
+  distance probes. This is an intentional algorithm difference, not JS parity.
+  Clean also receives variety. Its quality on real alternative routes remains
+  unqualified; IDs still differ across single/regional runtimes. The inner JS
+  oracle explicitly disables variety on both sides.
+- `ProfilePolicy.wander` is still stored but unused. Implement actual continuous
+  detour appetite, with controlled route tests, without silently changing style.
+  Do not claim Wander works until it changes behavior.
+- `ProfilePolicy.step`/`RoutingEngine.route` are incomplete translations of
+  `profile-costs.js`, `hop-search.js`, `road-tier.js`, `find-path-v2.js`, and outer
+  `router.js` orchestration. Compare all actual cost factors, profile fallback
+  stages, direct-distance caps, urban/settlement policy, meaningful dirt runs,
+  highway endpoint exemptions/entry costs, directional guidance, and recovery
+  selection. Current major-road multipliers/defaults differ from JS; some are
+  intentional owner preferences, others are unqualified drift. The present
+  steep away/quadratic-chord costs also need reconciliation with section 2's
+  soft waypoint preference. Record each deliberate correction separately.
+- No reverse-road compass/feasibility bounds have been implemented. Avoid
+  blindly restoring the old eager province-wide preparation. Measure a correct
+  baseline, then add tested bounds/preparation reuse where justified.
+- Matching has no JS median/opposite-carriageway suppression or weak-component
+  pair pruning. It uses latitude-scaled projection and honors directed matches;
+  JS's projection and later direction handling differ. Test one-way arrival,
+  divided highways, customer access, endpoints on the same edge, and exact
+  requested-versus-matched positions before declaring these improvements.
+- `NativeRoutingAdapter.request` currently **ignores `arrivalEdgeId`**. The new
+  `SearchArrival` preserves state within `FuelPlanner`, but independent app
+  rider-stage requests do not yet pass complete legal arrival state. Fix this
+  end-to-end; an edge ID alone is insufficient for active via-way restrictions.
+  Regional and single-pack edge-ID formats also differ today, which can weaken
+  prior-road/history matching when the prepared pack set changes.
+- New fuel planning is a first implementation. Audit `fuel-chain.js` against
+  `FuelPlanner` and the app adapter: partial-tank initial fuel, nearest reachable
+  probe, required/excluded/preferred stations, minimum stops, windows/partial
+  continuation, onward proof, destination escape, route-first reuse, avoiding
+  unnecessary retrace/urban entry, and total rider-leg Balanced composition.
+  Several JS request controls are currently ignored. Many candidates trigger
+  separate route searches and the frontier has no strong dominance pruning;
+  this is not proven fast or complete for real fuel cases. The new planner now retains a
+  completed foundation when its fuel frontier hits a time/label limit; its
+  regression test exercises actual frontier exhaustion. Cancellation still
+  propagates. The absolute 800 m refill-spacing exclusion has been removed and
+  a necessary-nearby-refill regression passes. Verify foundation retention through
+  the app as well; neither correction proves complete fuel policy.
+- Navigation cues are initial graph-based output, not yet a full tested port.
+  Honor `docs/00-NAVIGATION-SOURCE-OF-TRUTH.md`; do not change the accepted HUD,
+  speech or Loop experience while repairing the engine.
+
+**3. Execute JS-versus-Swift comparisons over the same immutable inputs.** Extend
+`scripts/native-routing-reference.cjs` or add test-only runners that execute the
+real JS `routeOnRuntime`/fuel pipeline on local packs. Keep JS out of the app.
+The inner fixture runner intentionally disables several policies; copying more
+constants into tests is not parity proof. Record request, settings, seed, pack
+hashes, requested/matched endpoints, directed physical roads, restrictions,
+geometry, actual surface composition, limits, timing, and memory. Diagnose the
+first decision that differs rather than tuning until percentages look similar.
+Compare known-surface statistics separately from JS's old unknown-as-dirt bug.
+
+The owner replay is A `(lon=-63.34024797349485, lat=44.764804567541226)` to
+B `(lon=-67.29131337653283, lat=45.262939746458734)`, seed
+`3806057305948982`, Dirt, Allow Unknown off, map zoom 12.5, and then fuel on at
+200 km / 10% reserve. Include short NS, real NS–NB, intermediate NS–QC/ON,
+Canada–US, dense Ontario, all three styles, meaningful Wander/seed cases, and
+fuel regressions. The short near-Dartmouth test above is not this owner replay.
+
+**4. Verify the offline application boundary.** With valid installed files,
+reject all routing HTTP requests in the test harness and exercise create,
+reroute, fuel replacement, edit/cancel, save/resume, and navigation handoff.
+Verify missing/corrupt/stale/incompatible packs and installation migration.
+Only explicit acquisition may download pack files/metadata. Missing data must
+preserve pins and request data, never invoke live routing or become `noPath`.
+The new `hasCompleteNativePack`/cache checks are not a substitute for corruption,
+atomic replacement and stale-cache tests. The app still contains the preserved
+live client; prove it is unreachable from ordinary device-routing paths.
+
+**5. Optimize measured bottlenecks while preserving the corrected route.** Start
+with matching/index reuse, duplicate preparation, candidate/continuation reuse,
+restriction-relevant state compaction, and justified graph-distance bounds.
+Ancestor canonicalization has already been optimized with measured evidence.
+  Do not redo it. Further dominance/pruning requires care: labels currently
+  merge histories by node/incoming/restriction/bucket even though the overlap
+  rule depends on earlier traversed spans, and length bounds can make a shorter
+  higher-cost arrival useful. Audit completeness before aggressive pruning.
+  Current label limits and mapped full files are not a demonstrated bounded
+working-set solution for dense Ontario. Measure memory as well as time. Do not
+shorten the ride, omit packs/stops, lower qualification, or hide a comparison
+limit to meet a latency target. Keep the single total monotonic deadline and
+cancellation behavior. The route-quality comparator correction must stay tested.
+
+**6. Report and release honestly.** Once package/app suites and the acceptance
+matrix pass, prepare a coherent reviewable diff and update this section. Do not
+stage the entire `.build` directory or unrelated owner work. Physical-device
+installation/production promotion still need current owner authorization.
+For simulator tests, reuse one existing suitable UDID and use
+`-parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1`;
+never create clones or boot an additional device concurrently without explicit
+authorization. Do not call this done solely because the app compiles.
+
+Useful local-only commands (run from the checkout above):
+
+```sh
+node scripts/native-routing-reference.cjs
+swift test --package-path Packages/DirtRoutingEngine --jobs 2
+swift build --package-path Packages/DirtRoutingEngine -c release --jobs 2
+Packages/DirtRoutingEngine/.build/release/dirt-routing-probe .build/greenfield-routing-evidence/packs ns -63.340265 44.764830 -63.574 44.666 cleanest 45
+Packages/DirtRoutingEngine/.build/release/dirt-routing-probe .build/greenfield-routing-evidence/packs ns,nb -63.340265 44.764830 -67.29131337653283 45.262939746458734 cleanest 60
+```
+
+The probe accepts optional `[SEED [MAP_ZOOM]]` after seconds (default seed 1).
+It now records requested/matched points and matched road IDs. It prints potentially large
+geometry/road JSON, so redirect to an evidence file when benchmarking. Avoid
+concurrent timing runs. Existing evidence is local and untracked; record the
+source state alongside any new measurements.
 
 ## 9. Existing V4 data format reference
 

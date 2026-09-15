@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		2BA101013014F00100000001 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 2BA201013014F00100000001 /* MapLibre */; };
 		2BA101013014F00100000002 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 2BA201013014F00100000002 /* Supabase */; };
+		AC7100000000000000000001 /* DirtRoutingEngine in Frameworks */ = {isa = PBXBuildFile; productRef = AC7100000000000000000002 /* DirtRoutingEngine */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +60,7 @@
 			files = (
 				2BA101013014F00100000001 /* MapLibre in Frameworks */,
 				2BA101013014F00100000002 /* Supabase in Frameworks */,
+				AC7100000000000000000001 /* DirtRoutingEngine in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,6 +123,7 @@
 			packageProductDependencies = (
 				2BA201013014F00100000001 /* MapLibre */,
 				2BA201013014F00100000002 /* Supabase */,
+				AC7100000000000000000002 /* DirtRoutingEngine */,
 			);
 			productName = Dirt;
 			productReference = 2B0105553014DE2B00065435 /* Dirt.app */;
@@ -210,6 +213,7 @@
 			mainGroup = 2B01054C3014DE2B00065435;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				AC7100000000000000000003 /* XCLocalSwiftPackageReference "Packages/DirtRoutingEngine" */,
 				2BA301013014F00100000001 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
 				2BA301013014F00100000002 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
@@ -616,6 +620,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		AC7100000000000000000003 /* XCLocalSwiftPackageReference "Packages/DirtRoutingEngine" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/DirtRoutingEngine;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		2BA301013014F00100000001 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -647,6 +658,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 2BA301013014F00100000002 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		AC7100000000000000000002 /* DirtRoutingEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC7100000000000000000003 /* XCLocalSwiftPackageReference "Packages/DirtRoutingEngine" */;
+			productName = DirtRoutingEngine;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

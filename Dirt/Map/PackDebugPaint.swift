@@ -37,10 +37,6 @@ enum PackDebugPaint {
         (family ?? .unknown).rawValue
     }
 
-    nonisolated static func roadTierKey(_ tier: RoadTier?) -> String {
-        (tier ?? .unknown).rawValue
-    }
-
     static func legend(for mode: DebugGraphPaintMode) -> [LegendItem] {
         switch mode {
         case .access:

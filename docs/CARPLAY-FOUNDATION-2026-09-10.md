@@ -1,6 +1,53 @@
-# CarPlay groundwork — September 10, 2026
+# CarPlay — setup and implementation record
 
-Status: entitlement request submitted; Apple Developer Relations has requested additional maneuver screenshots. Approval remains pending. No capability enabled, no CarPlay implementation or support claim. Launch support remains iPhone and iPad.
+Last updated: September 14, 2026.
+
+## Current status
+
+Apple approved the CarPlay entitlement for the developer account. CarPlay Navigation is enabled and saved for the production DIRT App ID, and a new App Store provisioning profile was generated and downloaded. This completes the developer-website setup performed in this session. It does not mean the CarPlay interface is implemented, tested, or released.
+
+## Completed September 14
+
+Richard supplied Apple Developer Relations’ approval email (Case-ID: 22137173) and authorized following its configuration steps in the open Apple Developer website.
+
+| Item | Verified result |
+| --- | --- |
+| Developer team | Hella Creative Solutions — 34XM6B4G7A |
+| Production bundle ID | com.mayday.dirt |
+| App ID description | A dual-sport motorcycle navigational map tool |
+| Apple identifier record | 9N6KGXKR39 |
+| Capability | CarPlay Navigation App enabled |
+| Save verification | Reopened the identifier after saving; CarPlay remained checked and Save was disabled, indicating no pending changes |
+| New profile name | DIRT Production CarPlay App Store 2026-09-14 |
+| Profile type | App Store distribution |
+| Profile ID | 9CUXT6HMJ2 |
+| Certificate selected | Existing Hella Creative Solutions Distribution certificate, displayed as expiring February 24, 2027 |
+| Profile expiry | February 25, 2027, as displayed by Apple |
+| Downloaded filename | DIRT_Production_CarPlay_App_Store_20260914.mobileprovision |
+| Download verification | Safari Downloads showed the completed 13 KB file |
+
+Apple warned that modifying capabilities invalidates provisioning profiles containing this App ID and requires regeneration for future use. The change was confirmed and the new profile above generated afterward. No certificate was created, revoked, or replaced.
+
+The downloaded profile was opened from Safari, but installation into Xcode was not independently verified. Do not treat the download or open action as proof that an archive will sign successfully with CarPlay.
+
+## Scope of this setup
+
+- Only the production App ID (`com.mayday.dirt`) was configured. The development App ID (`com.mayday.dirt.dev`) was not changed.
+- No app source, Xcode capability settings, entitlements file, scene configuration, or navigation adapter was changed in this setup session.
+- No development provisioning profile was generated.
+- No simulator or physical device was operated.
+- No archive, upload, App Review submission, or public release was performed.
+- No new agreement was accepted during this session; Richard had previously confirmed accepting the CarPlay request terms.
+
+## Remaining work
+
+1. Configure the development App ID and development signing when preparing CarPlay testing.
+2. Verify the downloaded distribution profile is installed and that the selected certificate has its matching private key available to the build machine. Preserve existing signing identities.
+3. Add the approved CarPlay entitlement and scene configuration to the intended app targets, then implement the map and maneuver adapter using the existing navigation session.
+4. Validate signing and the completed CarPlay experience using the tests below. Reuse one existing simulator; additional devices or clones require Richard’s explicit authorization.
+5. Include CarPlay in a future approved build and review submission only after implementation and qualification. Final App Review submission and public release remain deferred.
+
+The groundwork and historical request notes below are retained for context. Any earlier “pending approval”, “unsubmitted”, or “no capability enabled” statements are superseded by the verified September 14 record above.
 
 ## Apple setup
 
