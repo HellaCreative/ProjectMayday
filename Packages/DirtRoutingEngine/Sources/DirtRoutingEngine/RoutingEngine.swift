@@ -140,10 +140,12 @@ public struct RoutingEngine: Sendable {
         var incomplete: RoutingFailure?
         var comparisonFound = false
         var failedWidth = Double.infinity
+        var skipUnitBand = false
         var repeatable: (width: Double, route: ComputedRoute, quality: RouteQuality)?
         for multiplier in multipliers {
             let width = base*multiplier
             let comparison = multiplier <= 2
+            if multiplier == 1, skipUnitBand { continue }
             if failedWidth.isFinite, width < failedWidth { continue }
             if !comparison, !candidates.isEmpty { break }
             var options = request.options
@@ -182,6 +184,9 @@ public struct RoutingEngine: Sendable {
                 }
                 candidates.append(.init(route: route,width: options.corridorMeters,quality: quality))
                 if comparison { comparisonFound = true }
+                if multiplier == 2 {
+                    skipUnitBand = maxCrossTrack(route, from: start.coordinate, to: end.coordinate) <= base + 1
+                }
                 candidateLog.append("\(Self.widthLabel(options.corridorMeters))/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p\(route.limit.map { "/\($0)" } ?? "")")
                 if ProcessInfo.processInfo.environment["DIRT_ROUTE_CANDIDATES"] == "1" {
                     FileHandle.standardError.write(Data("candidate width=\(options.corridorMeters) dirt=\(quality.knownDirtPercent) m=\(route.distanceMeters) pops=\(route.poppedLabels) urban=\(quality.urbanMeters) back=\(quality.backwardMeters)\n".utf8))
@@ -235,6 +240,15 @@ public struct RoutingEngine: Sendable {
         if let incomplete { throw incomplete }
         throw RoutingFailure.noPath
     }
+    private func maxCrossTrack(_ route: ComputedRoute, from start: Coordinate, to end: Coordinate) -> Double {
+        var best = 0.0
+        for segment in route.segments {
+            for point in segment.geometry {
+                best = max(best, abs(point.crossTrack(from: start, to: end)))
+            }
+        }
+        return best
+    }
     /// Bounded 50/50 Balanced: shortest path plus at most two profile searches
     /// whose dirt weight is steered toward 45–55%. Stops at B; no resource flood.
     private func balanced(_ request: RoutingRequest,
@@ -253,41 +267,51 @@ public struct RoutingEngine: Sendable {
         }
         var candidates: [Candidate] = [.init(route: direct, width: .infinity, quality: quality(direct))]
         var log = [note("shortest", direct, candidates[0].quality)]
-        func profile(_ mix: Double) throws -> Candidate {
+        func profile(_ mix: Double, corridor: Double) throws -> Candidate {
             try budget.check()
             var options = request.options
             options.objective = .profile
             options.maximumMeters = .infinity
-            options.corridorMeters = .infinity
+            options.corridorMeters = corridor
+            options.cityWall = false
             var policy = request.profile
             policy.balancedDirtPreference = mix
             let route = try run(options, policy)
-            return .init(route: route, width: .infinity, quality: quality(route))
+            return .init(route: route, width: corridor, quality: quality(route))
         }
         func inBand(_ quality: RouteQuality) -> Bool {
-            (45...55).contains(quality.knownDirtPercent) && quality.urbanMeters <= 100
+            (45...55).contains(quality.knownDirtPercent)
+                && quality.minimumSectionDirtPercent >= 20
+                && quality.urbanMeters <= 100
         }
-        if !inBand(candidates[0].quality) {
-            let firstMix = candidates[0].quality.knownDirtPercent < 45 ? 1.0 : 0.0
+        let firstMix = candidates[0].quality.knownDirtPercent < 45 ? 1.0 : 0.0
+        for corridor in [25_000.0, 80_000.0, Double.infinity] {
+            let label = corridor.isFinite ? "\(Int(corridor/1000))k" : "∞"
             do {
-                let first = try profile(firstMix)
+                let first = try profile(firstMix, corridor: corridor)
                 candidates.append(first)
-                log.append(note(firstMix == 1 ? "mix1" : "mix0", first.route, first.quality))
-                if !inBand(first.quality) {
-                    do {
-                        let mid = try profile(0.5)
-                        candidates.append(mid)
-                        log.append(note("mix0.5", mid.route, mid.quality))
-                    } catch RoutingFailure.noPath { }
-                }
+                log.append(note(firstMix == 1 ? "mix1@\(label)" : "mix0@\(label)", first.route, first.quality))
             } catch RoutingFailure.noPath { }
+            do {
+                let mid = try profile(0.5, corridor: corridor)
+                candidates.append(mid)
+                log.append(note("mix0.5@\(label)", mid.route, mid.quality))
+            } catch RoutingFailure.noPath { }
+            if candidates.contains(where: { inBand($0.quality) }) { break }
+            if candidates.contains(where: { $0.width == corridor && $0.quality.knownDirtPercent < 5 }) { break }
+            if corridor.isFinite, candidates.contains(where: { (40...60).contains($0.quality.knownDirtPercent) }) { break }
         }
-        let band = candidates.filter { inBand($0.quality) }
-        let pool = band.isEmpty ? candidates : band
+        let mixed = candidates.filter { inBand($0.quality) }
+        let quartered = candidates.filter { $0.quality.minimumSectionDirtPercent >= 15 }
+        let pool = !mixed.isEmpty ? mixed : (!quartered.isEmpty ? quartered : candidates)
+        let shortestMeters = direct.distanceMeters
         let selected = pool.min { a, b in
-            let da = abs(a.quality.knownDirtPercent - 50), db = abs(b.quality.knownDirtPercent - 50)
-            if abs(da - db) > 2 { return da < db }
-            return a.route.distanceMeters < b.route.distanceMeters
+            func score(_ c: Candidate) -> Double {
+                abs(c.quality.knownDirtPercent - 50)
+                    + max(0, 20 - c.quality.minimumSectionDirtPercent) * 2
+                    + (c.route.distanceMeters - shortestMeters) / 10_000
+            }
+            return score(a) < score(b)
         } ?? candidates[0]
         var result = selected.route
         result.searchSummary = log.joined(separator: ",")

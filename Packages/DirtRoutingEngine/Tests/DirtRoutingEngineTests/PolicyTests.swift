@@ -47,6 +47,12 @@ struct PolicyTests {
                                 from: start,to: pack.nodes[1],start: start,end: end,startOnHighway: false,endOnHighway: false)
         #expect(full < tight)
         #expect(tight / full > 4)
+        var wide = ProfilePolicy(style: .dirt); wide.wander = 1
+        var tightBand = ProfilePolicy(style: .dirt); tightBand.wander = 0
+        #expect(wide.corridorMeters(straightLine: 200_000) > tightBand.corridorMeters(straightLine: 200_000) * 3)
+        let wideGate = ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: wide.corridorMeters(straightLine: 200_000) * 2, hasRoadCompass: true)
+        let tightGate = ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: tightBand.corridorMeters(straightLine: 200_000) * 2, hasRoadCompass: true)
+        #expect(wideGate > tightGate)
         policy.wander = 1
         let dirt = policy.step(pack: pack,edge: 0,meters: 1000,objective: .pavement,
                                from: start,to: Coordinate(longitude: 0.01,latitude: 0),start: start,end: end,

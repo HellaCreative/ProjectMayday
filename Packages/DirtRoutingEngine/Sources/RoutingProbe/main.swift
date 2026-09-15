@@ -11,6 +11,7 @@ import DirtRoutingEngine
 //   DIRT_FUEL_ESCAPE=0             fuel window options (escape defaults to on)
 //   DIRT_PROBE_COMPACT=1           omit geometry and edge IDs; their hash is always printed
 //   DIRT_DIRT_PAVEMENT_AWAY=<n>    Dirt pavement away multiplier at full wander (10/4/2/1)
+//   DIRT_WANDER=<0..1>             detour appetite (default 1)
 let arguments = Array(CommandLine.arguments.dropFirst())
 let environment = ProcessInfo.processInfo.environment
 guard (8...12).contains(arguments.count),
@@ -86,6 +87,9 @@ do {
     if let scale = environment["DIRT_DIRT_PAVEMENT_AWAY"].flatMap(Double.init), scale.isFinite, scale > 0 {
         request.profile.dirtPavementAwayAtFullWander = scale
     }
+    if let wander = environment["DIRT_WANDER"].flatMap(Double.init), wander.isFinite {
+        request.profile.wander = min(1, max(0, wander))
+    }
     request.mapZoom = zoom
     request.options.counter = counter
     request.options.arrivalEdgeID = environment["DIRT_ARRIVAL_EDGE"]
@@ -127,6 +131,7 @@ do {
             "matchedEnd":[result.end.coordinate.longitude,result.end.coordinate.latitude],
             "matchedStartEdge":indexed.edgeID(result.start.edge),"matchedEndEdge":indexed.edgeID(result.end.edge),
             "distanceMeters":result.distanceMeters,"knownDirtPercent":quality.knownDirtPercent,
+            "minimumSectionDirtPercent":quality.minimumSectionDirtPercent,
             "unknownSurfacePercent":quality.unknownPercent,
             "backwardMeters":quality.backwardMeters,"lateralMeters":quality.lateralMeters,
             "longestPavedRunMeters":quality.longestPavedRunMeters,"edgeIDsSHA256":sha256(edgeIDs),

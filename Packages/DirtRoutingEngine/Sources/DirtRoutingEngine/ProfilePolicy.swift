@@ -39,20 +39,22 @@ public struct ProfilePolicy: Sendable {
         }
     }
     func corridorMeters(straightLine: Double) -> Double {
-        let base = style == .dirt ? 60_000.0 : 40_000.0
-        // Full wander keeps the JS 60/40 km comparison bands. Lower wander
-        // shrinks them; it does not change surface weights.
-        return base * (0.40 + 0.60 * appetite)
+        _ = straightLine
+        let full = style == .dirt ? 60_000.0 : 40_000.0
+        // Wander 0 is a tight band; full wander is the JS 60/40 km width.
+        return full * (0.15 + 0.85 * appetite)
     }
     /// JS `progressRegressionForAttempt` / `MAX_PROGRESS_REGRESSION_M`.
     /// JS turns this off once a turn-state compass exists. Our compass is
     /// node-level, so Dirt/Balanced keep the forward gate as well as away-tax.
+    /// The 5 km floor lets a tight Wander shrink the gate; 60 km corridors still
+    /// match the JS 15 km value (0.25 × 60 km).
     static func progressRegressionMeters(style: RidingStyle, corridorMeters: Double,
                                          hasRoadCompass: Bool) -> Double {
         _ = hasRoadCompass
         if style == .cleanest || !corridorMeters.isFinite { return .infinity }
         if style == .balanced { return 10_000 }
-        return max(15_000, min(60_000, corridorMeters * 0.25))
+        return max(5_000, min(60_000, corridorMeters * 0.25))
     }
     /// JS `approachAwayExtraCost`, including pavement-mode ×10.
     func approachAway(fromRemaining: Double, toRemaining: Double, startRemaining: Double,
