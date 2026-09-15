@@ -209,8 +209,8 @@ public struct PathSearch: Sendable {
             if left.isFinite {
                 if options.objective == .pavement { return pathCost + left / 1000 * 0.02 }
                 if policy.style == .cleanest, options.objective == .profile {
-                    // Admissible: cheapest Clean collector is 0.88 × preferBackRoads 0.82.
-                    return pathCost + left / 1000 * 0.72
+                    // Collector 0.82 × variety floor 0.96.
+                    return pathCost + left / 1000 * 0.69
                 }
             }
             return pathCost

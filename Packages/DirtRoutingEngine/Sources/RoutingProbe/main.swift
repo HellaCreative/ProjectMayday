@@ -118,6 +118,10 @@ do {
         let result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore()).route(request,budget: budget)
         let quality = RouteQuality(route: result)
         let edgeIDs = result.segments.map(\.edgeID)
+        var classMeters: [String:Double] = [:]
+        for segment in result.segments {
+            classMeters[ProfilePolicy.tier(segment.roadClass), default: 0] += segment.meters
+        }
         output.merge(["status":"complete",
             "matchedStart":[result.start.coordinate.longitude,result.start.coordinate.latitude],
             "matchedEnd":[result.end.coordinate.longitude,result.end.coordinate.latitude],
@@ -127,6 +131,7 @@ do {
             "backwardMeters":quality.backwardMeters,"lateralMeters":quality.lateralMeters,
             "longestPavedRunMeters":quality.longestPavedRunMeters,"edgeIDsSHA256":sha256(edgeIDs),
             "searchSummary":result.searchSummary as Any? ?? NSNull(),
+            "roadClassMeters":classMeters,
             "pops":result.poppedLabels,"limit":result.limit as Any? ?? NSNull()]) { $1 }
         if !compact {
             output["edgeIDs"] = edgeIDs

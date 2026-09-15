@@ -115,7 +115,16 @@ public struct RoutingEngine: Sendable {
             return try search.search(start: start,end: end,policy: policy ?? request.profile,access: request.access,options: options,budget: budget)
         }
         if request.profile.style == .cleanest {
-            return try cleanest(request, run: run, budget: budget)
+            var clean = request.options
+            clean.objective = .profile
+            clean.corridorMeters = .infinity
+            clean.maximumMeters = .infinity
+            clean.pavedOnly = true
+            do { return try run(clean) } catch RoutingFailure.noPath { }
+            clean.pavedOnly = false
+            do { return try run(clean) } catch RoutingFailure.noPath { }
+            clean.cityWall = false
+            return try run(clean)
         }
         if request.profile.style == .balanced {
             return try balanced(request, run: run, budget: budget)
@@ -225,56 +234,6 @@ public struct RoutingEngine: Sendable {
         }
         if let incomplete { throw incomplete }
         throw RoutingFailure.noPath
-    }
-    /// Clean: shortest legal route (motorway/trunk only if nothing else connects),
-    /// then a back-road profile that cannot exceed 1.12× that length.
-    private func cleanest(_ request: RoutingRequest,
-                          run: (SearchOptions, ProfilePolicy?) throws -> ComputedRoute,
-                          budget: ComputationBudget) throws -> ComputedRoute {
-        func shortest(allowHighways: Bool, cityWall: Bool, pavedOnly: Bool) throws -> ComputedRoute {
-            var options = request.options
-            options.objective = .distance
-            options.corridorMeters = .infinity
-            options.maximumMeters = .infinity
-            options.pavedOnly = pavedOnly
-            options.cityWall = cityWall
-            options.varietyEnabled = false
-            var policy = request.profile
-            policy.cleanAllowHighways = allowHighways
-            return try run(options, policy)
-        }
-        var policy = request.profile
-        let attempts: [(allowHighways: Bool, cityWall: Bool, pavedOnly: Bool)] = [
-            (false, true, true),
-            (false, true, false),
-            (false, false, false),
-            (true, false, false)
-        ]
-        var direct: ComputedRoute?
-        var used = attempts[0]
-        for attempt in attempts {
-            try budget.check()
-            policy.cleanAllowHighways = attempt.allowHighways
-            do {
-                direct = try shortest(allowHighways: attempt.allowHighways,
-                                      cityWall: attempt.cityWall,
-                                      pavedOnly: attempt.pavedOnly)
-                used = attempt
-                break
-            } catch RoutingFailure.noPath { }
-        }
-        guard let direct else { throw RoutingFailure.noPath }
-        var profile = request.options
-        profile.objective = .profile
-        profile.corridorMeters = .infinity
-        profile.maximumMeters = direct.distanceMeters * 1.12
-        profile.pavedOnly = used.pavedOnly
-        profile.cityWall = used.cityWall
-        do {
-            let route = try run(profile, policy)
-            if route.distanceMeters <= profile.maximumMeters { return route }
-        } catch RoutingFailure.noPath { }
-        return direct
     }
     /// Bounded 50/50 Balanced: shortest path plus at most two profile searches
     /// whose dirt weight is steered toward 45–55%. Stops at B; no resource flood.

@@ -15,9 +15,6 @@ public struct ProfilePolicy: Sendable {
     /// Balanced dirt mix in [0, 1]. 0 prefers paved, 1 prefers dirt, 0.5 is the
     /// default 50/50 starting weight.
     public var balancedDirtPreference = 0.5
-    /// Clean skips motorway/trunk except the snapped pin roads. RoutingEngine
-    /// retries with this true only when those searches find no path.
-    public var cleanAllowHighways = false
     public init(style: RidingStyle) { self.style = style }
     public var appetite: Double { min(1, max(0, wander.isFinite ? wander : 1)) }
     public static func family(_ leaf: String) -> Surface {
@@ -83,7 +80,6 @@ public struct ProfilePolicy: Sendable {
         let family = Self.family(pack.surfaceLeaf(edge)), tier = Self.tier(pack.roadClass(edge))
         let paved = family == .paved || (family == .unknown && ["motorway","trunk","arterial","collector","local_paved"].contains(tier))
         if pavedOnly && !paved { return false }
-        if !cleanAllowHighways, !endpoint, tier == "motorway" || tier == "trunk" { return false }
         if endpoint || !pavedOnly { return true }
         return tier != "destination" && tier != "adventure"
     }
@@ -110,7 +106,7 @@ public struct ProfilePolicy: Sendable {
             let dirtKm = [150.0,0.05,0.02,0.02,0.9]
             cost = km * (penalizedDirt || unknownPaved ? 150 : dirtKm[min(4,surface)])
         } else if style == .cleanest {
-            let tiers = ["collector":0.88,"local_paved":0.95,"arterial":3.8,"service":2.4,
+            let tiers = ["collector":0.82,"local_paved":0.95,"arterial":8.0,"service":2.4,
                          "destination":1.15,"trunk":40.0,"motorway":80.0,"adventure":120.0,"unknown":2.2]
             let families: [Surface:Double] = [.paved:1,.gravel:14,.loose:90,.unknown:1.05]
             cost = km * tiers[tier,default: 2.2] * families[family,default: 1.05]
@@ -144,13 +140,8 @@ public struct ProfilePolicy: Sendable {
         // Section 2: avoid highways in every style except the pin-join exemption.
         // JS applies the leaf 40/18/8 table only to Clean; keeping it for Dirt
         // and Balanced is an intentional product correction, not parity.
-        if avoidMajorHighways && !pinned {
+        if avoidMajorHighways && !pinned && style != .cleanest {
             cost *= ["motorway":40.0,"trunk":18.0,"arterial":8.0][tier,default: 1]
-        }
-        // JS e4FlagsForProfile never enables preferBackRoads. Apply it only to
-        // Clean so Dirt/Balanced are not silently retuned toward paved collectors.
-        if preferBackRoads && style == .cleanest {
-            cost *= ["arterial":4.5,"collector":0.82][tier,default: 1]
         }
         if style == .cleanest && avoidMajorHighways && !pinned, let previousTier {
             let fromHighway = previousTier == "motorway" || previousTier == "trunk"
