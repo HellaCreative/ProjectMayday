@@ -15,11 +15,13 @@ public struct FuelRequirements: Sendable {
     public var usableRangeMeters: Double
     public var firstLegMaxMeters: Double
     public var minimumStops = 0
+    public var maximumStops: Int?
     public var excludedStationIDs: Set<String> = []
     public var requiredFirstStationID: String?
     public var destinationUsedLimitMeters: Double?
     public var ensureDestinationEscape = false
     public var probeFirstStation = false
+    public var allowPartialResult = false
     public var preferredStationIDs: [String] = []
     public init(usableRangeMeters: Double,firstLegMaxMeters: Double) {
         self.usableRangeMeters = usableRangeMeters; self.firstLegMaxMeters = firstLegMaxMeters
@@ -82,7 +84,7 @@ public struct FuelPlanner: Sendable {
             policy: request.access,intent: intent+180,budget: budget)
         guard !initialMatches.isEmpty, !destinationMatches.isEmpty else { throw RoutingFailure.noMatch }
         func hopBudget(shortest: Bool) -> ComputationBudget {
-            let cap = shortest ? 4.0 : min(max(4, budget.remainingSeconds * 0.35), 12)
+            let cap = shortest ? 3.0 : min(max(3, budget.remainingSeconds * 0.25), 8)
             return budget.limited(to: cap)
         }
         func hop(_ state: State,to point: Coordinate,endMatches: [RoadMatch],cap: Double,customer: Bool,shortest: Bool = false) throws -> ComputedRoute? {
@@ -138,7 +140,7 @@ public struct FuelPlanner: Sendable {
         let skipPreview = budget.maximumLabels > 10_000 && budget.remainingSeconds <= 22
         if !skipPreview {
             do {
-                foundation = try engine.route(request,budget: budget.limited(to: max(1,budget.remainingSeconds*0.35)))
+                foundation = try engine.route(request,budget: budget.limited(to: max(1,min(6,budget.remainingSeconds*0.15))))
             } catch is CancellationError { throw CancellationError() }
             catch RoutingFailure.noPath { }
             catch RoutingFailure.resourceLimit { }
@@ -148,6 +150,7 @@ public struct FuelPlanner: Sendable {
         }
         heap.push(initial)
         var visited = 0
+        var bestPartial: FuelPlan?
         do {
         while let current = heap.pop() {
             try budget.check()
@@ -176,17 +179,19 @@ public struct FuelPlanner: Sendable {
                                      destinationEscapeMeters: fuel.ensureDestinationEscape ? escape : nil,firstReachableStationMeters: nil)
                     }
                 }
+                if fuel.allowPartialResult, !current.stops.isEmpty,
+                   bestPartial == nil || current.stops.count > (bestPartial?.stops.count ?? 0) {
+                    bestPartial = .init(stops: current.stops,routes: current.routes,foundation: foundation,
+                                        complete: false,limit: "partial window",destinationEscapeMeters: nil,firstReachableStationMeters: nil)
+                }
             }
+            if let max = fuel.maximumStops, current.stops.count >= max { continue }
             let used = Set(current.stops.map(\.id))
             let remaining = current.point.distance(to: request.end)
             let eligible = candidates.filter { station in
                 !used.contains(station.id) && current.point.distance(to: station.coordinate) <= tank+150 &&
                 (!current.stops.isEmpty || fuel.requiredFirstStationID == nil || station.id == fuel.requiredFirstStationID)
             }
-            // First automatic refill is the closest legally reachable mapped station.
-            // Later stops prefer the approach that best expresses the selected style
-            // and still supports onward progress. The historical 75% tank barrier is
-            // not used as a ranking law.
             if current.stops.isEmpty, fuel.requiredFirstStationID == nil {
                 if let already = eligible.first(where: { current.point.distance(to: $0.coordinate) < 50 }),
                    let approach = try hop(current,to: already.coordinate,endMatches: matches(already),cap: tank,customer: true,shortest: true) {
@@ -197,8 +202,6 @@ public struct FuelPlanner: Sendable {
                     current.point.distance(to: $0.coordinate) < current.point.distance(to: $1.coordinate)
                 }
                 var nearest: (FuelStation,ComputedRoute)?
-                // Grow the road cap before flooding the whole tank; the owner
-                // 180 km search never reached a pump inside the remaining window.
                 let caps = [min(25_000,tank), min(60_000,tank), tank].reduce(into: [Double]()) {
                     if !$0.contains($1) { $0.append($1) }
                 }
@@ -231,16 +234,18 @@ public struct FuelPlanner: Sendable {
             var pushed = 0
             for station in ranked {
                 try budget.check()
-                guard let approach = try hop(current,to: station.coordinate,endMatches: matches(station),cap: tank,customer: true) else { continue }
+                guard let approach = try hop(current,to: station.coordinate,endMatches: matches(station),cap: tank,customer: true,shortest: true) else { continue }
                 heap.push(stateAfter(current,station: station,route: approach))
                 pushed += 1
                 if pushed >= 8 { break }
             }
         }
         } catch RoutingFailure.resourceLimit(let reason) {
+            if let bestPartial { return bestPartial }
             return .init(stops: [],routes: [],foundation: foundation,complete: false,
                          limit: "fuel comparison incomplete: \(reason)",destinationEscapeMeters: nil,firstReachableStationMeters: nil)
         }
+        if let bestPartial { return bestPartial }
         return .init(stops: [],routes: [],foundation: foundation,complete: false,limit: "no fuel-qualified continuation",
                      destinationEscapeMeters: nil,firstReachableStationMeters: nil)
     }

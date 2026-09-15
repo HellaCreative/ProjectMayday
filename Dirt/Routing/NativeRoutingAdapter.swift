@@ -32,7 +32,7 @@ nonisolated enum NativeRoutingAdapter {
         native.access.startIsCustomer = req.options?.startEndpointKind == "customers"
         native.access.endIsCustomer = req.options?.endEndpointKind == "customers"
         native.mapZoom = req.options?.mapZoom
-        native.matchRadiusMeters = req.options?.matchLimitMeters ?? 250
+        native.matchRadiusMeters = req.options?.matchLimitMeters ?? NativeRoutingAdapter.maximumMatchMeters
         native.profile.avoidMajorHighways = req.options?.ridePreferences?.avoidHighways ?? true
         native.profile.preferBackRoads = req.profile == .cleanest
         native.profile.wander = req.options?.ridePreferences?.normalized.wander ?? 1

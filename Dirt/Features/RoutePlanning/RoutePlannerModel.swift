@@ -878,35 +878,19 @@ final class RoutePlannerModel {
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
-            // Auto-download missing packs for the route when online.
-            if self.network.isOnline {
-                let endpoints = requested.waypoints.map(\.coordinate.locationCoordinate)
-                let needed = GraphPackStore.regionIds(containingAny: endpoints)
-                let missing = needed.filter {
-                    self.graphPacks.isRoutingPackPublished($0)
-                        && !self.graphPacks.isInstalled($0)
-                }
-                if !missing.isEmpty {
-                    let titles = missing.map { self.graphPacks.displayTitle(forRegionId: $0) }
-                    let names = PackAcquisitionEvaluator.joinedTitles(titles)
-                    self.toast = "Installing \(names) routing pack\(missing.count > 1 ? "s" : "")"
-                    RoutingDebugLog.shared.event(
-                        "pack auto-install begin regions=[\(missing.joined(separator: ","))]"
-                    )
-                    do {
-                        try await self.graphPacks.installVerifiedPacks(missing, replaceInstalled: false)
-                        RoutingDebugLog.shared.event(
-                            "pack auto-install complete regions=[\(missing.joined(separator: ","))]"
-                        )
-                    } catch {
-                        RoutingDebugLog.shared.event(
-                            "pack auto-install failed regions=[\(missing.joined(separator: ","))] "
-                                + "error=\(error.localizedDescription)"
-                        )
-                    }
-                    guard !Task.isCancelled else { return }
-                    self.toast = initialProgress
-                }
+            let acquisition = self.packAcquisition.evaluate(
+                coordinates: requested.waypoints.map(\.coordinate.locationCoordinate),
+                protectInstalledRevisions: self.graphPacks.protectInstalledRevisions)
+            switch acquisition {
+            case .requestConsent:
+                self.pendingPackBuild = (from: legIndex,through: throughLegIndex,reuse: reuse,replanFromStationID: replanFromStationID)
+                self.isRouting = false; self.isAssemblingRoute = false; self.toast = nil
+                return
+            case .unavailable(let warning):
+                self.isRouting = false; self.isAssemblingRoute = false
+                self.errorMessage = warning.message; self.toast = nil
+                return
+            case .useInstalledPacks: break
             }
 
             self.itineraryBuilder.mapZoom = self.mapState.mapZoom
@@ -1585,7 +1569,7 @@ final class RoutePlannerModel {
                       destination == requestedDest,
                       fromHereStartOverride == requestedStart
                 else { return }
-                if distance == nil || distance! > OnDeviceRouter.preferredMatchMeters {
+                if distance == nil || distance! > NativeRoutingAdapter.maximumMatchMeters {
                     isAssemblingRoute = false
                     fromHereResponse = nil
                     let meters = distance.map { Int($0.rounded()) }
@@ -1619,9 +1603,9 @@ final class RoutePlannerModel {
         fromHereNeedsStartPin = true
         // Only use the “about N m / limit 550” copy when the start is actually beyond
         // soft-approach. Within the limit, noPath is a fabric/profile issue — not tap-A.
-        if let startMeters, startMeters > Int(OnDeviceRouter.preferredMatchMeters) {
+        if let startMeters, startMeters > Int(NativeRoutingAdapter.maximumMatchMeters) {
             errorMessage =
-                "Your start (GPS) is about \(startMeters) m from the nearest mapped road (limit \(Int(OnDeviceRouter.preferredMatchMeters)) m). Tap the road to set point 1 — point 2 stays put."
+                "Your start (GPS) is about \(startMeters) m from the nearest mapped road (limit \(Int(NativeRoutingAdapter.maximumMatchMeters)) m). Tap the road to set point 1 — point 2 stays put."
         } else {
             errorMessage = Self.offGraphStartMessage
         }
@@ -1637,7 +1621,7 @@ final class RoutePlannerModel {
             allowUnknown: allowUnknown,
             profile: profile
         ) else { return true }
-        return distance > OnDeviceRouter.preferredMatchMeters
+        return distance > NativeRoutingAdapter.maximumMatchMeters
     }
 
     private func shouldEnterFromHereStartRecovery(
@@ -1665,14 +1649,14 @@ final class RoutePlannerModel {
         store: GraphPackStore
     ) -> Bool {
         let needed = GraphPackStore.regionIds(containingAny: ends)
-        if !needed.isEmpty, needed.allSatisfy({ store.isInstalled($0) }) {
+        if !needed.isEmpty, needed.allSatisfy({ store.hasCompleteNativePack($0) }) {
             return true
         }
         let primaries = ends.compactMap { GraphPackStore.primaryRegionId(containing: $0) }
         guard let first = primaries.first, primaries.allSatisfy({ $0 == first }) else {
             return false
         }
-        return store.isInstalled(first)
+        return store.hasCompleteNativePack(first)
     }
 
     /// Try Again: clear sticky A override and re-route GPS → B.
@@ -1983,8 +1967,15 @@ final class RoutePlannerModel {
         fuelReplacementTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let stations = try await self.routing.fuelStations(near: stop.coordinate, within: 25_000)
-                    .filter { $0.id != stop.stationID }.prefix(6)
+                let padLat = 25_000.0/111_000
+                let padLon = padLat/max(0.01,cos(stop.coordinate.latitude * .pi/180))
+                try Task.checkCancellation()
+                let stations = self.graphPacks.fuelStations(minLat: stop.coordinate.latitude-padLat,maxLat: stop.coordinate.latitude+padLat,
+                    minLon: stop.coordinate.longitude-padLon,maxLon: stop.coordinate.longitude+padLon)
+                    .filter { $0.id != stop.stationID }.sorted {
+                        GeoMath.meters(stop.coordinate,RouteCoordinate(longitude: $0.longitude,latitude: $0.latitude)) <
+                        GeoMath.meters(stop.coordinate,RouteCoordinate(longitude: $1.longitude,latitude: $1.latitude))
+                    }.prefix(6)
                 for station in stations {
                     guard !Task.isCancelled, self.fuelReplacementRunID == runID,
                           self.itinerary == requested, self.navigation.phase == .idle else { return }
@@ -2950,65 +2941,6 @@ final class RoutePlannerModel {
         )
     }
 
-    private func makeOnDeviceRouteResponse(_ local: OnDeviceRouter.Result) -> RouteResponse {
-        let coords = local.coordinates.map {
-            RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
-        }
-        let segments = local.legs.map { leg in
-            RouteSegment(
-                surfaceClass: leg.paintSurfaceName,
-                trackClass: leg.roadClassName,
-                accessClass: leg.accessName,
-                distanceMeters: leg.distanceMeters,
-                geometry: leg.coordinates.map {
-                    RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
-                },
-                coords: nil,
-                edgeId: leg.edgeId.isEmpty ? nil : leg.edgeId,
-                structureType: leg.structureType,
-                structureLeaf: leg.structureLeaf,
-                layer: leg.layer,
-                crossingLabel: leg.crossingLabel,
-                waterCrossing: leg.waterCrossing,
-                surfaceLeaf: leg.surfaceLeaf
-            )
-        }
-        return makeStoredRouteResponse(
-            coordinates: coords,
-            distanceMeters: local.distanceMeters,
-            dirtPercent: local.reportedDirtPercent,
-            pavedPercent: local.reportedPavedPercent,
-            imported: false,
-            networkSegments: segments,
-            unknownAccessPercent: local.unknownAccessPercent,
-            unknownSurfacePercent: local.unknownSurfacePercent,
-            surfaceFamilyMode: local.hasSurfaceLeaves ? "leaf-v3" : nil,
-            maneuvers: local.maneuvers,
-            warnings: {
-                var warnings: [RouteWarning] = []
-                if local.searchMeta.urbanCoreFallbackUsed {
-                    warnings.append(RouteWarning(
-                    code: "urban_core_fallback",
-                    message: "No route could reach the destination while keeping every urban core as a wall. This Clean route uses an urban crossing only as a last resort."
-                    ))
-                }
-                if local.searchMeta.cleanUnpavedFallbackUsed {
-                    warnings.append(RouteWarning(
-                        code: "clean_unpaved_fallback",
-                        message: "No fully paved route could reach the destination while respecting the current routing walls. Clean used tagged unpaved road only as a last resort."
-                    ))
-                }
-                if local.searchMeta.settlementFallbackUsed {
-                    warnings.append(RouteWarning(
-                        code: "settlement_fallback",
-                        message: "This route could not avoid every mapped town without losing its routing objective. Town travel remains strongly penalized and is used only where the alternatives are worse."
-                    ))
-                }
-                return warnings.isEmpty ? nil : warnings
-            }()
-        )
-    }
-
     /// Show only this generated stage and frame its start + end points. The
     /// endpoint view is intentionally tighter than the full-geometry view.
     func focusStage(at index: Int) {
@@ -3622,7 +3554,7 @@ final class RoutePlannerModel {
     /// True when Start Nav locked a graph pack for on-device detours.
     var hasOnDeviceRoutingPack: Bool { graphPacks.canRouteOnDevice }
 
-    /// Mid-ride / report recovery A→B. Tries on-device pack first; live `/api/route` if online.
+    /// Mid-ride / report recovery over installed routing packs.
     /// Optional `profile` / `allowUnknown` override the planner defaults (per-stage Plan).
     func routeWhileNavigating(
         from: RouteCoordinate,
@@ -3634,33 +3566,6 @@ final class RoutePlannerModel {
     ) async throws -> RouteResponse {
         let useProfile = profile ?? self.profile
         let useAllow = allowUnknown ?? self.allowUnknown
-        let online = networkOnline ?? network.isOnline
-        let fromCL = CLLocationCoordinate2D(latitude: from.latitude, longitude: from.longitude)
-        let toCL = CLLocationCoordinate2D(latitude: to.latitude, longitude: to.longitude)
-
-        await graphPacks.ensureRoadShapes(for: [fromCL, toCL])
-        if let local = await graphPacks.routeOnDevice(
-            from: fromCL,
-            to: toCL,
-            profile: useProfile,
-            allowUnknown: useAllow,
-            avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: planningSessionSeed
-        ), local.coordinates.count > 1 {
-            return makeOnDeviceRouteResponse(local)
-        }
-
-        guard online else {
-            if graphPacks.canRouteOnDevice {
-                throw RoutingError.server(
-                    "On-device routing couldn’t find a detour. Try Backtrack or Return to network."
-                )
-            }
-            throw RoutingError.server(
-                "You’re offline and no routing pack is loaded. Reconnect, or install the required regional pack when asked."
-            )
-        }
-
         let request = RouteRequest(
             profile: useProfile,
             locations: [
@@ -3674,12 +3579,11 @@ final class RoutePlannerModel {
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads
         )
-        return try await routing.route(request, timeout: 15)
+        return try await routingSourcePolicy.select(for: request).route(request)
     }
 
     /// From here / Plan A→B.
-    /// Live `/api/route` is always authoritative while online. Installed packs
-    /// route only while offline.
+    /// Routing uses installed packs in both online and offline conditions.
     var preservedDestination: RouteCoordinate? {
         if shouldPreserveStagesForRecovery,
            let idx = activeStageIndex(near: locationService.currentCoordinate),

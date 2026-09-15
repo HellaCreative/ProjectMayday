@@ -147,9 +147,7 @@ public struct RoutingEngine: Sendable {
                 }
                 if isDirt && quality.knownDirtPercent >= 70 { break }
                 if isDirt && !comparison { break }
-                // Live returns the first connecting search. Extra Dirt bands
-                // on the phone burned the 60 s window after a usable candidate.
-                if isDirt, !candidates.isEmpty, budget.remainingSeconds < 15 { break }
+                if isDirt, !candidates.isEmpty, budget.remainingSeconds < 8 { break }
                 if !isDirt && (45...55).contains(quality.knownDirtPercent) && quality.urbanMeters <= 100 { return route }
             } catch RoutingFailure.noPath {
                 if width.isFinite { failedWidth = min(failedWidth,width) }
@@ -157,15 +155,21 @@ public struct RoutingEngine: Sendable {
             }
             catch let failure as RoutingFailure { incomplete = failure; break }
         }
-        if isDirt, comparisonFound, incomplete == nil, budget.remainingSeconds >= 10,
+        if isDirt, comparisonFound, incomplete == nil, budget.remainingSeconds >= 5,
            let best = candidates.map(\.quality.knownDirtPercent).max(), best < 70, best >= 40 {
             var recovery = request.options
             recovery.objective = .balancedResource; recovery.corridorMeters = base
             if let primary = chooseDirt(candidates) {
                 recovery.maximumMeters = min(cap,max(primary.route.distanceMeters+40_000,primary.route.distanceMeters*1.5))
             }
+            let recoveryBudget = budget.limited(to: min(5, budget.remainingSeconds * 0.4))
+            func runRecovery(_ options: SearchOptions) throws -> ComputedRoute {
+                var options = options
+                options.roadRemaining = compass?.remaining
+                return try search.search(start: start,end: end,policy: request.profile,access: request.access,options: options,budget: recoveryBudget)
+            }
             do {
-                let route = try run(recovery)
+                let route = try runRecovery(recovery)
                 let quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
                 candidates.append(.init(route: route,width: base,quality: quality))
                 candidateLog.append("R:\(Int(base))m/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p")
@@ -173,6 +177,7 @@ public struct RoutingEngine: Sendable {
                     FileHandle.standardError.write(Data("candidate recovery width=\(base) dirt=\(quality.knownDirtPercent) m=\(route.distanceMeters) pops=\(route.poppedLabels) urban=\(quality.urbanMeters) back=\(quality.backwardMeters)\n".utf8))
                 }
             } catch RoutingFailure.noPath { }
+            catch RoutingFailure.resourceLimit { }
             catch let failure as RoutingFailure { incomplete = failure }
         }
         let summary = candidateLog.isEmpty ? nil : candidateLog.joined(separator: ",")
