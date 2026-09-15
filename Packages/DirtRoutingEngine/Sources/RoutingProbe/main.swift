@@ -117,6 +117,8 @@ do {
                 let dirt = route.segments.filter { $0.structure != "ferry" && ($0.surface == .gravel || $0.surface == .loose) }.reduce(0) { $0+$1.meters }
                 return route.distanceMeters > 0 ? (dirt/route.distanceMeters*1000).rounded()/10 : 0
             },
+            "hopProgressShare":plan.hopProgressShare,
+            "hopOffLineDegrees":plan.hopOffLineDegrees,
             "hopEdgeSHA256":sha256(plan.routes.map { $0.segments.map(\.edgeID).joined(separator: ",") }),
             "styleSummary":plan.styleSummary as Any? ?? NSNull(),
             "destinationEscapeMeters":plan.destinationEscapeMeters as Any? ?? NSNull(),

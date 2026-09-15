@@ -64,7 +64,9 @@ struct FuelPlannerTests {
         var fuel = FuelRequirements(usableRangeMeters: 45_000,firstLegMaxMeters: 40_000)
         fuel.ensureDestinationEscape = true
         let plan = try FuelPlanner(graph: Road(),stations: pumps).plan(request,requirements: fuel)
-        #expect(!plan.complete)
+        #expect(plan.complete)
+        #expect(plan.destinationEscapeMeters == nil)
+        #expect(plan.routes.last!.end.coordinate.distance(to: request.end) < 0.01)
     }
     @Test func necessaryNearbyRefillsAreNotExcludedByAMinimumSpacing() throws {
         var graph = Road()
