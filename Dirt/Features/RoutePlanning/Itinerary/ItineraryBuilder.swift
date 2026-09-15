@@ -61,7 +61,8 @@ struct FuelPlanningProgressWatchdog {
 enum FuelPlanningWindowPolicy {
     static func milliseconds(regions: [String], live: Bool) -> Int {
         let atlantic: Set<String> = ["ns", "nb", "pe", "nl"]
-        return live && regions.contains(where: { !atlantic.contains($0) }) ? 90_000 : 20_000
+        if live && regions.contains(where: { !atlantic.contains($0) }) { return 90_000 }
+        return live ? 20_000 : 45_000
     }
 
     static func transportSeconds(milliseconds: Int) -> TimeInterval {
@@ -175,6 +176,7 @@ final class ItineraryBuilder {
                 "requestedFrom=\(requestedStartIndex) reusePrefix=\(kept.count) " +
                 "reuseSuffix=\(preservedSuffix.count) localEdit=\(localEdit ? 1 : 0) " +
                 "source=\(selectedSource.name) " +
+                "profile=\(firstRequest.profile.rawValue) " +
                 "allowUnknown=\(firstRequest.accessPolicy.motorizedUnknown ? 1 : 0) " +
                 "mapZoom=\(mapZoom.map { String(format: "%.1f", $0) } ?? "-")"
         )
@@ -306,7 +308,7 @@ final class ItineraryBuilder {
             for waypointIndex in 1..<itinerary.waypoints.count - 1 {
                 let waypoint = itinerary.waypoints[waypointIndex]
                 if let station = try? await selectedSource.fuelStation(
-                    near: waypoint.coordinate, within: HopSearchPolicy.fuelWaypointSnapMeters
+                    near: waypoint.coordinate, within: ItineraryRangeArithmetic.fuelWaypointSnapMeters
                 ) {
                     let precedingLeg = itinerary.legs[waypointIndex - 1]
                     waypointFuelStops[waypoint.id] = FuelStop(
@@ -735,7 +737,7 @@ final class ItineraryBuilder {
                 let waypoint = itinerary.waypoints[waypointIndex]
                 if let station = try? await source.fuelStation(
                     near: waypoint.coordinate,
-                    within: HopSearchPolicy.fuelWaypointSnapMeters
+                    within: ItineraryRangeArithmetic.fuelWaypointSnapMeters
                 ) {
                     waypointFuelStops[waypoint.id] = FuelStop(
                         coordinate: station.coordinate,
@@ -1189,7 +1191,8 @@ final class ItineraryBuilder {
                         routeFirstPlan: source.supportsCombinedFuelPlanning,
                         ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
                             && index == itinerary.legs.count - 1
-                            && !finalWaypointIsFuel
+                            && !finalWaypointIsFuel,
+                        arrivalRestrictions: history.arrivalRestrictions
                     ), zoom: DirtSnapRequestContext.mapZoom))
                 } catch is CancellationError {
                     return dropped(itinerary, committed: committed, cancelled: true)
@@ -1879,11 +1882,11 @@ final class ItineraryBuilder {
         }
 
         let firstCap = max(0, fuel.usableMeters - fuelUsedAtStart)
-        let firstComfortCap = FuelItinerary.comfortCapMeters(
+        let firstComfortCap = ItineraryRangeArithmetic.comfortCapMeters(
             firstLegMaxMeters: firstCap,
             usableRangeMeters: fuel.usableMeters
         )
-        let stopsNeeded = FuelItinerary.fuelStopCountNeeded(
+        let stopsNeeded = ItineraryRangeArithmetic.fuelStopCountNeeded(
             profileMeters: meters,
             firstLegMaxMeters: firstCap,
             usableRangeMeters: fuel.usableMeters
@@ -1958,7 +1961,7 @@ final class ItineraryBuilder {
             )
             let requiredStationID = riderLeg.fuelStopOverrides[departureAnchorID]
             let remainingProfileMeters = max(0, meters - routedMeters)
-            let remainingStops = FuelItinerary.fuelStopCountNeeded(
+            let remainingStops = ItineraryRangeArithmetic.fuelStopCountNeeded(
                 profileMeters: remainingProfileMeters,
                 firstLegMaxMeters: windowFirstCap,
                 usableRangeMeters: fuel.usableMeters
@@ -1996,7 +1999,8 @@ final class ItineraryBuilder {
                     windowTimeBudgetMs: min(FuelPlanningWindowPolicy.milliseconds(
                         points: [windowStart, to], live: source.name == "live"
                     ), remainingBudgetMs),
-                    requiredFirstStationId: requiredStationID
+                    requiredFirstStationId: requiredStationID,
+                    arrivalRestrictions: sublegHistory.arrivalRestrictions
                 ), zoom: DirtSnapRequestContext.mapZoom))
             } catch {
                 // A timeout, transport failure, or server error is not proof
@@ -2552,7 +2556,8 @@ private func routeRequest(
         preferBackRoads: preferBackRoads,
         mapZoom: DirtSnapRequestContext.mapZoom,
         startEndpointKind: startEndpointKind,
-        endEndpointKind: endEndpointKind
+        endEndpointKind: endEndpointKind,
+        arrivalRestrictions: history.arrivalRestrictions
     )
 }
 
@@ -2571,6 +2576,7 @@ private struct EdgeHistory: Equatable {
     private var recent: [Entry] = []
     private var recentMeters = 0.0
     private(set) var arrivalEdgeID: String?
+    private(set) var arrivalRestrictions: [RouteArrivalRestriction] = []
 
     var edgeIDs: [String] { recent.map(\.id) }
 
@@ -2590,6 +2596,7 @@ private struct EdgeHistory: Equatable {
             recent.append(Entry(id: id, meters: meters))
             recentMeters += meters
             arrivalEdgeID = id
+            arrivalRestrictions = response.arrivalRestrictions ?? []
             while recent.count > 1,
                   (recent.count > Self.recentEdgeLimit
                     || recentMeters > Self.recentMeterLimit) {

@@ -1,0 +1,547 @@
+{
+  "nodeCount": 4,
+  "edgeCount": 2,
+  "arcCount": 2,
+  "graphHash": "0fb87e4487d1edccbed20696a113f9cd19b2b5944f77db724d0c6f41b81041e6",
+  "geometryHash": "7408edc9f8cc1e51bbe57fd2473651d44dc9b9343aff7f43ff7e73643d2eefc5",
+  "edges": [
+    {
+      "id": "w537982310:0:1",
+      "from": 0,
+      "to": 1,
+      "meters": 1550,
+      "forward": 0,
+      "reverse": 2,
+      "way": "537982310",
+      "leaves": {
+        "surfaceLeaf": null,
+        "roadClassLeaf": "motorway",
+        "tracktype": null,
+        "smoothness": null,
+        "layer": 0,
+        "structureLeaf": null,
+        "accessLeaf": null,
+        "atvDesignated": false,
+        "seasonal": false,
+        "fromLeaves": true
+      }
+    },
+    {
+      "id": "w537982311:2:3",
+      "from": 2,
+      "to": 3,
+      "meters": 1550,
+      "forward": 0,
+      "reverse": 2,
+      "way": "537982311",
+      "leaves": {
+        "surfaceLeaf": null,
+        "roadClassLeaf": "motorway",
+        "tracktype": null,
+        "smoothness": null,
+        "layer": 0,
+        "structureLeaf": null,
+        "accessLeaf": null,
+        "atvDesignated": false,
+        "seasonal": false,
+        "fromLeaves": true
+      }
+    }
+  ],
+  "turns": [
+    {
+      "node": 0,
+      "from": 0,
+      "to": 0,
+      "allowed": true,
+      "active": []
+    },
+    {
+      "node": 0,
+      "from": 1,
+      "to": 0,
+      "allowed": true,
+      "active": []
+    },
+    {
+      "node": 2,
+      "from": 0,
+      "to": 1,
+      "allowed": true,
+      "active": []
+    },
+    {
+      "node": 2,
+      "from": 1,
+      "to": 1,
+      "allowed": true,
+      "active": []
+    }
+  ],
+  "routes": [
+    {
+      "start": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "customer": false,
+      "style": "balanced",
+      "objective": "distance",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "customer": false,
+      "style": "dirt",
+      "objective": "pavement",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "customer": false,
+      "style": "cleanest",
+      "objective": "profile",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "customer": false,
+      "style": "balanced",
+      "objective": "profile",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "customer": true,
+      "style": "balanced",
+      "objective": "distance",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "customer": true,
+      "style": "dirt",
+      "objective": "pavement",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "customer": true,
+      "style": "cleanest",
+      "objective": "profile",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "customer": true,
+      "style": "balanced",
+      "objective": "profile",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "customer": false,
+      "style": "balanced",
+      "objective": "distance",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "customer": false,
+      "style": "dirt",
+      "objective": "pavement",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "customer": false,
+      "style": "cleanest",
+      "objective": "profile",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "customer": false,
+      "style": "balanced",
+      "objective": "profile",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "customer": true,
+      "style": "balanced",
+      "objective": "distance",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "customer": true,
+      "style": "dirt",
+      "objective": "pavement",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "customer": true,
+      "style": "cleanest",
+      "objective": "profile",
+      "distance": null,
+      "edgeIDs": []
+    },
+    {
+      "start": {
+        "edgeIndex": 1,
+        "coord": [
+          -64.20000076293945,
+          45.807308197021484
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9804376876245,
+        "edgeMeters": 1549.9608723422143,
+        "distanceM": 0
+      },
+      "end": {
+        "edgeIndex": 0,
+        "coord": [
+          -64.20000076293945,
+          45.80778884887695
+        ],
+        "segmentIndex": 0,
+        "distanceAlongM": 774.9737505432039,
+        "edgeMeters": 1549.9474980533496,
+        "distanceM": 0
+      },
+      "customer": true,
+      "style": "balanced",
+      "objective": "profile",
+      "distance": null,
+      "edgeIDs": []
+    }
+  ]
+}

@@ -1429,7 +1429,7 @@ private final class FakeRoutingSource: RoutingSource {
             selectedStops = fuelStopResponses.removeFirst()
         } else {
             let directMeters = distances[key(pair.0, pair.1)]
-            let comfort = FuelItinerary.comfortCapMeters(
+            let comfort = ItineraryRangeArithmetic.comfortCapMeters(
                 firstLegMaxMeters: req.fuel.firstLegMaxMeters,
                 usableRangeMeters: req.fuel.usableRangeMeters
             )
@@ -1564,7 +1564,7 @@ private func fuelStop(_ id: String, at point: RouteCoordinate) -> FuelChainStop 
 struct FuelPlanningWindowPolicyTests {
     @Test func atlanticAndOfflineKeepExistingDeadline() {
         #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["ns", "nb", "pe", "nl"], live: true) == 20_000)
-        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["wa"], live: false) == 20_000)
+        #expect(FuelPlanningWindowPolicy.milliseconds(regions: ["wa"], live: false) == 45_000)
         #expect(FuelPlanningWindowPolicy.milliseconds(regions: [], live: true) == 20_000)
         #expect(FuelPlanningWindowPolicy.transportSeconds(milliseconds: 20_000) == 23)
     }

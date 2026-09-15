@@ -1,0 +1,422 @@
+import Foundation
+
+public struct SearchArrival: Sendable {
+    public let edge: Int
+    public let coordinate: Coordinate
+    public let restrictions: [RestrictionProgress]
+    public init(edge: Int,coordinate: Coordinate,restrictions: [RestrictionProgress]) {
+        self.edge = edge; self.coordinate = coordinate; self.restrictions = restrictions
+    }
+}
+
+public struct SearchOptions: Sendable {
+    public var arrival: SearchArrival?
+    public var precedingMeters = 0.0
+    public var precedingDirtMeters = 0.0
+    public var objective: SearchObjective = .profile
+    public var maximumMeters: Double = .infinity
+    public var corridorMeters: Double = .infinity
+    public var pavedOnly = false
+    public var cityWall = true
+    public var avoidEdges: Set<String> = []
+    public var priorEdges: Set<String> = []
+    public var penalizedDirtEdges: Set<String> = []
+    public var backtrackFactor: Double = 4
+    public var seed: UInt64 = 0
+    public var varietyEnabled = true
+    public var arrivalEdgeID: String?
+    public var arrivalRestrictions: [RestrictionProgress] = []
+    /// Extra legal destinations for a nearest-reachable search. Corridor and
+    /// highway-pin tests still use the primary `end` match.
+    public var additionalEnds: [RoadMatch] = []
+    /// Remaining road meters to B from each graph node. When present, JS
+    /// disables the hard progress gate and taxes walking away from B instead.
+    public var roadRemaining: [Double]? = nil
+    public init() {}
+}
+
+public struct RouteSegment: Sendable {
+    public let edge: Int
+    public let edgeID: String
+    public let forward: Bool
+    public let meters: Double
+    public let surface: Surface
+    public let surfaceLeaf: String
+    public let roadClass: String
+    public let structure: String
+    public let access: UInt8
+    public let geometry: [Coordinate]
+}
+
+public struct ComputedRoute: Sendable {
+    public var maneuvers: [NavigationCue] = []
+    public let start: RoadMatch
+    public let end: RoadMatch
+    public let segments: [RouteSegment]
+    public let distanceMeters: Double
+    public let searchCost: Double
+    public let poppedLabels: Int
+    public var limit: String?
+    public var searchSummary: String?
+    public let arrivalRestrictions: [RestrictionProgress]
+    func reportingLimit(_ reason: String?) -> Self {
+        var copy = self
+        copy.limit = reason ?? limit
+        return copy
+    }
+    public var geometry: [Coordinate] {
+        var points: [Coordinate] = []
+        for segment in segments {
+            for p in segment.geometry where points.last != p { points.append(p) }
+        }
+        return points
+    }
+}
+
+public struct PathSearch: Sendable {
+    let pack: any RoadGraph
+    public init(pack: any RoadGraph) { self.pack = pack }
+    struct State: Hashable {
+        let node: Int
+        let incoming: Int
+        let restrictions: [RestrictionProgress]
+        let bucket: Int
+        var simple: SimpleKey? { restrictions.isEmpty ? SimpleKey(node: node, incoming: incoming, bucket: bucket) : nil }
+    }
+    struct SimpleKey: Hashable {
+        let node: Int
+        let incoming: Int
+        let bucket: Int
+    }
+    struct Arc {
+        let target: Int
+        let edge: Int
+        let forward: Bool
+        let meters: Double
+        let lower: Double
+        let upper: Double
+    }
+    struct Label {
+        let state: State
+        let cost: Double
+        let meters: Double
+        let dirtMeters: Double
+        let peakProgress: Double
+        let parent: Int?
+        let arc: Arc?
+    }
+    struct Entry { let label: Int; let cost: Double }
+
+    public func search(start: RoadMatch, end: RoadMatch, policy: ProfilePolicy,
+                       access: AccessPolicy, options: SearchOptions = .init(),
+                       budget: ComputationBudget = .init()) throws -> ComputedRoute {
+        try budget.check()
+        guard start.edge >= 0, end.edge >= 0, start.edge < pack.edgeCount, end.edge < pack.edgeCount,
+              start.coordinate.isValid, end.coordinate.isValid,
+              options.maximumMeters >= 0, options.corridorMeters >= 0 else {
+            throw RoutingFailure.invalidRequest("search endpoints or bounds")
+        }
+        let startNode = pack.nodeCount, endNode = startNode+1
+        let sa = pack.endpoint(start.edge,from: true), sb = pack.endpoint(start.edge,from: false)
+        let ea = pack.endpoint(end.edge,from: true), eb = pack.endpoint(end.edge,from: false)
+        let startAlong = start.alongMeters
+        let startLength = start.geometryMeters
+        var virtual: [Int:[Arc]] = [:]
+        func add(_ source: Int, _ target: Int, _ edge: Int, _ forward: Bool, _ lower: Double, _ upper: Double,
+                 requiredEndForward: Bool? = nil) {
+            if source == startNode, let required = start.forward, required != forward { return }
+            if target == endNode, let required = requiredEndForward ?? end.forward, required != forward { return }
+            let code = pack.accessCode(edge,forward: forward)
+            guard [0,1,3,4].contains(code) else { return }
+            virtual[source,default: []].append(.init(target: target,edge: edge,forward: forward,
+                                                    meters: max(0,upper-lower),lower: lower,upper: upper))
+        }
+        add(startNode,sa,start.edge,false,0,startAlong)
+        add(startNode,sb,start.edge,true,startAlong,startLength)
+        func attachEnd(_ match: RoadMatch) {
+            let a = pack.endpoint(match.edge,from: true), b = pack.endpoint(match.edge,from: false)
+            add(a,endNode,match.edge,true,0,match.alongMeters,requiredEndForward: match.forward)
+            add(b,endNode,match.edge,false,match.alongMeters,match.geometryMeters,requiredEndForward: match.forward)
+            if start.edge == match.edge {
+                add(startNode,endNode,start.edge,startAlong <= match.alongMeters,
+                    min(startAlong,match.alongMeters),max(startAlong,match.alongMeters),
+                    requiredEndForward: match.forward)
+            }
+        }
+        attachEnd(end)
+        for extra in options.additionalEnds { attachEnd(extra) }
+        func point(_ n: Int) -> Coordinate { n == startNode ? start.coordinate : n == endNode ? end.coordinate : pack.coordinate(node: n) }
+        let customerStart = try customerEdges(match: start,seeds: virtual[startNode] ?? [],reverse: false,
+                                              enabled: access.startIsCustomer,budget: budget)
+        let endSeeds = (virtual[ea] ?? []).filter { $0.target == endNode }.map {
+            Arc(target: ea,edge: $0.edge,forward: $0.forward,meters: $0.meters,lower: $0.lower,upper: $0.upper)
+        } + (virtual[eb] ?? []).filter { $0.target == endNode }.map {
+            Arc(target: eb,edge: $0.edge,forward: $0.forward,meters: $0.meters,lower: $0.lower,upper: $0.upper)
+        }
+        let extraEndEdges = Set(options.additionalEnds.map(\.edge))
+        let customerEnd = try customerEdges(match: end,seeds: endSeeds,reverse: true,
+                                            enabled: access.endIsCustomer,budget: budget)
+        if let arrival = options.arrival {
+            guard arrival.edge == pack.restrictionEdge(start.edge), arrival.coordinate.distance(to: start.coordinate) < 0.1 else {
+                throw RoutingFailure.invalidRequest("arrival state must stay at its matched road position")
+            }
+        }
+        let resolvedArrival = options.arrival?.edge
+            ?? options.arrivalEdgeID.flatMap { pack.edge(matching: [$0]).map(pack.restrictionEdge) }
+            ?? -1
+        let carriedRestrictions = options.arrival?.restrictions ?? options.arrivalRestrictions
+        let initial = State(node: startNode,incoming: resolvedArrival,
+                            restrictions: carriedRestrictions,bucket: 0)
+        var labels = [Label(state: initial,cost: 0,meters: 0,dirtMeters: 0,peakProgress: 0,parent: nil,arc: nil)]
+        var bestSimple: [SimpleKey:Int] = [:]
+        var bestFull: [State:Int] = [:]
+        if let key = initial.simple { bestSimple[key] = 0 } else { bestFull[initial] = 0 }
+        func bestIndex(_ state: State) -> Int? {
+            if let key = state.simple { return bestSimple[key] }
+            return bestFull[state]
+        }
+        func storeBest(_ state: State, _ index: Int) {
+            if let key = state.simple { bestSimple[key] = index } else { bestFull[state] = index }
+        }
+        let compass = options.roadRemaining
+        func remaining(of node: Int) -> Double {
+            if node == endNode { return 0 }
+            guard let compass else { return .infinity }
+            if node == startNode {
+                let viaA = remaining(of: sa) + startAlong
+                let viaB = remaining(of: sb) + max(0, startLength - startAlong)
+                return min(viaA, viaB)
+            }
+            guard node >= 0, node < compass.count else { return .infinity }
+            return compass[node]
+        }
+        func heapCost(_ pathCost: Double, _ node: Int) -> Double {
+            if options.objective == .distance {
+                return pathCost + point(node).distance(to: end.coordinate) / 1000
+            }
+            if options.objective == .pavement {
+                let left = remaining(of: node)
+                if left.isFinite { return pathCost + left / 1000 * 0.02 }
+            }
+            return pathCost
+        }
+        var heap = BinaryHeap<Entry> { $0.cost == $1.cost ? $0.label < $1.label : $0.cost < $1.cost }
+        heap.push(.init(label: 0,cost: heapCost(0, startNode)))
+        var goals: [Int] = [], pops = 0, limit: String?
+        let startHighway = start.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(start.edge)))
+        let endHighway = end.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(end.edge)))
+        let resource = options.objective == .balancedResource
+        let cores = UrbanCores.boxes(in: pack)
+        let avoid = options.avoidEdges
+        let prior = options.priorEdges
+        let penalized = options.penalizedDirtEdges
+        let needIdentity = !avoid.isEmpty || !prior.isEmpty || !penalized.isEmpty
+        let startRemaining = remaining(of: startNode)
+        let regression = ProfilePolicy.progressRegressionMeters(
+            style: policy.style, corridorMeters: options.corridorMeters, hasRoadCompass: compass != nil)
+        search: while let entry = heap.pop() {
+            if pops & 255 == 0 {
+                do { try budget.check() }
+                catch is CancellationError { throw CancellationError() }
+                catch { limit = "time"; break }
+            }
+            let current = labels[entry.label]
+            guard bestIndex(current.state) == entry.label else { continue }
+            pops += 1
+            if current.state.node == endNode {
+                goals.append(entry.label)
+                if resource {
+                    if policy.style == .balanced && abs((options.precedingDirtMeters+current.dirtMeters)/max(1,options.precedingMeters+current.meters)-0.5) <= 0.005 { break }
+                    continue
+                }
+                break
+            }
+            var arcs = virtual[current.state.node] ?? []
+            if current.state.node < pack.nodeCount {
+                for a in pack.outgoing(current.state.node) {
+                    let meters = a.meters.isFinite ? a.meters : pack.distance(a.edge)
+                    arcs.append(.init(target: a.target,edge: a.edge,forward: a.forward,
+                                      meters: meters,lower: 0,upper: meters))
+                }
+                for sibling in pack.coincidentSiblings(current.state.node) where sibling != current.state.node && sibling < pack.nodeCount {
+                    let state = State(node: sibling,incoming: current.state.incoming,
+                                      restrictions: current.state.restrictions,bucket: current.state.bucket)
+                    if let previous = bestIndex(state), labels[previous].cost <= current.cost { continue }
+                    if labels.count >= budget.maximumLabels { limit = "labels"; break search }
+                    let index = labels.count
+                    labels.append(.init(state: state,cost: current.cost,meters: current.meters,
+                                        dirtMeters: current.dirtMeters,peakProgress: current.peakProgress,
+                                        parent: entry.label,arc: nil))
+                    storeBest(state, index)
+                    heap.push(.init(label: index,cost: heapCost(current.cost, sibling)))
+                }
+            }
+            for arc in arcs {
+                let e = arc.edge
+                let physicalEdge = pack.restrictionEdge(e)
+                if let previous = current.arc, previous.edge == e, current.state.node < pack.nodeCount { continue }
+                if !avoid.isEmpty && pack.matches(e, identities: avoid) { continue }
+                let isStart = e == start.edge || customerStart.contains(e)
+                let isEnd = e == end.edge || extraEndEdges.contains(e) || customerEnd.contains(e)
+                if !access.permits(pack.accessCode(e,forward: arc.forward),isStart: isStart,isEnd: isEnd) { continue }
+                if policy.style == .cleanest && !policy.cleanEligible(pack: pack,edge: e,
+                    endpoint: isStart || isEnd,pavedOnly: options.pavedOnly) { continue }
+                let nextRestrictions: [RestrictionProgress]
+                if current.state.node == startNode { nextRestrictions = current.state.restrictions }
+                else if physicalEdge == current.state.incoming && arc.meters <= 0.01 { nextRestrictions = current.state.restrictions }
+                else {
+                    guard let state = pack.restrictionIndex.advance(current.state.restrictions,from: current.state.incoming,
+                                                                   to: physicalEdge,at: current.state.node) else { continue }
+                    nextRestrictions = state
+                }
+                do {
+                    var ancestor: Int? = entry.label, depth = 0, overlaps = false
+                    while let a = ancestor, depth < 128 {
+                        if let previous = labels[a].arc, labels[a].state.incoming == physicalEdge,
+                           min(previous.upper,arc.upper)-max(previous.lower,arc.lower) > 0.5 {
+                            overlaps = true; break
+                        }
+                        ancestor = labels[a].parent; depth += 1
+                    }
+                    if overlaps { continue }
+                }
+                let meters = current.meters+arc.meters
+                if meters > options.maximumMeters+0.01 { continue }
+                let fromPoint = point(current.state.node), toPoint = point(arc.target)
+                if options.corridorMeters.isFinite && abs(toPoint.crossTrack(from: start.coordinate,to: end.coordinate)) > options.corridorMeters { continue }
+                let progress = RouteQuality.progress(toPoint, start.coordinate, end.coordinate)
+                if current.peakProgress - progress > regression { continue }
+                let peak = max(current.peakProgress, progress)
+                let urban = cores.contains {
+                    !$0.contains(start.coordinate) && !$0.contains(end.coordinate) && $0.intersects(fromPoint,toPoint)
+                }
+                if urban && options.cityWall { continue }
+                let family = ProfilePolicy.family(pack.surfaceLeaf(e))
+                let isDirt = family == .gravel || family == .loose
+                let dirt = current.dirtMeters + (isDirt && pack.structure(e) != "ferry" ? arc.meters : 0)
+                let bucket = resource ? min(19,max(0,Int((options.precedingDirtMeters+dirt)/max(1,options.precedingMeters+meters)*20))) : 0
+                let previousTier = current.state.incoming >= 0 && current.state.incoming < pack.edgeCount
+                    ? ProfilePolicy.tier(pack.roadClass(current.state.incoming)) : nil
+                let id = needIdentity ? pack.edgeID(e) : ""
+                let penalizedDirt = !penalized.isEmpty && (penalized.contains(id) || pack.matches(e, identities: penalized))
+                var step = resource ? arc.meters : policy.step(pack: pack,edge: e,meters: arc.meters,objective: options.objective,
+                    from: fromPoint,to: toPoint,start: start.coordinate,end: end.coordinate,startOnHighway: startHighway,
+                    endOnHighway: endHighway,penalizedDirt: penalizedDirt,previousTier: previousTier,
+                    applyGeodesicPull: compass == nil)
+                if compass != nil, options.objective != .distance, options.objective != .balancedResource {
+                    step += policy.approachAway(fromRemaining: remaining(of: current.state.node),
+                                                toRemaining: remaining(of: arc.target),
+                                                startRemaining: startRemaining, objective: options.objective)
+                    step += policy.crossTrackExtra(to: toPoint, start: start.coordinate, end: end.coordinate, meters: arc.meters)
+                }
+                if options.varietyEnabled && options.objective != .distance {
+                    step *= RouteVariety.multiplier(seed: options.seed, edge: e)
+                }
+                if urban { step *= policy.style == .cleanest ? (policy.avoidMajorHighways ? 10 : 2) : 120 }
+                if !prior.isEmpty && pack.matches(e, identities: prior) { step *= max(1,options.backtrackFactor) }
+                let cost = current.cost+step
+                guard cost.isFinite, step >= 0 else { throw RoutingFailure.invalidPack("nonfinite search cost") }
+                let state = State(node: arc.target,incoming: physicalEdge,restrictions: nextRestrictions,bucket: bucket)
+                if let previous = bestIndex(state), labels[previous].cost <= cost { continue }
+                if labels.count >= budget.maximumLabels { limit = "labels"; break search }
+                let index = labels.count
+                labels.append(.init(state: state,cost: cost,meters: meters,dirtMeters: dirt,
+                                    peakProgress: peak,parent: entry.label,arc: arc))
+                storeBest(state, index)
+                heap.push(.init(label: index,cost: heapCost(cost, arc.target)))
+            }
+        }
+        guard let chosen = goals.min(by: { a,b in
+            if resource {
+                let ra = (options.precedingDirtMeters+labels[a].dirtMeters)/max(1,options.precedingMeters+labels[a].meters)
+                let rb = (options.precedingDirtMeters+labels[b].dirtMeters)/max(1,options.precedingMeters+labels[b].meters)
+                let ma = policy.style == .dirt ? -ra : abs(ra-0.5)
+                let mb = policy.style == .dirt ? -rb : abs(rb-0.5)
+                if ma != mb { return ma < mb }
+            } else if policy.style == .dirt, options.objective == .pavement,
+                      abs(labels[a].cost-labels[b].cost) <= 0.5 {
+                return labels[a].dirtMeters > labels[b].dirtMeters
+            }
+            return labels[a].cost < labels[b].cost
+        }) else {
+            if let limit { throw RoutingFailure.resourceLimit(limit) }
+            throw RoutingFailure.noPath
+        }
+        var path: [Arc] = [], cursor: Int? = chosen
+        while let i = cursor { if let arc = labels[i].arc { path.append(arc) }; cursor = labels[i].parent }
+        path.reverse()
+        let meaningful = path.filter { $0.meters > 0.01 }
+        // Customer access must be an actual endpoint run, never a through shortcut.
+        var i = 0
+        while i < meaningful.count {
+            guard pack.accessCode(meaningful[i].edge,forward: meaningful[i].forward) == 4 else { i += 1; continue }
+            let first = i
+            var distance = 0.0
+            while i < meaningful.count && pack.accessCode(meaningful[i].edge,forward: meaningful[i].forward) == 4 {
+                distance += meaningful[i].meters; i += 1
+            }
+            guard distance <= 200.01, (first == 0 && access.startIsCustomer) || (i == meaningful.count && access.endIsCustomer) else {
+                throw RoutingFailure.noPath
+            }
+        }
+        let segments = meaningful.map { arc in
+            RouteSegment(edge: arc.edge,edgeID: pack.edgeID(arc.edge),forward: arc.forward,meters: arc.meters,
+                         surface: ProfilePolicy.family(pack.surfaceLeaf(arc.edge)),surfaceLeaf: pack.surfaceLeaf(arc.edge),
+                         roadClass: pack.roadClass(arc.edge),structure: pack.structure(arc.edge),
+                         access: pack.accessCode(arc.edge,forward: arc.forward),geometry: clippedGeometry(arc))
+        }
+        let arrived = ([end]+options.additionalEnds).first { $0.edge == (meaningful.last?.edge ?? end.edge) } ?? end
+        var result = ComputedRoute(start: start,end: arrived,segments: segments,distanceMeters: labels[chosen].meters,
+                             searchCost: labels[chosen].cost,poppedLabels: pops,limit: limit,
+                             arrivalRestrictions: labels[chosen].state.restrictions)
+        result.maneuvers = NavigationCues.make(route: result,graph: pack,access: access,arrival: options.arrival)
+        return result
+    }
+
+    private func clippedGeometry(_ arc: Arc) -> [Coordinate] {
+        let line = pack.polyline(arc.edge)
+        guard line.count > 1 else { return line }
+        if arc.lower == 0 && arc.upper == pack.distance(arc.edge) { return arc.forward ? line : line.reversed() }
+        var walked = 0.0, result: [Coordinate] = []
+        for i in 1..<line.count {
+            let a = line[i-1], b = line[i], m = a.distance(to: b)
+            defer { walked += m }
+            guard m > 0, walked+m >= arc.lower, walked <= arc.upper else { continue }
+            for t in [max(0,(arc.lower-walked)/m),min(1,(arc.upper-walked)/m)] where t >= 0 && t <= 1 {
+                let point = Coordinate(longitude: a.longitude+(b.longitude-a.longitude)*t,latitude: a.latitude+(b.latitude-a.latitude)*t)
+                if result.last != point { result.append(point) }
+            }
+        }
+        return arc.forward ? result : result.reversed()
+    }
+
+    private func customerEdges(match: RoadMatch,seeds: [Arc],reverse: Bool,enabled: Bool,budget: ComputationBudget) throws -> Set<Int> {
+        guard enabled, [pack.accessCode(match.edge,forward: true),pack.accessCode(match.edge,forward: false)].contains(4) else { return [] }
+        var adjacency: [Int:[(node:Int,edge:Int,meters:Double)]] = [:]
+        for e in 0..<pack.edgeCount {
+            if e & 1023 == 0 { try budget.check() }
+            for forward in [true,false] where pack.accessCode(e,forward: forward) == 4 {
+                let a = pack.endpoint(e,from: forward), b = pack.endpoint(e,from: !forward)
+                adjacency[reverse ? b : a,default: []].append((reverse ? a : b,e,pack.distance(e)))
+            }
+        }
+        var distances: [Int:Double] = [:], edges: Set<Int> = []
+        var heap = BinaryHeap<(node:Int,meters:Double)> { $0.meters < $1.meters }
+        for seed in seeds where seed.meters <= 200 && seed.target < pack.nodeCount {
+            if seed.meters < distances[seed.target,default: .infinity] {
+                distances[seed.target] = seed.meters; heap.push((seed.target,seed.meters)); edges.insert(match.edge)
+            }
+        }
+        while let current = heap.pop() {
+            try budget.check()
+            if current.meters != distances[current.node] { continue }
+            for arc in adjacency[current.node] ?? [] {
+                let m = current.meters+arc.meters
+                if m > 200 { continue }
+                edges.insert(arc.edge)
+                if m < distances[arc.node,default: .infinity] { distances[arc.node] = m; heap.push((arc.node,m)) }
+            }
+        }
+        return edges
+    }
+}
