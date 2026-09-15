@@ -83,39 +83,65 @@ public struct FuelPlanner: Sendable {
         let destinationMatches = try matcher.matches(at: request.end,radius: request.matchRadiusMeters,start: false,
             policy: request.access,intent: intent+180,budget: budget)
         guard !initialMatches.isEmpty, !destinationMatches.isEmpty else { throw RoutingFailure.noMatch }
+        var destCompass: RoadCompass?
+        if let dest = destinationMatches.first {
+            do { destCompass = try RoadCompass.toward(end: dest, pack: graph, budget: budget) }
+            catch { destCompass = nil }
+        }
         func hopBudget(shortest: Bool) -> ComputationBudget {
-            let cap = shortest ? 3.0 : min(max(3, budget.remainingSeconds * 0.25), 8)
+            let cap = shortest ? min(max(3, budget.remainingSeconds * 0.3), 8)
+                               : min(max(3, budget.remainingSeconds * 0.2), 6)
             return budget.limited(to: cap)
         }
         func hop(_ state: State,to point: Coordinate,endMatches: [RoadMatch],cap: Double,customer: Bool,shortest: Bool = false) throws -> ComputedRoute? {
             if state.point.distance(to: point) > cap+300 { return nil }
-            var next = RoutingRequest(start: state.point,end: point,style: request.profile.style,
-                                      allowUnknown: request.access.allowUnknown,seed: request.options.seed)
-            next.profile = request.profile; next.options = request.options
-            next.options.arrival = state.arrival
-            next.options.precedingMeters = state.meters; next.options.precedingDirtMeters = state.dirt
-            next.options.maximumMeters = min(cap,request.options.maximumMeters-state.meters)
-            next.access = request.access; next.access.startIsCustomer = !state.stops.isEmpty || request.access.startIsCustomer
-            next.access.endIsCustomer = customer
-            for route in state.routes { next.options.priorEdges.formUnion(route.segments.map(\.edgeID)) }
+            var options = request.options
+            options.precedingMeters = state.meters
+            options.precedingDirtMeters = state.dirt
+            options.maximumMeters = cap
+            options.cityWall = false
+            options.corridorMeters = cap.isFinite ? cap + 20_000 : .infinity
+            options.varietyEnabled = false
+            options.arrival = state.arrival
+            if !shortest { options.roadRemaining = destCompass?.remaining }
+            for route in state.routes { options.priorEdges.formUnion(route.segments.map(\.edgeID)) }
+            var access = request.access
+            access.startIsCustomer = !state.stops.isEmpty || request.access.startIsCustomer
+            access.endIsCustomer = customer
             let starts = state.match.map { [$0] } ?? initialMatches
-            let sub = hopBudget(shortest: shortest)
+            let search = PathSearch(pack: graph)
             var tried = Set<String>()
+            func attempt(_ start: RoadMatch, _ end: RoadMatch, distance: Bool) throws -> ComputedRoute? {
+                var opts = options
+                opts.objective = distance ? .distance : (request.profile.style == .dirt ? .pavement : .profile)
+                if request.profile.style == .cleanest && !distance { opts.pavedOnly = true }
+                let route = try search.search(start: start, end: end, policy: request.profile,
+                                              access: access, options: opts, budget: hopBudget(shortest: distance))
+                return route.distanceMeters <= cap + 1 ? route : nil
+            }
             for start in starts {
                 for end in endMatches {
-                    // Matches that differ only in destination direction search identically.
                     guard tried.insert("\(start.edge):\(String(describing: start.forward)):\(start.alongMeters)|\(end.edge):\(end.alongMeters)").inserted else { continue }
                     try budget.check()
                     do {
                         if shortest {
-                            next.options.objective = .distance; next.options.cityWall = false
-                            next.options.corridorMeters = cap.isFinite ? cap + 20_000 : .infinity
-                            return try PathSearch(pack: graph).search(start: start,end: end,policy: next.profile,
-                                access: next.access,options: next.options,budget: sub)
+                            if let route = try attempt(start, end, distance: true) { return route }
+                            continue
                         }
-                        return try engine.route(next,start: start,end: end,budget: sub)
-                    } catch RoutingFailure.noPath { continue }
-                    catch RoutingFailure.resourceLimit { continue }
+                        do { if let route = try attempt(start, end, distance: false) { return route } } catch { }
+                        if request.profile.style == .cleanest {
+                            var opts = options
+                            opts.objective = .profile
+                            opts.pavedOnly = false
+                            do {
+                                let route = try search.search(start: start, end: end, policy: request.profile,
+                                                              access: access, options: opts, budget: hopBudget(shortest: false))
+                                if route.distanceMeters <= cap + 1 { return route }
+                            } catch { }
+                        }
+                        if let route = try attempt(start, end, distance: true) { return route }
+                    } catch is CancellationError { throw CancellationError() }
+                    catch { continue }
                 }
             }
             return nil
@@ -138,138 +164,224 @@ public struct FuelPlanner: Sendable {
                          complete: selected != nil,limit: selected == nil ? "no reachable fuel" : nil,
                          destinationEscapeMeters: nil,firstReachableStationMeters: nearest?.distanceMeters)
         }
+        func roadRemaining(at match: RoadMatch?) -> Double {
+            guard let table = destCompass?.remaining, let match, match.edge >= 0, match.edge < graph.edgeCount else {
+                return .infinity
+            }
+            let a = graph.endpoint(match.edge, from: true), b = graph.endpoint(match.edge, from: false)
+            let along = match.alongMeters, length = match.geometryMeters
+            let viaA = a >= 0 && a < table.count ? table[a] + along : .infinity
+            let viaB = b >= 0 && b < table.count ? table[b] + max(0, length - along) : .infinity
+            return min(viaA, viaB)
+        }
         var foundation: ComputedRoute?
-        // Live combined fuel-chain does not spend the 20 s window on an A→B
-        // preview. Tiny-label tests still keep that foundation.
-        let skipPreview = budget.maximumLabels > 10_000 && budget.remainingSeconds <= 22
-        if !skipPreview {
+        func ensureFoundation() {
+            guard foundation == nil else { return }
             let foundationStarted = ContinuousClock.now
             do {
-                foundation = try engine.route(request,budget: budget.limited(to: max(1,min(6,budget.remainingSeconds*0.15))))
-            } catch is CancellationError { throw CancellationError() }
-            catch RoutingFailure.noPath { }
-            catch RoutingFailure.resourceLimit { }
+                foundation = try engine.route(request, budget: budget.limited(to: max(1, min(6, budget.remainingSeconds))))
+            } catch is CancellationError { }
+            catch { }
             request.options.counter?.recordStage("fuel-foundation", since: foundationStarted)
         }
         func destLikelyReachable(from state: State, cap: Double) -> Bool {
-            let straight = state.point.distance(to: request.end)
-            guard straight <= cap + 300 else { return false }
-            if let foundation, foundation.distanceMeters > 0 {
-                let startStraight = max(1, request.start.distance(to: request.end))
-                return straight * (foundation.distanceMeters / startStraight) <= cap + 1_000
+            let left = roadRemaining(at: state.match)
+            if left.isFinite { return left <= cap + 50 }
+            return state.point.distance(to: request.end) <= cap + 50
+        }
+        /// One tank-bounded distance flood. Later hops only try pumps this flood can reach.
+        func tankReachable(from state: State, tank: Double, among: [FuelStation]) throws -> Set<String> {
+            var edgeStations: [Int:[(id: String, along: Double)]] = [:]
+            for station in among {
+                for match in try matches(station) {
+                    edgeStations[match.edge, default: []].append((station.id, match.alongMeters))
+                }
             }
-            return straight * 1.4 <= cap + 1_000
+            guard !edgeStations.isEmpty else { return [] }
+            let origins = state.match.map { [$0] } ?? initialMatches
+            guard let origin = origins.first else { return [] }
+            var access = request.access
+            access.startIsCustomer = !state.stops.isEmpty || request.access.startIsCustomer
+            access.endIsCustomer = true
+            var reached: Set<String> = []
+            func consider(edge: Int, fromNode: Int, meters: Double) {
+                guard let list = edgeStations[edge] else { return }
+                let a = graph.endpoint(edge, from: true)
+                let length = graph.distance(edge)
+                for item in list {
+                    let via = fromNode == a ? item.along : max(0, length - item.along)
+                    if meters + via <= tank + 0.5 { reached.insert(item.id) }
+                }
+            }
+            if let list = edgeStations[origin.edge] {
+                for item in list where abs(item.along - origin.alongMeters) <= tank + 0.5 {
+                    reached.insert(item.id)
+                }
+            }
+            var best = [Int: Double]()
+            var heap = BinaryHeap<(Int, Double)> { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 < $1.1 }
+            func offer(_ node: Int, _ meters: Double) {
+                guard node >= 0, node < graph.nodeCount, meters <= tank + 0.5 else { return }
+                if let previous = best[node], previous <= meters { return }
+                best[node] = meters
+                heap.push((node, meters))
+            }
+            let sa = graph.endpoint(origin.edge, from: true), sb = graph.endpoint(origin.edge, from: false)
+            offer(sa, origin.alongMeters)
+            offer(sb, max(0, origin.geometryMeters - origin.alongMeters))
+            var pops = 0
+            while let (node, meters) = heap.pop() {
+                if pops & 255 == 0 { try budget.check() }
+                pops += 1
+                guard best[node] == meters else { continue }
+                if pops > budget.maximumLabels { break }
+                for arc in graph.outgoing(node) {
+                    let isEnd = edgeStations[arc.edge] != nil
+                    guard access.permits(graph.accessCode(arc.edge, forward: arc.forward),
+                                         isStart: arc.edge == origin.edge, isEnd: isEnd) else { continue }
+                    consider(edge: arc.edge, fromNode: node, meters: meters)
+                    let step = arc.meters.isFinite && arc.meters > 0 ? arc.meters : graph.distance(arc.edge)
+                    offer(arc.target, meters + max(0, step))
+                }
+            }
+            return reached
         }
-        var heap = BinaryHeap<State> {
-            $0.stops.count == $1.stops.count ? $0.score < $1.score : $0.stops.count < $1.stops.count
-        }
-        heap.push(initial)
         var visited = 0
         var bestPartial: FuelPlan?
-        do {
-        while let current = heap.pop() {
+        func recordPartial(_ current: State) {
+            guard fuel.allowPartialResult, !current.stops.isEmpty else { return }
+            if bestPartial == nil || current.stops.count > (bestPartial?.stops.count ?? 0) {
+                bestPartial = .init(stops: current.stops, routes: current.routes, foundation: foundation,
+                                    complete: false, limit: "partial window", destinationEscapeMeters: nil,
+                                    firstReachableStationMeters: nil)
+            }
+        }
+        func solve(_ current: State) throws -> FuelPlan? {
             try budget.check()
             visited += 1
             guard visited <= budget.maximumLabels else { throw RoutingFailure.resourceLimit("fuel states") }
-            let tank = current.stops.isEmpty ? min(fuel.firstLegMaxMeters,fuel.usableRangeMeters) : fuel.usableRangeMeters
+            let tank = current.stops.isEmpty ? min(fuel.firstLegMaxMeters, fuel.usableRangeMeters) : fuel.usableRangeMeters
             let requiredSatisfied = fuel.requiredFirstStationID == nil || !current.stops.isEmpty
             if current.stops.count >= fuel.minimumStops && requiredSatisfied {
-                let endCap = min(tank,fuel.destinationUsedLimitMeters ?? .infinity)
+                let endCap = min(tank, fuel.destinationUsedLimitMeters ?? .infinity)
                 if destLikelyReachable(from: current, cap: endCap),
-                   let tail = try hop(current,to: request.end,endMatches: destinationMatches,cap: endCap,
-                                      customer: request.access.endIsCustomer,shortest: true) {
+                   let tail = try hop(current, to: request.end, endMatches: destinationMatches, cap: endCap,
+                                      customer: request.access.endIsCustomer, shortest: false) {
                     var escape: Double? = fuel.ensureDestinationEscape ? nil : 0
                     if fuel.ensureDestinationEscape {
-                        let arrived = stateAfter(current,station: nil,route: tail,destination: request.end)
-                        let remaining = max(0,tank-tail.distanceMeters)
+                        let arrived = stateAfter(current, station: nil, route: tail, destination: request.end)
+                        let remaining = max(0, tank - tail.distanceMeters)
                         for station in candidates.sorted(by: { request.end.distance(to: $0.coordinate) < request.end.distance(to: $1.coordinate) }) {
-                            if request.end.distance(to: station.coordinate) > remaining+150 { continue }
-                            if let road = try hop(arrived,to: station.coordinate,endMatches: matches(station),cap: remaining,customer: true,shortest: true) {
+                            if request.end.distance(to: station.coordinate) > remaining + 150 { continue }
+                            if let road = try hop(arrived, to: station.coordinate, endMatches: matches(station),
+                                                  cap: remaining, customer: true, shortest: true) {
                                 escape = road.distanceMeters; break
                             }
                         }
                     }
                     if let escape {
-                        return .init(stops: current.stops,routes: current.routes+[tail],foundation: foundation,
-                                     complete: true,limit: (current.routes+[tail]).compactMap(\.limit).first,
-                                     destinationEscapeMeters: fuel.ensureDestinationEscape ? escape : nil,firstReachableStationMeters: nil)
+                        return .init(stops: current.stops, routes: current.routes + [tail], foundation: foundation,
+                                     complete: true, limit: (current.routes + [tail]).compactMap(\.limit).first,
+                                     destinationEscapeMeters: fuel.ensureDestinationEscape ? escape : nil,
+                                     firstReachableStationMeters: nil)
                     }
                 }
-                if fuel.allowPartialResult, !current.stops.isEmpty,
-                   bestPartial == nil || current.stops.count > (bestPartial?.stops.count ?? 0) {
-                    bestPartial = .init(stops: current.stops,routes: current.routes,foundation: foundation,
-                                        complete: false,limit: "partial window",destinationEscapeMeters: nil,firstReachableStationMeters: nil)
-                }
+                recordPartial(current)
             }
-            if let max = fuel.maximumStops, current.stops.count >= max { continue }
+            if let maxStops = fuel.maximumStops, current.stops.count >= maxStops { return nil }
             let used = Set(current.stops.map(\.id))
-            let remaining = current.point.distance(to: request.end)
             let eligible = candidates.filter { station in
-                !used.contains(station.id) && current.point.distance(to: station.coordinate) <= tank+150 &&
+                !used.contains(station.id) && current.point.distance(to: station.coordinate) <= tank + 150 &&
                 (!current.stops.isEmpty || fuel.requiredFirstStationID == nil || station.id == fuel.requiredFirstStationID)
             }
             if current.stops.isEmpty, fuel.requiredFirstStationID == nil {
                 if let already = eligible.first(where: { current.point.distance(to: $0.coordinate) < 50 }),
-                   let approach = try hop(current,to: already.coordinate,endMatches: matches(already),cap: tank,customer: true,shortest: true) {
-                    heap.push(stateAfter(current,station: already,route: approach,destination: request.end))
-                    continue
+                   let approach = try hop(current, to: already.coordinate, endMatches: matches(already),
+                                          cap: tank, customer: true, shortest: true) {
+                    return try solve(stateAfter(current, station: already, route: approach, destination: request.end))
                 }
                 let nearby = eligible.sorted {
                     current.point.distance(to: $0.coordinate) < current.point.distance(to: $1.coordinate)
                 }
-                var nearest: (FuelStation,ComputedRoute)?
-                let caps = [min(25_000,tank), min(60_000,tank), tank].reduce(into: [Double]()) {
+                var nearest: (FuelStation, ComputedRoute)?
+                let caps = [min(25_000, tank), min(60_000, tank), tank].reduce(into: [Double]()) {
                     if !$0.contains($1) { $0.append($1) }
                 }
                 stationSearch: for roadCap in caps {
-                    let slice = nearby.filter { current.point.distance(to: $0.coordinate) <= roadCap+300 }
+                    let slice = nearby.filter { current.point.distance(to: $0.coordinate) <= roadCap + 300 }
                     guard !slice.isEmpty else { continue }
                     for limit in [24, 64, slice.count] where limit > 0 {
-                        nearest = try nearestReachable(current,stations: Array(slice.prefix(limit)),
-                                                       cap: min(tank,roadCap),matches: matches,budget: budget,request: request)
+                        nearest = try nearestReachable(current, stations: Array(slice.prefix(limit)),
+                                                       cap: min(tank, roadCap), matches: matches, budget: budget, request: request)
                         if nearest != nil { break stationSearch }
                         if limit >= slice.count { break }
                     }
                 }
-                if let nearest { heap.push(stateAfter(current,station: nearest.0,route: nearest.1,destination: request.end)) }
-                continue
+                if let nearest {
+                    return try solve(stateAfter(current, station: nearest.0, route: nearest.1, destination: request.end))
+                }
+                return nil
             }
             let preferred = Set(fuel.preferredStationIDs)
-            func onward(_ station: FuelStation) -> Double {
-                remaining - station.coordinate.distance(to: request.end)
+            let here = roadRemaining(at: current.match)
+            func towardDest(_ station: FuelStation) -> Double {
+                let matches = (try? matches(station)) ?? []
+                return matches.map { roadRemaining(at: $0) }.min() ?? .infinity
             }
-            let ranked = eligible.sorted { a,b in
+            func hopLower(_ station: FuelStation) -> Double {
+                let there = towardDest(station)
+                guard here.isFinite, there.isFinite else { return .infinity }
+                return max(0, here - there)
+            }
+            let reachable = try tankReachable(from: current, tank: tank, among: eligible)
+            let progressing = eligible.filter { station in
+                let there = towardDest(station)
+                guard there.isFinite, here.isFinite else { return false }
+                let inFlood = reachable.isEmpty || reachable.contains(station.id)
+                return there < here - 1 && hopLower(station) <= tank && inFlood
+            }
+            let hopPool = progressing.isEmpty ? eligible : progressing
+            let ranked = hopPool.sorted { a, b in
                 let ap = preferred.contains(a.id), bp = preferred.contains(b.id)
                 if ap != bp { return ap && !bp }
-                let aProg = onward(a), bProg = onward(b)
-                let aForward = aProg > 1_000, bForward = bProg > 1_000
-                if aForward != bForward { return aForward && !bForward }
-                if abs(aProg - bProg) > 2_000 { return aProg > bProg }
-                let aDetour = abs(a.coordinate.crossTrack(from: current.point, to: request.end))
-                let bDetour = abs(b.coordinate.crossTrack(from: current.point, to: request.end))
-                if abs(aDetour - bDetour) > 5_000 { return aDetour < bDetour }
+                let aLeft = towardDest(a), bLeft = towardDest(b)
+                if abs(aLeft - bLeft) > 1_000 { return aLeft < bLeft }
                 return a.id < b.id
             }
-            let progressing = ranked.filter { onward($0) > 1_000 }
-            let toTry = progressing.isEmpty ? ranked : progressing
-            var pushed = 0
-            for station in toTry {
+            for station in ranked.prefix(40) {
                 try budget.check()
-                guard let approach = try hop(current,to: station.coordinate,endMatches: matches(station),cap: tank,customer: true,shortest: true) else { continue }
-                heap.push(stateAfter(current,station: station,route: approach,destination: request.end,
-                                     preferred: preferred.contains(station.id)))
-                pushed += 1
-                if pushed >= 8 { break }
+                guard let approach = try hop(current, to: station.coordinate, endMatches: matches(station),
+                                             cap: tank, customer: true, shortest: true) else { continue }
+                if let plan = try solve(stateAfter(current, station: station, route: approach, destination: request.end,
+                                                   preferred: preferred.contains(station.id))) {
+                    return plan
+                }
             }
+            return nil
         }
+        do {
+            if let plan = try solve(initial) { return plan }
         } catch RoutingFailure.resourceLimit(let reason) {
-            if let bestPartial { return bestPartial }
-            return .init(stops: [],routes: [],foundation: foundation,complete: false,
-                         limit: "fuel comparison incomplete: \(reason)",destinationEscapeMeters: nil,firstReachableStationMeters: nil)
+            ensureFoundation()
+            if var bestPartial {
+                bestPartial = .init(stops: bestPartial.stops, routes: bestPartial.routes, foundation: foundation,
+                                    complete: false, limit: bestPartial.limit, destinationEscapeMeters: nil,
+                                    firstReachableStationMeters: nil)
+                return bestPartial
+            }
+            return .init(stops: [], routes: [], foundation: foundation, complete: false,
+                         limit: "fuel comparison incomplete: \(reason)", destinationEscapeMeters: nil,
+                         firstReachableStationMeters: nil)
         }
-        if let bestPartial { return bestPartial }
-        return .init(stops: [],routes: [],foundation: foundation,complete: false,limit: "no fuel-qualified continuation",
-                     destinationEscapeMeters: nil,firstReachableStationMeters: nil)
+        ensureFoundation()
+        if var bestPartial {
+            bestPartial = .init(stops: bestPartial.stops, routes: bestPartial.routes, foundation: foundation,
+                                complete: false, limit: bestPartial.limit, destinationEscapeMeters: nil,
+                                firstReachableStationMeters: nil)
+            return bestPartial
+        }
+        return .init(stops: [], routes: [], foundation: foundation, complete: false, limit: "no fuel-qualified continuation",
+                     destinationEscapeMeters: nil, firstReachableStationMeters: nil)
     }
     private func nearestReachable(_ state: State,stations: [FuelStation],cap: Double,
                                   matches: (FuelStation) throws -> [RoadMatch],
@@ -306,7 +418,8 @@ public struct FuelPlanner: Sendable {
                 let station = goals.first { $0.1.edge == route.end.edge && $0.1.alongMeters == route.end.alongMeters }?.0
                     ?? goals.first { $0.1.edge == route.end.edge }?.0 ?? first.0
                 return (station,route)
-            } catch RoutingFailure.noPath { continue }
+            } catch is CancellationError { throw CancellationError() }
+            catch { continue }
         }
         return nil
     }
