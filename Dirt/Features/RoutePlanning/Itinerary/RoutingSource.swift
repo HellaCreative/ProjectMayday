@@ -248,8 +248,10 @@ final class PackRoutingSource: RoutingSource {
                     name: station.name,brand: station.brand,address: station.address,
                     graphMeters: i < plan.routes.count ? plan.routes[i].distanceMeters : nil)
             }
-            return FuelChainResponse(status: plan.complete ? "complete" : "gap",
-                error: plan.complete ? nil : "fuel_not_proven",message: plan.limit,regionIds: directories.keys.sorted(),
+            return FuelChainResponse(status: plan.complete ? "complete"
+                    : (!plan.stops.isEmpty && plan.limit == nil ? "window" : "gap"),
+                error: plan.complete || (!plan.stops.isEmpty && plan.limit == nil) ? nil : "fuel_not_proven",
+                message: plan.limit,regionIds: directories.keys.sorted(),
                 stops: stops,graphMeters: plan.routes.map(\.distanceMeters),diagnostics: nil,
                 routes: plan.routes.map { NativeRoutingAdapter.response($0,style: request.profile.style) },
                 foundationRoute: plan.foundation.map { NativeRoutingAdapter.response($0,style: request.profile.style) },

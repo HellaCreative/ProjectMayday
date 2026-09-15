@@ -193,6 +193,25 @@ public struct ProfilePolicy: Sendable {
         let k = style == .dirt ? (0.0006 + pull * 0.0044) : (0.002 + pull * 0.012)
         return (meters / 1000) * xt * xt * k
     }
+    /// Extra cost each time the search enters dirt from a non-dirt surface.
+    /// Stacks with `shortDirtClawback` so many separate >1 km grabs lose to
+    /// fewer, longer connected dirt runs.
+    func dirtEnterTransitionCost(objective: SearchObjective) -> Double {
+        guard style != .cleanest, objective != .distance else { return 0 }
+        switch objective {
+        case .pavement:
+            // ~1.9 km of paved at 150/km — enough that an isolated 1–2 km dirt
+            // patch via a detour loses to staying on the corridor.
+            return 280
+        case .profile, .balancedResource:
+            let mix = min(1, max(0, balancedDirtPreference.isFinite ? balancedDirtPreference : 0.5))
+            // Profile surface gap is smaller than pavement-mode; keep the same
+            // qualitative barrier at that scale.
+            return 8 + mix * 10
+        case .distance:
+            return 0
+        }
+    }
     /// Extra cost for dirt meters that do not yet form a meaningful contiguous
     /// run. Callers pass only the meters still under `minimumMeaningfulDirtMeters`.
     /// Prices those meters as paved so a 200–300 m nibble cannot beat staying

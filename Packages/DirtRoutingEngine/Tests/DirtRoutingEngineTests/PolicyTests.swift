@@ -151,6 +151,18 @@ struct PolicyTests {
         #expect(mix < nibble) // profile gap is smaller than dirt pavement gap
     }
 
+    @Test func dirtEnterTransitionDiscouragesScatteredGrabs() {
+        var dirt = ProfilePolicy(style: .dirt)
+        let enter = dirt.dirtEnterTransitionCost(objective: .pavement)
+        #expect(enter > 200)
+        #expect(dirt.dirtEnterTransitionCost(objective: .distance) == 0)
+        var balanced = ProfilePolicy(style: .balanced)
+        balanced.balancedDirtPreference = 0.5
+        let mix = balanced.dirtEnterTransitionCost(objective: .profile)
+        #expect(mix > 0)
+        #expect(mix < enter)
+    }
+
     @Test func dirtPavementAwayScalesWithWander() {
         var policy = ProfilePolicy(style: .dirt)
         policy.wander = 0

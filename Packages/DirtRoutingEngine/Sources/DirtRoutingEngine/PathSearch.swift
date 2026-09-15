@@ -259,8 +259,12 @@ public struct PathSearch: Sendable {
         let penalized = options.penalizedDirtEdges
         let needIdentity = !avoid.isEmpty || !prior.isEmpty || !penalized.isEmpty
         let startRemaining = remaining(of: startNode)
-        let regression = ProfilePolicy.progressRegressionMeters(
-            style: policy.style, corridorMeters: options.corridorMeters, hasRoadCompass: compass != nil)
+        // Distance / fuel-feeler searches must cross regional seams and coastal
+        // wiggles; style progress-regression is for personality floods only.
+        let regression = options.objective == .distance
+            ? Double.infinity
+            : ProfilePolicy.progressRegressionMeters(
+                style: policy.style, corridorMeters: options.corridorMeters, hasRoadCompass: compass != nil)
         search: while let entry = heap.pop() {
             if pops & 255 == 0 {
                 do { try budget.check() }
@@ -369,6 +373,11 @@ public struct PathSearch: Sendable {
                         let taxable = min(arc.meters, max(0, minDirt - current.contiguousDirtMeters))
                         clawback = policy.shortDirtClawback(contiguousDirtMeters: taxable,
                                                            objective: options.objective)
+                    }
+                    // Entering a new dirt run (paved→dirt) costs a transition so
+                    // many separate >1 km grabs lose to one connected corridor.
+                    if current.contiguousDirtMeters <= 0 {
+                        clawback += policy.dirtEnterTransitionCost(objective: options.objective)
                     }
                 } else {
                     contiguousDirt = 0

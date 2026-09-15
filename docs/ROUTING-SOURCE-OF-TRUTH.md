@@ -737,7 +737,15 @@ From Here is the two-`.rider` case of the same list (origin, destination).
   search among progressing stations is the fallback — still one search, not
   N ranked hops. Corridor stays the profile wander band; do not inflate it
   to the tank (that disabled progress-regression and allowed out-and-back
-  nibbles).
+  nibbles). Distance-objective fuel feelers skip progress-regression so
+  joined-pack seam wiggles remain reachable.
+- **Window size.** Pack/combined fuel planning sizes `windowMaxStops` from
+  remaining straight-line distance / (0.75 × tank), capped at 12 — including
+  cross-province joined packs and hop-override replans. Do not force
+  `windowStops=1` merely because endpoints cross a province boundary (that
+  aborted after the first pump via `maximumStops`). A full window with
+  `allowPartialResult` returns status `window` (not `gap`) so the client
+  continues from the last proven pump.
 - **Frontier → station (named mapping).** For `.fuelStop`, the frontier label’s
   coordinate is snapped to a packed station with
   `FuelPlanner.fuelStationSnapMeters` (= 150, same contract as
@@ -748,9 +756,11 @@ From Here is the two-`.rider` case of the same list (origin, destination).
 - **Meaningful dirt floor (Stage 1 phone fix).** Dirt/Balanced tax contiguous
   dirt shorter than `ProfilePolicy.minimumMeaningfulDirtMeters` (1 km) at
   paved rates during expansion (`shortDirtClawback`), so 200–300 m nibble
-  detours lose to the direct alternative. Prior-edge `backtrackFactor` still
-  applies across hops; within a hop, wander-band corridor + progress
-  regression block out-and-back.
+  detours lose to the direct alternative. Each paved→dirt entry also pays
+  `dirtEnterTransitionCost` so many separate >1 km grabs lose to fewer,
+  longer connected runs. Prior-edge `backtrackFactor` still applies across
+  hops; within a hop, wander-band corridor + progress regression block
+  out-and-back.
 - **Balanced mix continuity across chained sub-legs.** A rider-to-rider span
   owns one 50/50 target. Carry `precedingDirtMeters` / `precedingMeters` across
   every sub-leg of that span (already on `SearchOptions`). Before each Balanced
@@ -769,6 +779,18 @@ From Here is the two-`.rider` case of the same list (origin, destination).
 Do not handle these inside Stages 0–3. After Stages 0–3 are phone-tested,
 resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
 
+- Wander slider: needs a real, monotonic, visibly-scaling effect anchored
+  around a sensible median default, not the current near-flat 0%–100%
+  behavior. Do not tweak weights ad hoc until that design is settled.
+- Avoid-highways / avoid-cities (audit 15 Sep Stage 1 phone): both toggles
+  are wired into `ProfilePolicy` / `SearchOptions.cityWall` via
+  `RidePreferences`, but Dirt’s displayed default for avoid-highways is
+  **off**, and `FuelPlanner.styleOptions` forces `cityWall = false` on every
+  fuel hop so avoid-cities does not apply during Stage 1 chaining. Soft
+  urban ×120 still applies when a search enters a core. Follow-up: stop
+  forcing `cityWall = false` on fuel hops; confirm Dirt/Balanced sheet
+  defaults; if highways still look unchanged with the toggle on, raise the
+  Dirt/Balanced motorway/trunk/arterial multipliers (currently ×40/×18/×8).
 - Remaining fuel now: no rider input exists (`FuelRangePrefs` is tank + reserve
   only). Add a control later; until then Stage 1 uses `usableMeters` for leg 0
   and does not guess a “current level” UI.

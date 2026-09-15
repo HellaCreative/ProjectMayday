@@ -205,7 +205,11 @@ public final class RegionalGraph: RoadGraph {
         return lo
     }
     private func edge(_ e: Int) -> (GraphPack,Int) { let p = owner(e,edgeBases); return (packs[p],e-edgeBases[p]) }
-    public func coordinate(node: Int) -> Coordinate { let p = owner(node,nodeBases); return packs[p].coordinate(node: node-nodeBases[p]) }
+    public func coordinate(node: Int) -> Coordinate {
+        let canonical = nodeAliases[node] ?? node
+        let p = owner(canonical, nodeBases)
+        return packs[p].coordinate(node: canonical - nodeBases[p])
+    }
     public func endpoint(_ edge: Int,from: Bool) -> Int {
         let p = owner(edge,edgeBases), n = nodeBases[p]+packs[p].endpoint(edge-edgeBases[p],from: from)
         return nodeAliases[n] ?? n

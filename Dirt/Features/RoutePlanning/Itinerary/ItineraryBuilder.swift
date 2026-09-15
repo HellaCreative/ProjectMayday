@@ -1125,23 +1125,20 @@ final class ItineraryBuilder {
                     riderDestination.coordinate.locationCoordinate
                 ])
 
-                // A multi-stop response is only safe when every generated hop
-                // uses the same riding profile and one regional runtime can
-                // return all of the corresponding route geometry.
-                // DEV NS/NB uses one fuel-aware regional graph. Request its
-                // complete ordinary test itinerary rather than graph-only anchors.
-                #if DIRT_DEVELOPMENT
-                let integratedAtlantic = Set(GraphPackStore.endpointProvinceIds(containingAny: [
-                    current.locationCoordinate, riderDestination.coordinate.locationCoordinate
-                ])) == Set(["ns", "nb"])
-                #else
-                let integratedAtlantic = false
-                #endif
+                // One regional runtime can return multi-stop geometry across
+                // joined packs. Size the window from remaining distance so
+                // cross-province and hop-override replans are not capped at 1
+                // (that aborted after the first pump via maximumStops).
+                let remainingToDest = max(
+                    straightLineMeters(current, riderDestination.coordinate),
+                    1
+                )
+                let hopBudgetMeters = max(50_000.0, fuel.usableMeters * 0.75)
+                let stopsNeeded = Int(ceil(remainingToDest / hopBudgetMeters)) + 1
                 let canConsumeCombinedWindow = source.supportsCombinedFuelPlanning
-                    && riderLeg.hopOverrides.isEmpty
-                    && riderLeg.hopAllowUnknown.isEmpty
-                    && (!crossesProvinceBoundary || integratedAtlantic)
-                let requestedWindowStops = canConsumeCombinedWindow ? (integratedAtlantic ? 12 : 4) : 1
+                let requestedWindowStops = canConsumeCombinedWindow
+                    ? min(12, max(1, stopsNeeded))
+                    : 1
                 let chain: FuelChainResponse
                 let requestBudgetMs = min(
                     FuelPlanningWindowPolicy.milliseconds(
@@ -1187,7 +1184,7 @@ final class ItineraryBuilder {
                         allowPartialWindow: true,
                         windowTimeBudgetMs: requestBudgetMs,
                         requiredFirstStationId: requiredStationID,
-                        forwardFeeler: crossesProvinceBoundary && !canConsumeCombinedWindow,
+                        forwardFeeler: !source.supportsCombinedFuelPlanning && crossesProvinceBoundary,
                         routeFirstPlan: source.supportsCombinedFuelPlanning,
                         ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
                             && index == itinerary.legs.count - 1

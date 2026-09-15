@@ -593,7 +593,9 @@ struct FuelChainResponse: Codable, Sendable {
     var isComplete: Bool { status == "complete" }
     var isGap: Bool { status == "gap" }
     var isFuelUnknown: Bool { status == "unknown" }
-    var isUsableFuelResult: Bool { isComplete || isGap || isFuelUnknown }
+    /// Bounded window filled with proven pumps; client must request the next window.
+    var isPartialWindow: Bool { status == "window" }
+    var isUsableFuelResult: Bool { isComplete || isGap || isFuelUnknown || isPartialWindow }
     var reachesDestination: Bool { windowComplete != false }
 }
 

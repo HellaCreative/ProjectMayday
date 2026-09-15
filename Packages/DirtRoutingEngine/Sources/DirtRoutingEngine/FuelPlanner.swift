@@ -396,6 +396,14 @@ public struct FuelPlanner: Sendable {
                 }
             }
             if let maxStops = fuel.maximumStops, current.stops.count >= maxStops {
+                // Window is full: return proven hops so the caller can continue
+                // from the last pump. Do not hard-fail — windowStops=1 is a
+                // feeler size, not "refuse to chain further".
+                if fuel.allowPartialResult, !current.stops.isEmpty {
+                    return .init(stops: current.stops, routes: current.routes, foundation: nil,
+                                 complete: false, limit: nil,
+                                 destinationEscapeMeters: nil, firstReachableStationMeters: nil)
+                }
                 return failure("no fuel stop found within range near \(placeName(current.point))", state: current)
             }
 
@@ -441,12 +449,43 @@ public struct FuelPlanner: Sendable {
                 return failure("no fuel stop found within range near \(placeName(current.point))", state: current)
             }
 
-            // Later hops: one personality flood toward B with the tank as fog of
-            // war; walk the frontier and take the first snapped station whose
-            // single hop succeeds. Do not rank or retry a pump set of style hops.
-            // If the frontier yields nothing, one multi-goal distance search
-            // among progressing stations (still one search, not N hops).
+            // Later hops: one multi-goal distance pick among onward stations
+            // inside the tank (reliable across joined-pack seams — do not trust
+            // compass-only shortlists that can omit the reachable seam pumps),
+            // then one style hop to that station. Short personality flood is the
+            // fallback when the distance pick is empty.
             let hereRemaining = roadRemaining(at: current.match)
+            let onward = eligible.filter { station in
+                let geo = current.point.distance(to: request.end)
+                    > station.coordinate.distance(to: request.end) + 500
+                guard geo, current.point.distance(to: station.coordinate) <= tank + 300 else { return false }
+                if hereRemaining.isFinite {
+                    let there = ((try? matches(station)) ?? []).map { roadRemaining(at: $0) }.min() ?? .infinity
+                    // Keep compass-progressing stations; also keep geo-only when
+                    // compass has no reading for the candidate (joined-pack holes).
+                    if there.isFinite {
+                        return there < hereRemaining - 500 && (hereRemaining - there) <= tank + 1_000
+                    }
+                }
+                return true
+            }.sorted { a, b in
+                let aGeo = a.coordinate.distance(to: request.end)
+                let bGeo = b.coordinate.distance(to: request.end)
+                if abs(aGeo - bGeo) > 1 { return aGeo < bGeo }
+                return a.id < b.id
+            }
+            if !onward.isEmpty,
+               let nearest = try nearestReachable(current, stations: Array(onward.prefix(48)), cap: tank) {
+                if let styled = try hop(current, to: nearest.0.coordinate, endMatches: matches(nearest.0),
+                                        cap: tank, customer: true),
+                   styled.distanceMeters <= tank + 1 {
+                    commitStop(nearest.0, route: styled)
+                } else {
+                    commitStop(nearest.0, route: nearest.1)
+                }
+                continue chain
+            }
+
             let starts = current.match.map { [$0] } ?? initialMatches
             guard let start = starts.first else {
                 return failure("no fuel stop found within range near \(placeName(current.point))", state: current)
@@ -455,10 +494,11 @@ public struct FuelPlanner: Sendable {
             access.startIsCustomer = true
             access.endIsCustomer = request.access.endIsCustomer
             let (options, policy) = styleOptions(from: current, cap: tank, shortest: false, toward: request.end)
+            let floodBudget = budget.limited(to: min(max(2, budget.remainingSeconds * 0.2), 6))
             do {
                 let result = try PathSearch(pack: graph).boundedSearch(
                     start: start, end: destinationMatches[0], policy: policy, access: access,
-                    options: options, budget: hopBudget())
+                    options: options, budget: floodBudget)
                 switch result {
                 case .reached(let route) where route.distanceMeters <= tank + 1
                     && current.stops.count >= fuel.minimumStops && requiredSatisfied:
@@ -482,10 +522,8 @@ public struct FuelPlanner: Sendable {
                     }
                     return failure("no fuel stop found within range near \(placeName(request.end))", state: current)
                 case .reached:
-                    // Style path reached B over the tank; still need a fuel stop.
                     break
                 case .stoppedAtBudget(let frontier):
-                    // First few frontier snaps only — not a ranked pump set.
                     for station in stationsAlongFrontier(frontier, excluding: used,
                                                          hereRemaining: hereRemaining).prefix(3) {
                         if let approach = try hop(current, to: station.coordinate, endMatches: matches(station),
@@ -498,15 +536,6 @@ public struct FuelPlanner: Sendable {
             } catch is CancellationError { throw CancellationError() }
             catch { }
 
-            let progressing = progressingStations(excluding: used, hereRemaining: hereRemaining,
-                                                  tank: tank, from: current.point)
-            if !progressing.isEmpty,
-               let nearest = try nearestReachable(current, stations: Array(progressing.prefix(24)), cap: tank) {
-                // Keep the distance-proven approach; recreational style already
-                // shaped the frontier flood above.
-                commitStop(nearest.0, route: nearest.1)
-                continue chain
-            }
             return failure("no fuel stop found within range near \(placeName(current.point))", state: current)
         }
     }
