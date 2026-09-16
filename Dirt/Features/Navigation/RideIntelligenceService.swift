@@ -133,10 +133,4 @@ enum TrackContributePrefs {
         get { UserDefaults.standard.bool(forKey: askedKey) }
         set { UserDefaults.standard.set(newValue, forKey: askedKey) }
     }
-
-    /// Tester replay: restore default-off contribute so first-run can ask again.
-    static func reset() {
-        UserDefaults.standard.removeObject(forKey: enabledKey)
-        UserDefaults.standard.removeObject(forKey: askedKey)
-    }
 }

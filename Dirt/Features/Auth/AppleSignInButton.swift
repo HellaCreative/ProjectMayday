@@ -11,7 +11,7 @@ struct AppleSignInButton: View {
     @State private var currentNonce = AppleNonce.random()
 
     var body: some View {
-        SignInWithAppleButton(.signIn) { request in
+        SignInWithAppleButton(.continue) { request in
             currentNonce = AppleNonce.random()
             request.requestedScopes = [.fullName]
             request.nonce = AppleNonce.sha256(currentNonce)

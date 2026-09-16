@@ -15,6 +15,12 @@ final class SupabaseService {
 
     var isSignedIn: Bool { userID != nil }
 
+    /// Signed in but has not chosen a screen name yet — routes to the screen
+    /// name setup step before the map loads.
+    var needsDisplayName: Bool {
+        isSignedIn && displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     func bootstrap() async {
         guard client == nil else { return }
         let client = SupabaseClient(
