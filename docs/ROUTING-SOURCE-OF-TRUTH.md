@@ -150,17 +150,24 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 
 ### Loop and navigation handoff
 
-A loop is two pins: the rider's start, and one far pin they drop where they want
-the ride to reach. There is no compass heading and no separate target distance —
-the far pin sets both the direction and the size of the loop, and the rider may
-drop it as near or as far as they like. Outbound rides to the far pin; the return
-comes home a different way. Both are ordinary styled legs, and the far pin stays
-draggable.
+A loop is two pins and a distance: the rider's start, one far pin they drop where
+they want the ride to reach, and their target distance. There is no compass
+heading. The pin says which way and how far out — the rider may drop it as near
+or as far as they like, including another province — and the distance target says
+how long the whole circuit should be, which is what decides how much the ride
+wanders on its way there and back. The pin is honoured; the distance is aimed at.
+
+The far pin is an ordinary rider waypoint. It is dropped with the same gesture as
+a Plan waypoint, and it can be tapped, dragged, and dropped somewhere else, which
+rebuilds the loop. That is the rider's control: if they do not like the loop, they
+move the pin.
 
 A loop is one ride: one style and one Allow Unknown setting for the whole
 circuit, never per leg. Shared access roads may be necessary and a perfect circle
-is not promised, but the return must differ from the outbound wherever the
-network allows it. Do not silently return a folded circuit or an out-and-back.
+is not promised. Make a true loop wherever the network allows one; where space is
+confined — a peninsula, a dead-end valley, one road in and out — an out-and-back
+is an acceptable result, but it is reported as what it is, with the repeated
+distance named. Never pass a folded circuit off as a loop.
 
 Navigation receives the same chosen route and ordered named stages. Recalculation
 preserves completed progress, remaining rider anchors, and fuel state. Cue,
@@ -334,20 +341,26 @@ code comment disagrees, this contract wins.
    S-curves and wide swings at high wander. It sets how much of each leg's ridden
    distance may go sideways instead of toward the next rider waypoint.
 
-Loops are rides (owner decision, 16 Sep). Build Loop uses the rider's start pin
-and one far pin the rider drops in the direction they want to ride. Compass
-headings — north, south, east, west — are removed. A heading asks the rider to
-name a direction they cannot see from a map (which coast, which way around the
-water), and it forces the engine to invent a far point from a distance target,
-which produced tangles instead of loops. The far pin is a fact, and the size of
-the loop comes from where it lands.
+Loops are rides (owner decision, 16 Sep). Build Loop uses the rider's start pin,
+one far pin the rider drops where they want the ride to reach, and their target
+distance. Compass headings — north, south, east, west — are removed. A heading
+asks the rider to name a direction they cannot see from a map (which coast, which
+way around the water), and it forced the engine to invent a far point, which
+produced tangles instead of loops. The far pin is a fact. The distance target
+stays and keeps its job: it is what the whole circuit aims at, and it sets how
+much the ride may wander getting out to the pin and home again.
+
+The far pin is a rider waypoint and uses the existing waypoint path — dropped
+with the same gesture, tapped, moved, and dropped again to rebuild the loop.
 
 Outbound and return are ordinary styled legs (rule 2) and obey leg shape
-(rule 3), so the return re-rides as little of the outbound as the network
-allows. The whole circuit carries one style and one Allow Unknown setting; the
-app never changes a loop leg's style, and a loop has no per-leg settings that can
-disagree with each other. When no acceptable return exists, say so in terms of
-the pin: the rider's move is to drop it somewhere else.
+(rule 3), so the return re-rides as little of the outbound as the network allows.
+The whole circuit carries one style and one Allow Unknown setting; the app never
+changes a loop leg's style, and a loop has no per-leg settings that can disagree
+with each other. Where the network is confined, an out-and-back is an acceptable
+answer, declared as one with its repeated distance. Reserve failure for a pin
+that cannot be reached at all, and say it in terms of the pin, because the
+rider's move is to drop it somewhere else.
 
 **Waypoints and experience**
 
@@ -709,7 +722,7 @@ are still proposal-only until Stage 3.
 | Pump pick | `RiderLeg.fuelStopOverrides: [String: String]` | Departure anchor (`from.uuidString` or previous `stationID`) → chosen `stationID`. |
 | Rider drag | `ItineraryAction.move(waypointID:to:)` | Marker `wp:{UUID}`. Confirm-then-rebuild. `reduce` sets `rebuildFromLegIndex = max(0, waypointIndex-1)` and `rebuildThroughLegIndex = nil` → rebuilds the **suffix**, then fuel re-solves. |
 | Fuel “drag” | `RoutePlannerModel.moveFuelStop` / `beginPlannerPinDrag` | Separate path. Drop must land on `validFuelTargets` within 5 km (or a probed replacement). Writes `setFuelStopOverride`. Not free placement. |
-| Loop (Build) | start + rider-dropped far pin → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep); no heading, no target distance. One style and one Allow Unknown for the whole circuit. Fuel is not consulted while building. |
+| Loop (Build) | start + rider-dropped far pin + target distance → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep), moved with the ordinary waypoint drag to rebuild; no heading. The distance target shapes the circuit rather than placing the far point. One style and one Allow Unknown for the whole circuit. Fuel is not consulted while building. |
 | Loop (Plan close) | `closeLoop()` → `.append(coordinate: start)` | Same: extra rider waypoint at the start pin, not a special route type. |
 | Saved library | `SavedRoute` (`SwiftData`) | `coordinatesData` (full polyline), `segmentsData?`, `profileRawValue` (one profile for the whole record), `ridePreferencesData?`, `routeSeedsData?`, stats. **No `RiderItinerary`.** |
 | Reopen | `loadSavedRoute` → `applyStoredRouteGeometry` | Frozen `.saved` track with pins `start`/`dest`. Does not restore waypoints or fuel stops. Re-planning requires a new From Here / Plan. |
