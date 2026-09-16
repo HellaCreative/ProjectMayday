@@ -153,7 +153,12 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 A loop is two pins: the rider's start, and one far pin they drop where they want
 the ride to reach. There is no compass heading and no distance slider. The far pin
 is the distance and the direction — the rider may drop it as near or as far as
-they like, including another province. The pin is honoured.
+they like, including another province. The pin is honoured: it is a hard extent,
+the outer edge of the day's ride, not merely what the circuit aims at (owner
+decision, 16 Sep, §5). Outbound and return may wander widely side to side —
+lateral width is not limited by this — but neither leg may travel farther from
+the start than the far pin itself. This is the rider's contract: "this is how
+far I ride today."
 
 The far pin is an ordinary rider waypoint. It is dropped with the same gesture as
 a Plan waypoint, and it can be tapped, dragged, and dropped somewhere else, which
@@ -339,14 +344,28 @@ code comment disagrees, this contract wins.
    S-curves and wide swings at high wander. It sets how much of each leg's ridden
    distance may go sideways instead of toward the next rider waypoint.
 
-Loops are rides (owner decision, 16 Sep). Build Loop uses the rider's start pin,
-one far pin the rider drops where they want the ride to reach, and their target
-distance. Compass headings — north, south, east, west — are removed. A heading
-asks the rider to name a direction they cannot see from a map (which coast, which
-way around the water), and it forced the engine to invent a far point, which
-produced tangles instead of loops. The far pin is a fact. The distance target
-stays and keeps its job: it is what the whole circuit aims at, and it sets how
-much the ride may wander getting out to the pin and home again.
+Loops are rides (owner decision, 16 Sep). Build Loop uses the rider's start pin
+and one far pin the rider drops where they want the ride to reach. Compass
+headings — north, south, east, west — are removed. A heading asks the rider to
+name a direction they cannot see from a map (which coast, which way around the
+water), and it forced the engine to invent a far point, which produced tangles
+instead of loops. The far pin is a fact, and it is a hard extent (owner
+decision, 16 Sep): no explored road, outbound or return, may sit farther from
+the start than the far pin itself. Lateral wander — side-to-side meander while
+staying within that radius — is unaffected; only radially passing the pin is
+rejected. This is the rider's contract: "this is how far I ride today," and
+past the pin breaks it. The distance target still shapes how much the ride
+wanders getting out to the pin and home again; it no longer sets the boundary
+itself, and it never lets the ride go past the pin to hit a number.
+
+Engine enforcement: `SearchOptions.extentCenter`/`maxExtentMeters` (opt-in, nil
+by default) reject any explored road farther than `maxExtentMeters` from
+`extentCenter`, with a small fixed `LoopPlanner.extentToleranceMeters` (2 km)
+for the pin's own graph edge, which may run a short distance past the pin's
+exact coordinate before turning onto it. `LoopPlanner` is the only caller that
+sets these fields, both legs sharing one centre (the start) and radius (start
+to far), so From Here and Plan searches — which never set them — are
+unaffected; the 16 Sep matrix (§8 STEP 6) proves this exactly.
 
 The far pin is a rider waypoint and uses the existing waypoint path — dropped
 with the same gesture, tapped, moved, and dropped again to rebuild the loop.
@@ -720,7 +739,7 @@ are still proposal-only until Stage 3.
 | Pump pick | `RiderLeg.fuelStopOverrides: [String: String]` | Departure anchor (`from.uuidString` or previous `stationID`) → chosen `stationID`. |
 | Rider drag | `ItineraryAction.move(waypointID:to:)` | Marker `wp:{UUID}`. Confirm-then-rebuild. `reduce` sets `rebuildFromLegIndex = max(0, waypointIndex-1)` and `rebuildThroughLegIndex = nil` → rebuilds the **suffix**, then fuel re-solves. |
 | Fuel “drag” | `RoutePlannerModel.moveFuelStop` / `beginPlannerPinDrag` | Separate path. Drop must land on `validFuelTargets` within 5 km (or a probed replacement). Writes `setFuelStopOverride`. Not free placement. |
-| Loop (Build) | start + rider-dropped far pin + target distance → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep), moved with the ordinary waypoint drag to rebuild; no heading. The distance target shapes the circuit rather than placing the far point. One style and one Allow Unknown for the whole circuit. Fuel is not consulted while building. |
+| Loop (Build) | start + rider-dropped far pin + target distance → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep) and a hard extent — outbound/return never travel farther from start than the pin — moved with the ordinary waypoint drag to rebuild; no heading. The distance target shapes wander inside that extent rather than placing the far point or setting the boundary. One style and one Allow Unknown for the whole circuit. Fuel is not consulted while building. |
 | Loop (Plan close) | `closeLoop()` → `.append(coordinate: start)` | Same: extra rider waypoint at the start pin, not a special route type. |
 | Saved library | `SavedRoute` (`SwiftData`) | `coordinatesData` (full polyline), `segmentsData?`, `profileRawValue` (one profile for the whole record), `ridePreferencesData?`, `routeSeedsData?`, stats. **No `RiderItinerary`.** |
 | Reopen | `loadSavedRoute` → `applyStoredRouteGeometry` | Frozen `.saved` track with pins `start`/`dest`. Does not restore waypoints or fuel stops. Re-planning requires a new From Here / Plan. |
@@ -1127,6 +1146,47 @@ already differed from that snapshot after STEPs 2–4.
 
 Unfinished: Gaspé 16.8 s vs 8 s. Stopped rather than extract a Québec
 subgraph overnight. Backlog.
+
+#### STEP 6 — Loop far pin is a hard extent — `f5bd9ef`
+
+What changed: the far pin is now the outer edge of the ride (§2, §5), not
+merely what the distance target aimed at. `SearchOptions.extentCenter` /
+`maxExtentMeters` (opt-in, nil by default) reject any explored road farther
+than `maxExtentMeters` from `extentCenter`, exempting only the endpoint's own
+attached edge. `LoopPlanner` sets `extentCenter = start`,
+`maxExtentMeters = start.distance(to: far) + 2 km`, for outbound and the
+derived inbound request, so both legs share one centre and radius. No other
+caller sets these fields, so From Here and Plan are unaffected: the 12-case
+non-fuel matrix is byte-identical before/after (edge hash, km, dirt%, pops,
+searches — `step5-matrix` vs `step6-matrix`).
+
+Probe: Porters Lake → (−62.89594,45.11837), the pin family from the owner's
+last device test, `ns` pack, Dirt, Allow Unknown **off** (product default).
+Before this step the combined loop reached 81.6 km from start against a
+52.6 km straight-line pin distance (+29.0 km, on the inbound leg — outbound
+alone was already close, +1.6 km). After, across three target distances:
+
+| Target | Outbound km | Inbound km | Total km | Dirt % | Outbound max-from-start | Inbound max-from-start |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 km | 112.7 | 114.5 | 227.2 | 34.0 | 52.75 km (+0.14 km) | 52.75 km (+0.14 km) |
+| 140 km | 105.6 | 136.1 | 241.7 | 36.7 | 52.75 km (+0.14 km) | 52.75 km (+0.14 km) |
+| 250 km | 113.3 | 132.2 | 245.5 | 35.7 | 52.75 km (+0.14 km) | 54.18 km (+1.57 km) |
+
+Every case stays inside the 2 km snap tolerance; none goes meaningfully past
+the pin. Combined distance dropped materially at the 140 km target (395.2 km
+→ 241.7 km) because the untaxed detour that previously ran outbound edges'
+`repeatFactor` tax out past the pin to avoid re-riding them is now blocked,
+so the return retraces more of the outbound at a real, bounded cost instead
+of ballooning past the extent. Engine tests: 64/64 (62 existing + 2 new)
+passed before this commit.
+
+Unfinished: short-dirt clawback / 1 km rule, global return `repeatFactor`,
+per-leg Allow Unknown, fuel, map freeze, and JS decommission are untouched —
+out of scope for this step. On the fixture pin, blocking the untaxed detour
+past the pin leaves the return re-riding 24–33% of its own distance
+(`reriddenMeters`/inbound km across the three targets above) at the taxed
+`repeatFactor` rate. Retuning that factor or the clawback is a separate,
+deliberately deferred question — not this step's job.
 
 ## 9. Existing V4 data format reference
 
