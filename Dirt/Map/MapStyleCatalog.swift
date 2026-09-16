@@ -76,58 +76,60 @@ enum MapStyleCatalog {
             let id = (layers[index]["id"] as? String ?? "").lowercased()
             var paint = layers[index]["paint"] as? [String: Any] ?? [:]
 
+            // Rich palette, ~15% more saturated (HSL S *1.15, clamped) than the
+            // original landcover/road hand-picked values below each comment.
             if rich, id == "background" {
-                paint["background-color"] = "#f3eadb"
+                paint["background-color"] = "#f5ead9" // was #f3eadb
             } else if rich, id.contains("water") {
-                if paint["fill-color"] != nil { paint["fill-color"] = "#91c8ef" }
-                if paint["line-color"] != nil { paint["line-color"] = "#5ba9df" }
+                if paint["fill-color"] != nil { paint["fill-color"] = "#8ac9f6" } // was #91c8ef
+                if paint["line-color"] != nil { paint["line-color"] = "#51abe9" } // was #5ba9df
             } else if rich, id.contains("forest") {
-                paint["fill-color"] = "#96ce74"
+                paint["fill-color"] = "#94d56d" // was #96ce74
             } else if rich, id.contains("orchard") || id.contains("vineyard") || id.contains("scrub") {
-                paint["fill-color"] = "#a4d381"
+                paint["fill-color"] = "#a3d97b" // was #a4d381
             } else if rich, id.contains("park") || id.contains("heath") || id.contains("meadow") {
-                paint["fill-color"] = "#b2dc90"
+                paint["fill-color"] = "#b1e28a" // was #b2dc90
             } else if rich, id.contains("grass") || id.contains("recreation_ground")
                         || id.contains("village_green") || id.contains("golf_course") {
-                paint["fill-color"] = "#b9df98"
+                paint["fill-color"] = "#b9e493" // was #b9df98
             } else if rich, id.contains("farmland") || id.contains("farmyard") {
-                paint["fill-color"] = "#e7c98e"
+                paint["fill-color"] = "#eecb87" // was #e7c98e
             } else if rich, id.contains("residential-fill") {
-                paint["fill-color"] = "#edddca"
+                paint["fill-color"] = "#f0ddc7" // was #edddca
             } else if rich, id.contains("retail-fill") || id.contains("commercial-fill") {
-                paint["fill-color"] = "#efbeb9"
+                paint["fill-color"] = "#f3bbb5" // was #efbeb9
             } else if rich, id.contains("industrial-fill") || id.contains("construction-fill") {
-                paint["fill-color"] = "#f2dda0"
+                paint["fill-color"] = "#f8e09a" // was #f2dda0
             } else if rich, id.contains("eduhospital-fill") || id.contains("schoolyard-fill") {
-                paint["fill-color"] = "#e4d5f1"
+                paint["fill-color"] = "#e4d3f3" // was #e4d5f1
             } else if rich, id.contains("beach-fill") || id.contains("sand-fill") {
-                paint["fill-color"] = "#f1df8d"
+                paint["fill-color"] = "#f8e486" // was #f1df8d
             }
 
             if paint["line-color"] != nil, id.contains("highway") {
                 let isCasing = id.contains("casing") || id.contains("outline")
                 if isCasing {
                     if id.contains("motorway") || id.contains("trunk") {
-                        paint["line-color"] = rich ? "#9f3528" : "#6f4d49"
+                        paint["line-color"] = rich ? "#a82e1f" : "#6f4d49" // rich was #9f3528
                     } else if id.contains("primary") {
-                        paint["line-color"] = rich ? "#ad5424" : "#805c50"
+                        paint["line-color"] = rich ? "#b7511a" : "#805c50" // rich was #ad5424
                     } else if id.contains("secondary") {
-                        paint["line-color"] = rich ? "#a47725" : "#79684a"
+                        paint["line-color"] = rich ? "#ae7a1b" : "#79684a" // rich was #a47725
                     } else if id.contains("tertiary") {
-                        paint["line-color"] = rich ? "#90772d" : "#6f6d50"
+                        paint["line-color"] = rich ? "#977b26" : "#6f6d50" // rich was #90772d
                     } else if id.contains("service") || id.contains("unclassified")
                                 || id.contains("living_street") {
-                        paint["line-color"] = rich ? "#747067" : "#77736b"
+                        paint["line-color"] = rich ? "#757066" : "#77736b" // rich was #747067
                     }
                 } else if rich {
                     if id.contains("motorway") || id.contains("trunk") {
-                        paint["line-color"] = "#e45e3d"
+                        paint["line-color"] = "#f15630" // was #e45e3d
                     } else if id.contains("primary") {
-                        paint["line-color"] = "#ee8732"
+                        paint["line-color"] = "#fc8624" // was #ee8732
                     } else if id.contains("secondary") {
-                        paint["line-color"] = "#f0b54d"
+                        paint["line-color"] = "#fcb841" // was #f0b54d
                     } else if id.contains("tertiary") {
-                        paint["line-color"] = "#e8c45f"
+                        paint["line-color"] = "#f2c955" // was #e8c45f
                     }
                 }
             }
