@@ -216,7 +216,7 @@ struct MapLibreMapView: UIViewRepresentable {
             )
             // Dual-sport nav: highway number shields (“NS 104 TCH”) crowd the
             // trail at mid zooms — hide them; keep ordinary street name labels.
-            Self.hideHighwayShieldLabels(in: style)
+            Self.hideJunctionRefChips(in: style)
             // Layer insertion order: network overlays (below) → route → POI
             addNetworkLayers(to: style)
             addDebugGraphLayers(to: style)
@@ -239,13 +239,12 @@ struct MapLibreMapView: UIViewRepresentable {
             )
         }
 
-        /// Shortbread `label-shield-*` + junction ref chips — visual chrome only.
-        private static func hideHighwayShieldLabels(in style: MLNStyle) {
+        /// Junction ref chips crowd mid-zoom trails; OsmAnd-style highway shields stay.
+        private static func hideJunctionRefChips(in style: MLNStyle) {
             for layer in style.layers {
                 let id = layer.identifier.lowercased()
-                let isShield = id.contains("label-shield") || id.contains("shield-")
                 let isJunctionRef = id.contains("motorway_junction") && id.contains("ref")
-                if isShield || isJunctionRef {
+                if isJunctionRef {
                     layer.isVisible = false
                 }
             }

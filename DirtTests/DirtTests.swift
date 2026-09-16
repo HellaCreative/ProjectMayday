@@ -215,10 +215,11 @@ struct DirtTests {
         #expect(byID["boundaries-0"] == nil)
         #expect(byID["boundary_labels-named-0"] == nil)
         let countryPaint = try #require(byID["dirt-bound-country"]?["paint"] as? [String: Any])
-        #expect(countryPaint["line-color"] as? String == "#3a424c")
+        #expect(countryPaint["line-color"] as? String == "#7b4fa0")
         let statePaint = try #require(byID["dirt-bound-state"]?["paint"] as? [String: Any])
-        #expect(statePaint["line-color"] as? String == "#5a6470")
-        #expect(intZoom(byID["dirt-bound-country"]?["minzoom"]) == 7)
+        #expect(statePaint["line-color"] as? String == "#9a74b8")
+        #expect(intZoom(byID["dirt-bound-country"]?["minzoom"]) == 0)
+        #expect(intZoom(byID["dirt-bound-state"]?["minzoom"]) == 7)
         let town = byID.first(where: { $0.key.contains("town") })?.value
         #expect(intZoom(town?["minzoom"]) <= 7)
         if let island = byID.first(where: { $0.key.contains("island") })?.value {

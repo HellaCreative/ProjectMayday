@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "admin-v1"
+    static let generatedStyleRevision = "osmand-v1"
 
     static var selectedID: MapStyleID {
         get {
@@ -80,11 +80,13 @@ enum MapStyleCatalog {
             let id = (layer["id"] as? String ?? "").lowercased()
             var paint = layer["paint"] as? [String: Any] ?? [:]
 
-            if rich {
-                applyRichLandcover(id: id, paint: &paint)
-            }
+            applyLandcover(id: id, rich: rich, paint: &paint)
             if paint["line-color"] != nil, id.contains("highway") {
                 applyHighwayColors(id: id, rich: rich, paint: &paint)
+                applyHighwayWidths(id: id, paint: &paint)
+            }
+            if id.contains("water_polygons_labels") || id.hasPrefix("label-waterway") {
+                paint["text-color"] = "#4f8fb0"
             }
             layer["paint"] = paint
 
@@ -157,33 +159,34 @@ enum MapStyleCatalog {
     }
 }
 
-// MARK: - Rich saturation + admin labels
+// MARK: - OsmAnd-aimed Shortbread paint + admin labels
 
 extension MapStyleCatalog {
-    /// Pre-boost landcover/road fills. Rich applies `×1.15` HSL saturation at generate time.
-    private static let richBase: [String: String] = [
-        "background": "#f3eadb",
-        "water-fill": "#91c8ef",
-        "water-line": "#5ba9df",
-        "forest": "#96ce74",
-        "orchard": "#a4d381",
-        "park": "#b2dc90",
-        "grass": "#b9df98",
-        "farmland": "#e7c98e",
-        "residential": "#edddca",
-        "retail": "#efbeb9",
-        "industrial": "#f2dda0",
-        "edu": "#e4d5f1",
-        "beach": "#f1df8d",
-        "mw-fill": "#e45e3d",
-        "pri-fill": "#ee8732",
-        "sec-fill": "#f0b54d",
-        "ter-fill": "#e8c45f",
-        "mw-casing": "#9f3528",
-        "pri-casing": "#ad5424",
-        "sec-casing": "#a47725",
-        "ter-casing": "#90772d",
-        "svc-casing": "#747067"
+    /// Daytime OsmAnd-like palette (pale land, orange roads, green cover at street zoom).
+    /// Rich applies `×1.15` HSL saturation on top. Never paint pack-bound polygons.
+    private static let osmandBase: [String: String] = [
+        "background": "#ebe8e0",
+        "water-fill": "#7eb8d4",
+        "water-line": "#5a9ec0",
+        "forest": "#9ec97a",
+        "orchard": "#b3d48a",
+        "park": "#b8d690",
+        "grass": "#c3dc9a",
+        "farmland": "#e4d5a4",
+        "residential": "#e6e0d4",
+        "retail": "#edd3cc",
+        "industrial": "#e8dcc0",
+        "edu": "#ddd4ea",
+        "beach": "#ead89a",
+        "mw-fill": "#c4483c",
+        "pri-fill": "#d97838",
+        "sec-fill": "#e0a84a",
+        "ter-fill": "#e4c85e",
+        "mw-casing": "#8a3028",
+        "pri-casing": "#9a4a24",
+        "sec-casing": "#9a7028",
+        "ter-casing": "#88722e",
+        "svc-casing": "#6e6a64"
     ]
 
     static func boostedSaturationHex(_ hex: String, factor: Double = 1.15) -> String {
@@ -193,37 +196,42 @@ extension MapStyleCatalog {
         return hexString(from: rgb(from: color))
     }
 
-    private static func applyRichLandcover(id: String, paint: inout [String: Any]) {
+    private static func paintHex(_ key: String, rich: Bool) -> String {
+        let hex = osmandBase[key]!
+        return rich ? boostedSaturationHex(hex) : hex
+    }
+
+    private static func applyLandcover(id: String, rich: Bool, paint: inout [String: Any]) {
         if id == "background" {
-            paint["background-color"] = boostedSaturationHex(richBase["background"]!)
+            paint["background-color"] = paintHex("background", rich: rich)
         } else if id.contains("water") {
             if paint["fill-color"] != nil {
-                paint["fill-color"] = boostedSaturationHex(richBase["water-fill"]!)
+                paint["fill-color"] = paintHex("water-fill", rich: rich)
             }
-            if paint["line-color"] != nil {
-                paint["line-color"] = boostedSaturationHex(richBase["water-line"]!)
+            if paint["line-color"] != nil, !id.contains("label") {
+                paint["line-color"] = paintHex("water-line", rich: rich)
             }
         } else if id.contains("forest") {
-            paint["fill-color"] = boostedSaturationHex(richBase["forest"]!)
+            paint["fill-color"] = paintHex("forest", rich: rich)
         } else if id.contains("orchard") || id.contains("vineyard") || id.contains("scrub") {
-            paint["fill-color"] = boostedSaturationHex(richBase["orchard"]!)
+            paint["fill-color"] = paintHex("orchard", rich: rich)
         } else if id.contains("park") || id.contains("heath") || id.contains("meadow") {
-            paint["fill-color"] = boostedSaturationHex(richBase["park"]!)
+            paint["fill-color"] = paintHex("park", rich: rich)
         } else if id.contains("grass") || id.contains("recreation_ground")
                     || id.contains("village_green") || id.contains("golf_course") {
-            paint["fill-color"] = boostedSaturationHex(richBase["grass"]!)
+            paint["fill-color"] = paintHex("grass", rich: rich)
         } else if id.contains("farmland") || id.contains("farmyard") {
-            paint["fill-color"] = boostedSaturationHex(richBase["farmland"]!)
+            paint["fill-color"] = paintHex("farmland", rich: rich)
         } else if id.contains("residential-fill") {
-            paint["fill-color"] = boostedSaturationHex(richBase["residential"]!)
+            paint["fill-color"] = paintHex("residential", rich: rich)
         } else if id.contains("retail-fill") || id.contains("commercial-fill") {
-            paint["fill-color"] = boostedSaturationHex(richBase["retail"]!)
+            paint["fill-color"] = paintHex("retail", rich: rich)
         } else if id.contains("industrial-fill") || id.contains("construction-fill") {
-            paint["fill-color"] = boostedSaturationHex(richBase["industrial"]!)
+            paint["fill-color"] = paintHex("industrial", rich: rich)
         } else if id.contains("eduhospital-fill") || id.contains("schoolyard-fill") {
-            paint["fill-color"] = boostedSaturationHex(richBase["edu"]!)
+            paint["fill-color"] = paintHex("edu", rich: rich)
         } else if id.contains("beach-fill") || id.contains("sand-fill") {
-            paint["fill-color"] = boostedSaturationHex(richBase["beach"]!)
+            paint["fill-color"] = paintHex("beach", rich: rich)
         }
     }
 
@@ -231,37 +239,48 @@ extension MapStyleCatalog {
         let isCasing = id.contains("casing") || id.contains("outline")
         if isCasing {
             if id.contains("motorway") || id.contains("trunk") {
-                paint["line-color"] = rich ? boostedSaturationHex(richBase["mw-casing"]!) : "#6f4d49"
+                paint["line-color"] = paintHex("mw-casing", rich: rich)
             } else if id.contains("primary") {
-                paint["line-color"] = rich ? boostedSaturationHex(richBase["pri-casing"]!) : "#805c50"
+                paint["line-color"] = paintHex("pri-casing", rich: rich)
             } else if id.contains("secondary") {
-                paint["line-color"] = rich ? boostedSaturationHex(richBase["sec-casing"]!) : "#79684a"
+                paint["line-color"] = paintHex("sec-casing", rich: rich)
             } else if id.contains("tertiary") {
-                paint["line-color"] = rich ? boostedSaturationHex(richBase["ter-casing"]!) : "#6f6d50"
+                paint["line-color"] = paintHex("ter-casing", rich: rich)
             } else if id.contains("service") || id.contains("unclassified")
                         || id.contains("living_street") {
-                paint["line-color"] = rich ? boostedSaturationHex(richBase["svc-casing"]!) : "#77736b"
+                paint["line-color"] = paintHex("svc-casing", rich: rich)
             }
-        } else if rich {
+        } else {
             if id.contains("motorway") || id.contains("trunk") {
-                paint["line-color"] = boostedSaturationHex(richBase["mw-fill"]!)
+                paint["line-color"] = paintHex("mw-fill", rich: rich)
             } else if id.contains("primary") {
-                paint["line-color"] = boostedSaturationHex(richBase["pri-fill"]!)
+                paint["line-color"] = paintHex("pri-fill", rich: rich)
             } else if id.contains("secondary") {
-                paint["line-color"] = boostedSaturationHex(richBase["sec-fill"]!)
+                paint["line-color"] = paintHex("sec-fill", rich: rich)
             } else if id.contains("tertiary") {
-                paint["line-color"] = boostedSaturationHex(richBase["ter-fill"]!)
+                paint["line-color"] = paintHex("ter-fill", rich: rich)
             }
         }
     }
 
-    /// Tile lines start at z7 (Shortbread has no province/state geometry below that).
-    /// Do not paint `RegionPolygons` pack bounds — those are routing regions, not admin borders.
+    /// OsmAnd regional view shows motorways/trunks as readable orange strokes, not hairlines.
+    private static func applyHighwayWidths(id: String, paint: inout [String: Any]) {
+        guard id.contains("otherfill") else { return }
+        if id.contains("motorway") {
+            paint["line-width"] = ["base": 1.4, "stops": [[3, 0.9], [6, 1.5], [9, 2.6], [14, 7]]]
+        } else if id.contains("trunk") {
+            paint["line-width"] = ["base": 1.4, "stops": [[6, 1.1], [9, 2.2], [14, 6]]]
+        } else if id.contains("primary") {
+            paint["line-width"] = ["base": 1.4, "stops": [[7, 1.0], [9, 2.0], [14, 5.5]]]
+        }
+    }
+
+    /// Real OSM Shortbread admin lines only. Country geometry exists from z0; state from z7.
     private static func dirtBoundaryLineLayers(from base: [String: Any]) -> [[String: Any]] {
-        func line(id: String, admin: Int, dashed: Bool, color: String) -> [String: Any] {
+        func line(id: String, admin: Int, minZoom: Double, dashed: Bool, color: String, widths: [[Any]]) -> [String: Any] {
             var layer = base
             layer["id"] = id
-            layer["minzoom"] = 7
+            layer["minzoom"] = minZoom
             layer["filter"] = [
                 "all",
                 ["==", "admin_level", admin],
@@ -269,10 +288,8 @@ extension MapStyleCatalog {
             ]
             var paint = layer["paint"] as? [String: Any] ?? [:]
             paint["line-color"] = color
-            paint["line-opacity"] = 0.92
-            paint["line-width"] = [
-                "stops": [[7, dashed ? 0.8 : 1.1], [10, dashed ? 1.6 : 2.2]]
-            ]
+            paint["line-opacity"] = 0.88
+            paint["line-width"] = ["stops": widths]
             if dashed {
                 paint["line-dasharray"] = [4, 3]
             } else {
@@ -282,13 +299,34 @@ extension MapStyleCatalog {
             return layer
         }
         return [
-            line(id: "dirt-bound-country", admin: 2, dashed: false, color: "#3a424c"),
-            line(id: "dirt-bound-state", admin: 4, dashed: true, color: "#5a6470")
+            line(
+                id: "dirt-bound-country",
+                admin: 2,
+                minZoom: 0,
+                dashed: false,
+                color: "#7b4fa0",
+                widths: [[2, 0.9], [6, 1.5], [10, 2.1]]
+            ),
+            line(
+                id: "dirt-bound-state",
+                admin: 4,
+                minZoom: 7,
+                dashed: true,
+                color: "#9a74b8",
+                widths: [[7, 0.7], [10, 1.3]]
+            )
         ]
     }
 
     private static func dirtBoundaryLabelLayers(from base: [String: Any]) -> [[String: Any]] {
-        func label(id: String, admin: Int, minZoom: Double, maxZoom: Double?, sizeStops: [[Any]]) -> [String: Any] {
+        func label(
+            id: String,
+            admin: Int,
+            minZoom: Double,
+            maxZoom: Double?,
+            color: String,
+            sizeStops: [[Any]]
+        ) -> [String: Any] {
             var layer = base
             layer["id"] = id
             layer["minzoom"] = minZoom
@@ -306,8 +344,8 @@ extension MapStyleCatalog {
             layout["text-font"] = ["Noto Sans Regular"]
             layer["layout"] = layout
             var paint = layer["paint"] as? [String: Any] ?? [:]
-            paint["text-color"] = "#1a1f24"
-            paint["text-halo-color"] = "#f8f4f0"
+            paint["text-color"] = color
+            paint["text-halo-color"] = "#f4f1ea"
             paint["text-halo-width"] = 1.8
             paint["text-halo-blur"] = 0.4
             layer["paint"] = paint
@@ -319,14 +357,16 @@ extension MapStyleCatalog {
                 admin: 2,
                 minZoom: 2,
                 maxZoom: 6.01,
-                sizeStops: [[2, 13], [8, 22]]
+                color: "#2c3036",
+                sizeStops: [[2, 13], [5, 17]]
             ),
             label(
                 id: "dirt-bound-label-state",
                 admin: 4,
                 minZoom: 3,
                 maxZoom: nil,
-                sizeStops: [[3, 12], [10, 18]]
+                color: "#6a7380",
+                sizeStops: [[3, 10], [8, 14], [12, 16]]
             )
         ]
     }
@@ -337,14 +377,14 @@ extension MapStyleCatalog {
         var layout = layer["layout"] as? [String: Any] ?? [:]
         var paint = layer["paint"] as? [String: Any] ?? [:]
         paint["text-color"] = "#1a1f24"
-        paint["text-halo-color"] = "#f8f4f0"
+        paint["text-halo-color"] = "#f4f1ea"
         paint["text-halo-width"] = 1.6
         if id.contains("capital") {
             layer["minzoom"] = 3
-            layout["text-size"] = ["stops": [[3, 14], [12, 22]]]
+            layout["text-size"] = ["stops": [[3, 13], [8, 16], [12, 22]]]
         } else if id.hasSuffix("-city") || id == "place_labels-city" {
             layer["minzoom"] = 5
-            layout["text-size"] = ["stops": [[5, 13], [12, 20]]]
+            layout["text-size"] = ["stops": [[5, 12], [8, 15], [12, 20]]]
         } else if id.contains("town") {
             layer["minzoom"] = 7
             layout["text-size"] = ["stops": [[7, 12], [12, 16]]]

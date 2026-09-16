@@ -149,7 +149,7 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ### Basemap labels and borders
 
-`MapStyleCatalog.generatedShortbreadStyleURL` (revision `admin-v1`) splits Shortbread `boundaries` / `boundary_labels` into country vs province/state layers, ink `#1a1f24`. Public Shortbread has **no province/state line geometry below zoom 7**. Do **not** paint `RegionPolygons` pack bounds as borders — those are routing regions, not admin geometry. Tile lines (`dirt-bound-country` / `dirt-bound-state`) start at z7 from real OSM admin_level. Country names stay at overview and fade after z6 so province names win.
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v1`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines from the tile schema. Country borders (`admin_level=2`) from z0; province/state borders (`admin_level=4`) from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
 
 ### Rider Services POIs
 
