@@ -81,6 +81,11 @@ final class ItineraryBuilder {
     private var currentGeneration: Int?
     /// Current map zoom for V4 tap-radius. Set by the planner before `build`.
     var mapZoom: Double?
+    /// Parked fuel-replan switch. Runtime-false so the compiler still type-checks
+    /// the body; Play E removes it. Do not turn this on.
+    private var fuelReplanEnabled = false
+
+    private func fuelReplanGate() -> Bool { fuelReplanEnabled }
 
     func setCurrentGeneration(_ generation: Int) {
         currentGeneration = generation
@@ -107,7 +112,7 @@ final class ItineraryBuilder {
         let requestedEndIndex = throughLegIndex.map {
             min(itinerary.legs.count, max(requestedStartIndex, $0 + 1))
         } ?? itinerary.legs.count
-        let fuelReplan = false
+        let fuelReplan = fuelReplanGate()
         let resume = fuelReplan ? fuelResume(
             stationID: replanFromStationID,
             riderLegIndex: requestedStartIndex,

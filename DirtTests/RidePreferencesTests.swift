@@ -16,11 +16,11 @@ import Testing
         #expect(RoutePlannerModel.loopReturnPoint(in: closed.itinerary) == nil)
     }
 
-    @Test func defaultRequestsDoNotChangeAcceptedPayload() {
+    @MainActor @Test func defaultRequestsDoNotChangeAcceptedPayload() {
         #expect(RouteRequestOptions().ridePreferences == nil)
     }
 
-    @Test func settingsAreCapturedByRequestsAndDoNotLeakToNextBuild() async throws {
+    @MainActor @Test func settingsAreCapturedByRequestsAndDoNotLeakToNextBuild() async throws {
         let preferences = RidePreferences(wander: 0.25, avoidCities: false, avoidHighways: true)
         let captured = await RidePreferenceContext.$current.withValue(preferences) {
             await Task.yield()
@@ -32,7 +32,7 @@ import Testing
         #expect(decoded.ridePreferences == preferences)
     }
 
-    @Test func olderOptionsRemainDecodable() throws {
+    @MainActor @Test func olderOptionsRemainDecodable() throws {
         let old = try JSONDecoder().decode(RouteRequestOptions.self, from: Data("{}".utf8))
         #expect(old.ridePreferences == nil)
     }
