@@ -13,6 +13,10 @@ struct MapControlStack: View {
     var compact: Bool = false
     /// Figma landscape-primary: controls run across the bottom of the open map.
     var horizontal: Bool = false
+    /// Groups owns 3D while its sheet is open — hide the map chip.
+    var hidesViewMode: Bool = false
+    /// Sharing lives on the Groups Your-location card while that sheet is open.
+    var hidesSharing: Bool = false
 
     @State private var cuesOpen = false
     @State private var sharingOpen = false
@@ -100,9 +104,13 @@ struct MapControlStack: View {
         } else {
             // Primary map: view mode and rider status remain available before
             // navigation. Cues are ride-only.
-            viewModeButton
+            if !hidesViewMode {
+                viewModeButton
+            }
             compassButton
-            riderStatusButton
+            if !hidesSharing {
+                riderStatusButton
+            }
             if app.mapState.hasDisplayedRoute,
                app.planner.canFocusEntirePlannedRoute {
                 if horizontal {
@@ -125,6 +133,7 @@ struct MapControlStack: View {
     private func zoomButton(increase: Bool) -> some View {
         Button {
             closePopovers()
+            DirtMotion.light()
             app.mapState.zoomBy(increase ? 1 : -1)
         } label: {
             Image(systemName: increase ? "plus" : "minus")
@@ -137,7 +146,7 @@ struct MapControlStack: View {
                         .stroke(DirtTheme.hairline, lineWidth: 1)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DirtPressStyle())
         .accessibilityLabel(increase ? "Zoom in" : "Zoom out")
         .accessibilityIdentifier(increase ? "map-zoom-in" : "map-zoom-out")
     }
