@@ -556,8 +556,8 @@ that guesses here can lose work or bloat the checkout.
 - **Working branch:** `cursor/on-device-routing-speed-37c5`. This branch is the
   source of truth for current work, whatever its name suggests.
 - **Remotes:** `github` → `https://github.com/HellaCreative/ProjectMayday`
-  (public). `origin` → `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`, a clone on
-  the internal disk kept as a second copy of history.
+  (public). There is no `origin`. The old internal-disk clone at
+  `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` is gone; do not recreate it.
 - **Publishing:** `git push github HEAD:main`. GitHub `main` was written from this
   work on 16 Sep and matches the working branch. The previous GitHub `main`
   (August) is preserved as `archive/main-2026-08-13`. The local `main` branch

@@ -436,9 +436,8 @@ public struct PathSearch: Sendable {
                     if options.maximumMeters.isFinite {
                         frontierHits.append((entry.label, current.meters, current.state.node))
                         options.profile?.meterRejects += 1
-                        if options.expandToCap, current.meters >= options.maximumMeters * 0.8 {
-                            break search
-                        }
+                        // Loops collect the whole cap frontier so the far point
+                        // can be a junction, not the first heading-aligned dead-end.
                     }
                     continue
                 }
@@ -669,7 +668,9 @@ public struct PathSearch: Sendable {
                     let at = point(hit.node)
                     let align = start.coordinate.distance(to: at) < 1
                         ? 1 : max(0, cos(start.coordinate.bearing(to: at) - heading))
-                    return hit.meters * (0.3 + 0.7 * align)
+                    let degree = hit.node >= 0 && hit.node < pack.nodeCount ? pack.outgoing(hit.node).count : 0
+                    let junction = degree >= 3 ? 1.0 + 0.2 * Double(degree - 2) : 0.35
+                    return hit.meters * (0.3 + 0.7 * align) * junction
                 }
                 let pool = frontierHits.filter { $0.meters >= near }
                 let ranked = (pool.isEmpty ? frontierHits : pool).sorted { score($0) > score($1) }

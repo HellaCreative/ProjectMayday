@@ -53,17 +53,26 @@ public struct LoopPlanner: Sendable {
         try budget.check()
         let cap = max(5_000, request.targetMeters / 2)
         do {
-            return try circuit(request, cap: cap, budget: budget, discoverOffer: false)
+            let result = try circuit(request, cap: cap, budget: budget, discoverOffer: false)
+            if result.distanceMeters < request.targetMeters * 0.5 {
+                throw LoopFailure.noReturn(outboundMeters: result.outbound.distanceMeters,
+                                           offeredMeters: result.distanceMeters,
+                                           detail: "No loop near the requested distance without re-riding the outbound.")
+            }
+            return result
         } catch let failure as LoopFailure {
-            guard case .noReturn(let outboundMeters, _, let detail) = failure else { throw failure }
+            guard case .noReturn(let outboundMeters, let alreadyOffered, let detail) = failure else { throw failure }
+            if alreadyOffered != nil { throw failure }
             var offered: Double?
-            for scale in [0.7, 0.5] {
+            for scale in [0.7, 0.5, 1.5] {
                 try budget.check()
-                request.options.counter?.recordStage("loop-offer-\(Int(scale * 100))", since: ContinuousClock.now)
+                let offerStarted = ContinuousClock.now
                 if let trial = try? circuit(request, cap: cap * scale, budget: budget, discoverOffer: true) {
                     offered = trial.distanceMeters
+                    request.options.counter?.recordStage("loop-offer-\(Int(scale * 100))", since: offerStarted)
                     break
                 }
+                request.options.counter?.recordStage("loop-offer-\(Int(scale * 100))", since: offerStarted)
             }
             throw LoopFailure.noReturn(outboundMeters: outboundMeters, offeredMeters: offered, detail: detail)
         }
@@ -96,9 +105,8 @@ public struct LoopPlanner: Sendable {
             throw LoopFailure.noOutbound
         }
         request.options.counter?.recordStage("loop-outbound", since: outboundStarted)
-        guard outbound.distanceMeters > 1_000 else { throw LoopFailure.noOutbound }
-        let far = outbound.end.coordinate
-        let ends = try matcher.matches(at: far, radius: radius, start: true, policy: request.access,
+        guard outbound.distanceMeters > 250 else { throw LoopFailure.noOutbound }
+        let ends = try matcher.matches(at: outbound.end.coordinate, radius: radius, start: true, policy: request.access,
                                        intent: (request.headingRadians + .pi) * 180 / .pi, budget: budget)
         let homes = try matcher.matches(at: request.start, radius: radius, start: false, policy: request.access,
                                         intent: (request.headingRadians + .pi) * 180 / .pi, budget: budget)
@@ -119,6 +127,38 @@ public struct LoopPlanner: Sendable {
                 ("widen-1km", avoid.subtracting(kilometre)),
             ]
         var relaxations: [String] = []
+        if let result = try returnFrom(outbound, farMatch: farMatch, home: home, request: request,
+                                       steps: steps, relaxations: &relaxations, budget: budget) {
+            return result
+        }
+        if !discoverOffer {
+            for fraction in [0.2, 0.4] {
+                try budget.check()
+                guard let trimmed = prefix(outbound, droppingTailMeters: outbound.distanceMeters * fraction) else { continue }
+                let trimmedFar = trimmed.end.coordinate
+                let trimmedEnds = try matcher.matches(at: trimmedFar, radius: radius, start: true,
+                                                      policy: request.access,
+                                                      intent: (request.headingRadians + .pi) * 180 / .pi, budget: budget)
+                guard let trimmedMatch = trimmedEnds.first else { continue }
+                let ids = Set(trimmed.segments.map(\.edgeID).filter { !$0.isEmpty })
+                guard !ids.isEmpty else { continue }
+                let name = "walk-back-\(Int(fraction * 100))"
+                if let found = try returnFrom(trimmed, farMatch: trimmedMatch, home: home, request: request,
+                                              steps: [("strict", ids)], relaxations: &relaxations, budget: budget) {
+                    relaxations.append(name)
+                    return LoopPlanResult(outbound: found.outbound, inbound: found.inbound, far: found.far,
+                                          relaxations: relaxations)
+                }
+                relaxations.append("failed:\(name)")
+            }
+        }
+        throw LoopFailure.noReturn(outboundMeters: outbound.distanceMeters, offeredMeters: nil,
+                                   detail: "No return without re-riding the outbound.")
+    }
+
+    private func returnFrom(_ outbound: ComputedRoute, farMatch: RoadMatch, home: RoadMatch,
+                            request: LoopRequest, steps: [(name: String, avoid: Set<String>)],
+                            relaxations: inout [String], budget: ComputationBudget) throws -> LoopPlanResult? {
         for (index, step) in steps.enumerated() {
             try budget.check()
             guard !step.avoid.isEmpty else {
@@ -139,7 +179,8 @@ public struct LoopPlanner: Sendable {
                                                                 access: request.access, options: inboundOptions, budget: budget)
                 if index > 0 { relaxations.append(step.name) }
                 request.options.counter?.recordStage("loop-return-\(step.name)", since: compassStarted)
-                return LoopPlanResult(outbound: outbound, inbound: inbound, far: far, relaxations: relaxations)
+                return LoopPlanResult(outbound: outbound, inbound: inbound, far: outbound.end.coordinate,
+                                      relaxations: relaxations)
             } catch let error as RoutingFailure {
                 if case .resourceLimit = error { throw error }
                 relaxations.append("failed:\(step.name)")
@@ -149,8 +190,22 @@ public struct LoopPlanner: Sendable {
                 request.options.counter?.recordStage("loop-return-\(step.name)", since: compassStarted)
             }
         }
-        throw LoopFailure.noReturn(outboundMeters: outbound.distanceMeters, offeredMeters: nil,
-                                   detail: "No return without re-riding the outbound.")
+        return nil
+    }
+
+    private func prefix(_ route: ComputedRoute, droppingTailMeters: Double) -> ComputedRoute? {
+        var remain = droppingTailMeters
+        var segs = route.segments
+        while remain > 0, segs.count > 1 {
+            remain -= segs.removeLast().meters
+        }
+        let meters = segs.reduce(0.0) { $0 + $1.meters }
+        guard meters > 250, let last = segs.last, let coord = last.geometry.last else { return nil }
+        let end = RoadMatch(edge: last.edge, coordinate: coord, distanceMeters: 0,
+                            alongMeters: last.meters, geometryMeters: last.meters, forward: last.forward)
+        return ComputedRoute(start: route.start, end: end, segments: segs, distanceMeters: meters,
+                             searchCost: route.searchCost, poppedLabels: route.poppedLabels,
+                             arrivalRestrictions: route.arrivalRestrictions)
     }
 
     func styledOptions(_ request: LoopRequest) -> SearchOptions {
