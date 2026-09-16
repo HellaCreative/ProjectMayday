@@ -23,12 +23,10 @@ struct ContributeTrackSheet: View {
                 .fontWeight(.bold)
                 .foregroundStyle(DirtTheme.ink)
 
-            Text(
-                "Upload \(candidate.edgeIds.count) road segments you rode so we can harden packs each month. No GPS trail is stored — only network edge ids."
-            )
-            .font(DirtType.helper)
-            .foregroundStyle(DirtTheme.muted)
-            .fixedSize(horizontal: false, vertical: true)
+            Text("Share the roads you just rode so we can harden packs each month. No GPS trail is stored.")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -36,24 +34,26 @@ struct ContributeTrackSheet: View {
                     .foregroundStyle(DirtTheme.danger)
             }
 
-            Button {
-                Task { await contribute() }
-            } label: {
-                Text(busy ? "Uploading…" : "Contribute")
-                    .font(DirtType.cta)
-                    .textCase(.uppercase)
-                    .tracking(0.6)
-                    .foregroundStyle(DirtTheme.onOrange)
-                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                    .background(DirtTheme.orange, in: RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
-            }
-            .disabled(busy || !app.supabase.isSignedIn)
-            .accessibilityLabel("Contribute this ride")
-
-            if !app.supabase.isSignedIn {
-                Text("Sign in with Apple in Profile to contribute.")
-                    .font(DirtType.helper)
-                    .foregroundStyle(DirtTheme.muted)
+            if app.supabase.isSignedIn {
+                Button {
+                    Task { await contribute() }
+                } label: {
+                    Text(busy ? "Uploading…" : "Contribute")
+                        .font(DirtType.cta)
+                        .textCase(.uppercase)
+                        .tracking(0.6)
+                        .foregroundStyle(DirtTheme.onOrange)
+                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                        .background(DirtTheme.orange, in: RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
+                }
+                .disabled(busy)
+                .accessibilityLabel("Contribute this ride")
+            } else {
+                AppleSignInButton { result in
+                    handleSignIn(result)
+                }
+                .disabled(busy)
+                .opacity(busy ? 0.65 : 1)
             }
 
             Button("Not now") {
@@ -79,6 +79,29 @@ struct ContributeTrackSheet: View {
         .padding(.horizontal, DirtSpace.row)
         .padding(.bottom, DirtSpace.row)
         .background(DirtTheme.sheetMaterial)
+    }
+
+    private func handleSignIn(_ result: Result<AppleCredential, Error>) {
+        switch result {
+        case let .success(credential):
+            guard !busy else { return }
+            busy = true
+            errorMessage = nil
+            Task {
+                defer { busy = false }
+                do {
+                    try await app.supabase.signInWithApple(
+                        idToken: credential.idToken,
+                        rawNonce: credential.rawNonce,
+                        fullName: credential.fullName
+                    )
+                } catch {
+                    errorMessage = AppleSignInFailure.message(from: error)
+                }
+            }
+        case let .failure(error):
+            errorMessage = AppleSignInFailure.message(from: error)
+        }
     }
 
     private func contribute() async {
