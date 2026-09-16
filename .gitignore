@@ -36,3 +36,9 @@ scripts/pack-fabric/.env*
 scripts/shortbread-edge/node_modules/
 scripts/shortbread-edge/.wrangler/
 scripts/shortbread-edge/artifacts/
+
+# Build output and local tool caches. Packs live under .build and must never be committed.
+.build/
+.impeccable/
+.wrangler/
+*.o
