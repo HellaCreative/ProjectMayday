@@ -408,10 +408,13 @@ struct RoutePlannerCard: View {
 
     private var loopSetupContent: some View {
         VStack(spacing: 12) {
-            Text("Hold the map to drop the far pin. Drag it to reshape the loop.")
-                .font(DirtType.helper)
-                .foregroundStyle(DirtTheme.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if planner.loopFar == nil, !planner.hasRoute {
+                Text("Drop a pin to define distance and direction of loop.")
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             VStack(spacing: 8) {
                 loopControlLayout {
                     Text("Surface")
@@ -445,20 +448,9 @@ struct RoutePlannerCard: View {
                         avoidMotorways: Binding(
                             get: { planner.avoidMotorways },
                             set: { planner.avoidMotorways = $0 }
-                        )
+                        ),
+                        showsAllowUnknownExplainer: false
                     )
-                }
-                Divider()
-                VStack(spacing: 0) {
-                    loopControlLayout {
-                        Text("Distance")
-                        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                        Text("\(Int(planner.loopDistanceKM)) km").fontWeight(.semibold).monospacedDigit()
-                    }
-                    Slider(value: Binding(get: { planner.loopDistanceKM }, set: { planner.loopDistanceKM = $0 }), in: 50...500, step: 25)
-                        .accessibilityLabel("Total loop distance")
-                        .accessibilityValue("\(Int(planner.loopDistanceKM)) kilometres")
-                        .frame(minHeight: DirtHit.min)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -1232,9 +1224,10 @@ struct RoutePlannerCard: View {
     private func allowUnknownControl(
         binding: Binding<Bool>,
         disabled: Bool,
-        profile: RouteProfile
+        profile: RouteProfile,
+        showsExplainer: Bool = true
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: showsExplainer ? 4 : 0) {
             HStack(spacing: 10) {
                 Text("Allow unknown")
                     .font(.dirtUI(13, weight: .semibold))
@@ -1246,9 +1239,11 @@ struct RoutePlannerCard: View {
                     .disabled(disabled)
                     .opacity(disabled ? 0.4 : 1)
             }
-            Text(allowUnknownFootnote(disabled: disabled, profile: profile))
-                .font(.dirtUI(11))
-                .foregroundStyle(DirtTheme.muted)
+            if showsExplainer {
+                Text(allowUnknownFootnote(disabled: disabled, profile: profile))
+                    .font(.dirtUI(11))
+                    .foregroundStyle(DirtTheme.muted)
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1267,7 +1262,8 @@ struct RoutePlannerCard: View {
     private func profilePolicyToggle(
         profile: RouteProfile,
         allowUnknown: Binding<Bool>,
-        avoidMotorways: Binding<Bool>
+        avoidMotorways: Binding<Bool>,
+        showsAllowUnknownExplainer: Bool = true
     ) -> some View {
         if profile == .cleanest {
             e4ToggleRow(
@@ -1282,7 +1278,8 @@ struct RoutePlannerCard: View {
             allowUnknownControl(
                 binding: allowUnknown,
                 disabled: false,
-                profile: profile
+                profile: profile,
+                showsExplainer: showsAllowUnknownExplainer
             )
         }
     }

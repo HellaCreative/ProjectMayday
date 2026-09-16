@@ -150,12 +150,10 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 
 ### Loop and navigation handoff
 
-A loop is two pins and a distance: the rider's start, one far pin they drop where
-they want the ride to reach, and their target distance. There is no compass
-heading. The pin says which way and how far out — the rider may drop it as near
-or as far as they like, including another province — and the distance target says
-how long the whole circuit should be, which is what decides how much the ride
-wanders on its way there and back. The pin is honoured; the distance is aimed at.
+A loop is two pins: the rider's start, and one far pin they drop where they want
+the ride to reach. There is no compass heading and no distance slider. The far pin
+is the distance and the direction — the rider may drop it as near or as far as
+they like, including another province. The pin is honoured.
 
 The far pin is an ordinary rider waypoint. It is dropped with the same gesture as
 a Plan waypoint, and it can be tapped, dragged, and dropped somewhere else, which

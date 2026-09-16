@@ -137,12 +137,6 @@ final class RoutePlannerModel {
         didSet { modeChanged(from: oldValue) }
     }
     var showingLoop = false
-    var loopDistanceKM: Double = 100 {
-        didSet {
-            guard oldValue != loopDistanceKM, showingLoop, loopFar != nil, hasRoute else { return }
-            generateLoop()
-        }
-    }
     var loopFar: RouteCoordinate?
     var loopSummary: String?
     private var loopRunID: UUID?
@@ -172,7 +166,7 @@ final class RoutePlannerModel {
             return
         }
         guard let far = loopFar else {
-            errorMessage = "Hold the map to drop a pin where you want the ride to reach."
+            errorMessage = "Drop a pin to define distance and direction of loop."
             return
         }
         invalidateInFlightRoutes()
@@ -183,7 +177,7 @@ final class RoutePlannerModel {
         errorMessage = nil
         loopSummary = nil
         fuelPlanningStatus = "Creating loop"
-        let target = loopDistanceKM * 1000
+        let target = loopTargetMeters(start: start, far: far)
         let selectedProfile = profile, selectedAllow = allowUnknown
         var preferences = displayedRidePreferences
         preferences.preferDifferentRoads = true
@@ -243,9 +237,9 @@ final class RoutePlannerModel {
                 self.destination = start
                 self.routeIdentity = "loop:\(runID.uuidString)"
                 if outAndBack {
-                    self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(result.distanceMeters / 1000)) km · only way back is the way you came, \(Int((result.reriddenMeters / 1000).rounded())) km repeated"
+                    self.loopSummary = "Ride \(Int(result.distanceMeters / 1000)) km · only way back is the way you came, \(Int((result.reriddenMeters / 1000).rounded())) km repeated"
                 } else {
-                    self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(result.distanceMeters / 1000)) km · \(Int(result.reriddenMeters)) m re-ridden"
+                    self.loopSummary = "Ride \(Int(result.distanceMeters / 1000)) km · \(Int(result.reriddenMeters)) m re-ridden"
                 }
                 self.toast = "Loop ready"
                 self.mapState.fit(built.legs.flatMap { $0.response.coordinates })
@@ -257,6 +251,14 @@ final class RoutePlannerModel {
             }
             self.refreshMap()
         }
+    }
+
+    /// There-and-back geodesic to the far pin. Loop has no rider target km;
+    /// `LoopPlanner` still takes `targetMeters`, so this is the pin as distance.
+    private func loopTargetMeters(start: RouteCoordinate, far: RouteCoordinate) -> Double {
+        let thereAndBack = CLLocation(latitude: start.latitude, longitude: start.longitude)
+            .distance(from: CLLocation(latitude: far.latitude, longitude: far.longitude)) * 2
+        return max(1, thereAndBack)
     }
 
     var profile: RouteProfile = .dirt {
