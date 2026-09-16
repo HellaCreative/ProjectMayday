@@ -23,6 +23,10 @@ public struct FuelRequirements: Sendable {
     public var probeFirstStation = false
     public var allowPartialResult = false
     public var preferredStationIDs: [String] = []
+    /// True when this `plan` resumes at a mapped pump (a later planning window,
+    /// a resume-from-station, or a start that is already the committed stop).
+    /// Rule 8's nearest-first-pump hop then must not run.
+    public var resumeAtPump = false
     public init(usableRangeMeters: Double,firstLegMaxMeters: Double) {
         self.usableRangeMeters = usableRangeMeters; self.firstLegMaxMeters = firstLegMaxMeters
     }
@@ -52,6 +56,11 @@ public struct FuelPlanner: Sendable {
     /// Same contract as `ItineraryRangeArithmetic.fuelWaypointSnapMeters`.
     /// Stage 1 always produces a non-nil `stationID` after a successful snap.
     public static let fuelStationSnapMeters = 150.0
+    /// Later pumps may not sit this close to the pump the leg started from.
+    public static let minimumOnwardPumpSeparationMeters = 5_000.0
+    /// Pump-to-pump ridden distance below this is only valid as the trip's
+    /// real first pump (rule 8).
+    public static let minimumOnwardPumpLegMeters = 20_000.0
     /// Fog-of-war budget when fuel planning is off (distance-break chaining).
     public static let nominalLegBudgetMeters = 325_000.0
 
@@ -99,6 +108,16 @@ public struct FuelPlanner: Sendable {
         let destinationMatches = try matcher.matches(at: request.end,radius: request.matchRadiusMeters,start: false,
             policy: request.access,intent: intent+180,budget: budget)
         guard !initialMatches.isEmpty, !destinationMatches.isEmpty else { throw RoutingFailure.noMatch }
+        let startPump = candidates.min {
+            request.start.distance(to: $0.coordinate) < request.start.distance(to: $1.coordinate)
+        }.flatMap { nearest in
+            request.start.distance(to: nearest.coordinate) <= Self.fuelStationSnapMeters ? nearest : nil
+        }
+        let skipFirstPump = fuel.resumeAtPump
+            || (fuel.usableRangeMeters >= Self.minimumOnwardPumpLegMeters
+                && startPump != nil
+                && (fuel.requiredFirstStationID == nil
+                    || fuel.requiredFirstStationID == startPump?.id))
         // Prepare compass once for the trip destination; reuse on every hop.
         var destCompass: RoadCompass?
         if let dest = destinationMatches.first {
@@ -189,8 +208,8 @@ public struct FuelPlanner: Sendable {
             if state.point.distance(to: point) > cap + 300 { return nil }
             if endMatches.isEmpty { return nil }
             var starts = state.match.map { [$0] } ?? initialMatches
-            var departureArrival = state.arrival
-            if !state.stops.isEmpty {
+            let departureArrival = state.arrival
+            if !state.stops.isEmpty || skipFirstPump {
                 let rematched = try matcher.matches(at: state.point, radius: request.matchRadiusMeters,
                                                     start: true, policy: request.access,
                                                     intent: state.point.bearing(to: point) * 180 / .pi,
@@ -204,7 +223,7 @@ public struct FuelPlanner: Sendable {
                 if !combined.isEmpty { starts = combined }
             }
             var access = request.access
-            access.startIsCustomer = !state.stops.isEmpty || request.access.startIsCustomer
+            access.startIsCustomer = !state.stops.isEmpty || skipFirstPump || request.access.startIsCustomer
             access.endIsCustomer = customer
             let search = PathSearch(pack: graph)
             guard let primaryEnd = endMatches.first else { return nil }
@@ -311,11 +330,11 @@ public struct FuelPlanner: Sendable {
             if request.profile.style == .cleanest { options.pavedOnly = false }
             options.additionalEnds = goals.map(\.1)
             var access = request.access
-            access.startIsCustomer = !state.stops.isEmpty || request.access.startIsCustomer
+            access.startIsCustomer = !state.stops.isEmpty || skipFirstPump || request.access.startIsCustomer
             access.endIsCustomer = true
             var startCandidates = state.match.map { [$0] } ?? initialMatches
             var departureArrival = state.arrival
-            if !state.stops.isEmpty, let intentMatch = try? matcher.matches(
+            if !state.stops.isEmpty || skipFirstPump, let intentMatch = try? matcher.matches(
                 at: state.point, radius: request.matchRadiusMeters, start: true,
                 policy: access,
                 intent: waypointHeading(from: state) * 180 / .pi,
@@ -382,6 +401,31 @@ public struct FuelPlanner: Sendable {
             note("sweep:reached dest=\(destRoute != nil ? 1 : 0) pumps=\(pumps.count) \(lastSummary)")
             return (destRoute, pumps)
         }
+        /// Rule 3: a hop that leaves a forecourt, goes round the block, and
+        /// returns past the pump it started from is a loop, not a leg.
+        func isForecourtLoop(_ route: ComputedRoute, from: Coordinate) -> Bool {
+            var left = false
+            for point in route.geometry {
+                let d = from.distance(to: point)
+                if d > 400 { left = true }
+                if left && d < Self.fuelStationSnapMeters { return true }
+            }
+            return false
+        }
+        /// Rule 8 onward spacing: no later pump within 5 km of the start pump,
+        /// and no pump-to-pump ridden distance under ~20 km except the trip's
+        /// real first pump. Tiny-range unit graphs keep nearby refills.
+        func onwardPumpAllowed(_ station: FuelStation, _ route: ComputedRoute, from state: State) -> Bool {
+            let fromRefill = skipFirstPump || !state.stops.isEmpty
+            guard fromRefill else { return true }
+            if isForecourtLoop(route, from: state.point) { return false }
+            guard fuel.usableRangeMeters >= Self.minimumOnwardPumpLegMeters else { return true }
+            if state.point.distance(to: station.coordinate) < Self.minimumOnwardPumpSeparationMeters {
+                return false
+            }
+            if route.distanceMeters < Self.minimumOnwardPumpLegMeters { return false }
+            return true
+        }
         /// Rule 10/11: 120° fan at the next rider waypoint; progress share then
         /// modest fan widening. Never ranked by closeness to the destination.
         func pickPump(from reached: [(FuelStation, ComputedRoute)], state: State, cap: Double) -> (FuelStation, ComputedRoute)? {
@@ -393,6 +437,7 @@ public struct FuelPlanner: Sendable {
                 offLineDegrees(from: state.point, to: station.coordinate)
             }
             func counts(_ station: FuelStation, _ route: ComputedRoute, share: Double, halfRadians: Double) -> Bool {
+                guard onwardPumpAllowed(station, route, from: state) else { return false }
                 guard route.distanceMeters <= cap + 1 else { return false }
                 guard angleDelta(state.point.bearing(to: station.coordinate), heading) <= halfRadians else { return false }
                 let ratio = progress(of: station, route: route)
@@ -533,10 +578,13 @@ public struct FuelPlanner: Sendable {
             guard visited <= budget.maximumLabels else {
                 return failure("no fuel stop found within range near \(placeName(current.point))", state: current)
             }
-            let tank = current.stops.isEmpty
-                ? min(fuel.firstLegMaxMeters, fuel.usableRangeMeters)
-                : fuel.usableRangeMeters
-            let requiredSatisfied = fuel.requiredFirstStationID == nil || !current.stops.isEmpty
+            let fromRefill = skipFirstPump || !current.stops.isEmpty
+            let tank = fromRefill
+                ? fuel.usableRangeMeters
+                : min(fuel.firstLegMaxMeters, fuel.usableRangeMeters)
+            let requiredSatisfied = fuel.requiredFirstStationID == nil
+                || !current.stops.isEmpty
+                || (skipFirstPump && (fuel.requiredFirstStationID == startPump?.id || fuel.resumeAtPump))
             if let maxStops = fuel.maximumStops, current.stops.count >= maxStops {
                 // Window is full: return proven hops so the caller can continue
                 // from the last pump. Do not hard-fail — windowStops=1 is a
@@ -550,15 +598,26 @@ public struct FuelPlanner: Sendable {
             }
 
             let used = Set(current.stops.map(\.id))
+            let spacingApplies = fromRefill && fuel.usableRangeMeters >= Self.minimumOnwardPumpLegMeters
             let eligible = candidates.filter { station in
-                !used.contains(station.id)
-                    && current.point.distance(to: station.coordinate) <= tank + 150
-                    && (!current.stops.isEmpty || fuel.requiredFirstStationID == nil
-                        || station.id == fuel.requiredFirstStationID)
+                if used.contains(station.id) { return false }
+                if current.stops.isEmpty, skipFirstPump, station.id == startPump?.id { return false }
+                if spacingApplies,
+                   current.point.distance(to: station.coordinate) < Self.minimumOnwardPumpSeparationMeters {
+                    return false
+                }
+                if current.point.distance(to: station.coordinate) > tank + 150 { return false }
+                if !fromRefill, let required = fuel.requiredFirstStationID, station.id != required {
+                    return false
+                }
+                return true
             }
 
-            // Leg 0: nearest reachable pump within the first-leg fog of war.
-            if current.stops.isEmpty {
+            // Leg 0: nearest reachable pump, only from the rider's own start
+            // with unknown fuel. A window that resumes at a pump sweeps on.
+            if current.stops.isEmpty, skipFirstPump {
+                note("leg0:skip resumeAtPump station=\(startPump?.id ?? "-")")
+            } else if current.stops.isEmpty {
                 if let already = eligible.first(where: { current.point.distance(to: $0.coordinate) < 50 }),
                    let approach = try hop(current, to: already.coordinate, endMatches: matches(already),
                                           cap: tank, customer: true) {
@@ -600,7 +659,11 @@ public struct FuelPlanner: Sendable {
             // pump. No shortest pick, flood, or frontier snap after leg 0.
             let endCap = min(tank, fuel.destinationUsedLimitMeters ?? .infinity)
             let (destRoute, reached) = try sweep(current, stations: eligible, cap: endCap)
-            if current.stops.count >= fuel.minimumStops, requiredSatisfied,
+            let destLoop = fromRefill
+                && (destRoute?.distanceMeters ?? .infinity) < Self.minimumOnwardPumpLegMeters
+                && destRoute.map { isForecourtLoop($0, from: current.point) } == true
+            if destLoop { note("dest:loop") }
+            if !destLoop, current.stops.count >= fuel.minimumStops, requiredSatisfied,
                let tail = destRoute, tail.distanceMeters <= endCap + 1 {
                 let actualEnd = tail.segments.last?.geometry.last ?? tail.end.coordinate
                 let here = current.point.distance(to: request.end)

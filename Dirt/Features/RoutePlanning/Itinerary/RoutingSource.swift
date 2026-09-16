@@ -232,6 +232,14 @@ final class PackRoutingSource: RoutingSource {
         fuel.probeFirstStation = req.fuel.probeFirstReachableStation == true || req.fuel.forwardFeeler == true
         fuel.allowPartialResult = req.fuel.allowPartialWindow == true
         fuel.preferredStationIDs = req.fuel.preferredStationIds ?? []
+        let origin = req.locations[0]
+        if (try? await fuelStation(
+            near: RouteCoordinate(longitude: origin.longitude, latitude: origin.latitude),
+            within: FuelPlanner.fuelStationSnapMeters
+        )) != nil {
+            fuel.resumeAtPump = true
+            request.access.startIsCustomer = true
+        }
         request.options.arrivalEdgeID = req.options?.arrivalEdgeId
         request.options.arrivalRestrictions = (req.options?.arrivalRestrictions ?? []).map {
             RestrictionProgress(pattern: $0.pattern, progress: $0.progress)

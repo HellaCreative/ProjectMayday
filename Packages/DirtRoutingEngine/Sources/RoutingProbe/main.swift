@@ -8,7 +8,7 @@ import DirtRoutingEngine
 //   DIRT_ARRIVAL_EDGE=<edge id>    arrival road carried from a previous leg
 //   DIRT_PRIOR_EDGES=<file>        edge IDs already ridden, one per line
 //   DIRT_FUEL_MIN_STOPS=<n>, DIRT_FUEL_MAX_STOPS=<n>, DIRT_FUEL_ALLOW_PARTIAL=1,
-//   DIRT_FUEL_ESCAPE=0             fuel window options (escape defaults to on)
+//   DIRT_FUEL_ESCAPE=0, DIRT_FUEL_RESUME_AT_PUMP=1
 //   DIRT_PROBE_COMPACT=1           omit geometry and edge IDs; their hash is always printed
 //   DIRT_DIRT_PAVEMENT_AWAY=<n>    Dirt pavement away multiplier at full wander (10/4/2/1)
 //   DIRT_WANDER=<0..1>             detour appetite (default 1)
@@ -106,6 +106,7 @@ do {
         fuel.minimumStops = environment["DIRT_FUEL_MIN_STOPS"].flatMap(Int.init) ?? 0
         fuel.maximumStops = environment["DIRT_FUEL_MAX_STOPS"].flatMap(Int.init)
         fuel.allowPartialResult = environment["DIRT_FUEL_ALLOW_PARTIAL"] == "1"
+        fuel.resumeAtPump = environment["DIRT_FUEL_RESUME_AT_PUMP"] == "1"
         let plan = try FuelPlanner(graph: indexed,stations: fuelStations).plan(request,requirements: fuel,budget: budget)
         let total = plan.routes.reduce(0) { $0+$1.distanceMeters }
         let known = plan.routes.flatMap(\.segments).filter { $0.structure != "ferry" && ($0.surface == .gravel || $0.surface == .loose) }.reduce(0) { $0+$1.meters }

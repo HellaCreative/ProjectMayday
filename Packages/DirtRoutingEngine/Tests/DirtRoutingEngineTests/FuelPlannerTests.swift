@@ -118,6 +118,46 @@ struct FuelPlannerTests {
         #expect(plan.stops.contains { $0.id == "onward" })
         #expect(plan.stops.filter { $0.id.hasPrefix("cluster-") }.count == 1)
     }
+    @Test func windowResumeAtAPumpSkipsTheNearestFirstPumpHop() throws {
+        var graph = Road()
+        graph.nodes = (0...10).map { .init(longitude: Double($0)*0.1,latitude: 0) }
+        let sitting = FuelStation(id: "resume-pump",coordinate: .init(longitude: 0.1,latitude: 0))
+        let neighbour = FuelStation(id: "neighbour",coordinate: .init(longitude: 0.13,latitude: 0))
+        let onward = FuelStation(id: "onward",coordinate: .init(longitude: 0.5,latitude: 0))
+        var request = RoutingRequest(start: sitting.coordinate,
+                                     end: .init(longitude: 0.99,latitude: 0),style: .cleanest)
+        request.matchRadiusMeters = 8_000
+        var fuel = FuelRequirements(usableRangeMeters: 80_000,firstLegMaxMeters: 80_000)
+        fuel.resumeAtPump = true
+        let plan = try FuelPlanner(graph: graph,stations: [sitting, neighbour, onward]).plan(request,requirements: fuel)
+        #expect(plan.styleSummary?.contains("leg0:distance") != true)
+        #expect(plan.styleSummary?.contains("leg0:skip") == true)
+        #expect(!plan.stops.contains { $0.id == "neighbour" })
+        #expect(!plan.stops.contains { $0.id == sitting.id })
+        #expect(plan.stops.contains { $0.id == "onward" } || plan.complete)
+    }
+    @Test func laterPumpIsNotCommittedWithinFiveKmOrUnderTwentyKm() throws {
+        var graph = Road()
+        graph.nodes = (0...10).map { .init(longitude: Double($0)*0.1,latitude: 0) }
+        let first = FuelStation(id: "first",coordinate: .init(longitude: 0.05,latitude: 0))
+        let close = FuelStation(id: "close",coordinate: .init(longitude: 0.12,latitude: 0))
+        let onward = FuelStation(id: "onward",coordinate: .init(longitude: 0.55,latitude: 0))
+        var request = RoutingRequest(start: .init(longitude: 0.01,latitude: 0),
+                                     end: .init(longitude: 0.99,latitude: 0),style: .cleanest)
+        request.matchRadiusMeters = 1_000
+        let plan = try FuelPlanner(graph: graph,stations: [first, close, onward]).plan(request,
+            requirements: .init(usableRangeMeters: 80_000,firstLegMaxMeters: 80_000))
+        #expect(plan.stops.first?.id == "first")
+        #expect(!plan.stops.contains { $0.id == "close" })
+        #expect(plan.stops.contains { $0.id == "onward" })
+        for (index, route) in plan.routes.enumerated() where index < plan.stops.count {
+            if index == 0 { continue }
+            #expect(route.distanceMeters >= FuelPlanner.minimumOnwardPumpLegMeters)
+            let from = index == 1 ? first.coordinate : plan.stops[index - 1].coordinate
+            #expect(from.distance(to: plan.stops[index].coordinate)
+                    >= FuelPlanner.minimumOnwardPumpSeparationMeters)
+        }
+    }
     @Test func preferredStationsAreTriedBeforeOrdinaryCandidates() throws {
         var fuel = FuelRequirements(usableRangeMeters: 80_000,firstLegMaxMeters: 80_000)
         fuel.preferredStationIDs = [pumps[1].id]
