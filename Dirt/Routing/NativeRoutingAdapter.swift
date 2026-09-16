@@ -192,31 +192,8 @@ actor NativeRoutingSession {
         }
     }
     func fuel(_ request: DirtRoutingEngine.RoutingRequest,requirements: FuelRequirements,directories: [String:URL],seconds: Double) throws -> FuelPlan {
-        let started = ContinuousClock.now
-        let budget = ComputationBudget(seconds: seconds)
-        let counter = SearchCounter()
-        var request = request
-        request.options.counter = counter
-        var prepared = 0, prepareDetail: String?
-        do {
-            let preparation = try prepare(directories,budget: budget)
-            prepared = elapsedMs(from: started); prepareDetail = preparation.detail
-            let plan = try FuelPlanner(graph: preparation.graph,stations: cachedFuel,compassStore: compassStore)
-                .plan(request,requirements: requirements,budget: budget)
-            let hopMeters = plan.routes.map { Int($0.distanceMeters.rounded()) }
-            let hopPops = plan.routes.map(\.poppedLabels)
-            log("pack fuel",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
-                outcome: "complete=\(plan.complete ? 1 : 0) stops=\(plan.stops.count) hops=\(plan.routes.count) " +
-                    "hopMeters=[\(hopMeters.map(String.init).joined(separator: ","))] " +
-                    "hopPops=[\(hopPops.map(String.init).joined(separator: ","))] " +
-                    "limit=\(plan.limit ?? "-") " +
-                    "style=\(plan.styleSummary ?? "-")")
-            return plan
-        } catch {
-            log("pack fuel failed",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
-                outcome: "error=\(error)")
-            throw error
-        }
+        _ = (request, requirements, directories, seconds)
+        throw RoutingFailure.unsupported("Routing does not consult fuel while building a route.")
     }
 }
 

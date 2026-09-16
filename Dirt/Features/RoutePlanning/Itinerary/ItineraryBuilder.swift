@@ -107,7 +107,7 @@ final class ItineraryBuilder {
         let requestedEndIndex = throughLegIndex.map {
             min(itinerary.legs.count, max(requestedStartIndex, $0 + 1))
         } ?? itinerary.legs.count
-        let fuelReplan = fuel.automaticPlanningEnabled && fuel.usableMeters > 0
+        let fuelReplan = false
         let resume = fuelReplan ? fuelResume(
             stationID: replanFromStationID,
             riderLegIndex: requestedStartIndex,
@@ -454,7 +454,7 @@ final class ItineraryBuilder {
                     baselineHistory: baselineHistory[index] ?? EdgeHistory(),
                     allBaseline: baseline,
                     fuelUsedAtStart: fuelUsed,
-                    fuel: fuelReplan ? fuel : .routeOnly,
+                    fuel: .routeOnly,
                     source: selectedSource,
                     history: finalHistory,
                     destinationFuelUsedLimitMeters: lookaheadEnabled && index + 1 < itinerary.legs.count
@@ -497,7 +497,8 @@ final class ItineraryBuilder {
                 let dirt = meters > 0 ? Int((weightedDirt / meters).rounded()) : 0
                 RoutingDebugLog.shared.event(
                     "build leg riderLeg=\(riderLeg.id) " +
-                        "fuelStops=\(builtLegs.filter { $0.endsAtFuelStop != nil }.count) " +
+                        "distanceBreaks=\(builtLegs.filter(\.endsAtDistanceBreak).count) " +
+                        "fuelStops=0 " +
                         "meters=\(Int(meters)) dirt%=\(dirt)"
                 )
                 let backtrackMeters = builtLegs.reduce(0.0) {
@@ -1888,7 +1889,7 @@ final class ItineraryBuilder {
                 ))
             guard active(itinerary) else { throw CancellationError() }
             let finalMeters = try responseMeters(finalResponse)
-            return [BuiltLeg(
+            return distanceBrokenLegs(BuiltLeg(
                 riderLegID: riderLeg.id,
                 fromCoordinate: from,
                 toCoordinate: to,
@@ -1896,7 +1897,7 @@ final class ItineraryBuilder {
                 response: finalResponse,
                 fuelUsedOnArrivalMeters: fuelUsedAtStart + finalMeters,
                 routeProfile: activeProfile
-            )]
+            ))
         }
 
         let firstCap = max(0, fuel.usableMeters - fuelUsedAtStart)
@@ -2412,6 +2413,33 @@ private func unconstrainedFuelLeg(
         fuelUsedOnArrivalMeters: fuelUsedAtStart + (response.distanceMeters ?? 0),
         routeProfile: riderLeg.profile
     )
+}
+
+private func distanceBrokenLegs(_ leg: BuiltLeg) -> [BuiltLeg] {
+    let chunks = ItineraryRangeArithmetic.distanceBreakChunks(leg.response)
+    guard chunks.count > 1 else {
+        return [leg]
+    }
+    var result: [BuiltLeg] = []
+    var from = leg.fromCoordinate
+    var used = 0.0
+    for (index, chunk) in chunks.enumerated() {
+        let end = chunk.response.coordinates.last
+            ?? (index == chunks.count - 1 ? leg.toCoordinate : from)
+        result.append(BuiltLeg(
+            riderLegID: leg.riderLegID,
+            fromCoordinate: from,
+            toCoordinate: chunk.endsAtDistanceBreak ? end : leg.toCoordinate,
+            endsAtFuelStop: nil,
+            endsAtDistanceBreak: chunk.endsAtDistanceBreak,
+            response: chunk.response,
+            fuelUsedOnArrivalMeters: used + (chunk.response.distanceMeters ?? 0),
+            routeProfile: leg.routeProfile
+        ))
+        from = result[index].toCoordinate
+        used = result[index].fuelUsedOnArrivalMeters
+    }
+    return result
 }
 
 private func markingFuelGap(

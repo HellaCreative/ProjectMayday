@@ -8,6 +8,7 @@ nonisolated struct NavigationStage: Identifiable, Equatable, Sendable {
     enum Kind: String, Equatable, Sendable {
         case waypoint
         case fuelStop
+        case distanceBreak
         case destination
     }
 

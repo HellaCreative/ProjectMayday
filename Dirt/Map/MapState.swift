@@ -75,6 +75,7 @@ final class MapState {
         case start
         case stage
         case fuel
+        case distanceBreak
         case destination
         case rider
         /// Unresolved peer `rider_alerts` pin when the rider is not live-sharing.

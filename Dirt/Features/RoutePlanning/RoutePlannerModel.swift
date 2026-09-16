@@ -34,6 +34,7 @@ final class RoutePlannerModel {
         let fuelGap: FuelGap?
         let fuelUnknown: String?
         let endsAtFuelStop: Bool
+        let endsAtDistanceBreak: Bool
         let fuelStopID: String?
         let fuelStopName: String?
         let departureFuelStopID: String?
@@ -71,6 +72,7 @@ final class RoutePlannerModel {
             if case .gap(let gap) = status { fuelGap = gap } else { fuelGap = nil }
             if case .fuelUnknown(let message) = status { fuelUnknown = message } else { fuelUnknown = nil }
             endsAtFuelStop = builtLeg.endsAtFuelStop != nil
+            endsAtDistanceBreak = builtLeg.endsAtDistanceBreak
             fuelStopID = builtLeg.endsAtFuelStop?.stationID
             fuelStopName = builtLeg.endsAtFuelStop?.name
             self.departureFuelStopID = departureFuelStopID
@@ -110,6 +112,7 @@ final class RoutePlannerModel {
             if case .gap(let gap) = status { fuelGap = gap } else { fuelGap = nil }
             if case .fuelUnknown(let message) = status { fuelUnknown = message } else { fuelUnknown = nil }
             endsAtFuelStop = false
+            endsAtDistanceBreak = false
             fuelStopID = nil
             fuelStopName = nil
             departureFuelStopID = riderLeg.from.uuidString
@@ -623,6 +626,10 @@ final class RoutePlannerModel {
            stages[index - 1].riderLegID == stage.riderLegID,
            stages[index - 1].endsAtFuelStop {
             from = "F\(fuelOrdinal(endingAt: index - 1))"
+        } else if index > 0,
+                  stages[index - 1].riderLegID == stage.riderLegID,
+                  stages[index - 1].endsAtDistanceBreak {
+            from = "D\(distanceBreakOrdinal(endingAt: index - 1))"
         } else {
             from = "Point \(riderLegIndex + 1)"
         }
@@ -630,6 +637,8 @@ final class RoutePlannerModel {
         let to: String
         if stage.endsAtFuelStop {
             to = "F\(fuelOrdinal(endingAt: index))"
+        } else if stage.endsAtDistanceBreak {
+            to = "D\(distanceBreakOrdinal(endingAt: index))"
         } else {
             to = "Point \(riderLegIndex + 2)"
         }
@@ -665,11 +674,17 @@ final class RoutePlannerModel {
         }
     }
 
+    private func distanceBreakOrdinal(endingAt stageIndex: Int) -> Int {
+        stages.prefix(stageIndex + 1).reduce(0) { count, stage in
+            count + (stage.endsAtDistanceBreak ? 1 : 0)
+        }
+    }
+
     /// Automatic pump hops are derived safety stops. The final non-fuel hop in
     /// each group represents the rider-created leg and is the row that may be
     /// removed from the plan.
     func canDeleteStage(at index: Int) -> Bool {
-        stages.indices.contains(index) && !stages[index].endsAtFuelStop
+        stages.indices.contains(index) && !stages[index].endsAtFuelStop && !stages[index].endsAtDistanceBreak
     }
 
     func fuelMarginText(at index: Int) -> String? {
@@ -1081,10 +1096,8 @@ final class RoutePlannerModel {
         let detail: String
     }
 
-    static func initialBuildProgressToast(for fuel: FuelRangePrefs.Snapshot) -> String {
-        fuel.automaticPlanningEnabled && fuel.usableMeters > 0
-            ? calculatingFuelRangeToast
-            : creatingRouteWithoutFuelToast
+    static func initialBuildProgressToast(for _: FuelRangePrefs.Snapshot) -> String {
+        creatingRouteWithoutFuelToast
     }
 
     static func progressToastContent(for message: String) -> ProgressToastContent? {
@@ -2563,20 +2576,35 @@ final class RoutePlannerModel {
             )
         }
         var fuelOrdinal = 0
+        var breakOrdinal = 0
         for (index, leg) in (built?.legs ?? []).enumerated() {
-            guard let stop = leg.endsAtFuelStop else { continue }
-            fuelOrdinal += 1
-            markers.append(
-                MapState.Marker(
-                    id: "fuel:\(leg.riderLegID.uuidString):\(index)",
-                    latitude: stop.coordinate.latitude,
-                    longitude: stop.coordinate.longitude,
-                    label: "F\(fuelOrdinal)",
-                    kind: .fuel,
-                    subtitle: stop.name,
-                    isLocked: true
+            if let stop = leg.endsAtFuelStop {
+                fuelOrdinal += 1
+                markers.append(
+                    MapState.Marker(
+                        id: "fuel:\(leg.riderLegID.uuidString):\(index)",
+                        latitude: stop.coordinate.latitude,
+                        longitude: stop.coordinate.longitude,
+                        label: "F\(fuelOrdinal)",
+                        kind: .fuel,
+                        subtitle: stop.name,
+                        isLocked: true
+                    )
                 )
-            )
+            } else if leg.endsAtDistanceBreak {
+                breakOrdinal += 1
+                markers.append(
+                    MapState.Marker(
+                        id: "break:\(leg.riderLegID.uuidString):\(index)",
+                        latitude: leg.toCoordinate.latitude,
+                        longitude: leg.toCoordinate.longitude,
+                        label: "D\(breakOrdinal)",
+                        kind: .distanceBreak,
+                        subtitle: "Distance break",
+                        isLocked: true
+                    )
+                )
+            }
         }
         return markers
     }
@@ -3035,14 +3063,10 @@ final class RoutePlannerModel {
         FuelRangePrefs.kilometers = rangeKm
         FuelRangePrefs.lastEnabledKilometers = rangeKm
         fuelPlanNotice = nil
-
-        let automatic = FuelRangePrefs.automaticPlanningEnabled
         RoutingDebugLog.shared.event(
-            "fuel reapply start mode=\(mode) legs=\(itinerary.legs.count) "
-                + "automatic=\(automatic ? 1 : 0) range=\(Int(rangeKm))km"
+            "fuel range stored mode=\(mode) range=\(Int(rangeKm))km (routing does not consult fuel)"
         )
-        toast = automatic ? "Looking for fuel stops" : "Building without automatic fuel stops"
-        apply(.rebuild, source: "fuel")
+        toast = "Fuel range saved"
     }
 
     /// Invalidates an in-flight itinerary as soon as the rider grabs the fuel
@@ -3477,6 +3501,10 @@ final class RoutePlannerModel {
                 title = "F\(fuelOrdinal(endingAt: index))"
                 detail = stage.fuelStopName
                 kind = .fuelStop
+            } else if stage.endsAtDistanceBreak {
+                title = "D\(distanceBreakOrdinal(endingAt: index))"
+                detail = "Distance break"
+                kind = .distanceBreak
             } else if let waypointFuel {
                 title = "Point \(pointOrdinal)"
                 detail = waypointFuel.name ?? "Fuel stop"
@@ -3884,6 +3912,7 @@ final class RoutePlannerModel {
             fromCoordinate: old.fromCoordinate,
             toCoordinate: old.toCoordinate,
             endsAtFuelStop: old.endsAtFuelStop,
+            endsAtDistanceBreak: old.endsAtDistanceBreak,
             response: applied,
             fuelUsedOnArrivalMeters: old.fuelUsedOnArrivalMeters,
             routeProfile: old.routeProfile

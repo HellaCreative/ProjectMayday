@@ -95,8 +95,6 @@ final class LiveRoutingSource: RoutingSource {
     private let client: RoutingClient
     private let cache: RouteResponseCache
     private let packRevision: () -> String
-    private var fuelContextStationIDs: [String: [String]] = [:]
-    private var fuelContextRecency: [String] = []
 
     init(
         client: RoutingClient,
@@ -131,60 +129,17 @@ final class LiveRoutingSource: RoutingSource {
     }
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
-        var request = req
-        let canReuseContext = req.fuel.forwardFeeler != true
-            && req.fuel.probeFirstReachableStation != true
-        let contextKey = fuelContextKey(req)
-        if canReuseContext,
-           req.fuel.requiredFirstStationId == nil,
-           let retained = fuelContextStationIDs[contextKey],
-           !retained.isEmpty {
-            request.fuel.preferredStationIds = retained
-            RoutingDebugLog.shared.event(
-                "fuel context reused candidates=\(retained.count) riderLeg=\(req.fuel.riderLegId)"
-            )
-        }
-        let response = try await client.fuelChain(request)
         RoutingDebugLog.shared.event(
-            "FUEL allowUnknown=\(req.accessPolicy.motorizedUnknown ? 1 : 0) "
-                + "profile=\(req.profile.rawValue) "
-                + "mapZoom=\(req.options?.mapZoom.map { String(format: "%.1f", $0) } ?? "-") "
-                + "riderLeg=\(req.fuel.riderLegId)"
+            "fuel chain ignored: routing does not consult fuel riderLeg=\(req.fuel.riderLegId)"
         )
-        if canReuseContext, response.isComplete {
-            var seen = Set<String>()
-            let retained = ((response.stops ?? []).map(\.id) + (response.stationCandidates ?? [])
-                .filter { $0.validForward == true }
-                .map(\.id))
-                .filter { !$0.isEmpty && seen.insert($0).inserted }
-                .prefix(48)
-            let stationIDs = Array(retained)
-            if !stationIDs.isEmpty {
-                fuelContextStationIDs[contextKey] = stationIDs
-                fuelContextRecency.removeAll { $0 == contextKey }
-                fuelContextRecency.append(contextKey)
-                while fuelContextRecency.count > 16 {
-                    let oldest = fuelContextRecency.removeFirst()
-                    fuelContextStationIDs.removeValue(forKey: oldest)
-                }
-            }
-        }
-        return response
+        return FuelChainResponse(
+            status: "complete", error: nil, message: nil, regionIds: nil,
+            stops: [], graphMeters: [], diagnostics: nil
+        )
     }
 
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
         try await client.fuelStation(near: point, within: meters)
-    }
-
-    private func fuelContextKey(_ request: FuelChainRequest) -> String {
-        let points = request.locations.map {
-            String(format: "%.5f,%.5f", $0.latitude, $0.longitude)
-        }.joined(separator: ">")
-        let avoid = (request.options?.avoidEdgeIds ?? []).sorted().joined(separator: ",")
-        return points
-            + "|usable=\(Int(request.fuel.usableRangeMeters.rounded()))"
-            + "|first=\(Int(request.fuel.firstLegMaxMeters.rounded()))"
-            + "|avoid=\(avoid)"
     }
 }
 
@@ -208,78 +163,13 @@ final class PackRoutingSource: RoutingSource {
         } catch let failure as RoutingFailure { throw RoutingError.server(NativeRoutingAdapter.message(failure)) }
     }
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
-        guard req.locations.count == 2 else { throw RoutingError.invalidEndpoints }
-        let roadRequest = RouteRequest(profile: req.profile,locations: req.locations,allowUnknown: req.accessPolicy.motorizedUnknown,
-            avoidEdgeIds: req.options?.avoidEdgeIds ?? [],priorEdgeIds: req.options?.priorEdgeIds ?? [],
-            arrivalEdgeId: req.options?.arrivalEdgeId,backtrackFactor: req.options?.backtrackFactor,
-            sessionSeed: req.options?.sessionSeed ?? 0,maxPathMeters: req.options?.maxPathMeters,
-            mapZoom: req.options?.mapZoom,matchLimitMeters: req.options?.matchLimitMeters,
-            startEndpointKind: req.options?.startEndpointKind,endEndpointKind: req.options?.endEndpointKind)
-        var request = try NativeRoutingAdapter.request(roadRequest)
-        // Preserve the same rider policy for the road foundation and fuel hops.
-        if let preferences = req.options?.ridePreferences?.normalized {
-            request.profile.wander = preferences.wander
-            request.profile.avoidMajorHighways = preferences.avoidHighways
-            request.options.cityWall = preferences.avoidCities
-        }
-        var fuel = FuelRequirements(usableRangeMeters: req.fuel.usableRangeMeters,firstLegMaxMeters: req.fuel.firstLegMaxMeters)
-        fuel.minimumStops = max(req.fuel.minimumFuelStops,req.fuel.requireFuelStopBeforeEnd ? 1 : 0)
-        fuel.maximumStops = req.fuel.windowMaxStops
-        fuel.excludedStationIDs = Set(req.fuel.excludedStationIds ?? [])
-        fuel.requiredFirstStationID = req.fuel.requiredFirstStationId
-        fuel.destinationUsedLimitMeters = req.fuel.destinationFuelUsedLimitMeters
-        fuel.ensureDestinationEscape = req.fuel.ensureDestinationFuelEscape == true
-        fuel.probeFirstStation = req.fuel.probeFirstReachableStation == true || req.fuel.forwardFeeler == true
-        fuel.allowPartialResult = req.fuel.allowPartialWindow == true
-        fuel.preferredStationIDs = req.fuel.preferredStationIds ?? []
-        let origin = req.locations[0]
-        if (try? await fuelStation(
-            near: RouteCoordinate(longitude: origin.longitude, latitude: origin.latitude),
-            within: FuelPlanner.fuelStationSnapMeters
-        )) != nil {
-            fuel.resumeAtPump = true
-            request.access.startIsCustomer = true
-        }
-        request.options.arrivalEdgeID = req.options?.arrivalEdgeId
-        request.options.arrivalRestrictions = (req.options?.arrivalRestrictions ?? []).map {
-            RestrictionProgress(pattern: $0.pattern, progress: $0.progress)
-        }
-        do {
-            let directories = try packs.routingDirectories(for: req.locations.map {
-                CLLocationCoordinate2D(latitude: $0.latitude,longitude: $0.longitude)
-            })
-            let plan = try await session.fuel(request,requirements: fuel,directories: directories,
-                                             seconds: Double(req.fuel.windowTimeBudgetMs ?? 60_000)/1000)
-            try Task.checkCancellation()
-            let stops = plan.stops.enumerated().map { i,station in
-                FuelChainStop(id: station.id,latitude: station.coordinate.latitude,longitude: station.coordinate.longitude,
-                    name: station.name,brand: station.brand,address: station.address,
-                    graphMeters: i < plan.routes.count ? plan.routes[i].distanceMeters : nil)
-            }
-            return FuelChainResponse(status: plan.complete ? "complete"
-                    : (!plan.stops.isEmpty && plan.limit == nil ? "window" : "gap"),
-                error: plan.complete || (!plan.stops.isEmpty && plan.limit == nil) ? nil : "fuel_not_proven",
-                message: plan.limit,regionIds: directories.keys.sorted(),
-                stops: stops,graphMeters: plan.routes.map(\.distanceMeters),diagnostics: nil,
-                routes: plan.routes.map { NativeRoutingAdapter.response($0,style: request.profile.style) },
-                foundationRoute: plan.foundation.map { NativeRoutingAdapter.response($0,style: request.profile.style) },
-                firstReachableStationMeters: plan.firstReachableStationMeters,destinationEscapeMeters: plan.destinationEscapeMeters,
-                windowComplete: plan.complete)
-        } catch let failure as RoutingFailure {
-            // Resource limits during fuel proof are incomplete coverage (gap),
-            // not "fuel data unknown". Keep the rider-facing Fuel range gap card.
-            let message = NativeRoutingAdapter.message(failure)
-            if case .resourceLimit = failure {
-                return FuelChainResponse(
-                    status: "gap", error: "fuel_not_proven",
-                    message: message.lowercased().contains("no fuel")
-                        ? message
-                        : "no fuel stop found within range (planning limit)",
-                    regionIds: nil, stops: [], graphMeters: [], diagnostics: nil)
-            }
-            return FuelChainResponse(status: "unknown",error: "fuel_not_proven",message: message,
-                                     regionIds: nil,stops: [],graphMeters: [],diagnostics: nil)
-        }
+        RoutingDebugLog.shared.event(
+            "fuel chain ignored: routing does not consult fuel riderLeg=\(req.fuel.riderLegId)"
+        )
+        return FuelChainResponse(
+            status: "complete", error: nil, message: nil, regionIds: nil,
+            stops: [], graphMeters: [], diagnostics: nil
+        )
     }
     func fuelStation(near point: RouteCoordinate,within meters: Double) async throws -> FuelChainStop? {
         let pad = max(0.002,meters/111_000)
