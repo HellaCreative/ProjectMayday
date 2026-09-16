@@ -242,9 +242,9 @@ struct DirtTests {
         let sources = try #require(root["sources"] as? [String: Any])
         let admin1 = try #require(sources["dirt-admin1-overview"] as? [String: Any])
         #expect(admin1["type"] as? String == "geojson")
-        let data = try #require(admin1["data"] as? [String: Any])
-        #expect(data["type"] as? String == "FeatureCollection")
-        let features = try #require(data["features"] as? [[String: Any]])
+        let collection = try #require(admin1["data"] as? [String: Any])
+        #expect(collection["type"] as? String == "FeatureCollection")
+        let features = try #require(collection["features"] as? [[String: Any]])
         #expect(features.count >= 40)
         #expect(features.allSatisfy { feature in
             let geom = feature["geometry"] as? [String: Any]
