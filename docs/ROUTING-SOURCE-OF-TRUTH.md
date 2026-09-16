@@ -1,6 +1,6 @@
 # DIRT routing — source of truth
 
-Updated: 2026-09-15. Owner: Richard Smith.
+Updated: 2026-09-16. Owner: Richard Smith.
 
 ## 1. Authority and purpose
 
@@ -512,9 +512,10 @@ Cursor reports. Work directly in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt` on branc
 the project; the owner builds DIRT Dev from this checkout and accepts work only
 after a phone build. One commit per step.
 
-- HEAD `6be017a`. Fallback: tag `pre-find-speed-2026-09-15` (commit `cda849b`, the
-  exact 15 Sep 05:45 working tree including the previously uncommitted greenfield
-  work), also pushed to the internal-disk repository.
+- HEAD `57d57be` (overnight 15–16 Sep report below). Fallback: tag
+  `pre-find-speed-2026-09-15` (commit `cda849b`, the exact 15 Sep 05:45 working
+  tree including the previously uncommitted greenfield work), also pushed to the
+  internal-disk repository.
 - `ccb3e1e`: Balanced crash fix (an infinite corridor width was printed with
   `Int`), `SearchCounter`, probe options, `Scripts/speed-matrix.sh`,
   `Scripts/compare-receipts.py`. `300d2c3`: honest app log. `22fccc8`: endpoint
@@ -883,6 +884,174 @@ resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
 - GPX `<wpt>` export for saved fuel / distance-break pins.
 - §2 sentence “generated fuel points remain bound to mapped stations rather
   than freely draggable locations” — delete or rewrite when Stage 2 ships.
+- Overnight 15–16 Sep (do not fix inline): north-NB Dirt wander 50 and 100 are
+  the same ride (edge hash `4a4d525e1c5c`). Cape Breton and Yarmouth do differ.
+- Overnight 15–16 Sep: contract Dirt is still 57–66%, not 70–80%. Yarmouth is
+  the weakest (57.1%). Clean on all three corridors is 0% dirt, so a paved
+  spine exists; the connected legal dirt is what is missing, not a paved-only
+  search. Profile candidate + away×1 did not reach 70% on any of the three.
+- Overnight 15–16 Sep: the rule-3 shape checker reported `shape:0->0` on every
+  Dirt/Balanced contract ride. It is unproven on a real loop / out-and-back / W.
+- Overnight 15–16 Sep: staged Gaspé (Porters Lake → 48.922934,−64.273363) is
+  1,281 km / 69.3% dirt / 16.8 s / 308 MB. Memory and dirt-vs-68% met; 8 s
+  missed. Stage `nb+qc` spends ~10 s indexing all of Québec. Need a subgraph
+  or a cheaper index, not another corridor tweak. Staged ride is ~25 km longer
+  than the old single 3-pack search (1,256 km) because the handover is the
+  nb–qc seam closest to the pin, not a globally optimal split.
+- `debugBuildUsesIsolatedDevelopmentBackends` still expects fabric-01 against
+  the app’s fabric-02. Pre-existing; left unstaged.
+- `Dirt/Features/Groups/GroupsSheet.swift` and `Dirt/Routing/RoutingModels.swift`
+  remain dirty and must not be staged with routing work.
+
+### Overnight report — 16 Sep 2026
+
+Probe-only overnight on `cursor/on-device-routing-speed-37c5`. No phone tests.
+Fuel off. Contract: Porters Lake → Cape Breton (−60.477673 46.931127), →
+Yarmouth (−66.09856 43.84097), → north NB (ns,nb −67.02568 47.31730), each
+Dirt / Balanced / Clean. Style targets 100 / 50 / 0. §5 was not edited;
+internal staging does not add waypoints (rule 7). Engine tests passed before
+every commit. `GroupsSheet.swift` and `RoutingModels.swift` were never staged.
+
+#### STEP 1 — finish distance-break removal — `c457e92`
+
+What changed: long legs stay one rider-to-rider search. No D pins. Routes
+paint from real surfaces (brown/black). Card dirt matches logged dirt %.
+12 non-fuel matrix cases IDENTICAL to the then-baseline (`step1-matrix`).
+
+| Route | Style | km | dirt % | target | s | peak MB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Cape Breton | Dirt | 603.9 | 59.7 | 100 | 2.35 | 79 |
+| Cape Breton | Balanced | 563.7 | 50.9 | 50 | 1.77 | 79 |
+| Cape Breton | Clean | 536.2 | 0 | 0 | 0.64 | 74 |
+| Yarmouth | Dirt | 581.9 | 53.8 | 100 | 1.18 | 85 |
+| Yarmouth | Balanced | 514.8 | 41.1 | 50 | 2.73 | 86 |
+| Yarmouth | Clean | 457.7 | 0 | 0 | 0.69 | 81 |
+| north NB | Dirt | 764.1 | 64.3 | 100 | 3.67 | 165 |
+| north NB | Balanced | 713.7 | 55.4 | 50 | 3.39 | 140 |
+| north NB | Clean | 739.3 | 0 | 0 | 1.56 | 137 |
+
+Unfinished: none for this step.
+
+#### STEP 2 — wander vs road progress — `782914f`
+
+What changed: corridor width now uses the straight-line span; extra and
+backward allowances are metres of road remaining toward the next waypoint,
+scaled by wander. Dirt noPath retries once with the progress gate relaxed.
+Default-wander contract (below) kept Cape Breton Dirt/Clean; Yarmouth and
+north-NB Balanced moved.
+
+Wander 0 / 50 / 100 on Dirt (must be different rides):
+
+| Route | wander 0 km / dirt % | 50 | 100 |
+| --- | --- | --- | --- |
+| Cape Breton | 577.5 / 58.3 | 602.7 / 59.6 | 603.9 / 59.7 |
+| Yarmouth | 510.8 / 48.9 | 519.0 / 50.6 | 581.9 / 53.8 |
+| north NB | 750.0 / 63.6 | 764.1 / 64.3 | 764.1 / 64.3 |
+
+Cape Breton and Yarmouth hashes differ at all three ticks. North NB 50 = 100
+(hash `4a4d525e1c5c`).
+
+| Route | Style | km | dirt % | target | s | peak MB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Cape Breton | Dirt | 603.9 | 59.7 | 100 | 1.65 | 101 |
+| Cape Breton | Balanced | 563.7 | 50.9 | 50 | 1.86 | 104 |
+| Cape Breton | Clean | 536.2 | 0 | 0 | 0.62 | 74 |
+| Yarmouth | Dirt | 581.9 | 53.8 | 100 | 1.60 | 106 |
+| Yarmouth | Balanced | 546.4 | 47.9 | 50 | 1.78 | 107 |
+| Yarmouth | Clean | 457.7 | 0 | 0 | 0.62 | 81 |
+| north NB | Dirt | 764.1 | 64.3 | 100 | 2.55 | 163 |
+| north NB | Balanced | 719.3 | 55.7 | 50 | 3.14 | 166 |
+| north NB | Clean | 739.3 | 0 | 0 | 1.50 | 136 |
+
+Unfinished: north-NB wander saturates by 50. Listed in Backlog.
+
+#### STEP 3 — Dirt toward 70–80% — `b2ceb77`
+
+What changed: `dirtPavementAwayAtFullWander = 1.0`; if Dirt is under 70%, run
+a `.profile` candidate and keep the dirtier legal ride. Balanced resource
+recovery restored to the 40–50% band only. Balanced and Clean unchanged vs
+STEP 2.
+
+| Route | Dirt before (STEP 2) | Dirt after | Balanced | Clean |
+| --- | --- | --- | --- | --- |
+| Cape Breton | 603.9 km / 59.7% | 667.8 km / 65.6% | 563.7 / 50.9 | 536.2 / 0 |
+| Yarmouth | 581.9 km / 53.8% | 620.8 km / 57.1% | 546.4 / 47.9 | 457.7 / 0 |
+| north NB | 764.1 km / 64.3% | 781.7 km / 65.5% | 719.3 / 55.7 | 739.3 / 0 |
+
+None of the three reach 70%. Yarmouth cannot on this network: Clean is a 458 km
+0% paved spine, and Dirt at full wander plus the profile extra only reaches
+57.1%. Cape Breton 65.6% and north NB 65.5% are the dirt the connected legal
+graph actually offers on those pins; Clean 0% on both shows pavement was
+available and rejected.
+
+| Route | Style | km | dirt % | target | s | peak MB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Cape Breton | Dirt | 667.8 | 65.6 | 100 | 2.46 | 103 |
+| Cape Breton | Balanced | 563.7 | 50.9 | 50 | 1.87 | 104 |
+| Cape Breton | Clean | 536.2 | 0 | 0 | 0.60 | 74 |
+| Yarmouth | Dirt | 620.8 | 57.1 | 100 | 1.99 | 108 |
+| Yarmouth | Balanced | 546.4 | 47.9 | 50 | 1.81 | 107 |
+| Yarmouth | Clean | 457.7 | 0 | 0 | 0.60 | 81 |
+| north NB | Dirt | 781.7 | 65.5 | 100 | 3.33 | 167 |
+| north NB | Balanced | 719.3 | 55.7 | 50 | 2.89 | 166 |
+| north NB | Clean | 739.3 | 0 | 0 | 1.47 | 137 |
+
+Unfinished: 70% Dirt on these three OD pairs. Evidence above; Backlog.
+
+#### STEP 4 — leg shape — `3f12746`
+
+What changed: `RouteQuality.shapeFaults` flags reused edge IDs (≥2 runs >80 m)
+and a W in the first/last 2.5 km of a pin. One avoid-edge re-search when a
+fault is found. Probe summary `shape:before->after`.
+
+Caught on the nine contract rides: **0 before, 0 after** (every Dirt/Balanced
+`shape:0->0`; Clean has no shape field). Nothing to repair on these pins.
+
+| Route | Style | km | dirt % | target | s | peak MB | shape |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Cape Breton | Dirt | 667.8 | 65.6 | 100 | 3.23 | 102 | 0→0 |
+| Cape Breton | Balanced | 563.7 | 50.9 | 50 | 2.05 | 105 | 0→0 |
+| Cape Breton | Clean | 536.2 | 0 | 0 | 0.63 | 76 | — |
+| Yarmouth | Dirt | 620.8 | 57.1 | 100 | 2.02 | 107 | 0→0 |
+| Yarmouth | Balanced | 546.4 | 47.9 | 50 | 1.75 | 107 | 0→0 |
+| Yarmouth | Clean | 457.7 | 0 | 0 | 0.63 | 81 | — |
+| north NB | Dirt | 781.7 | 65.5 | 100 | 4.29 | 167 | 0→0 |
+| north NB | Balanced | 719.3 | 55.7 | 50 | 3.13 | 166 | 0→0 |
+| north NB | Clean | 739.3 | 0 | 0 | 1.53 | 137 | — |
+
+Unfinished: checker unproven on a real loop. Backlog.
+
+#### STEP 5 — long-route internal stages — `57d57be`
+
+What changed: `StagedRouter` runs only when ≥3 packs and geodesic >400 km.
+Overlapping two-pack windows (ns+nb, then nb+qc), handover at the seam
+closest to the destination, stitch into one rider leg. Compass
+`maxRemaining` is capped per hop. 1–2 pack searches are unchanged.
+
+Porters Lake → 48.922934,−64.273363 (Dirt, seed 1, zoom 12.5, ns,nb,qc):
+1,280.7 km, 69.3% dirt (within 3 of 68%), **16.8 s**, **308 MB**. Stages
+`ns+nb` 3.8 s then `nb+qc` 10.1 s. No D pins. Dirt % met; 400 MB met; 8 s
+not met (Québec `IndexedGraph` of the whole pack).
+
+Nine-route contract vs STEP 4: all nine **IDENTICAL** (km, dirt %, edge hash,
+searches, pops). 12-case matrix 1–2 pack routes do not enter staging. Clean
+matrix cases remain IDENTICAL to `step2-matrix`; Dirt/Balanced matrix cases
+already differed from that snapshot after STEPs 2–4.
+
+| Route | Style | km | dirt % | target | s | peak MB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Cape Breton | Dirt | 667.8 | 65.6 | 100 | 3.32 | 102 |
+| Cape Breton | Balanced | 563.7 | 50.9 | 50 | 1.85 | 104 |
+| Cape Breton | Clean | 536.2 | 0 | 0 | 0.60 | 74 |
+| Yarmouth | Dirt | 620.8 | 57.1 | 100 | 2.05 | 108 |
+| Yarmouth | Balanced | 546.4 | 47.9 | 50 | 1.68 | 107 |
+| Yarmouth | Clean | 457.7 | 0 | 0 | 0.61 | 81 |
+| north NB | Dirt | 781.7 | 65.5 | 100 | 4.36 | 167 |
+| north NB | Balanced | 719.3 | 55.7 | 50 | 2.98 | 165 |
+| north NB | Clean | 739.3 | 0 | 0 | 1.50 | 137 |
+
+Unfinished: Gaspé 16.8 s vs 8 s. Stopped rather than extract a Québec
+subgraph overnight. Backlog.
 
 ## 9. Existing V4 data format reference
 
