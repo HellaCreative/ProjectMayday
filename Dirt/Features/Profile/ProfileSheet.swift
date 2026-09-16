@@ -22,7 +22,6 @@ struct ProfileSheet: View {
     @State private var showRouteDebugShare = false
     @AppStorage(FuelRangePrefs.key) private var fuelRangeKm = 0.0
     @AppStorage(FuelRangePrefs.reservePercentKey) private var fuelReservePercent = FuelRangePrefs.suggestedReservePercent
-    @AppStorage(FuelRangePrefs.automaticPlanningKey) private var automaticFuelPlanning = true
     @AppStorage(KeepAwakePrefs.key) private var keepAwakeWhileUsing = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var profileFuelDebounce: Task<Void, Never>?
@@ -338,14 +337,9 @@ struct ProfileSheet: View {
     private var fuelRangeCard: some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
             DirtSectionLabel(title: "Fuel range")
-            Toggle("Automatic fuel planning", isOn: $automaticFuelPlanning)
-                .font(DirtType.rowTitle)
-                .tint(DirtTheme.orange)
-            Text(automaticFuelPlanning
-                ? "Dirt adds only the fuel stops needed to finish safely."
-                : "Off — Dirt will not add fuel stops or check whether this route has enough fuel.")
+            Text("Dirt does not check your route for fuel or add fuel stops. Ride on your own fuel judgement — top up when you're not sure you'll make it.")
                 .font(DirtType.helper)
-                .foregroundStyle(automaticFuelPlanning ? DirtTheme.muted : DirtTheme.danger)
+                .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: DirtSpace.inner) {
                 Text("\(Int(displayedFuelRangeKm)) km")
@@ -403,13 +397,6 @@ struct ProfileSheet: View {
         .onChange(of: fuelReservePercent) { _, newValue in
             FuelRangePrefs.reservePercent = newValue
             profileFuelDebounce?.cancel()
-            app.planner.reapplyFuelAssist(rangeKm: displayedFuelRangeKm)
-        }
-        .onChange(of: automaticFuelPlanning) { _, enabled in
-            FuelRangePrefs.automaticPlanningEnabled = enabled
-            RoutingDebugLog.shared.event(
-                "profile automatic fuel planning=\(enabled ? 1 : 0) recalc=1"
-            )
             app.planner.reapplyFuelAssist(rangeKm: displayedFuelRangeKm)
         }
     }
