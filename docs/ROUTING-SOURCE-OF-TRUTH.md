@@ -923,7 +923,12 @@ From Here is the two-`.rider` case of the same list (origin, destination).
   inside `earlyOpeningWindowMeters` (12 km) that increase geodesic distance to
   the pin pay `earlyOpeningAwayCost` — road-compass `approachAway` alone missed
   U-shaped black opening dips that keep remaining-to-B flat; dirt arcs stay
-  exempt so dipping for dirt remains intentional. Post-search
+  exempt so dipping for dirt remains intentional. In that same opening window,
+  Dirt also suspends arterial/trunk `avoidMajorHighways` multipliers (motorway
+  stays taxed) and prices profile-mode arterial/trunk like collector — otherwise
+  the ×8 arterial flee turns Trunk/Hwy 7 into a paved collector U with no dirt
+  payoff (Porters Lake). After meaningful dirt, full highway avoidance returns.
+  Post-search
   `shortDirtExcursions` (useful-run floor) and `RouteQuality.prefersDirt`
   (scrap metres / leading paved before percent) reinforce the scrap rule.
   Prior-edge `backtrackFactor` still applies across hops (FuelPlanner unions

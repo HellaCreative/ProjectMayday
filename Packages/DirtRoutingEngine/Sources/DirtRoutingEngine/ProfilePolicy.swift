@@ -132,7 +132,9 @@ public struct ProfilePolicy: Sendable {
     func step(pack: any RoadGraph, edge: Int, meters: Double, objective: SearchObjective,
               from: Coordinate, to: Coordinate, start: Coordinate, end: Coordinate,
               startOnHighway: Bool, endOnHighway: Bool, penalizedDirt: Bool = false,
-              previousTier: String? = nil, applyGeodesicPull: Bool = true) -> Double {
+              previousTier: String? = nil, applyGeodesicPull: Bool = true,
+              riddenMetersBeforeArc: Double = .infinity,
+              achievedMeaningfulDirt: Bool = true) -> Double {
         if objective == .distance { return meters / 1000 }
         if pack.structure(edge) == "ferry" {
             let seconds = pack.crossingTime(edge)
@@ -179,15 +181,37 @@ public struct ProfilePolicy: Sendable {
             if surface == 4 && ["freeway","arterial","ramp","collector","local","service"].contains(coarse) {
                 surfaceCost = weights[0]
             }
-            cost = km * surfaceCost * (style == .dirt ? dirtRoads : balancedRoads)[coarse,default: 1]
+            var roadFactor = (style == .dirt ? dirtRoads : balancedRoads)[coarse,default: 1]
+            // Same early-opening relief as the ×8 arterial table below: do not
+            // make Trunk/Hwy class roads 4–9× a paved collector before any dirt.
+            if style == .dirt,
+               !achievedMeaningfulDirt,
+               riddenMetersBeforeArc < (earlyOpeningWindowMeters.isFinite ? max(0, earlyOpeningWindowMeters) : 12_000),
+               coarse == "arterial" || coarse == "trunk" {
+                roadFactor = dirtRoads["collector",default: 2.4]
+            }
+            cost = km * surfaceCost * roadFactor
         }
         let fromStart = to.distance(to: start), toEnd = to.distance(to: end)
         let pinned = (startOnHighway && fromStart < 6000) || (endOnHighway && toEnd < 6000)
         // Section 2: avoid highways in every style except the pin-join exemption.
         // JS applies the leaf 40/18/8 table only to Clean; keeping it for Dirt
         // and Balanced is an intentional product correction, not parity.
+        // Early opening exception: before the first meaningful dirt run, arterial
+        // and trunk multipliers are suspended so Dirt does not flee Trunk/Hwy 7
+        // onto a paved collector U with no dirt payoff (Porters Lake). Motorway
+        // stays expensive. After meaningful dirt, full avoidance returns.
         if avoidMajorHighways && !pinned && style != .cleanest {
-            cost *= ["motorway":40.0,"trunk":18.0,"arterial":8.0][tier,default: 1]
+            let openingRelief = style == .dirt
+                && !achievedMeaningfulDirt
+                && riddenMetersBeforeArc < (earlyOpeningWindowMeters.isFinite ? max(0, earlyOpeningWindowMeters) : 12_000)
+            let factor: Double
+            if openingRelief {
+                factor = ["motorway":40.0][tier,default: 1]
+            } else {
+                factor = ["motorway":40.0,"trunk":18.0,"arterial":8.0][tier,default: 1]
+            }
+            cost *= factor
         }
         if style == .cleanest && avoidMajorHighways && !pinned, let previousTier {
             let fromHighway = previousTier == "motorway" || previousTier == "trunk"
@@ -345,14 +369,16 @@ public struct ProfilePolicy: Sendable {
         let window = earlyOpeningWindowMeters.isFinite ? max(0, earlyOpeningWindowMeters) : 12_000
         guard riddenMetersBeforeArc < window else { return 0 }
         let away = to.distance(to: end) - from.distance(to: end)
-        guard away > 50 else { return 0 }
+        // Any geodesic regression counts. The prior >50 m floor skipped most
+        // short pack edges on a multi-km U, so the tax barely fired.
+        guard away > 0 else { return 0 }
         let kmAway = away / 1000
         // Soften toward the window edge so the tax does not cliff mid-opening.
         let depth = 1 - riddenMetersBeforeArc / max(1, window)
         switch objective {
         case .pavement:
-            // ~55/km at the start — enough that a multi-km paved U loses to
-            // hanging the on-progress turn; short block jogs stay affordable.
+            // Secondary to opening highway relief: still prices paved away when
+            // both choices are local/collector class.
             return kmAway * 55 * depth
         case .profile, .balancedResource:
             return kmAway * 3.5 * depth

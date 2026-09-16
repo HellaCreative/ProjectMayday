@@ -251,6 +251,16 @@ struct PolicyTests {
             achievedMeaningfulDirt: false,
             onDirt: false,
             objective: .pavement) == 0)
+        // Short edges with small away still tax — the old >50 m floor skipped them.
+        let nudge = Coordinate(longitude: -63.34, latitude: 44.7598)
+        let small = dirt.earlyOpeningAwayCost(
+            from: start, to: nudge, end: end,
+            riddenMetersBeforeArc: 0,
+            achievedMeaningfulDirt: false,
+            onDirt: false,
+            objective: .pavement)
+        #expect(small > 0)
+        #expect(small < 5)
         let balanced = ProfilePolicy(style: .balanced)
         #expect(balanced.earlyOpeningAwayCost(
             from: start, to: south, end: end,
@@ -258,6 +268,34 @@ struct PolicyTests {
             achievedMeaningfulDirt: false,
             onDirt: false,
             objective: .profile) == 0)
+    }
+
+    @Test func earlyOpeningSuspendsArterialFleeBeforeDirt() {
+        let dirt = ProfilePolicy(style: .dirt)
+        let pack = Line(
+            nodes: [.init(longitude: 0, latitude: 0), .init(longitude: 0.01, latitude: 0)],
+            edges: [(0, 1)], surfaces: ["asphalt"], roads: ["primary"])
+        let start = Coordinate(longitude: 0, latitude: 0)
+        let end = Coordinate(longitude: 0.2, latitude: 0.15)
+        let opening = dirt.step(pack: pack, edge: 0, meters: 1_000, objective: .pavement,
+                                from: start, to: pack.nodes[1], start: start, end: end,
+                                startOnHighway: false, endOnHighway: false,
+                                riddenMetersBeforeArc: 500, achievedMeaningfulDirt: false)
+        let afterDirt = dirt.step(pack: pack, edge: 0, meters: 1_000, objective: .pavement,
+                                  from: start, to: pack.nodes[1], start: start, end: end,
+                                  startOnHighway: false, endOnHighway: false,
+                                  riddenMetersBeforeArc: 500, achievedMeaningfulDirt: true)
+        let collector = Line(
+            nodes: [.init(longitude: 0, latitude: 0), .init(longitude: 0.01, latitude: 0)],
+            edges: [(0, 1)], surfaces: ["asphalt"], roads: ["secondary"])
+        let collectorCost = dirt.step(pack: collector, edge: 0, meters: 1_000, objective: .pavement,
+                                      from: start, to: collector.nodes[1], start: start, end: end,
+                                      startOnHighway: false, endOnHighway: false,
+                                      riddenMetersBeforeArc: 500, achievedMeaningfulDirt: false)
+        // Before meaningful dirt, primary matches collector — no ×8 flee.
+        #expect(abs(opening - collectorCost) < 0.01)
+        // After meaningful dirt, arterial avoidance returns.
+        #expect(afterDirt > opening * 5)
     }
 
     @Test func prefersDirtRejectsScrapInflatedCandidates() {

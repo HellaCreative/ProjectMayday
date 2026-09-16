@@ -81,7 +81,7 @@ enum CoachStep: Int, CaseIterable {
             case .crew:
                 "Create a group to get a code, or join with a friend's — then you'll see each other on the map. This is the one part that needs an account."
             case .account:
-                "Sign in with Apple and see DIRT PRO options in Profile. Voice cues and keep-awake live here too."
+                "Sign in with Apple and see DIRT PRO in Profile. Keep-awake and ride contribution live here too."
         }
     }
 

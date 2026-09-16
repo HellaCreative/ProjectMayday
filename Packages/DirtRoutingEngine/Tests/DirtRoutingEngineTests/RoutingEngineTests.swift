@@ -151,4 +151,48 @@ struct RoutingEngineTests {
                             geometryMeters: line.distance(1),forward: true)
         #expect(try EndpointReachability(graph: graph,budget: .init()).mayConnect(start: start,end: end,budget: .init()))
     }
+
+    @Test func dirtOpeningPrefersArterialProgressOverPavedCollectorU() throws {
+        // Porters Lake shape: from a local junction, arterial goes toward B;
+        // a longer paved collector dips south then rejoins. No dirt on either
+        // opening path — Dirt must hang the arterial instead of fleeing ×8.
+        let pack = PolicyTests.Line(
+            nodes: [
+                .init(longitude: 0, latitude: 0),          // 0 start
+                .init(longitude: 0.02, latitude: 0.01),    // 1 arterial mid
+                .init(longitude: 0.04, latitude: 0.02),    // 2 dest approach
+                .init(longitude: 0.01, latitude: -0.025),  // 3 south dip
+                .init(longitude: 0.03, latitude: -0.02),   // 4 south return
+            ],
+            edges: [
+                (0, 1), // arterial toward pin
+                (1, 2), // arterial finish
+                (0, 3), // collector south
+                (3, 4), // collector along bottom
+                (4, 2), // collector rejoin
+            ],
+            surfaces: Array(repeating: "asphalt", count: 5),
+            roads: ["primary", "primary", "secondary", "secondary", "secondary"]
+        )
+        let graph = try IndexedGraph(pack)
+        let start = RoadMatch(edge: 0, coordinate: pack.nodes[0], distanceMeters: 0, alongMeters: 0,
+                              geometryMeters: pack.distance(0), forward: true)
+        let end = RoadMatch(edge: 1, coordinate: pack.nodes[2], distanceMeters: 0,
+                            alongMeters: pack.distance(1), geometryMeters: pack.distance(1), forward: true)
+        let compass = try RoadCompass.toward(end: end, pack: graph, budget: .init())
+        var options = SearchOptions()
+        options.objective = .pavement
+        options.corridorMeters = .infinity
+        options.roadRemaining = compass.remaining
+        let route = try PathSearch(pack: graph).search(
+            start: start, end: end, policy: .init(style: .dirt),
+            access: .init(), options: options, budget: .init(seconds: 20))
+        let ids = Set(route.segments.map(\.edgeID))
+        #expect(ids.contains("line-0"))
+        #expect(ids.contains("line-1"))
+        #expect(!ids.contains("line-2"))
+        #expect(!ids.contains("line-3"))
+        let south = route.geometry.map { (pack.nodes[0].latitude - $0.latitude) * 111_320 }.max() ?? 0
+        #expect(south < 500)
+    }
 }

@@ -565,7 +565,9 @@ public struct PathSearch: Sendable {
                 var step = resource ? arc.meters : policy.step(pack: pack,edge: e,meters: arc.meters,objective: options.objective,
                     from: fromPoint,to: toPoint,start: start.coordinate,end: end.coordinate,startOnHighway: startHighway,
                     endOnHighway: endHighway,penalizedDirt: penalizedDirt,previousTier: previousTier,
-                    applyGeodesicPull: compass == nil)
+                    applyGeodesicPull: compass == nil,
+                    riddenMetersBeforeArc: current.meters,
+                    achievedMeaningfulDirt: current.achievedMeaningfulDirt)
                 step += clawback
                 if !resource {
                     // Geodesic early-leg away, even when road compass is active —
