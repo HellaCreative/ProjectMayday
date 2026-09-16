@@ -746,6 +746,7 @@ struct RootView: View {
             DockSheetPanel(
                 heightFraction: 1,
                 landscapeDockLeading: landscapeDockLeading,
+                material: .thinMaterial,
                 onDismiss: dismissDockSheet
             ) {
                 LayersSheet(onClose: dismissDockSheet)

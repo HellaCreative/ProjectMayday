@@ -76,6 +76,8 @@ struct DockSheetPanel<Content: View>: View {
     var contentChromeHeight: CGFloat = 56
     /// When set, drawer is a full-height side panel that extends under the vertical dock.
     var landscapeDockLeading: Bool? = nil
+    /// Layers uses thin glass so the map reads through; Groups/Profile keep the default.
+    var material: Material = DirtTheme.sheetMaterial
     var onDismiss: () -> Void
     @ViewBuilder var content: () -> Content
 
@@ -125,7 +127,7 @@ struct DockSheetPanel<Content: View>: View {
         // past the home indicator, so no map shows under an open sheet.
         .background(alignment: .top) {
             portraitShape
-                .fill(DirtTheme.sheetMaterial)
+                .fill(material)
                 .overlay(portraitShape.stroke(DirtTheme.hairline, lineWidth: 1))
                 .shadow(color: .black.opacity(0.18), radius: 16, y: -4)
                 .ignoresSafeArea(edges: .bottom)
@@ -174,7 +176,7 @@ struct DockSheetPanel<Content: View>: View {
         .padding(.trailing, dockLeading ? 14 : dockClearance + 10)
         .frame(width: width)
         .frame(maxHeight: .infinity)
-        .background(DirtTheme.sheetMaterial, in: sideShape(dockLeading: dockLeading))
+        .background(material, in: sideShape(dockLeading: dockLeading))
         .overlay(sideShape(dockLeading: dockLeading).stroke(DirtTheme.hairline, lineWidth: 1))
         .clipShape(sideShape(dockLeading: dockLeading))
         .shadow(

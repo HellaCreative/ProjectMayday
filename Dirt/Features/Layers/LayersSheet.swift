@@ -36,7 +36,14 @@ struct LayersSheet: View {
                                 .font(DirtType.rowTitle)
                                 .frame(maxWidth: .infinity, minHeight: 44)
                                 .foregroundStyle(selectedStyle == style ? DirtTheme.action : DirtTheme.ink)
-                                .background(selectedStyle == style ? Color.white.opacity(0.75) : .clear, in: RoundedRectangle(cornerRadius: 10))
+                                .background(
+                                    LayersGlass.groupingFill,
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                                )
                         }.buttonStyle(.plain)
                     }
                 }
@@ -76,7 +83,7 @@ struct LayersSheet: View {
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
@@ -125,7 +132,7 @@ struct LayersSheet: View {
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
@@ -171,4 +178,9 @@ private enum RiderServiceDot {
     static let camp = Color(dirtHex: 0x2F9E44)
     static let lodging = Color(dirtHex: 0x8A5A2B)
     static let liquor = Color(dirtHex: 0x8E44C9)
+}
+
+/// Opaque islands on Layers’ thin glass. Local to this sheet — not a DirtTheme token change.
+private enum LayersGlass {
+    static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.86)
 }
