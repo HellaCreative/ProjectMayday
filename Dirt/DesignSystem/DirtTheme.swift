@@ -1,6 +1,17 @@
 import SwiftUI
 import UIKit
 
+extension UIColor {
+    convenience init(dirtHex hex: UInt32, alpha: CGFloat = 1) {
+        self.init(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha
+        )
+    }
+}
+
 extension Color {
     init(dirtHex hex: UInt32, opacity: Double = 1) {
         self.init(
@@ -81,8 +92,33 @@ enum DirtTheme {
     static let navGreen = Color(dirtHex: 0x147A56)
     static let exportGray = Color(dirtHex: 0x616872)
     static let danger = Color(dirtHex: 0xD83B42)
-    /// Layers legend / basemap paved overlay (not selected-route paint).
+    /// Basemap paved overlay (not selected-route paint).
     static let pavedLine = Color(dirtHex: 0x303A45)
+
+    /// Rider-service map-dot colors. Layers glyphs use the same tokens as the map.
+    /// Fuel is the map-pump orange, not brand `#FF8000`.
+    static let poiFuelHex: UInt32 = 0xE8730C
+    static let poiCampgroundHex: UInt32 = 0x2F9E44
+    static let poiLodgingHex: UInt32 = 0x8A5A2B
+    static let poiLiquorHex: UInt32 = 0x8E44C9
+    static let poiFuel = Color(dirtHex: poiFuelHex)
+    static let poiCampground = Color(dirtHex: poiCampgroundHex)
+    static let poiLodging = Color(dirtHex: poiLodgingHex)
+    static let poiLiquor = Color(dirtHex: poiLiquorHex)
+
+    static func poiColor(for category: String) -> Color {
+        Color(uiColor: poiUIColor(for: category))
+    }
+
+    static func poiUIColor(for category: String) -> UIColor {
+        switch category {
+        case "fuel": return UIColor(dirtHex: poiFuelHex)
+        case "campground": return UIColor(dirtHex: poiCampgroundHex)
+        case "lodging": return UIColor(dirtHex: poiLodgingHex)
+        case "liquor": return UIColor(dirtHex: poiLiquorHex)
+        default: return UIColor(dirtHex: 0x616872)
+        }
+    }
 
     // Selected-route surface families. Rich, deep colors stay legible against
     // the white route casing; purple remains an independent access warning.

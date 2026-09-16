@@ -111,10 +111,10 @@ struct MapLibreMapView: UIViewRepresentable {
         static let fuelClusterCircleID = "dirt-poi-fuel-cluster"
         static let fuelClusterCountID = "dirt-poi-fuel-cluster-count"
         static let categories: [(id: String, color: UIColor)] = [
-            ("fuel",       UIColor(red: 0.910, green: 0.451, blue: 0.047, alpha: 1)),
-            ("campground", UIColor(red: 0.184, green: 0.620, blue: 0.267, alpha: 1)),
-            ("lodging",    UIColor(red: 0.541, green: 0.353, blue: 0.169, alpha: 1)),
-            ("liquor",     UIColor(red: 0.557, green: 0.267, blue: 0.788, alpha: 1))
+            ("fuel",       DirtTheme.poiUIColor(for: "fuel")),
+            ("campground", DirtTheme.poiUIColor(for: "campground")),
+            ("lodging",    DirtTheme.poiUIColor(for: "lodging")),
+            ("liquor",     DirtTheme.poiUIColor(for: "liquor"))
         ]
 
         static func layerID(_ category: String) -> String { "dirt-poi-\(category)" }
