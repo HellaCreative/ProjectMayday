@@ -22,7 +22,7 @@ Native chrome tokens and interaction patterns, aligned to the Figma screens page
 | `pavedLine` | `#303a45` | Layers/basemap paved overlay (not selected route) |
 | `routeAccess` / `routeGravel` / `routeTrack` / `routePaved` / `routeConnector` | `#0a66c2` / `#5d6874` / `#7c3aed` / `#ffb000` / `#d22730` | Selected-route map paint |
 
-Layers legend colours (access/gravel/branches/bridge/tunnel/restricted) are inlined in `LayersSheet`.
+Rider-service map-dot colours live on `DirtTheme` (`poiFuel` / `poiCampground` / `poiLodging` / `poiLiquor`) and are shared by Layers glyphs and map POI circles. There is no route-paint legend.
 
 ---
 
