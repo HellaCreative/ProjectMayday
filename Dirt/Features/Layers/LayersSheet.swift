@@ -6,7 +6,6 @@ import SwiftUI
 struct LayersSheet: View {
     var onClose: (() -> Void)? = nil
     @Environment(AppEnvironment.self) private var app
-    @State private var offlinePacksOpen = false
     @State private var busyPacks: Set<String> = []
     @State private var packError: String?
 
@@ -29,7 +28,7 @@ struct LayersSheet: View {
 
     private var layersList: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DirtSpace.group) {
                 HStack(spacing: 8) {
                     ForEach(MapStyleID.allCases) { style in
                         Button { selectStyle(style) } label: {
@@ -37,43 +36,20 @@ struct LayersSheet: View {
                                 .font(DirtType.rowTitle)
                                 .frame(maxWidth: .infinity, minHeight: 44)
                                 .foregroundStyle(selectedStyle == style ? DirtTheme.action : DirtTheme.ink)
-                                .background(selectedStyle == style ? Color.white.opacity(0.75) : .clear, in: RoundedRectangle(cornerRadius: 10))
+                                .background(
+                                    LayersGlass.groupingFill,
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                                )
                         }.buttonStyle(.plain)
                     }
                 }
-                Text("Rider services").font(DirtType.rowTitle).foregroundStyle(DirtTheme.muted)
-                VStack(spacing: 0) {
-                    serviceToggle("Fuel", icon: "fuelpump", isOn: $showFuel).frame(minHeight: 50)
-                    Divider()
-                    serviceToggle("Campgrounds", icon: "tent", isOn: $showCampgrounds).frame(minHeight: 50)
-                    Divider()
-                    serviceToggle("Lodging", icon: "bed.double", isOn: $showLodging).frame(minHeight: 50)
-                    Divider()
-                    serviceToggle("Liquor", icon: "wineglass", isOn: $showLiquor).frame(minHeight: 50)
-                }.tint(DirtTheme.orange)
-                Text("Downloaded maps").font(DirtType.rowTitle).foregroundStyle(DirtTheme.muted)
-                if app.graphPacks.installedManagementRows.isEmpty {
-                    Text("No maps downloaded yet").font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-                }
-                ForEach(app.graphPacks.installedManagementRows) { row in
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(row.title).font(DirtType.rowTitle)
-                            Text("\(row.revisionLabel) · \(ByteCountFormatter.string(fromByteCount: row.bytes, countStyle: .file))")
-                                .font(.caption).foregroundStyle(DirtTheme.muted)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                        if busyPacks.contains(row.id) || app.graphPacks.managementInFlight.contains(row.id) {
-                            ProgressView()
-                        } else {
-                            if row.revisionState == .stale {
-                                Button("Update") { managePack(row.id, update: true) }.foregroundStyle(DirtTheme.action).frame(minHeight: 44)
-                            }
-                            Button("Delete", role: .destructive) { managePack(row.id, update: false) }.frame(minHeight: 44)
-                        }
-                    }.font(.caption.weight(.semibold)).buttonStyle(.plain)
-                    Divider()
-                }
-                if let packError { Text(packError).font(DirtType.helper).foregroundStyle(DirtTheme.danger) }
+
+                riderServicesCard
+                downloadedMapsCard
             }
             .padding(.horizontal, 20).padding(.bottom, 12)
             .background(GeometryReader { geo in
@@ -85,12 +61,82 @@ struct LayersSheet: View {
         .onChange(of: showCampgrounds) { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLodging)     { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLiquor)      { _, _ in app.mapState.bumpLayerPrefs() }
-        .sheet(isPresented: $offlinePacksOpen) {
-            OfflinePacksSheet(isPresented: $offlinePacksOpen)
-                .environment(app)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+    }
+
+    private var riderServicesCard: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            DirtSectionLabel(title: "Rider services")
+            VStack(spacing: 0) {
+                serviceToggle("Fuel", icon: "fuelpump.fill", color: RiderServiceDot.fuel, isOn: $showFuel)
+                    .frame(minHeight: DirtHit.control)
+                Divider()
+                serviceToggle("Campgrounds", icon: "tent.fill", color: RiderServiceDot.camp, isOn: $showCampgrounds)
+                    .frame(minHeight: DirtHit.control)
+                Divider()
+                serviceToggle("Lodging", icon: "bed.double.fill", color: RiderServiceDot.lodging, isOn: $showLodging)
+                    .frame(minHeight: DirtHit.control)
+                Divider()
+                serviceToggle("Liquor", icon: "wineglass.fill", color: RiderServiceDot.liquor, isOn: $showLiquor)
+                    .frame(minHeight: DirtHit.control)
+            }
+            .tint(DirtTheme.orange)
         }
+        .padding(DirtSpace.row)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+    }
+
+    private var downloadedMapsCard: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            DirtSectionLabel(title: "Downloaded maps")
+            if app.graphPacks.installedManagementRows.isEmpty {
+                Text("No maps downloaded yet")
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, DirtSpace.tight)
+            }
+            ForEach(app.graphPacks.installedManagementRows) { row in
+                HStack(spacing: DirtSpace.tight) {
+                    VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                        Text(row.title).font(DirtType.rowTitle)
+                        Text("\(row.revisionLabel) · \(ByteCountFormatter.string(fromByteCount: row.bytes, countStyle: .file))")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if busyPacks.contains(row.id) || app.graphPacks.managementInFlight.contains(row.id) {
+                        ProgressView()
+                    } else {
+                        if row.revisionState == .stale {
+                            Button("Update") { managePack(row.id, update: true) }
+                                .foregroundStyle(DirtTheme.action)
+                                .frame(minHeight: DirtHit.min)
+                        }
+                        Button("Delete", role: .destructive) { managePack(row.id, update: false) }
+                            .frame(minHeight: DirtHit.min)
+                    }
+                }
+                .font(DirtType.chip)
+                .buttonStyle(.plain)
+            }
+            if let packError {
+                Text(packError)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.danger)
+            }
+        }
+        .padding(DirtSpace.row)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
     }
 
     private func managePack(_ id: String, update: Bool) {
@@ -105,168 +151,14 @@ struct LayersSheet: View {
         }
     }
 
-    private var legendSection: some View {
-        Section {
-            legendRow(
-                color: DirtTheme.routePaved,
-                title: "Paved",
-                detail: "Sealed surface"
-            )
-            legendRow(
-                color: DirtTheme.routeGravel,
-                title: "Gravel",
-                detail: "Gravel, compacted, or generic unpaved"
-            )
-            legendRow(
-                color: DirtTheme.routeLoose,
-                title: "Loose",
-                detail: "Dirt, earth, mud, sand, or natural surface"
-            )
-            legendRow(
-                color: DirtTheme.routeUnknown,
-                title: "Unknown surface",
-                detail: "Surface is not identified in map data"
-            )
-            legendRow(
-                color: DirtTheme.routeAccess,
-                title: "Unknown access",
-                detail: "Purple halo · motorcycle permission unproven"
-            )
-            legendRow(
-                color: DirtTheme.routeFerry,
-                title: "Ferry crossing",
-                detail: "Scheduled transport · verify service before riding",
-                dashed: true
-            )
-        } header: {
-            Text("Route paint")
-        } footer: {
-            Text("Dirt includes gravel, loose, and unknown surface.")
-                .font(DirtType.helper)
-        }
-        .listRowBackground(DirtTheme.rowFill)
-    }
-
-    private var servicesSection: some View {
-        Section("Rider services") {
-            serviceToggle("Fuel", icon: "fuelpump.fill", isOn: $showFuel)
-            serviceToggle("Campgrounds", icon: "tent.fill", isOn: $showCampgrounds)
-            serviceToggle("Lodging", icon: "bed.double.fill", isOn: $showLodging)
-            serviceToggle("Liquor", icon: "wineglass.fill", isOn: $showLiquor)
-        }
-        .listRowBackground(DirtTheme.rowFill)
-        .tint(DirtTheme.orange)
-    }
-
-    private var basemapSection: some View {
-        Section {
-            ForEach(MapStyleID.allCases) { style in
-                basemapRow(style)
-            }
-        } header: {
-            Text("Basemap")
-        } footer: {
-            Text("Looks only — routing still uses dual-sport data.")
-                .font(DirtType.helper)
-        }
-        .listRowBackground(DirtTheme.rowFill)
-    }
-
-    private var offlineRoutingSection: some View {
-        Section("Offline routing") {
-            Button {
-                offlinePacksOpen = true
-            } label: {
-                HStack(spacing: DirtSpace.inner) {
-                    Image(systemName: "square.stack.3d.up.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(DirtTheme.action)
-                        .frame(width: 22)
-                    VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
-                        Text("Downloaded maps")
-                            .font(DirtType.rowTitle)
-                            .fontWeight(.bold)
-                            .foregroundStyle(DirtTheme.ink)
-                        Text(downloadedMapsDetail)
-                            .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.muted)
-                    }
-                    Spacer(minLength: DirtSpace.tight)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(DirtTheme.muted)
-                }
-                .frame(minHeight: DirtHit.min)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .listRowBackground(DirtTheme.rowFill)
-    }
-
-    private var downloadedMapsDetail: String {
-        let count = app.graphPacks.installedManagementRows.count
-        if count == 0 { return "Installed automatically when a route needs them" }
-        return count == 1 ? "1 region on this phone" : "\(count) regions on this phone"
-    }
-
-    private func basemapRow(_ style: MapStyleID) -> some View {
-        Button {
-            selectStyle(style)
-        } label: {
-            HStack(alignment: .center, spacing: DirtSpace.inner) {
-                VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
-                    Text(style.title)
-                        .font(DirtType.rowTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DirtTheme.ink)
-                    Text(style.shortSubtitle)
-                        .font(DirtType.helper)
-                        .foregroundStyle(DirtTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: DirtSpace.tight)
-                if selectedStyle == style {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(DirtTheme.action)
-                        .accessibilityLabel("Selected")
-                }
-            }
-            .frame(minHeight: DirtHit.min)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func legendRow(
-        color: Color,
-        title: String,
-        detail: String,
-        dashed: Bool = false
-    ) -> some View {
-        HStack(spacing: DirtSpace.inner) {
-            RoutePaintLegendSwatch(color: color, dashed: dashed)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
-                Text(title)
-                    .font(DirtType.rowTitle)
-                    .foregroundStyle(DirtTheme.ink)
-                Text(detail)
-                    .font(DirtType.helper)
-                    .foregroundStyle(DirtTheme.muted)
-            }
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private func serviceToggle(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
+    private func serviceToggle(_ title: String, icon: String, color: Color, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             HStack(spacing: DirtSpace.inner) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(DirtTheme.ink)
+                    .foregroundStyle(color)
                     .frame(width: 22)
+                    .accessibilityHidden(true)
                 Text(title)
                     .font(DirtType.rowTitle)
             }
@@ -280,39 +172,15 @@ struct LayersSheet: View {
     }
 }
 
-private struct RoutePaintLegendSwatch: View {
-    let color: Color
-    var dashed = false
-
-    var body: some View {
-        ZStack {
-            Capsule()
-                .fill(Color.white.opacity(0.92))
-                .frame(width: 32, height: 10)
-            if dashed {
-                HStack(spacing: 3) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        Capsule()
-                            .fill(color)
-                            .frame(width: 8, height: 6)
-                    }
-                }
-            } else {
-                Capsule()
-                    .fill(color)
-                    .frame(width: 30, height: 6)
-            }
-        }
-        .frame(width: 32, height: 10)
-    }
+/// Map-dot colors from `MapLibreMapView.POILayer.categories` — icon matches the map, not brand orange.
+private enum RiderServiceDot {
+    static let fuel = Color(dirtHex: 0xE8730C)
+    static let camp = Color(dirtHex: 0x2F9E44)
+    static let lodging = Color(dirtHex: 0x8A5A2B)
+    static let liquor = Color(dirtHex: 0x8E44C9)
 }
 
-private extension MapStyleID {
-    /// Shorter than `subtitle` — Layers list density.
-    var shortSubtitle: String {
-        switch self {
-        case .shortbread:     "High-contrast Shortbread"
-        case .shortbreadRich: "Default · deeper landcover"
-        }
-    }
+/// Opaque islands on Layers’ thin glass. Local to this sheet — not a DirtTheme token change.
+private enum LayersGlass {
+    static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.94)
 }
