@@ -318,6 +318,7 @@ public struct PathSearch: Sendable {
         heap.push(.init(label: 0,cost: heapCost(0, startNode)))
         var goals: [Int] = [], pops = 0, limit: String?
         var frontierHits: [(label: Int, meters: Double, node: Int)] = []
+        var bestCap: (label: Int, score: Double)?
         defer {
             options.counter?.recordSearch(pops: pops, labels: labels.count, since: searchStarted)
             if let profile = options.profile {
@@ -358,6 +359,10 @@ public struct PathSearch: Sendable {
             let current = labels[entry.label]
             guard bestIndex(current.state) == entry.label else { continue }
             pops += 1
+            if options.expandToCap, current.meters > 250, current.state.node < pack.nodeCount {
+                let score = headingProgress(point(current.state.node)) + current.meters * 0.05
+                if bestCap == nil || score > bestCap!.score { bestCap = (entry.label, score) }
+            }
             if current.state.node == endNode, !options.expandToCap {
                 goals.append(entry.label)
                 if resource {
@@ -447,7 +452,10 @@ public struct PathSearch: Sendable {
                 } else {
                     progress = RouteQuality.progress(toPoint, start.coordinate, end.coordinate)
                 }
-                if useHeadingProgress || (useRoadProgress && left.isFinite) {
+                if useHeadingProgress {
+                    // Heading is a heap bias, not a corridor. Riding around water
+                    // is legal (§5.5); extra/backward gates would treat that as waste.
+                } else if useRoadProgress && left.isFinite {
                     if current.peakProgress - progress > backwardAllowance {
                         options.boundary?.touched = true
                         options.profile?.regressionRejects += 1
@@ -666,6 +674,9 @@ public struct PathSearch: Sendable {
                 let pool = frontierHits.filter { $0.meters >= near }
                 let ranked = (pool.isEmpty ? frontierHits : pool).sorted { score($0) > score($1) }
                 if let hit = ranked.first, let route = reconstruct(hit.label) {
+                    return .reached(route)
+                }
+                if let best = bestCap, let route = reconstruct(best.label), route.distanceMeters > 250 {
                     return .reached(route)
                 }
             }
