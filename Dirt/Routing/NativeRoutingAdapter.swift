@@ -63,6 +63,7 @@ nonisolated enum NativeRoutingAdapter {
     static func accessName(_ code: UInt8) -> String {
         switch code { case 0: "motorized_permissive"; case 1: "motorized_unknown"; case 3: "destination"; case 4: "customers"; default: "motorized_prohibited" }
     }
+    @MainActor
     static func response(_ route: ComputedRoute,style: RidingStyle? = nil,prior: Set<String> = []) -> RouteResponse {
         let quality = RouteQuality(route: route)
         let segments = route.segments.map { segment in
