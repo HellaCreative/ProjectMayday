@@ -24,6 +24,11 @@ JavaScript and Swift implementations, or use a particular third-party engine.
 There is no distance or province-boundary rule that automatically selects the
 server or changes the rider's requested style.
 
+New agents start with `docs/TAKE-THE-LEAD.md`: the product vision, how Richard
+works, the tools, what has and has not worked, and where everything lives. It is
+a handbook, subordinate to this document, and it never carries a routing rule of
+its own.
+
 Other product documents may cover navigation presentation, maps, accounts,
 subscriptions, privacy, and release operations. They must link here for routing
 requirements rather than maintain their own versions. Routing requirements for
