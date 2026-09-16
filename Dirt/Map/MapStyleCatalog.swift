@@ -25,6 +25,8 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 /// Resolves the active basemap URL and persists the rider's choice.
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
+    /// Bump when generated paint/label rules change so a cached JSON cannot linger.
+    static let generatedStyleRevision = "osmand-v1"
 
     static var selectedID: MapStyleID {
         get {
@@ -69,72 +71,35 @@ enum MapStyleCatalog {
         guard let source = Bundle.main.url(forResource: "shortbread-style", withExtension: "json"),
               let data = try? Data(contentsOf: source),
               var root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              var layers = root["layers"] as? [[String: Any]]
+              let incoming = root["layers"] as? [[String: Any]]
         else { return nil }
 
-        for index in layers.indices {
-            let id = (layers[index]["id"] as? String ?? "").lowercased()
-            var paint = layers[index]["paint"] as? [String: Any] ?? [:]
+        var layers: [[String: Any]] = []
+        layers.reserveCapacity(incoming.count + 4)
+        for var layer in incoming {
+            let id = (layer["id"] as? String ?? "").lowercased()
+            var paint = layer["paint"] as? [String: Any] ?? [:]
 
-            // Rich palette, ~15% more saturated (HSL S *1.15, clamped) than the
-            // original landcover/road hand-picked values below each comment.
-            if rich, id == "background" {
-                paint["background-color"] = "#f5ead9" // was #f3eadb
-            } else if rich, id.contains("water") {
-                if paint["fill-color"] != nil { paint["fill-color"] = "#8ac9f6" } // was #91c8ef
-                if paint["line-color"] != nil { paint["line-color"] = "#51abe9" } // was #5ba9df
-            } else if rich, id.contains("forest") {
-                paint["fill-color"] = "#94d56d" // was #96ce74
-            } else if rich, id.contains("orchard") || id.contains("vineyard") || id.contains("scrub") {
-                paint["fill-color"] = "#a3d97b" // was #a4d381
-            } else if rich, id.contains("park") || id.contains("heath") || id.contains("meadow") {
-                paint["fill-color"] = "#b1e28a" // was #b2dc90
-            } else if rich, id.contains("grass") || id.contains("recreation_ground")
-                        || id.contains("village_green") || id.contains("golf_course") {
-                paint["fill-color"] = "#b9e493" // was #b9df98
-            } else if rich, id.contains("farmland") || id.contains("farmyard") {
-                paint["fill-color"] = "#eecb87" // was #e7c98e
-            } else if rich, id.contains("residential-fill") {
-                paint["fill-color"] = "#f0ddc7" // was #edddca
-            } else if rich, id.contains("retail-fill") || id.contains("commercial-fill") {
-                paint["fill-color"] = "#f3bbb5" // was #efbeb9
-            } else if rich, id.contains("industrial-fill") || id.contains("construction-fill") {
-                paint["fill-color"] = "#f8e09a" // was #f2dda0
-            } else if rich, id.contains("eduhospital-fill") || id.contains("schoolyard-fill") {
-                paint["fill-color"] = "#e4d3f3" // was #e4d5f1
-            } else if rich, id.contains("beach-fill") || id.contains("sand-fill") {
-                paint["fill-color"] = "#f8e486" // was #f1df8d
-            }
-
+            applyLandcover(id: id, rich: rich, paint: &paint)
             if paint["line-color"] != nil, id.contains("highway") {
-                let isCasing = id.contains("casing") || id.contains("outline")
-                if isCasing {
-                    if id.contains("motorway") || id.contains("trunk") {
-                        paint["line-color"] = rich ? "#a82e1f" : "#6f4d49" // rich was #9f3528
-                    } else if id.contains("primary") {
-                        paint["line-color"] = rich ? "#b7511a" : "#805c50" // rich was #ad5424
-                    } else if id.contains("secondary") {
-                        paint["line-color"] = rich ? "#ae7a1b" : "#79684a" // rich was #a47725
-                    } else if id.contains("tertiary") {
-                        paint["line-color"] = rich ? "#977b26" : "#6f6d50" // rich was #90772d
-                    } else if id.contains("service") || id.contains("unclassified")
-                                || id.contains("living_street") {
-                        paint["line-color"] = rich ? "#757066" : "#77736b" // rich was #747067
-                    }
-                } else if rich {
-                    if id.contains("motorway") || id.contains("trunk") {
-                        paint["line-color"] = "#f15630" // was #e45e3d
-                    } else if id.contains("primary") {
-                        paint["line-color"] = "#fc8624" // was #ee8732
-                    } else if id.contains("secondary") {
-                        paint["line-color"] = "#fcb841" // was #f0b54d
-                    } else if id.contains("tertiary") {
-                        paint["line-color"] = "#f2c955" // was #e8c45f
-                    }
-                }
+                applyHighwayColors(id: id, rich: rich, paint: &paint)
+                applyHighwayWidths(id: id, paint: &paint)
             }
+            if id.contains("water_polygons_labels") || id.hasPrefix("label-waterway") {
+                paint["text-color"] = "#4f8fb0"
+            }
+            layer["paint"] = paint
 
-            layers[index]["paint"] = paint
+            if id == "boundaries-0" {
+                layers.append(contentsOf: dirtBoundaryLineLayers(from: layer))
+                continue
+            }
+            if id == "boundary_labels-named-0" {
+                layers.append(contentsOf: dirtBoundaryLabelLayers(from: layer))
+                continue
+            }
+            retunePlaceLabel(&layer)
+            layers.append(layer)
         }
 
         if var sources = root["sources"] as? [String: Any] {
@@ -157,7 +122,7 @@ enum MapStyleCatalog {
 
         let destination = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(
-                "dirt-shortbread-\(rich ? "rich" : "standard")-\(tileSource.styleCacheKey).json"
+                "dirt-shortbread-\(generatedStyleRevision)-\(rich ? "rich" : "standard")-\(tileSource.styleCacheKey).json"
             )
         do {
             try richData.write(to: destination, options: .atomic)
@@ -191,5 +156,299 @@ enum MapStyleCatalog {
         ) ?? Bundle.main.url(forResource: "svwd03sprite", withExtension: "json")
         guard let json else { return nil }
         return json.deletingPathExtension()
+    }
+}
+
+// MARK: - OsmAnd-aimed Shortbread paint + admin labels
+
+extension MapStyleCatalog {
+    /// Daytime OsmAnd-like palette (pale land, orange roads, green cover at street zoom).
+    /// Rich applies `×1.15` HSL saturation on top. Never paint pack-bound polygons.
+    private static let osmandBase: [String: String] = [
+        "background": "#ebe8e0",
+        "water-fill": "#7eb8d4",
+        "water-line": "#5a9ec0",
+        "forest": "#9ec97a",
+        "orchard": "#b3d48a",
+        "park": "#b8d690",
+        "grass": "#c3dc9a",
+        "farmland": "#e4d5a4",
+        "residential": "#e6e0d4",
+        "retail": "#edd3cc",
+        "industrial": "#e8dcc0",
+        "edu": "#ddd4ea",
+        "beach": "#ead89a",
+        "mw-fill": "#c4483c",
+        "pri-fill": "#d97838",
+        "sec-fill": "#e0a84a",
+        "ter-fill": "#e4c85e",
+        "mw-casing": "#8a3028",
+        "pri-casing": "#9a4a24",
+        "sec-casing": "#9a7028",
+        "ter-casing": "#88722e",
+        "svc-casing": "#6e6a64"
+    ]
+
+    static func boostedSaturationHex(_ hex: String, factor: Double = 1.15) -> String {
+        guard let base = rgb(from: hex) else { return hex }
+        var color = hsl(from: base)
+        color.s = min(1, color.s * factor)
+        return hexString(from: rgb(from: color))
+    }
+
+    private static func paintHex(_ key: String, rich: Bool) -> String {
+        let hex = osmandBase[key]!
+        return rich ? boostedSaturationHex(hex) : hex
+    }
+
+    private static func applyLandcover(id: String, rich: Bool, paint: inout [String: Any]) {
+        if id == "background" {
+            paint["background-color"] = paintHex("background", rich: rich)
+        } else if id.contains("water") {
+            if paint["fill-color"] != nil {
+                paint["fill-color"] = paintHex("water-fill", rich: rich)
+            }
+            if paint["line-color"] != nil, !id.contains("label") {
+                paint["line-color"] = paintHex("water-line", rich: rich)
+            }
+        } else if id.contains("forest") {
+            paint["fill-color"] = paintHex("forest", rich: rich)
+        } else if id.contains("orchard") || id.contains("vineyard") || id.contains("scrub") {
+            paint["fill-color"] = paintHex("orchard", rich: rich)
+        } else if id.contains("park") || id.contains("heath") || id.contains("meadow") {
+            paint["fill-color"] = paintHex("park", rich: rich)
+        } else if id.contains("grass") || id.contains("recreation_ground")
+                    || id.contains("village_green") || id.contains("golf_course") {
+            paint["fill-color"] = paintHex("grass", rich: rich)
+        } else if id.contains("farmland") || id.contains("farmyard") {
+            paint["fill-color"] = paintHex("farmland", rich: rich)
+        } else if id.contains("residential-fill") {
+            paint["fill-color"] = paintHex("residential", rich: rich)
+        } else if id.contains("retail-fill") || id.contains("commercial-fill") {
+            paint["fill-color"] = paintHex("retail", rich: rich)
+        } else if id.contains("industrial-fill") || id.contains("construction-fill") {
+            paint["fill-color"] = paintHex("industrial", rich: rich)
+        } else if id.contains("eduhospital-fill") || id.contains("schoolyard-fill") {
+            paint["fill-color"] = paintHex("edu", rich: rich)
+        } else if id.contains("beach-fill") || id.contains("sand-fill") {
+            paint["fill-color"] = paintHex("beach", rich: rich)
+        }
+    }
+
+    private static func applyHighwayColors(id: String, rich: Bool, paint: inout [String: Any]) {
+        let isCasing = id.contains("casing") || id.contains("outline")
+        if isCasing {
+            if id.contains("motorway") || id.contains("trunk") {
+                paint["line-color"] = paintHex("mw-casing", rich: rich)
+            } else if id.contains("primary") {
+                paint["line-color"] = paintHex("pri-casing", rich: rich)
+            } else if id.contains("secondary") {
+                paint["line-color"] = paintHex("sec-casing", rich: rich)
+            } else if id.contains("tertiary") {
+                paint["line-color"] = paintHex("ter-casing", rich: rich)
+            } else if id.contains("service") || id.contains("unclassified")
+                        || id.contains("living_street") {
+                paint["line-color"] = paintHex("svc-casing", rich: rich)
+            }
+        } else {
+            if id.contains("motorway") || id.contains("trunk") {
+                paint["line-color"] = paintHex("mw-fill", rich: rich)
+            } else if id.contains("primary") {
+                paint["line-color"] = paintHex("pri-fill", rich: rich)
+            } else if id.contains("secondary") {
+                paint["line-color"] = paintHex("sec-fill", rich: rich)
+            } else if id.contains("tertiary") {
+                paint["line-color"] = paintHex("ter-fill", rich: rich)
+            }
+        }
+    }
+
+    /// OsmAnd regional view shows motorways/trunks as readable orange strokes, not hairlines.
+    private static func applyHighwayWidths(id: String, paint: inout [String: Any]) {
+        guard id.contains("otherfill") else { return }
+        if id.contains("motorway") {
+            paint["line-width"] = ["base": 1.4, "stops": [[3, 0.9], [6, 1.5], [9, 2.6], [14, 7]]]
+        } else if id.contains("trunk") {
+            paint["line-width"] = ["base": 1.4, "stops": [[6, 1.1], [9, 2.2], [14, 6]]]
+        } else if id.contains("primary") {
+            paint["line-width"] = ["base": 1.4, "stops": [[7, 1.0], [9, 2.0], [14, 5.5]]]
+        }
+    }
+
+    /// Real OSM Shortbread admin lines only. Country geometry exists from z0; state from z7.
+    private static func dirtBoundaryLineLayers(from base: [String: Any]) -> [[String: Any]] {
+        func line(id: String, admin: Int, minZoom: Double, dashed: Bool, color: String, widths: [[Any]]) -> [String: Any] {
+            var layer = base
+            layer["id"] = id
+            layer["minzoom"] = minZoom
+            layer["filter"] = [
+                "all",
+                ["==", "admin_level", admin],
+                ["!=", "maritime", true]
+            ]
+            var paint = layer["paint"] as? [String: Any] ?? [:]
+            paint["line-color"] = color
+            paint["line-opacity"] = 0.88
+            paint["line-width"] = ["stops": widths]
+            if dashed {
+                paint["line-dasharray"] = [4, 3]
+            } else {
+                paint.removeValue(forKey: "line-dasharray")
+            }
+            layer["paint"] = paint
+            return layer
+        }
+        return [
+            line(
+                id: "dirt-bound-country",
+                admin: 2,
+                minZoom: 0,
+                dashed: false,
+                color: "#7b4fa0",
+                widths: [[2, 0.9], [6, 1.5], [10, 2.1]]
+            ),
+            line(
+                id: "dirt-bound-state",
+                admin: 4,
+                minZoom: 7,
+                dashed: true,
+                color: "#9a74b8",
+                widths: [[7, 0.7], [10, 1.3]]
+            )
+        ]
+    }
+
+    private static func dirtBoundaryLabelLayers(from base: [String: Any]) -> [[String: Any]] {
+        func label(
+            id: String,
+            admin: Int,
+            minZoom: Double,
+            maxZoom: Double?,
+            color: String,
+            sizeStops: [[Any]]
+        ) -> [String: Any] {
+            var layer = base
+            layer["id"] = id
+            layer["minzoom"] = minZoom
+            if let maxZoom {
+                layer["maxzoom"] = maxZoom
+            } else {
+                layer.removeValue(forKey: "maxzoom")
+            }
+            layer["filter"] = ["==", "admin_level", admin]
+            var layout = layer["layout"] as? [String: Any] ?? [:]
+            layout["text-field"] = ["coalesce", ["get", "name_en"], ["get", "name"]]
+            layout["text-size"] = ["stops": sizeStops]
+            layout["text-padding"] = 4
+            layout["symbol-sort-key"] = ["-", ["get", "way_area"]]
+            layout["text-font"] = ["Noto Sans Regular"]
+            layer["layout"] = layout
+            var paint = layer["paint"] as? [String: Any] ?? [:]
+            paint["text-color"] = color
+            paint["text-halo-color"] = "#f4f1ea"
+            paint["text-halo-width"] = 1.8
+            paint["text-halo-blur"] = 0.4
+            layer["paint"] = paint
+            return layer
+        }
+        return [
+            label(
+                id: "dirt-bound-label-country",
+                admin: 2,
+                minZoom: 2,
+                maxZoom: 6.01,
+                color: "#2c3036",
+                sizeStops: [[2, 13], [5, 17]]
+            ),
+            label(
+                id: "dirt-bound-label-state",
+                admin: 4,
+                minZoom: 3,
+                maxZoom: nil,
+                color: "#6a7380",
+                sizeStops: [[3, 10], [8, 14], [12, 16]]
+            )
+        ]
+    }
+
+    private static func retunePlaceLabel(_ layer: inout [String: Any]) {
+        let id = layer["id"] as? String ?? ""
+        guard id.hasPrefix("place_labels-") else { return }
+        var layout = layer["layout"] as? [String: Any] ?? [:]
+        var paint = layer["paint"] as? [String: Any] ?? [:]
+        paint["text-color"] = "#1a1f24"
+        paint["text-halo-color"] = "#f4f1ea"
+        paint["text-halo-width"] = 1.6
+        if id.contains("capital") {
+            layer["minzoom"] = 3
+            layout["text-size"] = ["stops": [[3, 13], [8, 16], [12, 22]]]
+        } else if id.hasSuffix("-city") || id == "place_labels-city" {
+            layer["minzoom"] = 5
+            layout["text-size"] = ["stops": [[5, 12], [8, 15], [12, 20]]]
+        } else if id.contains("town") {
+            layer["minzoom"] = 7
+            layout["text-size"] = ["stops": [[7, 12], [12, 16]]]
+        } else if id.contains("village") {
+            layer["minzoom"] = 10
+            layout["text-size"] = ["stops": [[10, 11], [13, 14]]]
+        } else if id.contains("hamlet") {
+            layer["minzoom"] = 11
+            layout["text-size"] = ["stops": [[11, 10], [14, 13]]]
+        } else if id.contains("island") {
+            layer["minzoom"] = 10
+            layout["text-size"] = ["stops": [[10, 11], [13, 14]]]
+        }
+        layer["layout"] = layout
+        layer["paint"] = paint
+    }
+
+    private static func rgb(from hex: String) -> (r: Double, g: Double, b: Double)? {
+        var raw = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.hasPrefix("#") { raw.removeFirst() }
+        guard raw.count == 6, let value = UInt32(raw, radix: 16) else { return nil }
+        return (
+            Double((value >> 16) & 0xFF) / 255,
+            Double((value >> 8) & 0xFF) / 255,
+            Double(value & 0xFF) / 255
+        )
+    }
+
+    private static func hsl(from rgb: (r: Double, g: Double, b: Double)) -> (h: Double, s: Double, l: Double) {
+        let maxV = max(rgb.r, rgb.g, rgb.b)
+        let minV = min(rgb.r, rgb.g, rgb.b)
+        let l = (maxV + minV) / 2
+        let d = maxV - minV
+        guard d > 0 else { return (0, 0, l) }
+        let s = l > 0.5 ? d / (2 - maxV - minV) : d / (maxV + minV)
+        let h: Double
+        if maxV == rgb.r {
+            h = (rgb.g - rgb.b) / d + (rgb.g < rgb.b ? 6 : 0)
+        } else if maxV == rgb.g {
+            h = (rgb.b - rgb.r) / d + 2
+        } else {
+            h = (rgb.r - rgb.g) / d + 4
+        }
+        return (h * 60, s, l)
+    }
+
+    private static func rgb(from hsl: (h: Double, s: Double, l: Double)) -> (r: Double, g: Double, b: Double) {
+        let c = (1 - abs(2 * hsl.l - 1)) * hsl.s
+        let x = c * (1 - abs((hsl.h / 60).truncatingRemainder(dividingBy: 2) - 1))
+        let m = hsl.l - c / 2
+        let rgb: (Double, Double, Double)
+        switch hsl.h {
+        case ..<60: rgb = (c, x, 0)
+        case ..<120: rgb = (x, c, 0)
+        case ..<180: rgb = (0, c, x)
+        case ..<240: rgb = (0, x, c)
+        case ..<300: rgb = (x, 0, c)
+        default: rgb = (c, 0, x)
+        }
+        return (rgb.0 + m, rgb.1 + m, rgb.2 + m)
+    }
+
+    private static func hexString(from rgb: (r: Double, g: Double, b: Double)) -> String {
+        func byte(_ v: Double) -> Int { min(255, max(0, Int((v * 255).rounded()))) }
+        return String(format: "#%02x%02x%02x", byte(rgb.r), byte(rgb.g), byte(rgb.b))
     }
 }

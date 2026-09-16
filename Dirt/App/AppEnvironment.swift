@@ -26,9 +26,9 @@ final class AppEnvironment {
     let poiManager: POIManager
     /// Provincial road overlay from the installed graph pack.
     let networkOverlayManager: NetworkOverlayManager
-    /// Temporary viewport diagnostic: live graph first, installed pack offline.
+    /// DEBUG-only viewport diagnostic. Release DIRT-logo uses the corridor overlay.
     let routingGraphDebug: RoutingGraphDebugManager
-    /// Feasibility: local BC.mbtiles OSM hierarchy (visual only).
+    /// Retired BC OSM mbtiles experiment (no-op; kept to avoid a pbxproj delete).
     let bcOSMHierarchy: BCOSMHierarchyOverlay
 
     /// Pending opt-in contribute sheet after End navigation.
@@ -134,12 +134,12 @@ final class AppEnvironment {
             network: network
         )
         bcOSMHierarchy         = BCOSMHierarchyOverlay(mapState: mapState)
-        // Network Lens was removed from Layers. Clear every legacy preference
-        // so an old installation cannot retain an overlay it can no longer control.
+        // Network Lens and BC OSM experiment are gone. Clear leftover prefs so
+        // an old install cannot retain an overlay the rider can no longer control.
         for region in ["ns", "nb", "qc", "on", "bc", "ab"] {
-            UserDefaults.standard.set(false, forKey: "dirt.layers.network.\(region)")
+            UserDefaults.standard.removeObject(forKey: "dirt.layers.network.\(region)")
         }
-        UserDefaults.standard.set(false, forKey: BCOSMHierarchyOverlay.prefsKey)
+        UserDefaults.standard.removeObject(forKey: BCOSMHierarchyOverlay.prefsKey)
         mapState.bumpLayerPrefs()
         bcOSMHierarchy.applyPrefs()
         planner.attachPOIManager(poiManager)

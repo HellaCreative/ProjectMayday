@@ -51,14 +51,6 @@ struct LayerPrefsSnapshot {
     let showCampgrounds: Bool
     let showLodging: Bool
     let showLiquor: Bool
-    let showNSLines: Bool
-    let showNBLines: Bool
-    let showQCLines: Bool
-    let showONLines: Bool
-    let showBCLines: Bool
-    let showABLines: Bool
-    /// Local BC OSM full-hierarchy mbtiles (experiment), not the gov CDN lens.
-    let showBCOSMHierarchy: Bool
 
     init() {
         let ud = UserDefaults.standard
@@ -66,30 +58,9 @@ struct LayerPrefsSnapshot {
         showCampgrounds = ud.bool(forKey: "dirt.layers.camp")
         showLodging     = ud.bool(forKey: "dirt.layers.lodging")
         showLiquor      = ud.bool(forKey: "dirt.layers.liquor")
-        showNSLines     = ud.bool(forKey: "dirt.layers.network.ns")
-        showNBLines     = ud.bool(forKey: "dirt.layers.network.nb")
-        showQCLines     = ud.bool(forKey: "dirt.layers.network.qc")
-        showONLines     = ud.bool(forKey: "dirt.layers.network.on")
-        showBCLines     = ud.bool(forKey: "dirt.layers.network.bc")
-        showABLines     = ud.bool(forKey: "dirt.layers.network.ab")
-        showBCOSMHierarchy = ud.bool(forKey: BCOSMHierarchyOverlay.prefsKey)
     }
 
     var anyPOIEnabled: Bool { showFuel || showCampgrounds || showLodging || showLiquor }
-    var anyProvinceEnabled: Bool {
-        showNSLines || showNBLines || showQCLines || showONLines || showBCLines || showABLines
-    }
-
-    /// Selected province for viewport-lens mode (one province at a time). Nil = corridor-only.
-    var lensProvince: String? {
-        if showNSLines { return "NS" }
-        if showNBLines { return "NB" }
-        if showQCLines { return "QC" }
-        if showONLines { return "ON" }
-        if showBCLines { return "BC" }
-        if showABLines { return "AB" }
-        return nil
-    }
 
     func isPOIEnabled(category: String) -> Bool {
         switch category {

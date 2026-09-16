@@ -66,20 +66,20 @@ Contrast is baked into `shortbread-style.json` paint properties (background, wat
 
 ## Route rendering
 
-`MapState.displaySegments(from:)` merges adjacent same-surface edges, then MapLibre paints two sources:
+`MapState.displaySegments(from:)` merges adjacent same-surface edges. Selected-route paint uses `DirtTheme` tokens, 8 pt opaque, inserted **below** street-name labels:
 
 | Source / layer | Colour | Meaning |
 | --- | --- | --- |
-| `dirt-route-access-*` | `#0a66c2` | access / resource |
-| `dirt-route-gravel-*` | `#5d6874` | gravel / unknown / unpaved |
-| `dirt-route-track-*` | `#7c3aed` | track / double_track (branches) |
-| `dirt-route-paved-*` | `#ffb000` | paved (+ default) |
-| `dirt-route-connector-*` | `#d22730` | connector / no-segment fallback |
-| Casings | White ~85% opacity | Readability |
+| `dirt-route-paved-*` | `#14161A` | paved |
+| `dirt-route-gravel-*` | `#B56A00` | gravel (selected route) |
+| `dirt-route-loose-*` | `#6E2F16` | loose / technical dirt |
+| `dirt-route-unknown-*` | `#555A63` | unknown surface |
+| `dirt-route-unknown-access-*` | `#54208F` | unknown motor access (not a surface) |
+| `dirt-route-ferry-*` | `#005A70` dashed over white casing | ferry connector |
 
-Matches the per-surface route palette (not stats mix `#3a9dff` / `#fdb003`, and not brand orange).
+Nearby pack-network overlay uses a **separate** thinner palette so the same words do not collide: overlay gravel is cool gray `#5D6874`, overlay access is blue `#0A66C2`, overlay dirt/track is route-loose brown `#6E2F16`.
 
-`RouteSegment.paintSurfaceKey` prefers `surfaceClass` then `trackClass`. If a response has **no** `segments`, the full geometry paints as **connector** .
+`RouteSegment.paintSurfaceKey` prefers `surfaceClass` then `trackClass`. If a response has **no** `segments`, the full geometry paints as **unknown**.
 
 `RouteSegment.isDirt` / adventure surfaces still drive dirt% vocabulary; paint is per-class.
 
@@ -145,8 +145,11 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ## Layers / overlays
 
-`LayersSheet` persists basemap choice, Rider Services, and network lens via `@AppStorage`.  
-BC network lens is parked (`if false` in Layers). Overlay paint is the installed pack.
+`LayersSheet` persists basemap choice and Rider Services via `@AppStorage`. Network lens prefs are cleared on launch and no longer read. Overlay paint is the installed pack.
+
+### Basemap labels and borders
+
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v1`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines from the tile schema. Country borders (`admin_level=2`) from z0; province/state borders (`admin_level=4`) from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
 
 ### Rider Services POIs
 
@@ -158,29 +161,32 @@ BC network lens is parked (`if false` in Layers). Overlay paint is the installed
 | **Trigger** | Map viewport change or layer pref change (350 ms debounce) |
 | **Min zoom** | 6.5 (below: source cleared) |
 | **MapLibre** | Source `dirt-poi` (GeoJSON); 4 `MLNCircleStyleLayer` (one per category) |
-| **Colors** | fuel #e8730c, campground #2f9e44, lodging #8a5a2b, liquor #8e44c9 |
+| **Colors** | fuel `#FF8000` (`DirtTheme.orange`; same as planner F-pins), campground #2f9e44, lodging #8a5a2b, liquor #8e44c9 |
 | **Tap** | Coordinator `handleTap` → `queryRenderedFeatures` on poi layers → `mapState.onPOITap` → `mapState.selectedPOI` → `RootView confirmationDialog` |
 | **Routing** | "Route to this" → `planner.routeToCoordinate`; "Add as waypoint" → `planner.addPlanWaypoint` |
 
 ### Province network overlays
 
-`NetworkOverlayManager` paints nearby edges for display. Display feature caps and lens/corridor sizes below are not routing search horizons or memory budgets. Honest Layers: when Allow is off, `motorized_unknown` / `motorized_excluded` are omitted. Routing laws: [ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md).
+`NetworkOverlayManager` paints nearby pack edges for display. Caps below are not routing search horizons. Honest Layers: when Allow is off, `motorized_unknown` / `motorized_excluded` are omitted. Routing laws: [ROUTING-SOURCE-OF-TRUTH.md](ROUTING-SOURCE-OF-TRUTH.md).
 
 | | |
 |---|---|
 | **Data source** | Compatible installed graph and paired geometry for the displayed area |
-| **Corridor mode** | Lines within 2–3 km of map focus + route anchors, or at zoom ≥ 12.5 |
-| **Lens mode** | Show one province at a time, ~20 km circle |
-| **Feature caps** | Corridor 1600; lens 5000 |
+| **When it paints** | Zoom ≥ 12.5, or Release DIRT-logo toggle (`showRoutingGraphDebug` without the DEBUG HUD). Built routes do **not** force the overlay at overview. |
+| **Feature cap** | 1600 GeoJSON lines, bbox around map focus + route anchors |
 | **MapLibre source** | `dirt-network` (GeoJSON) |
-| **Layers** | `dirt-net-access` (blue), `dirt-net-gravel` (gray), `dirt-net-track` (purple), `dirt-net-restricted` (red dashed), `dirt-net-bridge` (teal), `dirt-net-tunnel` (brown dashed) — always visible when loaded |
+| **Layers** | `dirt-net-access` (blue), `dirt-net-gravel` (gray), `dirt-net-track` (brown / `track` tag), `dirt-net-restricted` (red dashed), `dirt-net-bridge` (teal), `dirt-net-tunnel` (brown dashed) |
+| **DEBUG logo** | Heavy `RoutingGraphDebugManager` + GRAPH HUD. Release logo uses this lighter corridor instead. |
+
+Loose/technical pack edges tag `surfaceClass: track` so `dirt-net-track` actually draws them.
 
 ### Layer insertion order
 
 ```
-dirt-net-access / gravel / track / restricted / bridge / tunnel   ← below route
-dirt-route-{bucket}-casing / line                                  ← route
+dirt-net-access / gravel / track / restricted / bridge / tunnel   ← nearby network
+dirt-route-{bucket}-line                                           ← selected route
 dirt-poi-{category}                                                ← above route
+street-name labels                                                 ← above route (style)
 ```
 
 ---
@@ -192,4 +198,4 @@ dirt-poi-{category}                                                ← above rou
    `/api/poi`; the phone never depends on one public Overpass host. Preserve the
    last successful non-fuel viewport paint during a temporary upstream outage.
 3. **Invariants:** Start-Nav-only tile prefetch; keep-through-reroute; never clear tiles on End alone; selected-route paint stays on the per-surface palette; bundled style. Do not flash NS at launch.
-4. **Open questions:** true corridor tiles vs bbox; Rich style JSON; BC lens re-enable.
+4. BC OSM mbtiles experiment is retired (class is a no-op). Network lens prefs are not read.
