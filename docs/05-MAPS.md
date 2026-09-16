@@ -149,7 +149,7 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ### Basemap labels and borders
 
-`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v2`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from Shortbread z0. Province/state borders: bundled Natural Earth 50m Admin-1 (lakes) linework from z0–7, then Shortbread `admin_level=4` from z7. Shortbread has no state geometry below z7; overzooming those tiles at continental view is not used. Do **not** paint `RegionPolygons` pack bounds. Country names stay through z7; province names are quieter gray. Place collision padding is 1 so more names survive overview. Rich is the same structure with ×1.15 saturation.
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v3`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from Shortbread z0. Province/state borders: bundled Natural Earth 50m Admin-1 (lakes) linework from z0–7, then Shortbread `admin_level=4` from z7 — **do not change that handoff**. Do **not** paint `RegionPolygons` pack bounds. Glanceable type: near-black `#111418`, cream halo ~2.6 px. Country names through z6; province/state names held through z12. Place floors: capital z2, city z4, town z7, village/hamlet/island z10. Major road names from z10, local streets from z11. Rich is the same structure with ×1.15 saturation.
 
 ### Rider Services POIs
 

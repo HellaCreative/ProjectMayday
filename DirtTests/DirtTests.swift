@@ -228,7 +228,7 @@ struct DirtTests {
         #expect(intZoom(byID["dirt-bound-state-overview"]?["minzoom"]) == 0)
         #expect(intZoom(byID["dirt-bound-state-overview"]?["maxzoom"]) == 7)
         let town = byID.first(where: { $0.key.contains("town") })?.value
-        #expect(intZoom(town?["minzoom"]) <= 6)
+        #expect(intZoom(town?["minzoom"]) <= 7)
         if let island = byID.first(where: { $0.key.contains("island") })?.value {
             #expect(intZoom(island["minzoom"]) <= 14)
         }
@@ -238,7 +238,25 @@ struct DirtTests {
         if let city = byID["place_labels-city"] {
             #expect(intZoom(city["minzoom"]) <= 4)
         }
-        #expect(intZoom(byID["dirt-bound-label-country"]?["maxzoom"]) <= 8)
+        if let hamlet = byID.first(where: { $0.key.contains("hamlet") })?.value {
+            #expect(intZoom(hamlet["minzoom"]) <= 10)
+        }
+        #expect(intZoom(byID["dirt-bound-label-country"]?["maxzoom"]) <= 7)
+        let stateLabelPaint = try #require(byID["dirt-bound-label-state"]?["paint"] as? [String: Any])
+        #expect(stateLabelPaint["text-color"] as? String == "#111418")
+        #expect(haloWidth(stateLabelPaint["text-halo-width"]) >= 2.4)
+        #expect(zoomValue(byID["dirt-bound-label-state"]?["maxzoom"]) >= 12)
+        let cityPaint = try #require(byID["place_labels-city"]?["paint"] as? [String: Any])
+        #expect(haloWidth(cityPaint["text-halo-width"]) >= 2.4)
+        #expect(byID["dirt-label-street-major"] != nil)
+        #expect(intZoom(byID["dirt-label-street-major"]?["minzoom"]) <= 10)
+        #expect(byID["label-street-centre-12"] != nil)
+        #expect(intZoom(byID["label-street-centre-12"]?["minzoom"]) <= 11)
+        #expect(intZoom(byID["label-path-bottom-12"]?["minzoom"]) <= 11)
+        #expect(byID.keys.contains(where: { $0.hasPrefix("label-shield-motorway") }))
+        let streetPaint = try #require(byID["label-street-centre-12"]?["paint"] as? [String: Any])
+        #expect(streetPaint["text-color"] as? String == "#111418")
+        #expect(haloWidth(streetPaint["text-halo-width"]) >= 2.2)
         let sources = try #require(root["sources"] as? [String: Any])
         let admin1 = try #require(sources["dirt-admin1-overview"] as? [String: Any])
         #expect(admin1["type"] as? String == "geojson")
@@ -311,6 +329,17 @@ struct DirtTests {
         if let value = raw as? Double { return Int(value.rounded()) }
         if let value = raw as? NSNumber { return value.intValue }
         return .max
+    }
+
+    private func zoomValue(_ raw: Any?) -> Double {
+        if let value = raw as? Double { return value }
+        if let value = raw as? Int { return Double(value) }
+        if let value = raw as? NSNumber { return value.doubleValue }
+        return .greatestFiniteMagnitude
+    }
+
+    private func haloWidth(_ raw: Any?) -> Double {
+        zoomValue(raw)
     }
 
     private func testShortbreadManifest(

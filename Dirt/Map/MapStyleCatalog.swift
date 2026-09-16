@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v2"
+    static let generatedStyleRevision = "osmand-v3"
     /// Natural Earth 50m admin-1 (lakes), US+CA interior borders. Not pack bounds.
     static let admin1OverviewSourceID = "dirt-admin1-overview"
     static let admin1OverviewLayerID = "dirt-bound-state-overview"
@@ -90,9 +90,6 @@ enum MapStyleCatalog {
                 applyHighwayColors(id: id, rich: rich, paint: &paint)
                 applyHighwayWidths(id: id, paint: &paint)
             }
-            if id.contains("water_polygons_labels") || id.hasPrefix("label-waterway") {
-                paint["text-color"] = "#4f8fb0"
-            }
             layer["paint"] = paint
 
             if id == "boundaries-0" {
@@ -103,7 +100,13 @@ enum MapStyleCatalog {
                 layers.append(contentsOf: dirtBoundaryLabelLayers(from: layer))
                 continue
             }
+            if id == "label-street-centre-12" {
+                layers.append(contentsOf: dirtStreetNameLayers(from: layer))
+                continue
+            }
             retunePlaceLabel(&layer)
+            retunePathLabel(&layer)
+            retuneWaterLabel(&layer)
             layers.append(layer)
         }
 
@@ -378,14 +381,35 @@ extension MapStyleCatalog {
         return nil
     }
 
+    /// Outdoor glanceable type. Glyphs are Noto Sans Regular only — weight comes
+    /// from size, near-black ink, and a thick cream halo on green/blue land.
+    private static let typeInk = "#111418"
+    private static let typeHalo = "#f8f4f0"
+    private static let typeHaloWidth = 2.6
+
+    private static func applyGlanceableType(
+        paint: inout [String: Any],
+        layout: inout [String: Any],
+        color: String = typeInk,
+        haloWidth: Double = typeHaloWidth,
+        padding: Double = 0.5
+    ) {
+        paint["text-color"] = color
+        paint["text-halo-color"] = typeHalo
+        paint["text-halo-width"] = haloWidth
+        paint["text-halo-blur"] = 0.15
+        layout["text-padding"] = padding
+        layout["text-font"] = ["Noto Sans Regular"]
+    }
+
     private static func dirtBoundaryLabelLayers(from base: [String: Any]) -> [[String: Any]] {
         func label(
             id: String,
             admin: Int,
             minZoom: Double,
             maxZoom: Double?,
-            color: String,
-            sizeStops: [[Any]]
+            sizeStops: [[Any]],
+            sortKey: Int
         ) -> [String: Any] {
             var layer = base
             layer["id"] = id
@@ -399,15 +423,11 @@ extension MapStyleCatalog {
             var layout = layer["layout"] as? [String: Any] ?? [:]
             layout["text-field"] = ["coalesce", ["get", "name_en"], ["get", "name"]]
             layout["text-size"] = ["stops": sizeStops]
-            layout["text-padding"] = 1
-            layout["symbol-sort-key"] = ["-", ["get", "way_area"]]
-            layout["text-font"] = ["Noto Sans Regular"]
-            layer["layout"] = layout
+            layout["symbol-sort-key"] = sortKey
+            layout["text-max-width"] = 8
             var paint = layer["paint"] as? [String: Any] ?? [:]
-            paint["text-color"] = color
-            paint["text-halo-color"] = "#f4f1ea"
-            paint["text-halo-width"] = 1.8
-            paint["text-halo-blur"] = 0.4
+            applyGlanceableType(paint: &paint, layout: &layout, haloWidth: 2.8, padding: 0.4)
+            layer["layout"] = layout
             layer["paint"] = paint
             return layer
         }
@@ -416,17 +436,17 @@ extension MapStyleCatalog {
                 id: "dirt-bound-label-country",
                 admin: 2,
                 minZoom: 2,
-                maxZoom: 7.01,
-                color: "#2c3036",
-                sizeStops: [[2, 13], [5, 17]]
+                maxZoom: 6.01,
+                sizeStops: [[2, 15], [4, 16]],
+                sortKey: 20
             ),
             label(
                 id: "dirt-bound-label-state",
                 admin: 4,
                 minZoom: 3,
-                maxZoom: nil,
-                color: "#6a7380",
-                sizeStops: [[3, 9], [8, 14], [12, 16]]
+                maxZoom: 12.5,
+                sizeStops: [[3, 13], [5, 17], [8, 20], [11, 18]],
+                sortKey: 100
             )
         ]
     }
@@ -436,28 +456,109 @@ extension MapStyleCatalog {
         guard id.hasPrefix("place_labels-") else { return }
         var layout = layer["layout"] as? [String: Any] ?? [:]
         var paint = layer["paint"] as? [String: Any] ?? [:]
-        paint["text-color"] = "#1a1f24"
-        paint["text-halo-color"] = "#f4f1ea"
-        paint["text-halo-width"] = 1.6
-        layout["text-padding"] = 1
+        applyGlanceableType(paint: &paint, layout: &layout, haloWidth: 2.7)
         if id.contains("capital") {
             layer["minzoom"] = 2
-            layout["text-size"] = ["stops": [[2, 12], [8, 16], [12, 22]]]
+            layout["text-size"] = ["stops": [[2, 14], [7, 18], [11, 22], [14, 26]]]
+            layout["symbol-sort-key"] = 80
         } else if id.hasSuffix("-city") || id == "place_labels-city" {
             layer["minzoom"] = 4
-            layout["text-size"] = ["stops": [[4, 11], [8, 15], [12, 20]]]
+            layout["text-size"] = ["stops": [[4, 13], [7, 17], [11, 21], [14, 24]]]
+            layout["symbol-sort-key"] = 70
         } else if id.contains("town") {
-            layer["minzoom"] = 6
-            layout["text-size"] = ["stops": [[6, 11], [12, 16]]]
+            layer["minzoom"] = 7
+            layout["text-size"] = ["stops": [[7, 13], [10, 17], [13, 20]]]
+            layout["symbol-sort-key"] = 60
         } else if id.contains("village") {
             layer["minzoom"] = 10
-            layout["text-size"] = ["stops": [[10, 11], [13, 14]]]
+            layout["text-size"] = ["stops": [[10, 13], [13, 16], [15, 18]]]
+            layout["symbol-sort-key"] = 50
         } else if id.contains("hamlet") {
-            layer["minzoom"] = 11
-            layout["text-size"] = ["stops": [[11, 10], [14, 13]]]
+            layer["minzoom"] = 10
+            layout["text-size"] = ["stops": [[10, 12], [13, 15], [15, 17]]]
+            layout["symbol-sort-key"] = 40
         } else if id.contains("island") {
             layer["minzoom"] = 10
-            layout["text-size"] = ["stops": [[10, 11], [13, 14]]]
+            layout["text-size"] = ["stops": [[10, 12], [13, 15]]]
+            layout["symbol-sort-key"] = 45
+        }
+        layer["layout"] = layout
+        layer["paint"] = paint
+    }
+
+    private static func dirtStreetNameLayers(from base: [String: Any]) -> [[String: Any]] {
+        func street(id: String, kinds: [String], minZoom: Double, sizes: [[Any]]) -> [String: Any] {
+            var layer = base
+            layer["id"] = id
+            layer["minzoom"] = minZoom
+            layer["filter"] = ["in", "kind"] + kinds
+            var layout = layer["layout"] as? [String: Any] ?? [:]
+            var paint = layer["paint"] as? [String: Any] ?? [:]
+            layout["text-size"] = ["stops": sizes]
+            layout["symbol-placement"] = "line"
+            applyGlanceableType(paint: &paint, layout: &layout, haloWidth: 2.5, padding: 1)
+            layer["layout"] = layout
+            layer["paint"] = paint
+            return layer
+        }
+        return [
+            street(
+                id: "dirt-label-street-major",
+                kinds: ["motorway", "trunk", "primary", "secondary"],
+                minZoom: 10,
+                sizes: [[10, 12], [13, 15], [16, 18]]
+            ),
+            street(
+                id: "label-street-centre-12",
+                kinds: [
+                    "tertiary", "unclassified", "residential",
+                    "pedestrian", "living_street", "service", "road"
+                ],
+                minZoom: 11,
+                sizes: [[11, 12], [14, 15], [16, 17]]
+            )
+        ]
+    }
+
+    private static func retunePathLabel(_ layer: inout [String: Any]) {
+        let id = layer["id"] as? String ?? ""
+        if id == "label-path-bottom-12" {
+            layer["minzoom"] = 11
+            var layout = layer["layout"] as? [String: Any] ?? [:]
+            var paint = layer["paint"] as? [String: Any] ?? [:]
+            layout["text-size"] = ["stops": [[11, 11], [14, 14], [16, 16]]]
+            applyGlanceableType(paint: &paint, layout: &layout, haloWidth: 2.4, padding: 1)
+            layer["layout"] = layout
+            layer["paint"] = paint
+            return
+        }
+        guard id == "streets_polygons_labels-name-13" else { return }
+        var layout = layer["layout"] as? [String: Any] ?? [:]
+        var paint = layer["paint"] as? [String: Any] ?? [:]
+        layout["text-size"] = ["stops": [[13, 12], [16, 16]]]
+        applyGlanceableType(paint: &paint, layout: &layout, haloWidth: 2.4, padding: 1)
+        layer["layout"] = layout
+        layer["paint"] = paint
+    }
+
+    private static func retuneWaterLabel(_ layer: inout [String: Any]) {
+        let id = layer["id"] as? String ?? ""
+        let isWaterText = id.contains("water_polygons_labels") || id.hasPrefix("label-waterway")
+        guard isWaterText else { return }
+        var layout = layer["layout"] as? [String: Any] ?? [:]
+        var paint = layer["paint"] as? [String: Any] ?? [:]
+        applyGlanceableType(
+            paint: &paint,
+            layout: &layout,
+            color: "#1a4d68",
+            haloWidth: 2.4,
+            padding: 1
+        )
+        if let size = layout["text-size"] as? [String: Any],
+           let stops = size["stops"] as? [[Any]],
+           let first = stops.first, first.count == 2,
+           let zoom = first[0] as? Int, zoom >= 12 {
+            layout["text-size"] = ["stops": [[zoom, 12], [20, 22]]]
         }
         layer["layout"] = layout
         layer["paint"] = paint
