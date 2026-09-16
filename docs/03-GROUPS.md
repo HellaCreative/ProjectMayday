@@ -10,7 +10,11 @@ Group ride list/detail, invite codes, presence sharing, and map roster. Spec: th
 | --- | --- |
 | `Dirt/Features/Groups/GroupsViewModel.swift` | Membership, validated presence, realtime, and polling fallback |
 | `Dirt/Features/Groups/GroupSafetyPolicies.swift` | Presence validity and stop-trigger tracking rules |
-| `Dirt/Features/Groups/GroupsSheet.swift` | List / detail UI |
+| `Dirt/Features/Groups/GroupsSheet.swift` | List / detail UI, roster, invite, in-sheet sharing |
+| `Dirt/Features/Groups/GroupNavigationNoticeBanner.swift` | Stop-trigger notices + peer-alert HUD |
+| `Dirt/Features/Map/MapControlStack.swift` | Rider-status sharing popover on the map |
+| `Dirt/App/RootView.swift` | Dock Group panel, peer pin sheet, replace-route confirm |
+| `Dirt/Features/RoutePlanning/RoutePlannerModel.swift` | `routeToMember`, stop-trigger tracking, sharing-ended notice |
 | `Dirt/Persistence/SupabaseService.swift` | Client + session |
 | `Dirt/Map/MapState.swift` | Independent rider and planner marker state |
 
@@ -59,17 +63,18 @@ Missing, future, malformed, or stale timestamps are offline, never live.
 | Feature | Behaviour |
 | --- | --- |
 | Auth gate | Sheet shows sign-in prompt if `!supabase.isSignedIn` |
-| List | Name · member count · live count; pull-to-refresh |
-| Create | Trim and validate name (1–60 chars), then call transactional `create_group` so group + owner membership succeed or roll back together |
-| Join | Invite code → RPC → refresh |
-| Detail | Invite code + copy; sharing controls; roster; leave/delete |
-| Start sharing | Wait for a current, accurate GPS fix, then `requestAlways` + background location; upsert every **10s** normally and every **5s** during distress |
+| List | Name · created/joined · rider count · live count; quiet “Showing {name} on the map”; pull-to-refresh |
+| Create | Inline name field (1–60 chars), then transactional `create_group` so group + owner membership succeed or roll back together |
+| Join | Inline 6-character invite code → RPC → refresh |
+| Detail | Invite code + copy; roster; confirm before leave/delete |
+| Start sharing | Map Rider-status popover **or** own roster row. Wait for a current, accurate GPS fix, then `requestAlways` + background location; upsert every **10s** normally and every **5s** during distress. Sharing is account-wide to every membership. |
 | Stop sharing | Broadcast sharing-off, upsert `sharing_enabled: false`, `status: offline`, and release only the group-sharing background-location claim |
 | Status while sharing | `riding` \| `flat_tire` \| `dead_battery` \| `unrepairable` \| `injured` \| `stuck` (picker) |
-| Roster refresh | Realtime updates with a database polling fallback while tracked (**30s** when connected, **10s** when Realtime is down) |
+| Roster refresh | While group detail is open, poll every **5s**. After close, **30s** when Realtime is connected and **10s** when it is down |
 | Map pins | Live peers (not self): status-colored dot + **name/status chip**; pins keep updating after sheet close while that group is tracked |
 | Focus peer | Scope button flies map to peer, closes sheet |
-| Route to member | Sheet **or tap peer pin on map** → route to the validated last-known position while preserving stable group/member identity |
+| Pin sheet | Tap a live peer pin → compact name / status / Live location / Route to rider |
+| Route to member | Sheet **or tap peer pin on map** → route to the validated last-known position while preserving stable group/member identity. If already navigating to a different rider, confirm then end current nav and route to the new member. Offline/stale never routes. |
 | Stop-trigger tracking | During navigation the route stays frozen while the follower is moving. After an 8s stop, it updates if the member moved at least 100m and is still live. Resuming motion cancels/discards the update. |
 | Tracking notice | A successful update, sharing end, or safe fallback produces a persistent, dismissible navigation notice |
 | Peer alerts | Distress status and route reports are persisted and broadcast only to the selected/tracked target group, shown above the map, and reconciled against current presence |
@@ -92,7 +97,7 @@ commit, and failed presence writes without recording coordinates or account IDs.
 
 Realtime uses a private Realtime channel `group:{groupId}` with presence + broadcast (`location`, `alert`, `sharing_off`).
 
-The app subscribes to the tracked group's private channel for low-latency validated location, alert, and sharing-off events. It persists `rider_presence` every 10s during ordinary sharing and every 5s during distress, then polls the database every 30s when Realtime is connected (10s when it is down), so a missed broadcast is eventually corrected. Request generations prevent old group/list responses from overwriting a newer selection.
+The app subscribes to the tracked group's private channel for low-latency validated location, alert, and sharing-off events. It persists `rider_presence` every 10s during ordinary sharing and every 5s during distress, then polls the database every **5s while that group's detail is open**, or every 30s when Realtime is connected (10s when it is down) after detail closes, so a missed broadcast is eventually corrected. Request generations prevent old group/list responses from overwriting a newer selection.
 
 Location broadcasts and database rows pass the same validity checks. The app never publishes `(0,0)`, never treats a missing timestamp as live, and does not route to a stale member.
 

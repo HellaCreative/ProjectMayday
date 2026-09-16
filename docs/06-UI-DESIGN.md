@@ -83,7 +83,7 @@ No bundled custom fonts in the target today.
 | --- | --- |
 | Layers | Map-aware dock panel |
 | Profile | Full-screen opaque destination with an explicit Close control |
-| Groups | `.sheet` large |
+| Groups | Dock panel ~46% height, fits content |
 | Route planner | Floating card above dock (`DirtTheme.sheet`, 22pt radius, shadow) |
 | Nav chrome | Split top/bottom (see below) while `navigation.phase != .idle` |
 | Incident flow | `IncidentFlowOverlay` — scrim + bottom card (report → recovery → confirm) |

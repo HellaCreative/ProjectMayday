@@ -251,6 +251,38 @@ struct GroupSafetyPolicyTests {
         #expect(!GroupsViewModel.isDistressStatus("riding"))
     }
 
+    @Test func rosterRouteTargetRequiresALiveValidCoordinate() {
+        let now = Date()
+        let live = GroupMemberRow(
+            userID: "alex",
+            role: "member",
+            displayName: "Alex",
+            isLive: true,
+            latitude: 44.65,
+            longitude: -63.57,
+            status: "riding",
+            lastSeenAt: now,
+            accuracyMeters: 12
+        )
+        let target = live.routeTarget(groupID: "trail")
+        #expect(target?.userID == "alex")
+        #expect(target?.groupID == "trail")
+        #expect(target?.isLive == true)
+
+        let offline = GroupMemberRow(
+            userID: "alex",
+            role: "member",
+            displayName: "Alex",
+            isLive: false,
+            latitude: 44.65,
+            longitude: -63.57,
+            status: "offline",
+            lastSeenAt: now,
+            accuracyMeters: 12
+        )
+        #expect(offline.routeTarget(groupID: "trail") == nil)
+    }
+
     @Test func appleSignInFailuresRemainVisibleToTheRider() {
         let error = NSError(
             domain: "DIRTTests.AppleSignIn",

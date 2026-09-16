@@ -421,9 +421,11 @@ struct RootView: View {
                 onRoute: {
                     app.planner.routeToMember(peer.routeTarget)
                     app.groups.clearSelectedPeer()
-                    withAnimation(DockSheetMotion.spring) {
-                        activeSheet = nil
-                        routeCardOpen = true
+                    if app.planner.pendingMemberRouteReplacement == nil {
+                        withAnimation(DockSheetMotion.spring) {
+                            activeSheet = nil
+                            routeCardOpen = true
+                        }
                     }
                 },
                 onClose: { app.groups.clearSelectedPeer() }
@@ -431,6 +433,31 @@ struct RootView: View {
             .presentationDetents([.height(280)])
             .presentationDragIndicator(.visible)
             .presentationBackground(DirtTheme.sheetMaterial)
+        }
+        .confirmationDialog(
+            "Route to a different rider?",
+            isPresented: Binding(
+                get: { app.planner.pendingMemberRouteReplacement != nil },
+                set: { if !$0 { app.planner.cancelReplaceMemberRoute() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let name = app.planner.pendingMemberRouteReplacement?.displayName {
+                Button("Route to \(name)") {
+                    app.planner.confirmReplaceMemberRoute()
+                    withAnimation(DockSheetMotion.spring) {
+                        activeSheet = nil
+                        routeCardOpen = true
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                app.planner.cancelReplaceMemberRoute()
+            }
+        } message: {
+            if let name = app.planner.pendingMemberRouteReplacement?.displayName {
+                Text("Ends the current ride and routes to \(name).")
+            }
         }
     }
 
@@ -634,15 +661,8 @@ struct RootView: View {
                     }
                     // Sit fully above the sticky dock (was 24pt — stack slid under the bar).
                     // The sharing card below supplies that clearance when it's open.
-                    .padding(.bottom, sharingCardOpen ? 8 : (showsDock ? DockSheetMotion.dockClearance + 8 : 24))
+                    .padding(.bottom, showsDock ? DockSheetMotion.dockClearance + 8 : 24)
                     .transition(.opacity)
-                }
-
-                if sharingCardOpen {
-                    GroupSharingCard { app.groups.sharingPanelOpen = false }
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, navActive ? 8 : (showsDock ? DockSheetMotion.dockClearance + 8 : 24))
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 if navActive {
@@ -695,7 +715,6 @@ struct RootView: View {
         }
         .ignoresSafeArea(edges: navActive ? .bottom : [])
         .animation(.easeInOut(duration: 0.2), value: app.mapState.followUser)
-        .animation(DockSheetMotion.spring, value: app.groups.sharingPanelOpen)
         .onPreferenceChange(PlannerSheetHeightKey.self) { height in
             portraitRouteSheetHeight = height
             syncPortraitMapInsets()
@@ -706,8 +725,6 @@ struct RootView: View {
         }
         .onChange(of: activeSheet) { _, _ in
             syncPortraitMapInsets()
-            // A dock panel owns the lower screen — don't leave the card armed behind it.
-            if activeSheet != nil { app.groups.sharingPanelOpen = false }
         }
         .onDisappear {
             // Landscape chrome re-applies its own insets on appear.
@@ -734,11 +751,6 @@ struct RootView: View {
         return activeSheet == nil && !routeCardOpen
     }
 
-    /// Live-sharing card follows the map controls that open it.
-    private var sharingCardOpen: Bool {
-        app.groups.sharingPanelOpen && showsMapControlStack
-    }
-
     @ViewBuilder
     private func dockSheet(_ sheet: ActiveSheet, landscapeDockLeading: Bool?) -> some View {
         switch sheet {
@@ -746,6 +758,7 @@ struct RootView: View {
             DockSheetPanel(
                 heightFraction: 1,
                 landscapeDockLeading: landscapeDockLeading,
+                material: .thinMaterial,
                 onDismiss: dismissDockSheet
             ) {
                 LayersSheet(onClose: dismissDockSheet)
@@ -790,7 +803,6 @@ struct RootView: View {
             )
         }
         .ignoresSafeArea(edges: [.horizontal, .vertical])
-        .animation(DockSheetMotion.spring, value: app.groups.sharingPanelOpen)
         .animation(.easeInOut(duration: 0.2), value: app.mapState.followUser)
         .animation(.easeInOut(duration: 0.2), value: landscapeEdgeTicket)
     }
@@ -863,14 +875,6 @@ struct RootView: View {
                     // Keep the strip at control height — unconstrained Color.clear
                     // spacers otherwise expand the HStack and vertically center the button.
                     .fixedSize(horizontal: false, vertical: true)
-
-                    if app.groups.sharingPanelOpen {
-                        GroupSharingCard { app.groups.sharingPanelOpen = false }
-                            .frame(maxWidth: 420)
-                            .padding(.leading, dockLeading ? dockW + 12 : islandPad)
-                            .padding(.trailing, dockLeading ? islandPad : dockW + 12)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    }
                 }
                 // Figma MapControlStrip sits ~12pt above the bottom edge (y=331 in 393).
                 .padding(.bottom, max(insets.bottom, 12))
@@ -1322,7 +1326,6 @@ struct RootView: View {
     private func mapControlStrip(compact: Bool) -> some View {
         MapControlStack(
             compact: compact,
-            groupOnly: activeSheet == .group,
             horizontal: true
         )
     }
@@ -1481,8 +1484,7 @@ struct RootView: View {
             compact: NavigationChrome.mapStackCompact(
                 routeCardOpen: routeCardOpen,
                 phase: app.navigation.phase
-            ),
-            groupOnly: activeSheet == .group
+            )
         )
     }
 
@@ -1921,79 +1923,6 @@ private struct RouteBuildPistonIndicator: View {
     }
 }
 
-/// Peer distress banners while a group ride is live.
-struct PeerAlertStack: View {
-    let alerts: [PeerAlertBanner]
-    let onFocus: (PeerAlertBanner) -> Void
-    let onDismiss: (String) -> Void
-
-    var body: some View {
-        VStack(spacing: DirtSpace.tight) {
-            ForEach(alerts.prefix(3)) { alert in
-                let isBreakdown = GroupsViewModel.isMechanicalDistressStatus(alert.status)
-                HStack(alignment: .center, spacing: DirtSpace.tight) {
-                    Button {
-                        onFocus(alert)
-                    } label: {
-                        VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
-                            Text(alert.title)
-                                .font(DirtType.rowTitle)
-                                .fontWeight(.bold)
-                                .foregroundStyle(isBreakdown ? .white : DirtTheme.ink)
-                            Text(alert.subtitle)
-                                .font(DirtType.helper)
-                                .foregroundStyle(isBreakdown ? .white.opacity(0.9) : DirtTheme.muted)
-                                .multilineTextAlignment(.leading)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Shows the rider's last known location")
-                    Button {
-                        onDismiss(alert.id)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(isBreakdown ? .white.opacity(0.85) : DirtTheme.muted)
-                            .frame(width: DirtHit.min, height: DirtHit.min)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss alert")
-                }
-                .padding(.leading, DirtSpace.inner)
-                .padding(.trailing, DirtSpace.tight)
-                .padding(.vertical, DirtSpace.tight)
-                .frame(minHeight: DirtHit.control)
-                .background(background(for: alert.status), in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                        .stroke(border(for: alert.status), lineWidth: 1)
-                )
-            }
-        }
-    }
-
-    private func background(for status: String) -> Color {
-        switch status {
-        case "breakdown", "flat_tire", "dead_battery", "unrepairable": return Color(dirtHex: 0xDC6803)
-        case "injured": return Color(dirtHex: 0xC1122F).opacity(0.12)
-        case "stuck": return Color(dirtHex: 0x7C3AED).opacity(0.12)
-        default: return DirtTheme.rowFill
-        }
-    }
-
-    private func border(for status: String) -> Color {
-        switch status {
-        case "breakdown", "flat_tire", "dead_battery", "unrepairable": return Color(dirtHex: 0xDC6803)
-        case "injured": return Color(dirtHex: 0xC1122F).opacity(0.35)
-        case "stuck": return Color(dirtHex: 0x7C3AED).opacity(0.35)
-        default: return DirtTheme.hairline
-        }
-    }
-}
-
 /// Group rider popup — details first, then explicit route CTA.
 private struct GroupPeerDetailSheet: View {
     let peer: SelectedGroupPeer
@@ -2027,11 +1956,11 @@ private struct GroupPeerDetailSheet: View {
 
             detailRow(label: "Group", value: peer.groupName)
             detailRow(label: "Status", value: peer.statusText)
-            detailRow(label: "Last seen", value: peer.lastSeenLabel)
+            detailRow(label: "Location", value: peer.placeLabel)
 
             Spacer(minLength: 0)
 
-            Button("Route to this member", action: onRoute)
+            Button("Route to rider", action: onRoute)
                 .buttonStyle(DirtCTAStyle.brand())
         }
         .padding(DirtSpace.group)

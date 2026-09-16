@@ -443,6 +443,8 @@ final class RoutePlannerModel {
     @ObservationIgnored private var groupFollowerStoppedSince: Date?
     @ObservationIgnored private var groupFollowerIsStopped = false
     private(set) var groupNavigationNotice: GroupNavigationNotice?
+    /// While navigating, Route to rider waits here until the rider confirms replace.
+    private(set) var pendingMemberRouteReplacement: GroupMemberRouteTarget?
 
     private(set) var isRouting = false
     var errorMessage: String?
@@ -1113,6 +1115,20 @@ final class RoutePlannerModel {
         // first so the test hook never observes the previous completed build.
         await moveDebounceTask?.value
         await buildTask?.value
+    }
+
+    var pendingGroupMemberUserIDForTesting: String? { pendingGroupTracking?.userID }
+    var activeGroupMemberUserIDForTesting: String? { activeGroupTracking?.userID }
+
+    func installActiveGroupTrackingForTesting(_ target: GroupMemberRouteTarget) {
+        activeGroupTracking = ActiveGroupTracking(
+            groupID: target.groupID,
+            userID: target.userID,
+            displayName: target.displayName,
+            routedCoordinate: target.coordinate,
+            latestTarget: target,
+            deferredCoordinate: nil
+        )
     }
 
     /// From here drops point 2 as soon as the rider taps — before on-device routing returns.
@@ -2321,6 +2337,7 @@ final class RoutePlannerModel {
         pendingPackBuild = nil
         pendingGroupTracking = nil
         activeGroupTracking = nil
+        pendingMemberRouteReplacement = nil
         dismissGroupNavigationNotice()
         cancelGroupRouteUpdate(resetStopState: true)
         packAcquisition.resetSession()
@@ -4049,12 +4066,44 @@ final class RoutePlannerModel {
     // MARK: - Route to member
 
     func routeToMember(_ target: GroupMemberRouteTarget) {
-        guard navigation.phase == .idle else {
-            toast = "End navigation before choosing a different rider."
+        if navigation.phase != .idle {
+            let currentUserID = activeGroupTracking?.userID ?? pendingGroupTracking?.userID
+            if currentUserID == target.userID {
+                toast = "Already routing to \(target.displayName)."
+                RoutingDebugLog.shared.event(
+                    "group tracking already routing user=\(target.userID)"
+                )
+                return
+            }
+            pendingMemberRouteReplacement = target
+            RoutingDebugLog.shared.event(
+                "group tracking replace offered from=\(currentUserID ?? "none") to=\(target.userID)"
+            )
             return
         }
+        armRouteToMember(target)
+    }
+
+    func confirmReplaceMemberRoute() {
+        guard let target = pendingMemberRouteReplacement else { return }
+        pendingMemberRouteReplacement = nil
+        RoutingDebugLog.shared.event(
+            "group tracking replace confirmed user=\(target.userID)"
+        )
+        clearRoute()
+        armRouteToMember(target)
+    }
+
+    func cancelReplaceMemberRoute() {
+        pendingMemberRouteReplacement = nil
+    }
+
+    private func armRouteToMember(_ target: GroupMemberRouteTarget) {
         guard StopTriggeredTrackingPolicy.targetIsFresh(target) else {
             toast = "That rider's location is no longer current."
+            RoutingDebugLog.shared.event(
+                "group tracking offline rejected user=\(target.userID)"
+            )
             return
         }
         let point = target.coordinate
@@ -4080,13 +4129,6 @@ final class RoutePlannerModel {
         )
         refreshMap()
         Task { await routeFromHere() }
-    }
-
-    /// Compatibility entry point for older call sites. It intentionally does
-    /// not enable stop-trigger tracking because it has no stable rider identity.
-    func routeToMember(name: String, latitude: Double, longitude: Double) {
-        pendingGroupTracking = nil
-        routeToCoordinate(name: name, latitude: latitude, longitude: longitude)
     }
 
     func receiveGroupMemberUpdate(_ target: GroupMemberRouteTarget) {

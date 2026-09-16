@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GroupMapNoticesHost: View {
     @Environment(AppEnvironment.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: DirtSpace.tight) {
@@ -19,7 +20,7 @@ struct GroupMapNoticesHost: View {
                 )
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: app.planner.groupNavigationNotice?.id)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: app.planner.groupNavigationNotice?.id)
     }
 }
 
@@ -77,6 +78,79 @@ struct GroupNavigationNoticeBanner: View {
         case .updated: return "arrow.triangle.2.circlepath"
         case .lastKnown: return "location.slash.fill"
         case .needsReview: return "fuelpump.fill"
+        }
+    }
+}
+
+/// Peer distress banners while a group ride is live.
+struct PeerAlertStack: View {
+    let alerts: [PeerAlertBanner]
+    let onFocus: (PeerAlertBanner) -> Void
+    let onDismiss: (String) -> Void
+
+    var body: some View {
+        VStack(spacing: DirtSpace.tight) {
+            ForEach(alerts.prefix(3)) { alert in
+                let isBreakdown = GroupsViewModel.isMechanicalDistressStatus(alert.status)
+                HStack(alignment: .center, spacing: DirtSpace.tight) {
+                    Button {
+                        onFocus(alert)
+                    } label: {
+                        VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                            Text(alert.title)
+                                .font(DirtType.rowTitle)
+                                .fontWeight(.bold)
+                                .foregroundStyle(isBreakdown ? .white : DirtTheme.ink)
+                            Text(alert.subtitle)
+                                .font(DirtType.helper)
+                                .foregroundStyle(isBreakdown ? .white.opacity(0.9) : DirtTheme.muted)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows the rider's last known location")
+                    Button {
+                        onDismiss(alert.id)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(isBreakdown ? .white.opacity(0.85) : DirtTheme.muted)
+                            .frame(width: DirtHit.min, height: DirtHit.min)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss alert")
+                }
+                .padding(.leading, DirtSpace.inner)
+                .padding(.trailing, DirtSpace.tight)
+                .padding(.vertical, DirtSpace.tight)
+                .frame(minHeight: DirtHit.control)
+                .background(background(for: alert.status), in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(border(for: alert.status), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private func background(for status: String) -> Color {
+        switch status {
+        case "breakdown", "flat_tire", "dead_battery", "unrepairable": return Color(dirtHex: 0xDC6803)
+        case "injured": return Color(dirtHex: 0xC1122F).opacity(0.12)
+        case "stuck": return Color(dirtHex: 0x7C3AED).opacity(0.12)
+        default: return DirtTheme.rowFill
+        }
+    }
+
+    private func border(for status: String) -> Color {
+        switch status {
+        case "breakdown", "flat_tire", "dead_battery", "unrepairable": return Color(dirtHex: 0xDC6803)
+        case "injured": return Color(dirtHex: 0xC1122F).opacity(0.35)
+        case "stuck": return Color(dirtHex: 0x7C3AED).opacity(0.35)
+        default: return DirtTheme.hairline
         }
     }
 }

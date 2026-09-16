@@ -11,9 +11,6 @@ import UIKit
 struct MapControlStack: View {
     @Environment(AppEnvironment.self) private var app
     var compact: Bool = false
-    /// Group browsing owns its own map actions. North reset is the only shared
-    /// map control in that context.
-    var groupOnly = false
     /// Figma landscape-primary: controls run across the bottom of the open map.
     var horizontal: Bool = false
 
@@ -457,17 +454,7 @@ struct MapControlStack: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button {
-                    if groups.isSharing {
-                        groups.stopSharing()
-                        app.planner.toast = "Sharing stopped"
-                    } else if app.supabase.userID == nil {
-                        app.planner.toast = "Sign in from Profile to share"
-                    } else if groups.groups.isEmpty {
-                        app.planner.toast = "Join or create a group first"
-                    } else {
-                        groups.startSharing()
-                        app.planner.toast = "Sharing on"
-                    }
+                    app.planner.toast = groups.toggleSharingFromUI()
                 } label: {
                     Text(groups.isSharing ? "Stop" : "Start sharing")
                         .font(.dirtUI(11, weight: .heavy))
@@ -478,6 +465,21 @@ struct MapControlStack: View {
                         .background(groups.isSharing ? DirtTheme.chrome : DirtTheme.orange)
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
+            }
+
+            if groups.isWaitingForLocation {
+                Text("Waiting for GPS")
+                    .font(.dirtUI(10, weight: .semibold))
+                    .foregroundStyle(DirtTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("group-sharing-waiting-gps")
+            }
+
+            if let distress = groups.distressScopeCopy {
+                Text(distress)
+                    .font(.dirtUI(10))
+                    .foregroundStyle(DirtTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)
@@ -492,16 +494,7 @@ struct MapControlStack: View {
     }
 
     private var sharingContext: String {
-        if app.supabase.userID == nil {
-            return "Sign in from Profile to share your status."
-        }
-        if let selected = app.groups.selectedGroup {
-            return "Sharing with \(selected.name)."
-        }
-        if app.groups.groups.isEmpty {
-            return "Choose a group in Group first."
-        }
-        return "Live for every group you’re in."
+        app.groups.sharingScopeCopy
     }
 
     private func closePopovers() {

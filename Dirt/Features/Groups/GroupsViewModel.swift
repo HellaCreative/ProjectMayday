@@ -25,6 +25,24 @@ struct GroupMemberRow: Identifiable {
     var accuracyMeters: Double?
 
     var id: String { userID }
+
+    func routeTarget(groupID: String) -> GroupMemberRouteTarget? {
+        guard isLive,
+              let latitude,
+              let longitude,
+              let lastSeenAt,
+              GroupPresencePolicy.isValidCoordinate(latitude: latitude, longitude: longitude)
+        else { return nil }
+        return GroupMemberRouteTarget(
+            groupID: groupID,
+            userID: userID,
+            displayName: displayName,
+            coordinate: RouteCoordinate(longitude: longitude, latitude: latitude),
+            lastSeenAt: lastSeenAt,
+            accuracyMeters: accuracyMeters,
+            isLive: true
+        )
+    }
 }
 
 /// Map / roster selection for a live peer.
@@ -42,6 +60,8 @@ struct SelectedGroupPeer: Identifiable, Equatable {
     let accuracyMeters: Double?
 
     var id: String { userID }
+
+    var placeLabel: String { "Live" }
 
     var routeTarget: GroupMemberRouteTarget {
         GroupMemberRouteTarget(
@@ -106,9 +126,6 @@ final class GroupsViewModel {
     /// Live peer selected from the map (or roster) — details card, not auto-route.
     var selectedPeer: SelectedGroupPeer?
     var status = "riding"
-    /// Live-sharing card presented over the map (owned here so the map control
-    /// stack can open it and `RootView` can place it as a bottom card).
-    var sharingPanelOpen = false
     var errorMessage: String?
 
     private var shareTask: Task<Void, Never>?
@@ -168,14 +185,6 @@ final class GroupsViewModel {
     /// Open member details from a map rider pin.
     func selectPeer(fromRiderMarkerID markerID: String) {
         guard let member = member(forRiderMarkerID: markerID),
-              let lat = member.latitude,
-              let lon = member.longitude else { return }
-        presentPeer(member, latitude: lat, longitude: lon)
-    }
-
-    /// Open member details from the group roster.
-    func selectPeer(_ member: GroupMemberRow) {
-        guard member.isLive,
               let lat = member.latitude,
               let lon = member.longitude else { return }
         presentPeer(member, latitude: lat, longitude: lon)
@@ -246,6 +255,54 @@ final class GroupsViewModel {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: .now)
+    }
+
+    /// Library/map caption: one group's pins are on the map at a time.
+    var mapTrackedGroupName: String? {
+        guard let mapTrackedGroupID else { return nil }
+        return groups.first(where: { $0.id == mapTrackedGroupID })?.name
+    }
+
+    var mapTrackingCaption: String? {
+        guard let mapTrackedGroupName else { return nil }
+        return "Showing \(mapTrackedGroupName) on the map"
+    }
+
+    var sharingScopeCopy: String {
+        if supabase.userID == nil {
+            return "Sign in from Group to share your status."
+        }
+        if groups.isEmpty {
+            return "Create or join a group first."
+        }
+        return "Live for every group you’re in."
+    }
+
+    var distressScopeCopy: String? {
+        guard supabase.userID != nil, !groups.isEmpty else { return nil }
+        if let selected = selectedGroup {
+            return "Distress alerts go only to \(selected.name)."
+        }
+        if let name = mapTrackedGroupName {
+            return "Distress alerts go only to \(name)."
+        }
+        return "Distress alerts go only to the group on the map."
+    }
+
+    /// Map popover and own-row Start/Stop share one toast vocabulary.
+    func toggleSharingFromUI() -> String {
+        if isSharing {
+            stopSharing()
+            return "Sharing stopped"
+        }
+        if supabase.userID == nil {
+            return "Sign in from Group to share"
+        }
+        if groups.isEmpty {
+            return "Join or create a group first"
+        }
+        startSharing()
+        return "Sharing on"
     }
 
     func focusPeerAlert(_ alert: PeerAlertBanner) {
@@ -1012,7 +1069,6 @@ final class GroupsViewModel {
         peerAlerts = []
         selectedPeer = nil
         mapTrackedGroupID = nil
-        sharingPanelOpen = false
         location.setBackgroundUpdates(false, for: .groupSharing)
         clearGroupOverlays()
     }
