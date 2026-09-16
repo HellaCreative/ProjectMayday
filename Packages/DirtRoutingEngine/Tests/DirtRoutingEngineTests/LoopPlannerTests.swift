@@ -113,6 +113,57 @@ struct LoopPlannerTests {
         }
     }
 
+    @Test func loopGeometryNeverGoesPastTheFarPinExtent() throws {
+        let graph = try parallelRoads(hops: 30)
+        let start = Coordinate(longitude: 0.002, latitude: 0.002)
+        let far = Coordinate(longitude: 0.28, latitude: 0.002)
+        // Maximum target opens full wander, the case most likely to send the
+        // search past the pin if the extent were not enforced.
+        var request = LoopRequest(start: start, far: far, targetMeters: 200_000, style: .dirt)
+        request.options.cityWall = false
+        let result = try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10))
+        let allowed = start.distance(to: far) + LoopPlanner.extentToleranceMeters
+        for point in result.outbound.geometry {
+            #expect(start.distance(to: point) <= allowed + 1)
+        }
+        for point in result.inbound.geometry {
+            #expect(start.distance(to: point) <= allowed + 1)
+        }
+    }
+
+    @Test func extentCenterRejectsTheOnlyRoadPastItAndInfinityDoesNotChangeIt() throws {
+        // A single line 0->1->2->3: reaching node 3 must pass through node 2,
+        // which is the arc under test.
+        let nodes = (0...3).map { Coordinate(longitude: Double($0) * 0.01, latitude: 0) }
+        let graph = try IndexedGraph(PolicyTests.Line(
+            nodes: nodes, edges: [(0, 1), (1, 2), (2, 3)],
+            surfaces: Array(repeating: "asphalt", count: 3),
+            roads: Array(repeating: "tertiary", count: 3)))
+        let span = nodes[0].distance(to: nodes[1])
+        let start = RoadMatch(edge: 0, coordinate: nodes[0], distanceMeters: 0, alongMeters: 0, geometryMeters: span, forward: true)
+        let end = RoadMatch(edge: 2, coordinate: nodes[3], distanceMeters: 0, alongMeters: span, geometryMeters: span, forward: true)
+        var options = SearchOptions()
+        options.cityWall = false
+        options.extentCenter = nodes[0]
+        // Node 2 sits at 2x the first hop from node 0; a radius under that must
+        // reject the only road there and fail the search.
+        options.maxExtentMeters = span * 1.4
+        #expect(throws: RoutingFailure.self) {
+            try PathSearch(pack: graph).search(start: start, end: end, policy: .init(style: .dirt),
+                                               access: .init(), options: options, budget: .init())
+        }
+        // A generous radius (or no cap at all) leaves the same road reachable.
+        options.maxExtentMeters = span * 2.5
+        let widened = try PathSearch(pack: graph).search(start: start, end: end, policy: .init(style: .dirt),
+                                                         access: .init(), options: options, budget: .init())
+        #expect(widened.end.coordinate.distance(to: nodes[3]) < 10)
+        var uncapped = options
+        uncapped.extentCenter = nil
+        let unbounded = try PathSearch(pack: graph).search(start: start, end: end, policy: .init(style: .dirt),
+                                                           access: .init(), options: uncapped, budget: .init())
+        #expect(unbounded.segments.map(\.edgeID) == widened.segments.map(\.edgeID))
+    }
+
     @Test func ordinaryABSearchIsUnchangedWhenRepeatEdgesAreEmpty() throws {
         let graph = try parallelRoads(hops: 8)
         let start = RoadMatch(edge: 0, coordinate: .init(longitude: 0.002, latitude: 0.002), distanceMeters: 0,

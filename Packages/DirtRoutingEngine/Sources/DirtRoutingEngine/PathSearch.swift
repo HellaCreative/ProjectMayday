@@ -26,6 +26,15 @@ public struct SearchOptions: Sendable {
     /// Extra road-progress budget so a loop can spend leftover target distance
     /// wandering. Zero (default) keeps ordinary A→B extra meters identical.
     public var loopSlackMeters: Double = 0
+    /// Loop hard extent: nil (default) applies no cap, so ordinary A→B search is
+    /// unchanged. When set, no explored road may sit farther from `extentCenter`
+    /// than `maxExtentMeters` — the rider's far pin is the outer edge of the
+    /// ride, not merely what the search aims at. Lateral wander inside that
+    /// radius is unaffected; only the radial "past the pin" case is rejected.
+    /// The endpoint's own attached edge is exempt so the pin itself, wherever
+    /// it falls along a graph edge, always stays reachable.
+    public var extentCenter: Coordinate? = nil
+    public var maxExtentMeters: Double = .infinity
     public var penalizedDirtEdges: Set<String> = []
     public var backtrackFactor: Double = 4
     public var seed: UInt64 = 0
@@ -436,6 +445,12 @@ public struct PathSearch: Sendable {
                     continue
                 }
                 let fromPoint = point(current.state.node), toPoint = point(arc.target)
+                if let center = options.extentCenter, options.maxExtentMeters.isFinite,
+                   !isStart, !isEnd, toPoint.distance(to: center) > options.maxExtentMeters {
+                    options.boundary?.touched = true
+                    options.profile?.corridorRejects += 1
+                    continue
+                }
                 let left = remaining(of: arc.target)
                 let progress: Double
                 if useRoadProgress && left.isFinite {

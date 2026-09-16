@@ -47,6 +47,12 @@ public enum LoopFailure: Error, Equatable, Sendable {
 /// are ordinary styled searches. Outbound edges are expensive on the return,
 /// not forbidden, so a confined network still comes home.
 public struct LoopPlanner: Sendable {
+    /// Final-approach slack on the hard extent: the pin can fall anywhere along
+    /// its graph edge, and the road reaching that edge may run a short distance
+    /// beyond the pin's straight-line radius before turning onto it. This is a
+    /// snap/geometry allowance, not wander room — it stays fixed regardless of
+    /// pin distance or target distance.
+    public static let extentToleranceMeters = 2_000.0
     let pack: any RoadGraph
     public init(pack: any RoadGraph) { self.pack = pack }
 
@@ -69,6 +75,13 @@ public struct LoopPlanner: Sendable {
         outboundRequest.options.maximumMeters = .infinity
         let slack = max(0, request.targetMeters / 2 - request.start.distance(to: request.far))
         outboundRequest.options.loopSlackMeters = slack
+        // The far pin is a hard extent, not merely what the circuit aims at: no
+        // explored road, outbound or return, may sit farther from the start than
+        // the pin itself. Lateral wander inside that radius is unaffected; this
+        // only rejects the radial "past the pin" case. `.with(...)` below carries
+        // these two fields onto the return leg, so both share one centre/radius.
+        outboundRequest.options.extentCenter = request.start
+        outboundRequest.options.maxExtentMeters = request.start.distance(to: request.far) + Self.extentToleranceMeters
         let outbound: ComputedRoute
         do {
             outbound = try engine.route(outboundRequest, budget: budget)
