@@ -290,19 +290,19 @@ timezones; unsupported or ambiguous safety conditions cannot be treated as open.
 Snap and fuel connectors must obey the same directions, barriers, and turns.
 Source provenance and required licensing/attribution survive this consolidation.
 
-## 5. Fuel belongs to the whole journey
+## 5. Routing, waypoints, and fuel
 
-### Owner contract: legs, fuel, and waypoints (15 Sep)
+### Owner contract: legs and waypoints (15 Sep)
 
-This contract governs routing and fuel. Where any other sentence in this
-document or any code comment disagrees, this contract wins.
+This contract governs routing. Where any other sentence in this document or any
+code comment disagrees, this contract wins.
 
 **The ride**
 
 1. The ride is the product. Every leg between two waypoints is the best, most
    interesting ride in that leg's style. It is never the simplest or shortest
    route.
-2. Every leg is selectable, whatever its waypoints are (rider, fuel, or distance
+2. Every leg is selectable, whatever its waypoints are (rider-placed or distance
    break). Each leg has its own style and is held to that style's target:
    - Dirt: strive for 100% dirt.
    - Balanced: strive for 50% dirt and 50% pavement on that leg.
@@ -317,101 +317,95 @@ document or any code comment disagrees, this contract wins.
    closer to the next waypoint by road, so a lake or bay is ridden around, not
    treated as a wall.
 6. Wander sets how far the ride may roam: tight and direct at low wander, big
-   S-curves and wide swings at high wander. It sets how much of each leg's
-   ridden distance may go sideways instead of toward the next rider waypoint
-   (rule 10). Wander never decides whether fuel is found (rule 11).
-
-**Fuel**
-
-7. Fuel is part of the ride. Every fuel stop is a waypoint. There is no separate
-   fuel plan with a route drawn afterwards.
-8. First pump. Never assume a full tank. From the rider's start, go to the
-   nearest reachable mapped pump by the most direct legal route, on any surface,
-   even when that pump is behind the direction of travel. That pump is the first
-   waypoint, and the ride begins there with the full usable range (tank minus
-   reserve). This is the only leg where the ride does not matter. It happens once
-   per trip, at the rider's start. Planning the rest of a trip in windows is an
-   internal detail: a window that resumes at a pump already has a full tank and
-   sweeps on (rule 9). It must never send the rider to another nearby pump, and
-   no leg may end at a pump within a few kilometres of the one it started from.
-9. Sweep. From each refill, one ride search in the leg's style moves outward
-   ahead, no further than the usable range (the fog of war). It remembers each
-   pump it reaches and the ridden distance to it. Range shapes the ride; fuel is
-   chosen from where the rider would actually be on that ride.
-10. Pump choice. From each refill, look in a 120 degree fan (60 degrees either
-    side) pointed straight at the next rider-placed waypoint. Consider the pumps
-    the sweep reached inside that fan. A pump counts only if its leg earns its
-    distance: the reduction in road distance to the next rider waypoint must be
-    at least half of the km ridden on that leg at the default wander (higher
-    wander may lower that share, lower wander raises it). Among pumps that
-    count, choose the one whose leg is the best ride in the leg's style and fits
-    the tank; on a tie, the one that makes more progress. Pumps are never ranked
-    by closeness to the final destination, and shortest distance never picks a
-    pump after the first one.
-11. Nothing counts. First lower the progress share step by step, then widen the
-    fan in modest steps (never past 180 degrees). If still no pump is reachable
-    within range by a leg in the leg's style, show the fuel range gap card.
-    Never substitute a shortest route or a route that ignores fuel.
-12. Destination. The next rider waypoint (or final destination) sets direction.
-    It becomes the leg's end only when a leg in that style reaches it inside the
-    range.
-13. Fuel planning off. The same sweep with no pumps: place a distance-break
-    waypoint where the ride reaches 350 to 400 km, then sweep again from there.
+   S-curves and wide swings at high wander. It sets how much of each leg's ridden
+   distance may go sideways instead of toward the next rider waypoint.
 
 **Waypoints and experience**
 
-14. Waypoint kinds are rider, fuelStop, and distanceBreak. All three are movable
-    with the same drag and confirm. Moving one rebuilds only the legs on either
-    side. A dropped fuel stop snaps to a mapped pump when one is under it. All
-    three are saved and restored with the route.
-15. Legs appear one after another as they are built. A long trip may take longer
-    to finish; the rider watches it grow.
+7. Long legs are broken up. Where a leg would run past 350 to 400 km, place a
+   distance-break waypoint and continue from there, so the route builds in
+   pieces the rider can reshape.
+8. Waypoint kinds are rider-placed and distance break. Both are movable with the
+   same drag and confirm. Moving one rebuilds only the legs on either side. Both
+   are saved and restored with the route.
+9. Legs appear one after another as they are built. A long trip may take longer
+   to finish; the rider watches it grow.
 
-**Tests before any phone build of a routing or fuel change**
+**Fuel is not part of route building (owner decision, 15 Sep evening)**
+
+10. Route building never consults fuel range, reserve, or pumps, and never places
+    a fuel stop. No fuel windows, sweeps, fans, progress shares, or fuel gap
+    cards take part in building a route. Hunting for fuel while composing the
+    ride produced paved legs and wrong-way detours; the ride comes first.
+11. Fuel becomes an advisory layer in a later phase (below). Until it ships,
+    routes are ridden with the rider's own fuel judgement, and the app must not
+    imply a route has been checked for fuel.
+
+**Tests before any phone build of a routing change**
 
 Routes: Porters Lake to Cape Breton, to Yarmouth, and to north New Brunswick,
-each in Dirt, Balanced, and Clean, with fuel on. Report per leg: waypoint kinds,
-km, dirt %, and that style's target (100 / 50 / 0), plus stops and total
-seconds. A leg after the first pump built as a shortest route fails.
+each in Dirt, Balanced, and Clean. Report per leg: waypoint kinds, km, dirt %,
+and that style's target (100 / 50 / 0), plus total seconds. No fuel stops may
+appear. A leg built as a shortest route fails.
 
-Being at a mapped station can satisfy the first-pump approach. Preserve the
-legal arrival orientation while resetting recreational history appropriately. A
-planned approach is not knowledge of actual starting fuel.
+### Later phase: fuel and points of interest, advisory only
 
-After a planned refill, use the configured range minus reserve. Count actual
-selected road distance, including approaches, connectors, and seam tails.
-Ordinary rider points and regional boundaries do not reset the tank. A proposed
-stop or passing a pump does not prove a physical refill or current availability.
+Parked until the core routing above is built and accepted. Nothing here changes
+a route.
 
-Pumps after the first are chosen by the sweep and fan in the owner contract
-(rules 9 to 11): the pump is a pivot of the ride, a reason to ride out to it, not
-the nearest convenient interruption of it. Earlier refuelling is valid where
-needed. Do not impose historical 75-percent barriers, shortest-distance slack
-factors, or a global minimum-stop objective that overrides the ride. Do not
-exclude a necessary refill by an absolute minimum stage distance or a fixed
-exclusion zone around the destination. Avoid needless repetitive stops and
-preserve already proved useful stages. Reconsider a prior choice when its
-downstream region or station exit makes the rest infeasible.
+Fuel is the primary point of interest and ships first, because running dry ends
+a ride. The same "what is near this route" index then serves the rest with no new
+machinery, each kind opt-in so a rider only hears about what they care about:
 
-Before declaring fuel coverage, verify the actual connected chain. Include legal
-station approach/exit, reserve across the full stage, and the final destination.
-At a destination without refuelling, account for the legal onward route to fuel;
-a short lower bound does not prove a longer chosen Dirt route fits the range.
-Do not spend the entire range reaching a regional anchor and forget its tail.
+| Kind | Why a dual-sport rider wants it |
+| --- | --- |
+| Fuel | Primary. Range is the limit on where the ride can go. |
+| Camping and accommodation | Where the day can end: campgrounds, sites, motels. |
+| Food and water | Diners, general stores, and the last store before a long empty stretch. |
+| Sightseeing | Viewpoints, lookouts, waterfalls, beaches, landmarks: reasons the long way is the better way. |
+| Repairs and tyres | Motorcycle and general repair, welding, hardware. A long way from home this matters. |
+| Rider services | Toilets, showers, water refill, shelter. |
 
-Fuel off means no automatic stops and no claim of fuel sufficiency. Road-route
-completion and fuel verification are independent:
+Each kind carries the same facts: distance along the route, distance off the
+route, name, and whatever the pack knows about it. What differs is when it is
+worth saying: fuel is driven by range, accommodation by time of day and distance
+remaining, food by mealtime and by how long since the last one, sightseeing by
+simple proximity. Sightseeing may also be shown at planning time so a rider can
+drag a waypoint onto something worth seeing.
+
+- After a route exists, walk it once and index the points of interest near it:
+  distance along the route, distance off the route, name, and kind. No searching
+  and no route changes.
+- Fuel tracking is a setting, and turning it on states plainly what it means:
+  the rider will get notifications while navigating; the rider must flag when
+  they filled up, because the app cannot know otherwise; pump data may be wrong,
+  closed, or out of date, so cues are information, not promises.
+- Starting navigation asks whether the tank is full. If it is not, offer a route
+  to the nearest pump, then rejoin the planned route.
+- While navigating, a soft nudge may use the rider's own threshold (for example
+  half a tank): name the pump ahead and the distance to the one after it. The
+  hard prompt is last chance, not a percentage: fire when the remaining range is
+  about to fall below the distance to the last pump still reachable ahead, plus a
+  margin. In pump-dense country this rarely fires; in the Cape Breton Highlands
+  it fires early, because it has to.
+- Accepting a prompt routes a short detour to the pump, then rejoins the
+  remaining route at its nearest point. Asking "filled up?" resets the range.
+- The planning screen may say where a route outruns the range and where the
+  pumps near it are. It never changes the route for fuel.
+- Advisory fuel cannot promise the rider reaches a pump. It reports where they
+  would run dry on the ride they chose.
+
+Road completion and fuel are independent facts:
 
 | Outcome | Meaning |
 | --- | --- |
-| Road complete, fuel verified | A connected route reaches every rider point and the planned fuel chain satisfies the stated assumptions. |
-| Road complete, fuel unknown | The road route is usable with the appropriate warning/acknowledgement; missing data, a timeout, or an incomplete search has not proved fuel coverage or a gap. |
-| Road complete, demonstrated fuel gap | Explain the demonstrated gap and assumptions; do not claim coverage or throw away valid road geometry. |
+| Road complete | A connected route reaches every rider point in the chosen styles. Fuel is not asserted. |
+| Road complete, fuel advisory shown | The advisory layer reported pumps near the route and where the range runs out, from the rider's declared fuel. |
 | Road incomplete | Identify the unfinished section and cause. Do not draw a false connector or mark the requested destination reached. |
 
-When fuel cannot be proved, continue/retain the valid requested road route with
-honest fuel status and existing warning behavior. Preserve earlier useful work.
-Do not discard a completed road route merely because pump planning failed.
+The automatic fuel chaining built on 15 September (windows, sweep, fan, progress
+share, gap cards) is removed from the routing path and kept in git history. If it
+returns, it returns as a rider setting after the ride quality above is met.
 
 ## 6. Performance, limits, and completion
 
