@@ -144,7 +144,11 @@ These are not preferences; ignoring them wastes his money and his day.
 - **Never use `-wmo` build flags.** It breaks clean Xcode builds. Tried,
   reverted.
 - **No destructive git.** No force pushes, no resets, no discarding his work.
-  Commit only the files you touched.
+  Commit only the files you touched. Never fetch the GitHub remote into this
+  checkout — it once grew `.git` from 95 MB to 7 GB. The full repository rules,
+  remotes and push command are in the source of truth, §7 "Git: where the work
+  lives"; read them before you run anything. Rick does not read Git, so say in
+  plain words what a command will do before you propose it.
 - **Keep messages short.** He reads on a phone, often tired. Lead with the
   finding. Tables beat paragraphs.
 - **Do not hand him a prompt mid-conversation.** When he is thinking a design
@@ -286,7 +290,11 @@ entry for everything you noticed but did not fix.
 
 ## 12. Where things are
 
-Repository root: `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`
+Repository root: `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, branch
+`cursor/on-device-routing-speed-37c5`, published with `git push github HEAD:main`
+to `HellaCreative/ProjectMayday`. Remotes, the files that must never be staged,
+and the no-fetch rule are all in the source of truth, §7 "Git: where the work
+lives".
 
 | Path | What it is |
 | --- | --- |
@@ -389,7 +397,8 @@ Fallback tag if something goes badly wrong: `pre-find-speed-2026-09-15`.
 
 ## 15. Where the work stands, 16 September 2026
 
-Branch `cursor/on-device-routing-speed-37c5`, HEAD `e07a798`.
+Branch `cursor/on-device-routing-speed-37c5`, HEAD `a972109`, pushed to GitHub
+`main`.
 
 Done: fuel out of routing; distance breaks removed; wander rebuilt; long routes
 staged; shape faults detected and repaired once; backtracking measured honestly.
@@ -408,7 +417,14 @@ is met with Allow Unknown on, which is the live product question: it unlocks the
 dirt and it is also what put Rick on a mucky unproven track. That belongs in the
 interface, not the algorithm.
 
-In flight: the Loop rebuild described in §14.
+In flight: the Loop rebuild. The two-leg design (start → far → home) is on the
+phone, but the first phone test failed — the no-reuse return never succeeded, so
+every loop that completed did so through a relaxation that un-bans most of the
+outbound, re-riding 5–14% of the ride; two loops failed outright with errors the
+rider could not act on. Rick's decision of 16 Sep follows from that test: compass
+headings are removed and the rider drops a far pin instead, and repetition
+becomes a cost the search pays rather than a ban that collapses. See the source
+of truth §2 "Loop and navigation handoff" and §5.
 
 Open items, also in §8's backlog: north New Brunswick wander saturates by 50;
 Quebec indexing costs about 10 seconds inside staged Gaspé; no Ontario pack

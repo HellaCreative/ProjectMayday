@@ -150,13 +150,17 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 
 ### Loop and navigation handoff
 
-Preserve the accepted Loop experience while repairing destination routing.
-A loop is the rider's start pin, a heading, and a target distance. Outbound is
-one styled search to about half the target (the fog-of-war cap); the far point
-is wherever that ride reached, saved as a draggable rider waypoint. Return is
-one styled search that excludes outbound edges. The rider's style is never
-overridden on any leg. Shared access roads may be necessary; a perfect circle
-is not promised. Do not silently return a folded circuit.
+A loop is two pins: the rider's start, and one far pin they drop where they want
+the ride to reach. There is no compass heading and no separate target distance —
+the far pin sets both the direction and the size of the loop, and the rider may
+drop it as near or as far as they like. Outbound rides to the far pin; the return
+comes home a different way. Both are ordinary styled legs, and the far pin stays
+draggable.
+
+A loop is one ride: one style and one Allow Unknown setting for the whole
+circuit, never per leg. Shared access roads may be necessary and a perfect circle
+is not promised, but the return must differ from the outbound wherever the
+network allows it. Do not silently return a folded circuit or an out-and-back.
 
 Navigation receives the same chosen route and ordered named stages. Recalculation
 preserves completed progress, remaining rider anchors, and fuel state. Cue,
@@ -316,7 +320,11 @@ code comment disagrees, this contract wins.
    A route may mix styles leg by leg (for example leg 1 Dirt, leg 2 Balanced).
 3. Leg shape. S-curves and wide swings are good. No loops. No out-and-back or W
    shape into or out of any waypoint on the same road. Re-ride a road only when
-   absolutely necessary.
+   absolutely necessary. Repetition is priced, never simply forbidden: a search
+   that can only finish by repeating road returns the least repetition the
+   network allows, and reports the metres. A hard ban gives either a ride with
+   no repetition or no ride at all, and on a real network the rider mostly gets
+   the second.
 4. Dirt means real riding. Dirt runs under 1 km do not count and are not worth a
    detour.
 5. Direction of travel follows the roads, not the straight line. "Ahead" means
@@ -326,9 +334,20 @@ code comment disagrees, this contract wins.
    S-curves and wide swings at high wander. It sets how much of each leg's ridden
    distance may go sideways instead of toward the next rider waypoint.
 
-Loops are rides. Generate Loop uses the rider's start pin, a heading, and a
-target distance. Outbound and return are ordinary styled legs (rule 2) and
-must obey leg shape (rule 3). The app never changes a loop leg's style.
+Loops are rides (owner decision, 16 Sep). Build Loop uses the rider's start pin
+and one far pin the rider drops in the direction they want to ride. Compass
+headings — north, south, east, west — are removed. A heading asks the rider to
+name a direction they cannot see from a map (which coast, which way around the
+water), and it forces the engine to invent a far point from a distance target,
+which produced tangles instead of loops. The far pin is a fact, and the size of
+the loop comes from where it lands.
+
+Outbound and return are ordinary styled legs (rule 2) and obey leg shape
+(rule 3), so the return re-rides as little of the outbound as the network
+allows. The whole circuit carries one style and one Allow Unknown setting; the
+app never changes a loop leg's style, and a loop has no per-leg settings that can
+disagree with each other. When no acceptable return exists, say so in terms of
+the pin: the rider's move is to drop it somewhere else.
 
 **Waypoints and experience**
 
@@ -512,6 +531,41 @@ does not require rebuilding a shipped app when only an already-used server
 changes, but native binary changes do require a new build to reach a device.
 Verify the actual path; never promise a server fix reaches a local-only binary.
 
+### Git: where the work lives
+
+These are facts about this project's repositories. Keep them accurate; an agent
+that guesses here can lose work or bloat the checkout.
+
+- **Working checkout, the only one:** `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, on
+  the SIDECAR volume. Richard builds DIRT Dev from this checkout. Do not create a
+  second worktree, clone, or copy of the project. Probe and experiment builds go
+  to the session scratch directory, never to another checkout.
+- **Working branch:** `cursor/on-device-routing-speed-37c5`. This branch is the
+  source of truth for current work, whatever its name suggests.
+- **Remotes:** `github` → `https://github.com/HellaCreative/ProjectMayday`
+  (public). `origin` → `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`, a clone on
+  the internal disk kept as a second copy of history.
+- **Publishing:** `git push github HEAD:main`. GitHub `main` was written from this
+  work on 16 Sep and matches the working branch. The previous GitHub `main`
+  (August) is preserved as `archive/main-2026-08-13`. The local `main` branch
+  (`b436a58`, 29 July) is stale and unused.
+- **Never fetch ProjectMayday into this checkout.** Doing it once pulled every
+  unrelated experiment branch and grew `.git` from 95 MB to 7 GB. This checkout
+  pushes; it does not fetch. `.git` is about 100 MB after `git gc`.
+- **Never stage** `Dirt/Features/Groups/GroupsSheet.swift` or
+  `Dirt/Routing/RoutingModels.swift`. They carry Richard's own local changes and
+  stay uncommitted. Stage named paths, never `git add -A` or `git add .`.
+- **Never commit** build output, packs, or evidence directories. `.build/`,
+  `.impeccable/`, `.wrangler/`, and `*.o` are ignored; keep it that way.
+- **Commit rhythm:** one commit per step, with a message saying what changed and
+  why. Commit and push at the end of every piece of work, so that what is on
+  Richard's phone and what is on GitHub are the same thing. He should never have
+  to ask whether his work is saved.
+- **Nothing destructive without a specific instruction for that action:** no
+  force push, no `reset --hard`, no branch deletion, no history rewrite. Richard
+  does not read Git; explain in plain language what a command will do before
+  proposing it.
+
 ## 8. Current state and Cursor handoff — September 15
 
 ### Read this before changing code
@@ -655,7 +709,7 @@ are still proposal-only until Stage 3.
 | Pump pick | `RiderLeg.fuelStopOverrides: [String: String]` | Departure anchor (`from.uuidString` or previous `stationID`) → chosen `stationID`. |
 | Rider drag | `ItineraryAction.move(waypointID:to:)` | Marker `wp:{UUID}`. Confirm-then-rebuild. `reduce` sets `rebuildFromLegIndex = max(0, waypointIndex-1)` and `rebuildThroughLegIndex = nil` → rebuilds the **suffix**, then fuel re-solves. |
 | Fuel “drag” | `RoutePlannerModel.moveFuelStop` / `beginPlannerPinDrag` | Separate path. Drop must land on `validFuelTargets` within 5 km (or a probed replacement). Writes `setFuelStopOverride`. Not free placement. |
-| Loop (Generate) | start + heading + target → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is chosen by the outbound ride, not a trigonometric box. Both legs keep the rider's style. Fuel is not consulted while building. |
+| Loop (Build) | start + rider-dropped far pin → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep); no heading, no target distance. One style and one Allow Unknown for the whole circuit. Fuel is not consulted while building. |
 | Loop (Plan close) | `closeLoop()` → `.append(coordinate: start)` | Same: extra rider waypoint at the start pin, not a special route type. |
 | Saved library | `SavedRoute` (`SwiftData`) | `coordinatesData` (full polyline), `segmentsData?`, `profileRawValue` (one profile for the whole record), `ridePreferencesData?`, `routeSeedsData?`, stats. **No `RiderItinerary`.** |
 | Reopen | `loadSavedRoute` → `applyStoredRouteGeometry` | Frozen `.saved` track with pins `start`/`dest`. Does not restore waypoints or fuel stops. Re-planning requires a new From Here / Plan. |
@@ -780,9 +834,9 @@ not a re-solve.
 
 #### 4. Loops
 
-No loop-specific fuel type. Generate Loop materializes rider waypoints
-`[start, far, start]`. Plan “close loop” already `.append`s the
-start coordinate as a new `.rider` with a new `id`.
+No loop-specific fuel type. Build Loop materializes rider waypoints
+`[start, far, start]`, where `far` is the pin the rider dropped. Plan “close
+loop” already `.append`s the start coordinate as a new `.rider` with a new `id`.
 
 The “final destination” is that last `.rider` row. Chaining in §1 runs inside
 each rider-to-rider span, including the return span. Initial refuel does not
