@@ -409,57 +409,36 @@ struct RoutePlannerCard: View {
     private var loopSetupContent: some View {
         VStack(spacing: 12) {
             if planner.loopFar == nil, !planner.hasRoute {
-                Text("Drop a pin to define distance and direction of loop.")
+                Text("Drop a pin to define distance and direction of loop")
                     .font(DirtType.helper)
+                    .fontWeight(.bold)
                     .foregroundStyle(DirtTheme.ink)
+                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity)
             }
-            VStack(spacing: 8) {
-                loopControlLayout {
-                    Text("Surface")
-                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                    Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
-                        ForEach(RouteProfile.allCases) { profile in
-                            Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
-                                .foregroundStyle(DirtTheme.orange).tag(profile)
-                        }
-                    }
-                    .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
-                    .accessibilityValue(planner.profile.title)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(minHeight: DirtHit.min)
-                if planner.profile != .cleanest {
-                    Divider()
-                    profilePolicyToggle(
-                        profile: planner.profile,
-                        allowUnknown: Binding(
-                            get: { planner.allowUnknown },
-                            set: { on in
-                                if on {
-                                    unknownAckStage = nil
-                                    showUnknownAck = true
-                                } else {
-                                    planner.allowUnknown = false
-                                }
+            surfaceAndDirtGrouping
+            if planner.hasRoute {
+                profilePolicyToggle(
+                    profile: planner.profile,
+                    allowUnknown: Binding(
+                        get: { planner.allowUnknown },
+                        set: { on in
+                            if on {
+                                unknownAckStage = nil
+                                showUnknownAck = true
+                            } else {
+                                planner.allowUnknown = false
                             }
-                        ),
-                        avoidMotorways: Binding(
-                            get: { planner.avoidMotorways },
-                            set: { planner.avoidMotorways = $0 }
-                        ),
-                        showsAllowUnknownExplainer: false
-                    )
-                }
+                        }
+                    ),
+                    avoidMotorways: Binding(
+                        get: { planner.avoidMotorways },
+                        set: { planner.avoidMotorways = $0 }
+                    ),
+                    showsAllowUnknownExplainer: false
+                )
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .font(.subheadline)
-            .foregroundStyle(DirtTheme.ink)
-            .tint(DirtTheme.action)
-            .padding(.horizontal, 14).padding(.vertical, 6)
-
-            .disabled(planner.isRouting)
 
             if planner.isRouting {
                 loopControlLayout {
@@ -474,10 +453,18 @@ struct RoutePlannerCard: View {
                     .buttonStyle(DirtCTAStyle.brand())
             }
             if let summary = planner.loopSummary {
-                Text(summary).font(DirtType.helper).foregroundStyle(DirtTheme.ink)
+                Text(summary)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.ink)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             }
             if let error = planner.errorMessage {
-                Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
+                Text(error)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.danger)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             }
         }
     }
@@ -527,7 +514,6 @@ struct RoutePlannerCard: View {
                                 planner.profile = profile
                                 withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = false }
                             }
-                            profileGuidanceLine(planner.profile)
                             profilePolicyToggle(
                                 profile: planner.profile,
                                 allowUnknown: Binding(
@@ -558,47 +544,8 @@ struct RoutePlannerCard: View {
             ctaRow
             clearAllButton
         } else {
-            fromHereProfileHeader
-            if fromHereChipsOpen {
-                profilePolicyToggle(
-                    profile: planner.profile,
-                    allowUnknown: Binding(
-                        get: { planner.allowUnknown },
-                        set: { on in
-                            if on {
-                                unknownAckStage = nil
-                                showUnknownAck = true
-                            } else {
-                                planner.allowUnknown = false
-                            }
-                        }
-                    ),
-                    avoidMotorways: Binding(
-                        get: { planner.avoidMotorways },
-                        set: { planner.avoidMotorways = $0 }
-                    )
-                )
-            }
+            surfaceAndDirtGrouping
             fromHereGuidanceAndRecovery
-        }
-    }
-
-    @ViewBuilder private var fromHereProfileHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Surface")
-                Spacer()
-                Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
-                    ForEach(RouteProfile.allCases) { profile in
-                        Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
-                                .foregroundStyle(DirtTheme.orange).tag(profile)
-                    }
-                }
-                .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
-                .accessibilityValue(planner.profile.title)
-            }
-            .frame(minHeight: DirtHit.min)
-            profileGuidanceLine(planner.profile)
         }
     }
 
@@ -650,7 +597,7 @@ struct RoutePlannerCard: View {
         if msg.contains("fuel-safe route") {
             return "Try again. If it repeats, choose Balanced for this leg or move point 2 closer."
         }
-        return "Try another profile (tap Balanced), turn on Allow unknown, or long-press to move point 2."
+        return "Try another profile (tap Balanced), or long-press to move point 2."
     }
 
     // MARK: - Plan
@@ -1174,12 +1121,41 @@ struct RoutePlannerCard: View {
 
     // MARK: - Shared rows
 
+    /// Surface label + Dirt/Clean/Balanced picker as one island — picker sits
+    /// immediately after Surface, not trailing-aligned as a second column.
+    private var surfaceAndDirtGrouping: some View {
+        HStack(spacing: DirtSpace.inner) {
+            Text("Surface")
+                .font(DirtType.rowTitle)
+                .foregroundStyle(DirtTheme.ink)
+            Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
+                ForEach(RouteProfile.allCases) { profile in
+                    Label { Text(profile.title) } icon: { DirtSurfaceIcon.menuImage(for: profile.title) }
+                        .foregroundStyle(DirtTheme.orange).tag(profile)
+                }
+            }
+            .pickerStyle(.menu)
+            .dirtDropdownSurface()
+            .labelsHidden()
+            .accessibilityLabel("Surface")
+            .accessibilityValue(planner.profile.title)
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
+        .padding(.horizontal, DirtSpace.row)
+        .padding(.vertical, DirtSpace.tight)
+        .dirtGroupingSurface()
+        .disabled(planner.isRouting)
+    }
+
     private func profileGuidanceLine(_ profile: RouteProfile) -> some View {
         Text(profile.guidance)
             .font(.dirtUI(11))
             .foregroundStyle(DirtTheme.muted)
+            .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 2)
     }
 
@@ -1329,16 +1305,17 @@ struct RoutePlannerCard: View {
                 .font(.dirtUI(12, weight: .semibold))
                 .foregroundStyle(DirtTheme.danger)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
         } else if !planner.packRoutingWarnings.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(spacing: 6) {
                 ForEach(planner.packRoutingWarnings) { warning in
                     Text(warning.message)
                         .font(.dirtUI(12, weight: .semibold))
                         .foregroundStyle(DirtTheme.muted)
-                        .multilineTextAlignment(.leading)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -1792,6 +1769,8 @@ struct SavedRoutesList: View {
                 Text("No saved routes yet. Route somewhere and tap Save, or import a GPX track.")
                     .font(.dirtUI(12))
                     .foregroundStyle(DirtTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
             } else {
                 ScrollView {

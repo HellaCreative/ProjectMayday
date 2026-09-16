@@ -78,11 +78,16 @@ struct ProfileSheet: View {
                 .padding(.horizontal, DirtSpace.group)
                 .padding(.top, DirtSpace.tight)
                 .padding(.bottom, DirtSpace.section)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
+                    }
+                )
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
         .onAppear { displayName = supabase.displayName }
         .onChange(of: supabase.displayName) { _, name in
             if !showEditName {
@@ -280,7 +285,11 @@ struct ProfileSheet: View {
 
     private var rideSettingsSheet: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Keep-awake & contribute", onClose: { showRideSettings = false })
+            DirtSheetHeader(
+                title: "Keep-awake & contribute",
+                titleFont: .system(.title2, design: .default, weight: .bold),
+                onClose: { showRideSettings = false }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: DirtSpace.inner) {
                     Toggle("Keep device awake while using this app", isOn: $keepAwakeWhileUsing)
@@ -321,6 +330,7 @@ struct ProfileSheet: View {
             .scrollEdgeEffectStyle(.soft, for: .top)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
         }
+        .padding(.top, DirtSpace.group)
         .background(DirtTheme.sheetMaterial)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -337,7 +347,11 @@ struct ProfileSheet: View {
 
     private var legalAccountSheet: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Legal & account", onClose: { showLegalAccount = false })
+            DirtSheetHeader(
+                title: "Legal & account",
+                titleFont: .system(.title2, design: .default, weight: .bold),
+                onClose: { showLegalAccount = false }
+            )
             ScrollView {
                 VStack(spacing: DirtSpace.group) {
                     VStack(spacing: DirtSpace.tight) {
@@ -416,6 +430,7 @@ struct ProfileSheet: View {
             .scrollEdgeEffectStyle(.soft, for: .top)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
         }
+        .padding(.top, DirtSpace.group)
         .background(DirtTheme.sheetMaterial)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

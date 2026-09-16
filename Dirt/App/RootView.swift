@@ -273,13 +273,6 @@ struct RootView: View {
                     Text("Ends the current ride and routes to \(name).")
                 }
             }
-            .sheet(isPresented: $ridePreferencesOpen) {
-                RidePreferencesSheet(initial: app.planner.displayedRidePreferences) {
-                    app.planner.applyRidePreferences($0)
-                }
-                .presentationDetents([.height(420)])
-                .presentationBackground(DirtTheme.sheetMaterial)
-            }
             .background { rootLifecycleHooks }
     }
 
@@ -368,15 +361,26 @@ struct RootView: View {
             .transition(.move(edge: .top).combined(with: .opacity))
         }
         .overlay(alignment: .top) {
-            if fuelControlsOpen, routeCardOpen, !navActive, activeSheet == nil {
-                fuelControlPanel
-                    .padding(.top, isLandscape ? 12 : 72)
-                    .padding(.horizontal, 12)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .zIndex(20)
+            if routeCardOpen, !navActive, activeSheet == nil {
+                Group {
+                    if fuelControlsOpen {
+                        fuelControlPanel
+                    } else if ridePreferencesOpen {
+                        RidePreferencesSheet(
+                            initial: app.planner.displayedRidePreferences,
+                            onApply: { app.planner.applyRidePreferences($0) },
+                            onClose: { ridePreferencesOpen = false }
+                        )
+                    }
+                }
+                .padding(.top, isLandscape ? 12 : 72)
+                .padding(.horizontal, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(20)
             }
         }
         .animation(.easeInOut(duration: 0.18), value: fuelControlsOpen)
+        .animation(.easeInOut(duration: 0.18), value: ridePreferencesOpen)
         .animation(.easeInOut(duration: 0.22), value: app.groups.peerAlerts.map(\.id))
         .overlay {
             if showRouteConfetti {
@@ -763,7 +767,13 @@ struct RootView: View {
                 })
             }
         case .profile:
-            DockSheetPanel(heightFraction: 1, landscapeDockLeading: landscapeDockLeading, onDismiss: dismissDockSheet) {
+            DockSheetPanel(
+                heightFraction: 0.62,
+                fitsContent: true,
+                minContentHeight: 280,
+                landscapeDockLeading: landscapeDockLeading,
+                onDismiss: dismissDockSheet
+            ) {
                 ProfileSheet(onClose: dismissDockSheet)
             }
         }
@@ -1025,18 +1035,24 @@ struct RootView: View {
 
     private var ridePreferencesButton: some View {
         Button {
-            fuelControlsOpen = false
-            ridePreferencesOpen = true
+            withAnimation(.easeInOut(duration: 0.18)) {
+                fuelControlsOpen = false
+                ridePreferencesOpen.toggle()
+            }
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(ridePreferencesOpen ? DirtTheme.onOrange : .white)
                 .frame(width: 48, height: 48)
-                .background(DirtTheme.chrome, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+                .background(
+                    ridePreferencesOpen ? DirtTheme.orange : DirtTheme.chrome,
+                    in: RoundedRectangle(cornerRadius: DirtRadius.control)
+                )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Ride settings")
+        .accessibilityLabel("Your Ride")
         .accessibilityHint("Adjust wander, cities and highways")
+        .accessibilityAddTraits(ridePreferencesOpen ? .isSelected : [])
     }
 
     /// Consume a free taste when the live ride actually begins (not on prep cancel).
@@ -1052,6 +1068,7 @@ struct RootView: View {
             mapFuelReservePercent = FuelRangePrefs.reservePercent
             mapFuelNotificationsEnabled = FuelRangePrefs.notificationsEnabled
             withAnimation(.easeInOut(duration: 0.18)) {
+                ridePreferencesOpen = false
                 fuelControlsOpen.toggle()
             }
         } label: {
@@ -1189,14 +1206,7 @@ struct RootView: View {
                 .accessibilityValue("\(Int(mapFuelReservePercent)) percent")
             }
         }
-        .padding(14)
-        .frame(maxWidth: 420)
-        .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
+        .dirtTopAffordancePanel()
     }
 
     private func syncLandscapeMapInsets(dockLeading: Bool, sheetWidth: CGFloat) {

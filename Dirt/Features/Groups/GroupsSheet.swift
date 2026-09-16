@@ -284,29 +284,30 @@ struct GroupDetailView: View {
     private var groups: GroupsViewModel { app.groups }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("\(group.memberCount) riders · \(group.liveCount) sharing")
-                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-                Spacer()
-            }
-            if let invite = group.inviteCode {
-                Button {
-                    UIPasteboard.general.string = invite.lowercased()
-                    app.planner.toast = "Invite code copied"
-                } label: {
-                    HStack {
-                        Label("Invite a rider", systemImage: "person.badge.plus")
-                        Spacer()
-                        Text(invite.lowercased()).monospaced()
-                        Image(systemName: "doc.on.doc")
-                    }.font(DirtType.rowTitle).frame(minHeight: 44)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("\(group.memberCount) riders · \(group.liveCount) sharing")
+                        .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+                    Spacer()
                 }
-                .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
-                .padding(.horizontal, DirtSpace.row)
-                .dirtGroupingSurface()
-            }
-            ScrollView {
+                if let invite = group.inviteCode {
+                    Button {
+                        UIPasteboard.general.string = invite.lowercased()
+                        app.planner.toast = "Invite code copied"
+                    } label: {
+                        HStack {
+                            Label("Invite a rider", systemImage: "person.badge.plus")
+                            Spacer()
+                            Text(invite.lowercased()).monospaced()
+                            Image(systemName: "doc.on.doc")
+                        }.font(DirtType.rowTitle).frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
+                    .padding(.horizontal, DirtSpace.row)
+                    .dirtGroupingSurface()
+                }
+                ownSharingCard
                 VStack(spacing: 0) {
                     ForEach(groups.members) { member in riderRow(member) }
                     if groups.members.isEmpty {
@@ -325,12 +326,14 @@ struct GroupDetailView: View {
                     .font(DirtType.helper).frame(minHeight: 44).padding(.top, 10)
                 }
                 .dirtGroupingSurface(radius: DirtRadius.card)
-                .background(GeometryReader { geo in
-                    Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height + 88)
-                })
             }
+            .padding(.horizontal, DirtSpace.group)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
+                }
+            )
         }
-        .padding(.horizontal, DirtSpace.group)
         .task(id: groups.members.map { "\($0.id):\(locationKey($0)):\($0.isLive)" }.joined()) {
             // Resolve actual live locations serially. Offline rows never masquerade as current.
             for member in groups.members where member.isLive && locationKeys[member.id] != locationKey(member) {
@@ -345,6 +348,76 @@ struct GroupDetailView: View {
                 }
             }
         }
+    }
+
+    private var ownSharingCard: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            Text("Your location")
+                .font(DirtType.rowTitle)
+                .fontWeight(.bold)
+                .foregroundStyle(DirtTheme.ink)
+            Text(ownSharingHelper)
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: DirtSpace.inner) {
+                Button(groups.isSharing ? "Stop sharing" : "Start sharing") {
+                    app.planner.toast = groups.toggleSharingFromUI()
+                }
+                .font(DirtType.chip)
+                .fontWeight(.bold)
+                .padding(.horizontal, 10)
+                .frame(minHeight: DirtHit.min)
+                .foregroundStyle(groups.isSharing ? Color.white : DirtTheme.onOrange)
+                .background(
+                    groups.isSharing ? DirtTheme.chrome : DirtTheme.orange,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .accessibilityLabel(groups.isSharing ? "Stop sharing location" : "Start sharing location")
+
+                Spacer(minLength: 0)
+
+                Menu {
+                    ForEach(GroupsViewModel.selectableStatuses, id: \.self) { status in
+                        Button(GroupsViewModel.statusLabel(status)) { groups.setStatus(status) }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Status")
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .font(DirtType.chip)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.ink)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: DirtHit.min)
+                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .dirtDropdownSurface()
+                .disabled(!groups.isSharing)
+                .accessibilityLabel("Share status")
+                .accessibilityHint(groups.isSharing ? "Choose the status your riders see" : "Start sharing to set status")
+            }
+
+            if let distress = groups.distressScopeCopy {
+                Text(distress)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(DirtSpace.row)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dirtGroupingSurface()
+    }
+
+    private var ownSharingHelper: String {
+        if groups.isSharing {
+            return groups.isWaitingForLocation ? "Waiting for GPS" : groups.sharingScopeCopy
+        }
+        return "Share your position and status with this group."
     }
 
     private func locationKey(_ member: GroupMemberRow) -> String {
