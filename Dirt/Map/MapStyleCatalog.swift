@@ -187,10 +187,10 @@ extension MapStyleCatalog {
     ]
 
     static func boostedSaturationHex(_ hex: String, factor: Double = 1.15) -> String {
-        guard let rgb = rgb(from: hex) else { return hex }
-        var hsl = hsl(from: rgb)
-        hsl.s = min(1, hsl.s * factor)
-        return hexString(from: rgb(from: hsl))
+        guard let base = rgb(from: hex) else { return hex }
+        var color = hsl(from: base)
+        color.s = min(1, color.s * factor)
+        return hexString(from: rgb(from: color))
     }
 
     private static func applyRichLandcover(id: String, paint: inout [String: Any]) {

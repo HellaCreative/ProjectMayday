@@ -439,13 +439,14 @@ nonisolated enum PackNetworkOverlay {
                 north = max(north, point.latitude)
             }
             guard east >= minLon, west <= maxLon, north >= minLat, south <= maxLat else { continue }
-            let surface = ProfilePolicy.family(pack.surfaceLeaf(edge))
+            let engineSurface = ProfilePolicy.family(pack.surfaceLeaf(edge))
+            let family = SurfaceFamily(rawValue: engineSurface.rawValue) ?? .unknown
             result.append(NetworkLineFeature(edgeId: pack.edgeID(edge),
                 coordinates: line.map { .init(lat: $0.latitude,lon: $0.longitude) },
-                surfaceClass: overlaySurfaceClass(surface),
+                surfaceClass: overlaySurfaceClass(family),
                 accessClass: NativeRoutingAdapter.accessName(pack.accessCode(edge,forward: true)),
                 structureType: pack.structure(edge),province: province,roadClass: pack.roadClass(edge),
-                surfaceLeaf: pack.surfaceLeaf(edge),surfaceFamily: surface.rawValue,
+                surfaceLeaf: pack.surfaceLeaf(edge),surfaceFamily: family.rawValue,
                 roadClassLeaf: pack.roadClass(edge),roadTier: ProfilePolicy.tier(pack.roadClass(edge)),
                 accessLeaf: pack.accessLeaf(edge),atvDesignated: pack.atvDesignated(edge)))
             if result.count >= cap { break }
