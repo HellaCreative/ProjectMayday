@@ -223,6 +223,18 @@ struct PolicyTests {
         #expect(first[0] == second[0])
     }
 
+    @Test func shapeFaultsCatchOutAndBackAndIgnoreSplitRuns() {
+        func seg(_ id: String, _ meters: Double, forward: Bool = true) -> RouteSegment {
+            RouteSegment(edge: 0, edgeID: id, forward: forward, meters: meters, surface: .paved,
+                         surfaceLeaf: "asphalt", roadClass: "tertiary", structure: "", access: 0, geometry: [])
+        }
+        #expect(RouteQuality.shapeFaults([seg("a", 500), seg("b", 500), seg("c", 500)]).issueCount == 0)
+        #expect(RouteQuality.shapeFaults([seg("a", 200), seg("a", 200), seg("b", 500)]).issueCount == 0)
+        let back = RouteQuality.shapeFaults([seg("a", 400), seg("b", 400), seg("a", 400, forward: false)])
+        #expect(back.reusedEdgeIDs.contains("a"))
+        #expect(back.issueCount >= 1)
+    }
+
     @Test func defaultMetroWallIncludesHalifax() {
         let halifax = Coordinate(longitude: -63.58,latitude: 44.65)
         let start = Coordinate(longitude: -63.34,latitude: 44.76)

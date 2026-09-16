@@ -259,8 +259,10 @@ public struct RoutingEngine: Sendable {
         let summary = candidateLog.isEmpty ? nil : candidateLog.joined(separator: ",")
         let limitNote = incomplete.map { "comparison incomplete: \($0)" }
         if let selected = chooseDirt(candidates) {
-            var result = selected.route.reportingLimit(limitNote)
-            result.searchSummary = summary
+            let repaired = repairLegShape(selected.route, request: request, run: run, policy: request.profile)
+            var result = repaired.route.reportingLimit(limitNote)
+            let shape = "shape:\(repaired.before)->\(repaired.after)"
+            result.searchSummary = [summary, shape].compactMap { $0 }.joined(separator: ",")
             return result
         }
         if let incomplete { throw incomplete }
@@ -342,8 +344,31 @@ public struct RoutingEngine: Sendable {
             return score(a) < score(b)
         } ?? candidates[0]
         var result = selected.route
-        result.searchSummary = log.joined(separator: ",")
+        let repaired = repairLegShape(result, request: request, run: run, policy: request.profile)
+        result = repaired.route
+        result.searchSummary = log.joined(separator: ",") + ",shape:\(repaired.before)->\(repaired.after)"
         return result
+    }
+    private func repairLegShape(
+        _ route: ComputedRoute,
+        request: RoutingRequest,
+        run: (SearchOptions, ProfilePolicy?) throws -> ComputedRoute,
+        policy: ProfilePolicy?
+    ) -> (route: ComputedRoute, before: Int, after: Int) {
+        let before = RouteQuality.shapeFaults(route.segments)
+        guard before.issueCount > 0 else { return (route, 0, 0) }
+        var options = request.options
+        options.avoidEdges.formUnion(before.avoidIDs)
+        options.corridorMeters = .infinity
+        options.objective = (policy?.style ?? request.profile.style) == .balanced ? .profile : .pavement
+        do {
+            let fixed = try run(options, policy)
+            let after = RouteQuality.shapeFaults(fixed.segments)
+            if after.issueCount < before.issueCount {
+                return (fixed, before.issueCount, after.issueCount)
+            }
+        } catch { }
+        return (route, before.issueCount, before.issueCount)
     }
     private func chooseDirt(_ candidates: [Candidate]) -> Candidate? {
         let coherent = candidates.filter { $0.quality.backwardMeters <= max(5000,$0.quality.totalMeters*0.08) }

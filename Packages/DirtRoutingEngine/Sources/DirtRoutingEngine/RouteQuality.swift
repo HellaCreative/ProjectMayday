@@ -86,4 +86,61 @@ public struct RouteQuality: Sendable {
         }
         return result
     }
+
+    public struct ShapeFaults: Sendable, Equatable {
+        public var reusedEdgeIDs: Set<String> = []
+        public var pinWiggleIDs: Set<String> = []
+        public var avoidIDs: Set<String> { reusedEdgeIDs.union(pinWiggleIDs) }
+        public var issueCount: Int { reusedEdgeIDs.count + pinWiggleIDs.count }
+    }
+
+    /// §5 rule 3: a finished leg must not loop, out-and-back, or W on the same
+    /// road into or out of a waypoint. Consecutive splits of one edge are one run.
+    public static func shapeFaults(_ segments: [RouteSegment], pinMeters: Double = 2_500) -> ShapeFaults {
+        struct Run { let id: String; let forward: Bool; var meters: Double }
+        var runs: [Run] = []
+        for segment in segments where segment.structure != "ferry" && !segment.edgeID.isEmpty {
+            if let last = runs.last, last.id == segment.edgeID, last.forward == segment.forward {
+                runs[runs.count - 1].meters += segment.meters
+            } else {
+                runs.append(Run(id: segment.edgeID, forward: segment.forward, meters: segment.meters))
+            }
+        }
+        var faults = ShapeFaults()
+        var seen: [String: Int] = [:]
+        for run in runs where run.meters > 80 {
+            seen[run.id, default: 0] += 1
+        }
+        for (id, count) in seen where count >= 2 {
+            faults.reusedEdgeIDs.insert(id)
+        }
+        func wiggle(in slice: ArraySlice<Run>) -> Set<String> {
+            var local: [String: Int] = [:]
+            for run in slice where run.meters > 40 {
+                local[run.id, default: 0] += 1
+            }
+            return Set(local.compactMap { $0.value >= 2 ? $0.key : nil })
+        }
+        var walked = 0.0, startEnd = 0
+        for (index, run) in runs.enumerated() {
+            walked += run.meters
+            startEnd = index
+            if walked >= pinMeters { break }
+        }
+        var tail = runs.count
+        walked = 0
+        for index in stride(from: runs.count - 1, through: 0, by: -1) {
+            walked += runs[index].meters
+            tail = index
+            if walked >= pinMeters { break }
+        }
+        if !runs.isEmpty {
+            faults.pinWiggleIDs.formUnion(wiggle(in: runs.prefix(startEnd + 1)))
+            if tail < runs.count {
+                faults.pinWiggleIDs.formUnion(wiggle(in: runs.suffix(from: tail)))
+            }
+        }
+        faults.pinWiggleIDs.subtract(faults.reusedEdgeIDs)
+        return faults
+    }
 }
