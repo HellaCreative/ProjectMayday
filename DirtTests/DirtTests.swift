@@ -242,17 +242,6 @@ struct DirtTests {
         #expect(PackNetworkOverlay.overlaySurfaceClass(.unknown) == "unknown")
     }
 
-    @Test func lowZoomOutlineRingsCoverProvincesAndStates() {
-        let rings = RegionPolygons.lowZoomOutlineRings()
-        let ids = Set(rings.map(\.regionId))
-        #expect(ids.contains("ns"))
-        #expect(ids.contains("on"))
-        #expect(ids.contains("ny"))
-        #expect(ids.contains("ca"))
-        #expect(rings.count >= 50)
-        #expect(rings.allSatisfy { $0.coordinates.count >= 2 })
-    }
-
     private func intZoom(_ raw: Any?) -> Int {
         if let value = raw as? Int { return value }
         if let value = raw as? Double { return Int(value.rounded()) }

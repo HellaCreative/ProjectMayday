@@ -256,7 +256,7 @@ extension MapStyleCatalog {
     }
 
     /// Tile lines start at z7 (Shortbread has no province/state geometry below that).
-    /// Bundled `RegionPolygons` outlines cover idle/continental zoom.
+    /// Do not paint `RegionPolygons` pack bounds — those are routing regions, not admin borders.
     private static func dirtBoundaryLineLayers(from base: [String: Any]) -> [[String: Any]] {
         func line(id: String, admin: Int, dashed: Bool, color: String) -> [String: Any] {
             var layer = base

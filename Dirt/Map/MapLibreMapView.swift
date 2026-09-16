@@ -217,8 +217,7 @@ struct MapLibreMapView: UIViewRepresentable {
             // Dual-sport nav: highway number shields (“NS 104 TCH”) crowd the
             // trail at mid zooms — hide them; keep ordinary street name labels.
             Self.hideHighwayShieldLabels(in: style)
-            // Layer insertion order: admin outlines → network → route → POI
-            addAdminOutlineLayers(to: style)
+            // Layer insertion order: network overlays (below) → route → POI
             addNetworkLayers(to: style)
             addDebugGraphLayers(to: style)
             addRouteLayers(to: style)
@@ -250,39 +249,6 @@ struct MapLibreMapView: UIViewRepresentable {
                     layer.isVisible = false
                 }
             }
-        }
-
-        // MARK: - Low-zoom admin outlines (Shortbread has no state lines below z7)
-
-        private func addAdminOutlineLayers(to style: MLNStyle) {
-            guard style.source(withIdentifier: "dirt-admin-outlines") == nil else { return }
-            let rings = RegionPolygons.lowZoomOutlineRings()
-            let shapes: [MLNPolylineFeature] = rings.compactMap { ring in
-                guard ring.coordinates.count >= 2 else { return nil }
-                var coords = ring.coordinates.compactMap { pair -> CLLocationCoordinate2D? in
-                    guard pair.count >= 2 else { return nil }
-                    return CLLocationCoordinate2D(latitude: pair[1], longitude: pair[0])
-                }
-                guard coords.count >= 2 else { return nil }
-                let line = MLNPolylineFeature(coordinates: &coords, count: UInt(coords.count))
-                line.attributes = ["regionId": ring.regionId]
-                return line
-            }
-            let src = MLNShapeSource(
-                identifier: "dirt-admin-outlines",
-                shape: MLNShapeCollectionFeature(shapes: shapes),
-                options: nil
-            )
-            style.addSource(src)
-            let outline = MLNLineStyleLayer(identifier: "dirt-admin-outline", source: src)
-            outline.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.adminStateBorder))
-            outline.lineWidth = NSExpression(forConstantValue: 0.9)
-            outline.lineOpacity = NSExpression(forConstantValue: 0.85)
-            outline.lineDashPattern = NSExpression(forConstantValue: [4, 3] as [NSNumber])
-            outline.lineCap = NSExpression(forConstantValue: "round")
-            outline.lineJoin = NSExpression(forConstantValue: "round")
-            outline.maximumZoomLevel = 7
-            style.addLayer(outline)
         }
 
         // MARK: - Network overlay layers

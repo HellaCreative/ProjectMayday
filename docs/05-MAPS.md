@@ -149,7 +149,7 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ### Basemap labels and borders
 
-`MapStyleCatalog.generatedShortbreadStyleURL` (revision `admin-v1`) splits Shortbread `boundaries` / `boundary_labels` into country vs province/state layers, ink `#1a1f24`. Public Shortbread has **no province/state line geometry below zoom 7**. Bundled `RegionPolygons` outlines (`dirt-admin-outline`) cover idle / continental zoom and hide at z7 when tile lines take over. Country names fade after z6 so province names win.
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `admin-v1`) splits Shortbread `boundaries` / `boundary_labels` into country vs province/state layers, ink `#1a1f24`. Public Shortbread has **no province/state line geometry below zoom 7**. Do **not** paint `RegionPolygons` pack bounds as borders — those are routing regions, not admin geometry. Tile lines (`dirt-bound-country` / `dirt-bound-state`) start at z7 from real OSM admin_level. Country names stay at overview and fade after z6 so province names win.
 
 ### Rider Services POIs
 
@@ -183,7 +183,6 @@ Loose/technical pack edges tag `surfaceClass: track` so `dirt-net-track` actuall
 ### Layer insertion order
 
 ```
-dirt-admin-outline                                                 ← z0–7 bundled province/state
 dirt-net-access / gravel / track / restricted / bridge / tunnel   ← nearby network
 dirt-route-{bucket}-line                                           ← selected route
 dirt-poi-{category}                                                ← above route
