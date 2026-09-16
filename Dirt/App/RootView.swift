@@ -1055,29 +1055,10 @@ struct RootView: View {
     /// Portrait Island phones: hardware cutout on top, wordmark under it, one
     /// black rounded wrapper around both. Nothing is drawn into the cutout.
     private var islandBrandBar: some View {
-        VStack(spacing: 0) {
-            Color.clear
-                .frame(width: DirtIsland.cutoutWidth, height: DirtIsland.cutoutHeight)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-
-            Button(action: toggleRoutingGraphDebug) {
-                BrandChip(sitsInIslandStack: true)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 2)
-                    .padding(.bottom, 10)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(app.mapState.showRoutingGraphDebug ? "Hide surface network" : "Show surface network")
-            .accessibilityHint("Shows or hides nearby road surfaces")
-        }
-        .frame(minWidth: DirtIsland.cutoutWidth)
-        .background(
-            Color.black,
-            in: RoundedRectangle(cornerRadius: DirtIsland.wrapperRadius, style: .continuous)
+        IslandBrandBar(
+            graphDebugVisible: app.mapState.showRoutingGraphDebug,
+            onToggleGraph: toggleRoutingGraphDebug
         )
-        .padding(.top, DirtIsland.cutoutTop)
-        .ignoresSafeArea(edges: .top)
     }
 
     @ViewBuilder
@@ -1870,6 +1851,96 @@ struct RootView: View {
         .accessibilityAddTraits(state == .open ? [.isSelected] : [])
     }
 
+}
+
+/// Load entrance: wrapper grows down from the hardware Island, then `DIRT.` plops
+/// into the settled bar. Reduce Motion fades; the wrapper never bounces off the cutout.
+private struct IslandBrandBar: View {
+    let graphDebugVisible: Bool
+    let onToggleGraph: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var wrapperRevealed = false
+    @State private var wordmarkLanded = false
+
+    private var wrapperShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: DirtIsland.wrapperRadius, style: .continuous)
+    }
+
+    private var wrapperScale: CGFloat {
+        if reduceMotion { return 1 }
+        return wrapperRevealed ? 1 : DirtIsland.collapsedScaleY
+    }
+
+    private var barOpacity: Double {
+        reduceMotion ? (wrapperRevealed ? 1 : 0) : 1
+    }
+
+    private var wordmarkOpacity: Double {
+        if reduceMotion { return wrapperRevealed ? 1 : 0 }
+        return wordmarkLanded ? 1 : 0
+    }
+
+    private var wordmarkScale: CGFloat {
+        if reduceMotion { return 1 }
+        return wordmarkLanded ? 1 : 0.88
+    }
+
+    private var wordmarkOffset: CGFloat {
+        if reduceMotion { return 0 }
+        return wordmarkLanded ? 0 : -10
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(width: DirtIsland.cutoutWidth, height: DirtIsland.cutoutHeight)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            Button(action: onToggleGraph) {
+                BrandChip(sitsInIslandStack: true)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 2)
+                    .padding(.bottom, 10)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(graphDebugVisible ? "Hide surface network" : "Show surface network")
+            .accessibilityHint("Shows or hides nearby road surfaces")
+            .opacity(wordmarkOpacity)
+            .scaleEffect(wordmarkScale, anchor: .top)
+            .offset(y: wordmarkOffset)
+            .allowsHitTesting(wordmarkLanded || reduceMotion)
+        }
+        .frame(minWidth: DirtIsland.cutoutWidth)
+        .background(Color.black, in: wrapperShape)
+        .clipShape(wrapperShape)
+        .scaleEffect(x: 1, y: wrapperScale, anchor: .top)
+        .opacity(barOpacity)
+        .padding(.top, DirtIsland.cutoutTop)
+        .ignoresSafeArea(edges: .top)
+        .onAppear(perform: playEntrance)
+    }
+
+    private func playEntrance() {
+        if reduceMotion {
+            withAnimation(DirtMotion.islandFade) {
+                wrapperRevealed = true
+                wordmarkLanded = true
+            }
+            return
+        }
+
+        withAnimation(DirtMotion.islandGrow) {
+            wrapperRevealed = true
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(280))
+            withAnimation(DirtMotion.islandPlop) {
+                wordmarkLanded = true
+            }
+        }
+    }
 }
 
 private struct KeepAwakeLifecycle: ViewModifier {

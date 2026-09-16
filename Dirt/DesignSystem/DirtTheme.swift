@@ -185,6 +185,25 @@ enum DirtMotion {
             : .spring(response: 0.32, dampingFraction: 0.80)
     }
 
+    /// Island wrapper grows down from the hardware cutout. High damping so the
+    /// bar never overshoots and bounces off the Island after rest.
+    static var islandGrow: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.20)
+            : .spring(response: 0.42, dampingFraction: 0.92)
+    }
+
+    /// Wordmark drop into the settled wrapper. Small bounce; Reduce Motion fades.
+    static var islandPlop: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.16)
+            : .spring(response: 0.34, dampingFraction: 0.62)
+    }
+
+    static var islandFade: Animation {
+        .easeOut(duration: 0.22)
+    }
+
     static func light() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
@@ -218,6 +237,11 @@ enum DirtIsland {
     /// Capsule corners of the hardware Island — the wrapper uses the same radius
     /// so Island + logo read as one object, not two pills.
     static var wrapperRadius: CGFloat { cutoutHeight / 2 }
+    /// Wordmark padding under the cutout slot (top 2 + 32 wordmark + bottom 10).
+    static let wordmarkBand: CGFloat = 44
+    static var restingHeight: CGFloat { cutoutHeight + wordmarkBand }
+    /// First-frame scaleY so the black wrapper matches the hardware Island.
+    static var collapsedScaleY: CGFloat { cutoutHeight / restingHeight }
 
     static func isPresent(
         topInset: CGFloat,
@@ -580,9 +604,11 @@ enum DirtSurfaceIcon {
 
 /// Opaque dropdown affordance: the field stays legible above map-backed sheets.
 extension View {
-    func dirtDropdownSurface() -> some View {
+    /// `titleColor` tints the selected word. Icons stay orange via `tint` /
+    /// `DirtSurfaceIcon.menuImage`. Planner Surface uses ink so **DIRT** reads.
+    func dirtDropdownSurface(titleColor: Color = DirtTheme.orange) -> some View {
         tint(DirtTheme.orange)
-            .foregroundStyle(DirtTheme.orange)
+            .foregroundStyle(titleColor)
             .padding(.horizontal, 10)
             .frame(minHeight: 36)
             .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
