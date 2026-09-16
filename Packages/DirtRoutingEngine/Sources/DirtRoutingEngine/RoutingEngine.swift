@@ -170,6 +170,19 @@ public struct RoutingEngine: Sendable {
                     route = try run(options)
                     quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
                     if route.limit == nil && quality.knownDirtPercent < 70 {
+                        var profileOptions = options
+                        profileOptions.objective = .profile
+                        do {
+                            let profileRoute = try run(profileOptions)
+                            let profileQuality = RouteQuality(route: profileRoute,urbanBoxes: UrbanCores.boxes(in: pack))
+                            candidates.append(.init(route: profileRoute,width: options.corridorMeters,quality: profileQuality))
+                            candidateLog.append("profile/\(Int(profileQuality.knownDirtPercent))%/\(Int(profileRoute.distanceMeters))m/\(profileRoute.poppedLabels)p")
+                            if profileQuality.knownDirtPercent > quality.knownDirtPercent {
+                                route = profileRoute
+                                quality = profileQuality
+                            }
+                        } catch RoutingFailure.noPath { }
+                        catch let failure as RoutingFailure { incomplete = failure }
                         for _ in 0..<3 {
                             let penalties = RouteQuality.shortDirtExcursions(route.segments)
                             if penalties.isSubset(of: options.penalizedDirtEdges) { break }

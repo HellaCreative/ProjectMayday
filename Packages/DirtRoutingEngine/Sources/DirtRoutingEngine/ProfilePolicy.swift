@@ -9,9 +9,8 @@ public struct ProfilePolicy: Sendable {
     /// Zero tightens the pull without converting Dirt into Balanced or Clean.
     public var wander = 1.0
     /// Pavement-mode away multiplier at full wander. Zero wander restores the JS ×10.
-    /// Sweep 10/4/2/1 on Dirt matrix routes; 4 keeps detours cheaper than paved
-    /// (38/km away vs 150/km paved) without the loop-prone ×1 floor.
-    public var dirtPavementAwayAtFullWander = 4.0
+    /// 2 keeps dirt detours cheap enough to chase 70%+ without the loop-prone ×1 floor.
+    public var dirtPavementAwayAtFullWander = 1.0
     /// Balanced dirt mix in [0, 1]. 0 prefers paved, 1 prefers dirt, 0.5 is the
     /// default 50/50 starting weight.
     public var balancedDirtPreference = 0.5
