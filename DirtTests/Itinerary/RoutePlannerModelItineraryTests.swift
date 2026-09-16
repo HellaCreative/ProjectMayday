@@ -352,6 +352,48 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.built?.legs.allSatisfy { $0.endsAtFuelStop == nil } == true)
     }
 
+    @Test func distanceBreakPinsAreLabeledAndBecomeRiderWaypointsWhenConfirmed() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 0
+        FuelRangePrefs.automaticPlanningEnabled = false
+
+        let map = MapState()
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(point(0), point(1))] = 475_000
+        let model = makeModel(source: source, mapState: map)
+        model.selectMode(.plan)
+        model.apply(
+            .replaceAll(waypoints: [point(0), point(1)], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.stages.count == 2)
+        #expect(model.stageEndpointTitle(at: 0) == "Point 1 → D1")
+        #expect(model.stageFuelStationSubtitle(at: 0) == RoutePlannerModel.distanceBreakPinSubtitle)
+        let pin = try #require(map.plannerMarkers.first { $0.kind == .distanceBreak })
+        #expect(pin.label == "D1")
+        #expect(pin.subtitle == RoutePlannerModel.distanceBreakPinSubtitle)
+        #expect(!pin.isLocked)
+        let parsed = try #require(RoutePlannerModel.parseDistanceBreakMarkerID(pin.id))
+        #expect(parsed.riderLegID == model.itinerary.legs[0].id)
+
+        source.routeRequests.removeAll()
+        model.moveWaypoint(markerID: pin.id, to: point(0.4).locationCoordinate)
+        #expect(model.showsWaypointPlacementConfirmation)
+        #expect(model.distanceBreakMove?.riderLegID == model.itinerary.legs[0].id)
+        #expect(source.routeRequests.isEmpty)
+        #expect(model.itinerary.waypoints.count == 2)
+
+        model.confirmWaypointPlacement()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.distanceBreakMove == nil)
+        #expect(model.itinerary.waypoints.count == 3)
+        #expect(model.itinerary.waypoints[1].coordinate == point(0.4))
+        #expect(!source.routeRequests.isEmpty)
+    }
+
     @Test func perLegStyleSelectorAppliesToEachRiderLeg() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }

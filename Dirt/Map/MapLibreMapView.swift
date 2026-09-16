@@ -1360,7 +1360,7 @@ struct MapLibreMapView: UIViewRepresentable {
             // Fuel pins expose the packed station name on tap. Other planner
             // pins use direct selection/drag behavior and need no callout.
             guard let dirtAnnotation = annotation as? DirtAnnotation else { return false }
-            return dirtAnnotation.kind == .fuel
+            return dirtAnnotation.kind == .fuel || dirtAnnotation.kind == .distanceBreak
         }
 
         func mapView(_ mapView: MLNMapView, didSelect annotation: MLNAnnotation) {
@@ -1925,7 +1925,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
             : annotation.kind == .fuel
             ? "Fuel stop \(annotation.label), \(title)"
             : annotation.kind == .distanceBreak
-            ? "Distance break \(annotation.label)"
+            ? "Distance break \(annotation.label). \(annotation.title ?? "Placed every 350 to 400 kilometers. Drag to move")"
             : "Route pin \(annotation.label)"
         // All planner pins: dark #111820 body + orange circle.
         bodyLayer.fillColor = UIColor(red: 17/255, green: 24/255, blue: 32/255, alpha: 1).cgColor

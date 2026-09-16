@@ -657,6 +657,9 @@ final class RoutePlannerModel {
     func stageFuelStationSubtitle(at index: Int) -> String? {
         guard stages.indices.contains(index) else { return nil }
         let stage = stages[index]
+        if stage.endsAtDistanceBreak {
+            return Self.distanceBreakPinSubtitle
+        }
         if stage.endsAtFuelStop {
             return stage.fuelStopName
         }
@@ -1250,28 +1253,46 @@ final class RoutePlannerModel {
         RoutingDebugLog.shared.event("ui waypoint placement draft leg=\(resolvedRiderLegID)")
     }
 
+    static let distanceBreakPinSubtitle = "Distance break · every 350–400 km · drag to move"
+
     var waypointPlacement: (legID: UUID, coordinate: RouteCoordinate)?
     var waypointMove: (id: UUID, coordinate: RouteCoordinate)?
+    var distanceBreakMove: (markerID: String, riderLegID: UUID, coordinate: RouteCoordinate)?
     var showsWaypointPlacementConfirmation = false
 
     func keepMovingWaypoint() {
         showsWaypointPlacementConfirmation = false
-        toast = "Drag the waypoint to your preferred location"
+        toast = distanceBreakMove == nil
+            ? "Drag the waypoint to your preferred location"
+            : "Drag the distance break to your preferred location"
     }
 
     func confirmWaypointPlacement() {
         guard showsWaypointPlacementConfirmation, navigation.phase == .idle, !isRouting else { return }
         if let move = waypointMove {
             waypointMove = nil
+            distanceBreakMove = nil
             showsWaypointPlacementConfirmation = false
             mapState.selectPlannerPin(nil)
             apply(.move(waypointID: move.id, to: move.coordinate), source: "confirmedMove")
+            return
+        }
+        if let move = distanceBreakMove {
+            distanceBreakMove = nil
+            waypointPlacement = nil
+            waypointMove = nil
+            showsWaypointPlacementConfirmation = false
+            mapState.selectPlannerPin(nil)
+            if mode == .fromHere { switchToPlanKeepingFromHere() }
+            apply(.insert(afterLegID: move.riderLegID, coordinate: move.coordinate), source: "confirmedDistanceBreakMove")
+            RoutingDebugLog.shared.event("ui distance break moved to rider waypoint leg=\(move.riderLegID)")
             return
         }
         guard let draft = waypointPlacement, navigation.phase == .idle, !isRouting,
               itinerary.legs.contains(where: { $0.id == draft.legID }) else { return }
         waypointPlacement = nil
         waypointMove = nil
+        distanceBreakMove = nil
         showsWaypointPlacementConfirmation = false
         if mode == .fromHere { switchToPlanKeepingFromHere() }
         apply(.insert(afterLegID: draft.legID, coordinate: draft.coordinate), source: "confirmedPlacement")
@@ -1770,6 +1791,7 @@ final class RoutePlannerModel {
     private func invalidateInFlightRoutes(cancelPlanRebuildTask: Bool = true) {
         waypointPlacement = nil
         waypointMove = nil
+        distanceBreakMove = nil
         showsWaypointPlacementConfirmation = false
         cancelFuelReplacement()
         fromHereIntentGeneration += 1
@@ -1895,6 +1917,10 @@ final class RoutePlannerModel {
         guard navigation.phase == .idle, !isRouting else { return }
         if markerID.hasPrefix("fuel:") {
             moveFuelStop(markerID: markerID, to: rawCoordinate)
+            return
+        }
+        if markerID.hasPrefix("break:") {
+            moveDistanceBreak(markerID: markerID, to: rawCoordinate)
             return
         }
         if markerID == "waypoint-draft", let draft = waypointPlacement {
@@ -2158,7 +2184,40 @@ final class RoutePlannerModel {
               itinerary.waypoints.contains(where: { $0.id == waypointID })
         else { return }
         waypointPlacement = nil
+        distanceBreakMove = nil
         waypointMove = (waypointID, snapped)
+        showsWaypointPlacementConfirmation = true
+        refreshMap()
+        mapState.selectPlannerPin(markerID)
+    }
+
+    /// `break:<riderLegUUID>:<builtIndex>` — UUID hyphens mean the last colon is the split.
+    static func parseDistanceBreakMarkerID(_ markerID: String) -> (riderLegID: UUID, builtIndex: Int)? {
+        guard markerID.hasPrefix("break:") else { return nil }
+        let rest = markerID.dropFirst(6)
+        guard let colon = rest.lastIndex(of: ":") else { return nil }
+        let uuidString = String(rest[..<colon])
+        let indexString = String(rest[rest.index(after: colon)...])
+        guard let riderLegID = UUID(uuidString: uuidString), let builtIndex = Int(indexString)
+        else { return nil }
+        return (riderLegID, builtIndex)
+    }
+
+    private func moveDistanceBreak(markerID: String, to rawCoordinate: CLLocationCoordinate2D) {
+        guard let parsed = Self.parseDistanceBreakMarkerID(markerID),
+              let leg = built?.legs.indices.contains(parsed.builtIndex) == true
+                ? built?.legs[parsed.builtIndex] : nil,
+              leg.riderLegID == parsed.riderLegID,
+              leg.endsAtDistanceBreak,
+              itinerary.legs.contains(where: { $0.id == parsed.riderLegID })
+        else { return }
+        waypointPlacement = nil
+        waypointMove = nil
+        distanceBreakMove = (
+            markerID: markerID,
+            riderLegID: parsed.riderLegID,
+            coordinate: RouteCoordinate(longitude: rawCoordinate.longitude, latitude: rawCoordinate.latitude)
+        )
         showsWaypointPlacementConfirmation = true
         refreshMap()
         mapState.selectPlannerPin(markerID)
@@ -2246,6 +2305,7 @@ final class RoutePlannerModel {
     func clearRoute() {
         waypointPlacement = nil
         waypointMove = nil
+        distanceBreakMove = nil
         showsWaypointPlacementConfirmation = false
         if navigation.phase != .idle {
             endNavigation()
@@ -2282,6 +2342,7 @@ final class RoutePlannerModel {
     func selectMode(_ newMode: Mode) {
         waypointPlacement = nil
         waypointMove = nil
+        distanceBreakMove = nil
         showsWaypointPlacementConfirmation = false
         cancelFuelReplacement()
         if showingLoop {
@@ -2593,15 +2654,19 @@ final class RoutePlannerModel {
                 )
             } else if leg.endsAtDistanceBreak {
                 breakOrdinal += 1
+                let markerID = "break:\(leg.riderLegID.uuidString):\(index)"
+                let coordinate = distanceBreakMove?.markerID == markerID
+                    ? distanceBreakMove!.coordinate
+                    : leg.toCoordinate
                 markers.append(
                     MapState.Marker(
-                        id: "break:\(leg.riderLegID.uuidString):\(index)",
-                        latitude: leg.toCoordinate.latitude,
-                        longitude: leg.toCoordinate.longitude,
+                        id: markerID,
+                        latitude: coordinate.latitude,
+                        longitude: coordinate.longitude,
                         label: "D\(breakOrdinal)",
                         kind: .distanceBreak,
-                        subtitle: "Distance break",
-                        isLocked: true
+                        subtitle: Self.distanceBreakPinSubtitle,
+                        isLocked: false
                     )
                 )
             }
@@ -3033,7 +3098,7 @@ final class RoutePlannerModel {
                 latitude: start.latitude,
                 longitude: start.longitude,
                 label: compactLabel(title, fallback: "A"),
-                kind: title.hasPrefix("F") ? .fuel : .start,
+                kind: title.hasPrefix("F") ? .fuel : (title.hasPrefix("D") ? .distanceBreak : .start),
                 isLocked: true
             ))
         }
@@ -3044,7 +3109,7 @@ final class RoutePlannerModel {
                 latitude: end.latitude,
                 longitude: end.longitude,
                 label: compactLabel(title, fallback: "B"),
-                kind: title.hasPrefix("F") ? .fuel : .destination,
+                kind: title.hasPrefix("F") ? .fuel : (title.hasPrefix("D") ? .distanceBreak : .destination),
                 isLocked: true
             ))
         }
@@ -3503,7 +3568,7 @@ final class RoutePlannerModel {
                 kind = .fuelStop
             } else if stage.endsAtDistanceBreak {
                 title = "D\(distanceBreakOrdinal(endingAt: index))"
-                detail = "Distance break"
+                detail = Self.distanceBreakPinSubtitle
                 kind = .distanceBreak
             } else if let waypointFuel {
                 title = "Point \(pointOrdinal)"

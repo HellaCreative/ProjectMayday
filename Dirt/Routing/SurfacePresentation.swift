@@ -67,12 +67,15 @@ struct RouteSurfaceComposition: Equatable, Sendable {
                 }
             }
 
-            // Legacy saved routes have only their two-bucket summary. Preserve
-            // the numbers but do not invent a specific non-paved material.
+            // Legacy saved routes have only their two-bucket summary. Keep both
+            // published percents; leftover distance stays unknown rather than
+            // being silently assigned to gravel or loose.
             let meters = response.distanceMeters ?? GeoMath.lineMeters(response.coordinates)
             let paved = max(0, min(100, response.pavedPercent))
+            let dirt = max(0, min(100 - paved, response.dirtPercent))
             result.add(meters: meters * Double(paved) / 100, family: .paved)
-            result.add(meters: meters * Double(100 - paved) / 100, family: .unknown)
+            result.add(meters: meters * Double(dirt) / 100, family: .gravel)
+            result.add(meters: meters * Double(max(0, 100 - paved - dirt)) / 100, family: .unknown)
         }
         return result
     }
