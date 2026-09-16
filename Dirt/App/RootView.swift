@@ -341,6 +341,20 @@ struct RootView: View {
             case (.profile, .account): finishCoach()
             default: break
             }
+            if sheet == .group {
+                withAnimation(DirtMotion.affordance) {
+                    fuelControlsOpen = false
+                    ridePreferencesOpen = false
+                }
+            }
+        }
+        .onChange(of: app.planner.mode) { _, mode in
+            if mode == .saved {
+                withAnimation(DirtMotion.affordance) {
+                    fuelControlsOpen = false
+                    ridePreferencesOpen = false
+                }
+            }
         }
         // Consume a free taste when the live ride actually begins (not on prep cancel).
         // Also covers the fuel-stop hook: `NavigationStage.kind == .fuelStop` already
@@ -693,11 +707,11 @@ struct RootView: View {
             }
 
             // Fuel range (leading) + recenter / fit plan (trailing) above route sheet.
-            if showsDock, (routeCardOpen || activeSheet != nil), activeSheet != .profile, activeSheet != .layers, !navActive {
+            if showsDock, (routeCardOpen || activeSheet != nil), activeSheet != .profile, activeSheet != .layers, activeSheet != .group, !navActive {
                 HStack(alignment: .bottom, spacing: 10) {
-                    if routeCardOpen {
+                    if routeCardOpen, app.planner.mode != .saved {
                         fuelRangeButton
-                        if app.planner.mode != .saved { ridePreferencesButton }
+                        ridePreferencesButton
                     }
                     Spacer(minLength: 0)
                     mapControlStack
@@ -717,6 +731,11 @@ struct RootView: View {
                 dock
                     .zIndex(2)
 
+            }
+        }
+        .overlay(alignment: .top) {
+            if hasDynamicIsland {
+                islandBrandBar
             }
         }
         .ignoresSafeArea(edges: navActive ? .bottom : [])
@@ -771,9 +790,9 @@ struct RootView: View {
             }
         case .group:
             DockSheetPanel(
-                heightFraction: 0.46,
-                fitsContent: true,
-                minContentHeight: 200,
+                heightFraction: 0.60,
+                expandedHeightFraction: 0.92,
+                showsDragIndicator: true,
                 landscapeDockLeading: landscapeDockLeading,
                 onDismiss: dismissDockSheet
             ) {
@@ -783,7 +802,16 @@ struct RootView: View {
                 })
             }
         case .profile:
-            DockSheetPanel(heightFraction: 1, landscapeDockLeading: landscapeDockLeading, onDismiss: dismissDockSheet) {
+            DockSheetPanel(
+                heightFraction: 0.72,
+                fitsContent: true,
+                minContentHeight: 340,
+                contentBreathing: DirtSpace.section,
+                expandedHeightFraction: 0.92,
+                showsDragIndicator: true,
+                landscapeDockLeading: landscapeDockLeading,
+                onDismiss: dismissDockSheet
+            ) {
                 ProfileSheet(onClose: dismissDockSheet)
             }
         }
@@ -792,7 +820,7 @@ struct RootView: View {
     private func dismissDockSheet() {
         dockTransitionTask?.cancel()
         dockDestination = nil
-        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.21)) {
+        withAnimation(reduceMotion ? nil : DirtMotion.sheetExit) {
             activeSheet = nil
         }
     }
@@ -931,8 +959,10 @@ struct RootView: View {
         let gutter = Color.clear.frame(width: sheetWidth + gap, height: 1)
         // Packs on the sheet-adjacent edge; fit + recenter on the far open-map edge.
         let controls = HStack(spacing: 10) {
-            fuelRangeButton
-            if app.planner.mode != .saved { ridePreferencesButton }
+            if app.planner.mode != .saved {
+                fuelRangeButton
+                ridePreferencesButton
+            }
             Spacer(minLength: 8)
             if app.planner.canFocusEntirePlannedRoute {
                 landscapeFitPlanButton
@@ -996,16 +1026,18 @@ struct RootView: View {
         .accessibilityLabel("Follow my location")
     }
 
-    private var graphBrandButton: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.22)) {
-                app.mapState.showRoutingGraphDebug.toggle()
-                if !app.mapState.showRoutingGraphDebug {
-                    app.mapState.debugGraphHit = nil
-                    routingGraphDebugPanelExpanded = false
-                }
+    private func toggleRoutingGraphDebug() {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            app.mapState.showRoutingGraphDebug.toggle()
+            if !app.mapState.showRoutingGraphDebug {
+                app.mapState.debugGraphHit = nil
+                routingGraphDebugPanelExpanded = false
             }
-        } label: {
+        }
+    }
+
+    private var graphBrandButton: some View {
+        Button(action: toggleRoutingGraphDebug) {
             BrandChip(minHeight: 48)
             .overlay(
                 RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous)
@@ -1020,10 +1052,40 @@ struct RootView: View {
         .accessibilityHint("Shows or hides nearby road surfaces")
     }
 
+    /// Portrait Island phones: hardware cutout on top, wordmark under it, one
+    /// black rounded wrapper around both. Nothing is drawn into the cutout.
+    private var islandBrandBar: some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(width: DirtIsland.cutoutWidth, height: DirtIsland.cutoutHeight)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            Button(action: toggleRoutingGraphDebug) {
+                BrandChip(sitsInIslandStack: true)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 2)
+                    .padding(.bottom, 10)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(app.mapState.showRoutingGraphDebug ? "Hide surface network" : "Show surface network")
+            .accessibilityHint("Shows or hides nearby road surfaces")
+        }
+        .frame(minWidth: DirtIsland.cutoutWidth)
+        .background(
+            Color.black,
+            in: RoundedRectangle(cornerRadius: DirtIsland.wrapperRadius, style: .continuous)
+        )
+        .padding(.top, DirtIsland.cutoutTop)
+        .ignoresSafeArea(edges: .top)
+    }
+
     @ViewBuilder
     private var idleBrandStack: some View {
         VStack(alignment: .leading, spacing: 8) {
-            graphBrandButton
+            if !hasDynamicIsland {
+                graphBrandButton
+            }
 
             if let progress = app.planner.activeRouteProgressMessage {
                 ToastView(text: progress, isBuildingRoute: true)
@@ -1332,6 +1394,7 @@ struct RootView: View {
     private func mapControlStrip(compact: Bool) -> some View {
         MapControlStack(
             compact: compact,
+            groupOnly: activeSheet == .group,
             horizontal: true
         )
     }
@@ -1485,12 +1548,20 @@ struct RootView: View {
         return window?.safeAreaInsets ?? .zero
     }
 
+    private var hasDynamicIsland: Bool {
+        DirtIsland.isPresent(
+            topInset: Self.foregroundSafeAreaInsets.top,
+            isLandscape: isLandscape
+        )
+    }
+
     private var mapControlStack: some View {
         MapControlStack(
             compact: NavigationChrome.mapStackCompact(
                 routeCardOpen: routeCardOpen,
                 phase: app.navigation.phase
-            )
+            ),
+            groupOnly: activeSheet == .group
         )
     }
 
@@ -1498,7 +1569,9 @@ struct RootView: View {
         Group {
             if navActive {
                 HStack(alignment: .top, spacing: 8) {
-                    BrandChip(minHeight: 68)
+                    if !hasDynamicIsland {
+                        BrandChip(minHeight: 68)
+                    }
                     NavCueCard()
                         .frame(maxWidth: .infinity)
                 }
@@ -1730,10 +1803,10 @@ struct RootView: View {
         let closing = dockDestination == tab || isActive(tab)
         let hadSheet = routeCardOpen || activeSheet != nil
         dockTransitionTask?.cancel()
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.32)) {
+        withAnimation(reduceMotion ? nil : DirtMotion.dock) {
             dockDestination = closing ? nil : tab
         }
-        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.21)) {
+        withAnimation(reduceMotion ? nil : DirtMotion.sheetExit) {
             activeSheet = nil
             routeCardOpen = false
         }
@@ -1743,7 +1816,7 @@ struct RootView: View {
                 try? await Task.sleep(for: .milliseconds(210))
             }
             guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : DockSheetMotion.spring) {
+            withAnimation(reduceMotion ? nil : DirtMotion.sheet) {
                 dockDestination = nil
                 switch tab {
                 case .route: routeCardOpen = true

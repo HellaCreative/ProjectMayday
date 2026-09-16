@@ -39,35 +39,42 @@ struct ProfileSheet: View {
 
             ScrollView {
                 VStack(spacing: DirtSpace.group) {
-                    heroCard
+                    VStack(spacing: DirtSpace.group) {
+                        heroCard
 
-                    VStack(spacing: DirtSpace.tight) {
-                        Button { showRideSettings = true } label: {
-                            navigationRow("Keep-awake & contribute", systemImage: "moon.zzz.fill")
+                        VStack(spacing: DirtSpace.tight) {
+                            Button { showRideSettings = true } label: {
+                                navigationRow("Keep-awake & contribute", systemImage: "moon.zzz.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Opens keep-awake and ride contribution settings")
+
+                            Button { showLegalAccount = true } label: {
+                                navigationRow("Legal & account", systemImage: "doc.text.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Opens legal links, restore, sign out, and delete account")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Opens keep-awake and ride contribution settings")
 
-                        Button { showLegalAccount = true } label: {
-                            navigationRow("Legal & account", systemImage: "doc.text.fill")
+                        if let notice {
+                            Text(notice.text)
+                                .font(DirtType.helper)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(notice.kind == .problem ? DirtTheme.danger : DirtTheme.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Opens legal links, restore, sign out, and delete account")
+                        if let bootstrapError = supabase.bootstrapError {
+                            Text(bootstrapError)
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.danger)
+                        }
                     }
-
-                    if let notice {
-                        Text(notice.text)
-                            .font(DirtType.helper)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(notice.kind == .problem ? DirtTheme.danger : DirtTheme.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if let bootstrapError = supabase.bootstrapError {
-                        Text(bootstrapError)
-                            .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.danger)
-                    }
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
+                        }
+                    )
 
                     if BuildChannel.showsTesterUnlock {
                         testerFooter

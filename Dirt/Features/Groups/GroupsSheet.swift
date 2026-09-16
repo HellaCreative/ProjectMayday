@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreLocation
+import MapKit
 
 struct GroupsSheet: View {
     let onClose: () -> Void
@@ -310,10 +311,19 @@ struct GroupDetailView: View {
                 .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
             }
             ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(groups.members) { member in riderRow(member) }
-                    if groups.members.isEmpty {
-                        Text("No riders yet").font(DirtType.helper).padding(.vertical, 20)
+                VStack(spacing: DirtSpace.inner) {
+                    ForEach(rosterMembers) { member in riderRow(member) }
+                    if rosterMembers.isEmpty {
+                        Text("No riders yet")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DirtSpace.group)
+                            .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                                    .stroke(DirtTheme.hairline, lineWidth: 1)
+                            )
                     }
                     if let error = groups.errorMessage {
                         Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
@@ -325,7 +335,7 @@ struct GroupDetailView: View {
                         }
                     }
                     .disabled(groups.isMutatingGroup)
-                    .font(DirtType.helper).frame(minHeight: 44).padding(.top, 10)
+                    .font(DirtType.helper).frame(minHeight: DirtHit.min).padding(.top, DirtSpace.tight)
                 }
                 .background(GeometryReader { geo in
                     Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height + 88)
@@ -339,14 +349,26 @@ struct GroupDetailView: View {
                 guard !Task.isCancelled, let lat = member.latitude, let lon = member.longitude else { continue }
                 locations[member.id] = nil
                 let key = locationKey(member)
-                let marks = try? await CLGeocoder().reverseGeocodeLocation(CLLocation(latitude: lat, longitude: lon))
+                let marks = try? await MKReverseGeocodingRequest(location: CLLocation(latitude: lat, longitude: lon))?.mapItems
                 guard !Task.isCancelled else { return }
                 locationKeys[member.id] = key
                 if let mark = marks?.first {
-                    locations[member.id] = mark.locality ?? mark.subAdministrativeArea ?? mark.name
+                    let representations = mark.addressRepresentations
+                    locations[member.id] = representations?.cityName
+                        ?? representations?.cityWithContext
+                        ?? mark.name
                 }
             }
         }
+    }
+
+    private var rosterMembers: [GroupMemberRow] {
+        let selfID = app.supabase.userID
+        let others = groups.members.filter { $0.userID != selfID }
+        if let own = groups.members.first(where: { $0.userID == selfID }) {
+            return [own] + others
+        }
+        return others
     }
 
     private func locationKey(_ member: GroupMemberRow) -> String {
@@ -365,7 +387,8 @@ struct GroupDetailView: View {
         let color: Color = !member.isLive ? DirtTheme.muted : (status == "riding" ? DirtTheme.navGreen : (status == "injured" || status == "unrepairable" ? DirtTheme.danger : DirtTheme.action))
         return VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) { expandedRider = expanded ? nil : member.id }
+                DirtMotion.light()
+                withAnimation(DirtMotion.affordance) { expandedRider = expanded ? nil : member.id }
             } label: {
                 HStack(spacing: 8) {
                     Circle().fill(member.isLive ? DirtTheme.navGreen : DirtTheme.muted.opacity(0.4))
@@ -403,7 +426,7 @@ struct GroupDetailView: View {
                             if groups.isSharing { groups.stopSharing() } else { groups.startSharing() }
                         }
                         .padding(.horizontal, 10).frame(minHeight: 44)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(groups.isSharing ? Color.white : DirtTheme.onOrange)
                         .background(groups.isSharing ? DirtTheme.chrome : DirtTheme.orange, in: RoundedRectangle(cornerRadius: 8))
                     } else {
                         Button {
@@ -428,7 +451,11 @@ struct GroupDetailView: View {
                 }
             }
         }
-        .background(expanded ? DirtTheme.rowFill : .clear, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(alignment: .bottom) { Divider() }
+        .padding(.vertical, DirtSpace.tight)
+        .background(expanded ? DirtTheme.wash : DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                .stroke(own ? DirtTheme.orange.opacity(0.45) : DirtTheme.hairline, lineWidth: 1)
+        }
     }
 }

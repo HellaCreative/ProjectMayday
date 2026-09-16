@@ -11,6 +11,9 @@ import UIKit
 struct MapControlStack: View {
     @Environment(AppEnvironment.self) private var app
     var compact: Bool = false
+    /// Group browsing owns its own map actions. North reset is the only shared
+    /// map control in that context.
+    var groupOnly = false
     /// Figma landscape-primary: controls run across the bottom of the open map.
     var horizontal: Bool = false
 
@@ -99,10 +102,15 @@ struct MapControlStack: View {
 
         } else {
             // Primary map: view mode and rider status remain available before
-            // navigation. Cues are ride-only.
-            viewModeButton
+            // navigation. Cues are ride-only. Groups owns sharing, so hide 3D
+            // and the map share chip while that sheet is open.
+            if !groupOnly {
+                viewModeButton
+            }
             compassButton
-            riderStatusButton
+            if !groupOnly {
+                riderStatusButton
+            }
             if app.mapState.hasDisplayedRoute,
                app.planner.canFocusEntirePlannedRoute {
                 if horizontal {

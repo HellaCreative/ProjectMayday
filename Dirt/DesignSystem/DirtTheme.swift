@@ -150,6 +150,84 @@ enum DirtHit {
     static let control: CGFloat = 50
 }
 
+/// Operate-mode motion: feedback and continuity, not page-load choreography.
+/// Springs yield to a short ease when Reduce Motion is on.
+enum DirtMotion {
+    static var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
+
+    static var sheet: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.22)
+            : .spring(response: 0.36, dampingFraction: 0.86)
+    }
+
+    static var sheetExit: Animation {
+        reduceMotion
+            ? .easeIn(duration: 0.16)
+            : .easeIn(duration: 0.20)
+    }
+
+    static var affordance: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.16)
+            : .spring(response: 0.30, dampingFraction: 0.88)
+    }
+
+    static var dock: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.22)
+            : .spring(response: 0.34, dampingFraction: 0.78)
+    }
+
+    static var island: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.16)
+            : .spring(response: 0.32, dampingFraction: 0.80)
+    }
+
+    static func light() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    static func medium() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+}
+
+/// Press scale for map chips and dock-adjacent controls.
+struct DirtPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .animation(DirtMotion.affordance, value: configuration.isPressed)
+    }
+}
+
+/// Hardware Dynamic Island — portrait iPhone 14 Pro and later.
+/// Detected from the window's top safe-area inset (59pt). Notch phones are ~47pt.
+/// Never invent an Island on SE, notch, or iPad.
+enum DirtIsland {
+    static let minimumTopInset: CGFloat = 59
+    static let cutoutWidth: CGFloat = 126
+    static let cutoutHeight: CGFloat = 37
+    static let cutoutTop: CGFloat = 11
+    /// Capsule corners of the hardware Island — the wrapper uses the same radius
+    /// so Island + logo read as one object, not two pills.
+    static var wrapperRadius: CGFloat { cutoutHeight / 2 }
+
+    static func isPresent(
+        topInset: CGFloat,
+        idiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom,
+        isLandscape: Bool
+    ) -> Bool {
+        !isLandscape && idiom == .phone && topInset >= minimumTopInset
+    }
+}
+
 /// Dynamic Type–aware semantic scale. Adopt these in sheets instead of fixed
 /// `dirtUI(_:)` / `dirtMono(_:)` sizes so text follows the rider's reading size.
 enum DirtType {
@@ -435,6 +513,9 @@ struct BrandChip: View {
     var minHeight: CGFloat = 42
     /// Landscape: expand to the brand-column width so the left rail aligns.
     var fillsWidth: Bool = false
+    /// Wordmark only, sitting **under** the hardware Island inside the stacked wrapper.
+    /// No nested chrome — the parent rounded rect is the object.
+    var sitsInIslandStack: Bool = false
 
     /// Wordmark only — `DIRT.` (orange period). MAYDAY no longer sits in the chip.
     var body: some View {
@@ -455,13 +536,25 @@ struct BrandChip: View {
                 .background(DirtTheme.orange, in: Capsule())
                 .padding(.leading, 6)
         }
-        .font(.dirtUI(16, weight: .black))
-        .padding(.horizontal, 12)
-        .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: minHeight)
-        .dirtChromeSurface(radius: DirtRadius.chip)
+        .font(.dirtUI(sitsInIslandStack ? 15 : 16, weight: .black))
+        .padding(.horizontal, sitsInIslandStack ? 0 : 12)
+        .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: sitsInIslandStack ? 32 : minHeight)
+        .modifier(BrandChipChrome(sitsInIslandStack: sitsInIslandStack))
         .accessibilityLabel(
             AppConfig.backendEnvironment == .development ? "DIRT development" : "DIRT \(edition.lowercased())"
         )
+    }
+}
+
+private struct BrandChipChrome: ViewModifier {
+    var sitsInIslandStack: Bool
+
+    func body(content: Content) -> some View {
+        if sitsInIslandStack {
+            content
+        } else {
+            content.dirtChromeSurface(radius: DirtRadius.chip)
+        }
     }
 }
 
