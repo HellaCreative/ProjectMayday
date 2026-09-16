@@ -919,12 +919,16 @@ From Here is the two-`.rider` case of the same list (origin, destination).
   zero by 2.5 km). Dirt also accrues `deferredDirtEntryCost` after
   `deferredDirtEntryAfterMeters` (3 km) of pavement without a meaningful
   dirt completion, so the first proper dirt turn beats a long paved dip that
-  only harvests scraps later. Post-search `shortDirtExcursions` (useful-run
-  floor) and `RouteQuality.prefersDirt` (scrap metres / leading paved before
-  percent) reinforce the same rule. Prior-edge
-  `backtrackFactor` still applies across hops (FuelPlanner unions every prior
-  hop's edge IDs into `priorEdges`); within a hop, wander-band corridor +
-  progress regression block out-and-back.
+  only harvests scraps later. Before the first meaningful dirt run, paved arcs
+  inside `earlyOpeningWindowMeters` (12 km) that increase geodesic distance to
+  the pin pay `earlyOpeningAwayCost` — road-compass `approachAway` alone missed
+  U-shaped black opening dips that keep remaining-to-B flat; dirt arcs stay
+  exempt so dipping for dirt remains intentional. Post-search
+  `shortDirtExcursions` (useful-run floor) and `RouteQuality.prefersDirt`
+  (scrap metres / leading paved before percent) reinforce the scrap rule.
+  Prior-edge `backtrackFactor` still applies across hops (FuelPlanner unions
+  every prior hop's edge IDs into `priorEdges`); within a hop, wander-band
+  corridor + progress regression block out-and-back.
 - **Balanced mix continuity across chained sub-legs.** A rider-to-rider span
   owns one 50/50 target. Carry `precedingDirtMeters` / `precedingMeters` across
   every sub-leg of that span (already on `SearchOptions`). Before each Balanced

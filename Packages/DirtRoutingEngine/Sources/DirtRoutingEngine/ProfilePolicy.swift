@@ -27,6 +27,10 @@ public struct ProfilePolicy: Sendable {
     /// run, further pavement pays `deferredDirtEntryCost` so Dirt prefers the
     /// first proper dirt turn over a long paved dip that harvests scraps later.
     public var deferredDirtEntryAfterMeters = 3_000.0
+    /// Opening window where paved travel that moves geodesically away from the
+    /// pin pays `earlyOpeningAwayCost`. Keeps the first left toward the
+    /// destination when there is no dirt payoff yet; dirt arcs stay exempt.
+    public var earlyOpeningWindowMeters = 12_000.0
     public init(style: RidingStyle) { self.style = style }
     public var appetite: Double { min(1, max(0, wander.isFinite ? wander : 1)) }
     public static func family(_ leaf: String) -> Surface {
@@ -322,6 +326,36 @@ public struct ProfilePolicy: Sendable {
             return km * 18
         case .profile, .balancedResource:
             return km * 1.2
+        case .distance:
+            return 0
+        }
+    }
+    /// Tax early paved arcs that increase geodesic distance to the pin before
+    /// the first meaningful dirt run. Road-compass `approachAway` alone misses
+    /// U-shaped black dips that do not worsen remaining-to-B. Dirt arcs are
+    /// exempt — dipping for dirt is intentional (§2). Does not change scrap
+    /// enter/leave/deferred levers.
+    func earlyOpeningAwayCost(from: Coordinate, to: Coordinate, end: Coordinate,
+                              riddenMetersBeforeArc: Double,
+                              achievedMeaningfulDirt: Bool,
+                              onDirt: Bool,
+                              objective: SearchObjective) -> Double {
+        guard style == .dirt, objective != .distance else { return 0 }
+        guard !achievedMeaningfulDirt, !onDirt else { return 0 }
+        let window = earlyOpeningWindowMeters.isFinite ? max(0, earlyOpeningWindowMeters) : 12_000
+        guard riddenMetersBeforeArc < window else { return 0 }
+        let away = to.distance(to: end) - from.distance(to: end)
+        guard away > 50 else { return 0 }
+        let kmAway = away / 1000
+        // Soften toward the window edge so the tax does not cliff mid-opening.
+        let depth = 1 - riddenMetersBeforeArc / max(1, window)
+        switch objective {
+        case .pavement:
+            // ~55/km at the start — enough that a multi-km paved U loses to
+            // hanging the on-progress turn; short block jogs stay affordable.
+            return kmAway * 55 * depth
+        case .profile, .balancedResource:
+            return kmAway * 3.5 * depth
         case .distance:
             return 0
         }

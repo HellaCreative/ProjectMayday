@@ -567,6 +567,17 @@ public struct PathSearch: Sendable {
                     endOnHighway: endHighway,penalizedDirt: penalizedDirt,previousTier: previousTier,
                     applyGeodesicPull: compass == nil)
                 step += clawback
+                if !resource {
+                    // Geodesic early-leg away, even when road compass is active —
+                    // paved U-dips can keep remaining-to-B flat while walking off
+                    // the pin with no dirt payoff.
+                    step += policy.earlyOpeningAwayCost(
+                        from: fromPoint, to: toPoint, end: end.coordinate,
+                        riddenMetersBeforeArc: current.meters,
+                        achievedMeaningfulDirt: current.achievedMeaningfulDirt,
+                        onDirt: isDirt,
+                        objective: options.objective)
+                }
                 if compass != nil, options.objective != .distance, options.objective != .balancedResource {
                     step += policy.approachAway(fromRemaining: remaining(of: current.state.node),
                                                 toRemaining: remaining(of: arc.target),

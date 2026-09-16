@@ -209,6 +209,57 @@ struct PolicyTests {
         #expect(balanced.deferredDirtEntryCost(pavedWithoutMeaningfulMeters: 8_000, objective: .profile) == 0)
     }
 
+    @Test func earlyOpeningAwayTaxesPavedDipNotDirt() {
+        let dirt = ProfilePolicy(style: .dirt)
+        let start = Coordinate(longitude: -63.34, latitude: 44.76)
+        let end = Coordinate(longitude: -60.49, latitude: 46.92)
+        // ~1 km south of start — away from the Cape Breton pin.
+        let south = Coordinate(longitude: -63.34, latitude: 44.751)
+        let away = dirt.earlyOpeningAwayCost(
+            from: start, to: south, end: end,
+            riddenMetersBeforeArc: 0,
+            achievedMeaningfulDirt: false,
+            onDirt: false,
+            objective: .pavement)
+        #expect(away > 40)
+        // Dirt payoff is exempt — dipping for dirt stays intentional.
+        #expect(dirt.earlyOpeningAwayCost(
+            from: start, to: south, end: end,
+            riddenMetersBeforeArc: 0,
+            achievedMeaningfulDirt: false,
+            onDirt: true,
+            objective: .pavement) == 0)
+        // After first meaningful dirt, opening tax ends.
+        #expect(dirt.earlyOpeningAwayCost(
+            from: start, to: south, end: end,
+            riddenMetersBeforeArc: 0,
+            achievedMeaningfulDirt: true,
+            onDirt: false,
+            objective: .pavement) == 0)
+        // Past the opening window, no tax.
+        #expect(dirt.earlyOpeningAwayCost(
+            from: start, to: south, end: end,
+            riddenMetersBeforeArc: 12_000,
+            achievedMeaningfulDirt: false,
+            onDirt: false,
+            objective: .pavement) == 0)
+        // Toward the pin is free.
+        let toward = Coordinate(longitude: -63.33, latitude: 44.77)
+        #expect(dirt.earlyOpeningAwayCost(
+            from: start, to: toward, end: end,
+            riddenMetersBeforeArc: 0,
+            achievedMeaningfulDirt: false,
+            onDirt: false,
+            objective: .pavement) == 0)
+        let balanced = ProfilePolicy(style: .balanced)
+        #expect(balanced.earlyOpeningAwayCost(
+            from: start, to: south, end: end,
+            riddenMetersBeforeArc: 0,
+            achievedMeaningfulDirt: false,
+            onDirt: false,
+            objective: .profile) == 0)
+    }
+
     @Test func prefersDirtRejectsScrapInflatedCandidates() {
         var scraps = RouteQuality()
         scraps.knownDirtPercent = 64
