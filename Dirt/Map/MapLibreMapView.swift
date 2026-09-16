@@ -78,13 +78,16 @@ struct MapLibreMapView: UIViewRepresentable {
         mapView.compassView.isHidden = true
         mapView.compassViewPosition = .topRight
 
+        // Dirt owns exclusive pin/route/map resolution (full teardrop hit-test).
+        // MapLibre's built-in tap must wait — otherwise it "succeeds" without
+        // selecting our offset pins and Dirt's handler never runs, so confirmed
+        // waypoints get no move signifier and cannot enter drag-to-move.
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
-        for recognizer in mapView.gestureRecognizers ?? [] {
-            if let existing = recognizer as? UITapGestureRecognizer {
-                tap.require(toFail: existing)
-            }
-        }
         mapView.addGestureRecognizer(tap)
+        for recognizer in mapView.gestureRecognizers ?? [] {
+            guard recognizer !== tap, recognizer is UITapGestureRecognizer else { continue }
+            recognizer.require(toFail: tap)
+        }
 
         let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
         mapView.addGestureRecognizer(longPress)
@@ -841,11 +844,28 @@ struct MapLibreMapView: UIViewRepresentable {
             for annotation in annotations {
                 guard !annotation.kind.isGroupOverlay,
                       let view = mapView.view(for: annotation) as? DirtPlannerPinView else { continue }
-                if locked || annotation.isLocked {
+                if locked {
+                    view.onTapped = nil
                     view.onDragBegan = nil
                     view.onDragEnded = nil
                     view.applySelectionChrome(false, animated: false)
+                } else if annotation.isLocked {
+                    view.onDragBegan = nil
+                    view.onDragEnded = nil
+                    view.applySelectionChrome(false, animated: false)
+                    // Fuel pins are drag-locked but still open replacement on tap.
+                    if annotation.kind == .fuel {
+                        view.onTapped = { [weak self] markerID in
+                            self?.state.selectPlannerPin(markerID)
+                            self?.state.onPlannerPinDragBegan?(markerID)
+                        }
+                    } else {
+                        view.onTapped = nil
+                    }
                 } else {
+                    view.onTapped = { [weak self] markerID in
+                        self?.selectPlannerPinForEditing(markerID)
+                    }
                     view.onDragBegan = { [weak self] markerID in
                         self?.state.selectPlannerPin(markerID)
                         self?.state.onPlannerPinDragBegan?(markerID)
@@ -1207,15 +1227,26 @@ struct MapLibreMapView: UIViewRepresentable {
             view.isDraggable = false
             view.hostMapView = mapView
             if state.isNavigating || dirtAnnotation.isLocked {
+                view.onTapped = nil
                 view.onDragBegan = nil
                 view.onDragEnded = nil
             } else {
+                view.onTapped = { [weak self] markerID in
+                    self?.selectPlannerPinForEditing(markerID)
+                }
                 view.onDragBegan = { [weak self] markerID in
                     self?.state.selectPlannerPin(markerID)
                     self?.state.onPlannerPinDragBegan?(markerID)
                 }
                 view.onDragEnded = { [weak self] markerID, coordinate in
                     self?.finishPlannerPinMove(markerID, coordinate: coordinate)
+                }
+            }
+            // Fuel stays locked against drag but still needs tap → replacement sheet.
+            if dirtAnnotation.kind == .fuel, !state.isNavigating {
+                view.onTapped = { [weak self] markerID in
+                    self?.state.selectPlannerPin(markerID)
+                    self?.state.onPlannerPinDragBegan?(markerID)
                 }
             }
             return view
@@ -1229,6 +1260,21 @@ struct MapLibreMapView: UIViewRepresentable {
                 return
             }
             state.onPlannerPinDragEnd?(markerID, snapped)
+        }
+
+        /// Tap-select enters move mode: orange lift chrome + pan drag armed.
+        private func selectPlannerPinForEditing(_ markerID: String) {
+            guard !state.isNavigating,
+                  let annotation = annotations.first(where: { $0.markerID == markerID }),
+                  !annotation.isLocked
+            else { return }
+            state.selectPlannerPin(markerID)
+            if let mapView,
+               let view = mapView.view(for: annotation) as? DirtPlannerPinView {
+                view.applySelectionChrome(true, animated: true)
+                mapView.selectAnnotation(annotation, animated: false, completionHandler: nil)
+            }
+            RoutingDebugLog.shared.event("map pin select for move markerID=\(markerID)")
         }
 
         func mapView(_ mapView: MLNMapView, annotationCanShowCallout annotation: MLNAnnotation) -> Bool {
@@ -1247,12 +1293,12 @@ struct MapLibreMapView: UIViewRepresentable {
             }
             guard !state.isNavigating else { return }
             // Tap pin → select (orange lift) so drag / second-tap relocate is obvious.
-            state.selectPlannerPin(dirtAnnotation.markerID)
-            (mapView.view(for: dirtAnnotation) as? DirtPlannerPinView)?
-                .applySelectionChrome(!dirtAnnotation.isLocked, animated: true)
             if dirtAnnotation.kind == .fuel {
+                state.selectPlannerPin(dirtAnnotation.markerID)
                 state.onPlannerPinDragBegan?(dirtAnnotation.markerID)
+                return
             }
+            selectPlannerPinForEditing(dirtAnnotation.markerID)
         }
 
         func mapView(_ mapView: MLNMapView, didDeselect annotation: MLNAnnotation) {
@@ -1329,14 +1375,16 @@ struct MapLibreMapView: UIViewRepresentable {
             // but remains locked against every relocation path.
             if case .pin(let pin) = resolution {
                 logTouch(resolution)
-                if pin.kind == .fuel,
-                   pin.markerID == state.selectedPlannerPinID,
-                   !pin.markerID.hasPrefix("fuel-target:") {
-                    state.onPlannerPinDragBegan?(pin.markerID)
+                if pin.kind == .fuel {
+                    let alreadySelected = pin.markerID == state.selectedPlannerPinID
+                    state.selectPlannerPin(pin.markerID)
+                    mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
+                    if alreadySelected, !pin.markerID.hasPrefix("fuel-target:") {
+                        state.onPlannerPinDragBegan?(pin.markerID)
+                    }
                     return
                 }
-                mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
-                state.selectPlannerPin(pin.markerID)
+                selectPlannerPinForEditing(pin.markerID)
                 return
             }
 
@@ -1701,6 +1749,8 @@ final class DirtPlannerPinView: MLNAnnotationView {
     private var savedMapRotateEnabled = true
 
     weak var hostMapView: MLNMapView?
+    /// Tap-select before drag — fires even when MapLibre's map tap never reaches us.
+    var onTapped: ((String) -> Void)?
     var onDragBegan: ((String) -> Void)?
     var onDragEnded: ((String, CLLocationCoordinate2D) -> Void)?
 
@@ -1768,6 +1818,10 @@ final class DirtPlannerPinView: MLNAnnotationView {
         candidateIconView.contentMode = .scaleAspectFit
         candidateIconView.isHidden = true
         addSubview(candidateIconView)
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handlePinTap(_:)))
+        tap.delegate = self
+        addGestureRecognizer(tap)
 
         let pan = DirtPinPanGestureRecognizer(target: self, action: #selector(handlePinPan(_:)))
         pan.maximumNumberOfTouches = 1
@@ -1879,7 +1933,19 @@ final class DirtPlannerPinView: MLNAnnotationView {
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let annotation = annotation as? DirtAnnotation else { return false }
+        if gestureRecognizer is UITapGestureRecognizer {
+            return onTapped != nil
+        }
         return isSelectedForEditing && onDragEnded != nil && annotation.kind != .fuel
+    }
+
+    @objc private func handlePinTap(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended,
+              let dirtAnnotation = annotation as? DirtAnnotation,
+              onTapped != nil
+        else { return }
+        RoutingDebugLog.shared.event("map pinTap markerID=\(dirtAnnotation.markerID)")
+        onTapped?(dirtAnnotation.markerID)
     }
 
     @objc private func handlePinPan(_ gesture: UIPanGestureRecognizer) {

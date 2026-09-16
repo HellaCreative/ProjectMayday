@@ -513,6 +513,43 @@ struct RoutePlannerModelItineraryTests {
         #expect(!source.routeRequests.isEmpty)
     }
 
+    @Test func confirmedPlanWaypointsStayUnlockedForMoveSelection() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 0
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.selectMode(.plan)
+        model.apply(
+            .replaceAll(
+                waypoints: [point(0), point(0.4), point(0.7), point(1)],
+                profile: .dirt,
+                allowUnknown: false,
+                avoidMotorways: false,
+                preferBackRoads: false
+            ),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        let wpMarkers = map.plannerMarkers.filter { $0.id.hasPrefix("wp:") }
+        #expect(wpMarkers.count == 4)
+        #expect(wpMarkers.allSatisfy { !$0.isLocked })
+        #expect(model.stages.count == 3)
+
+        let first = try #require(wpMarkers.first)
+        let third = try #require(wpMarkers.dropFirst(2).first)
+        map.selectPlannerPin(first.id)
+        #expect(map.selectedPlannerPinID == first.id)
+        map.selectPlannerPin(third.id)
+        #expect(map.selectedPlannerPinID == third.id)
+
+        model.moveWaypoint(markerID: third.id, to: point(0.75).locationCoordinate)
+        #expect(model.showsWaypointPlacementConfirmation)
+        #expect(model.waypointMove != nil)
+    }
+
     @Test func failedRouteKeepsItsRiderLegVisible() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
