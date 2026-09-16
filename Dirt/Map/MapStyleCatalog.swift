@@ -26,7 +26,12 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v1"
+    static let generatedStyleRevision = "osmand-v2"
+    /// Natural Earth 50m admin-1 (lakes), US+CA interior borders. Not pack bounds.
+    static let admin1OverviewSourceID = "dirt-admin1-overview"
+    static let admin1OverviewLayerID = "dirt-bound-state-overview"
+
+    private final class BundleToken {}
 
     static var selectedID: MapStyleID {
         get {
@@ -68,7 +73,7 @@ enum MapStyleCatalog {
         rich: Bool,
         tileSource: ShortbreadTileSource
     ) -> URL? {
-        guard let source = Bundle.main.url(forResource: "shortbread-style", withExtension: "json"),
+        guard let source = bundledJSONURL(resource: "shortbread-style"),
               let data = try? Data(contentsOf: source),
               var root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let incoming = root["layers"] as? [[String: Any]]
@@ -109,6 +114,12 @@ enum MapStyleCatalog {
                 else { continue }
                 source["tiles"] = [tileSource.tileTemplate]
                 sources[key] = source
+            }
+            if let admin1 = admin1OverviewGeoJSONObject() {
+                sources[admin1OverviewSourceID] = [
+                    "type": "geojson",
+                    "data": admin1
+                ]
             }
             root["sources"] = sources
         }
@@ -275,7 +286,9 @@ extension MapStyleCatalog {
         }
     }
 
-    /// Real OSM Shortbread admin lines only. Country geometry exists from z0; state from z7.
+    /// Country lines from Shortbread z0. State/province lines: Natural Earth
+    /// admin-1 through z7 (Shortbread has no admin_level=4 geometry below z7),
+    /// then tile lines from z7. Never RegionPolygons pack bounds.
     private static func dirtBoundaryLineLayers(from base: [String: Any]) -> [[String: Any]] {
         func line(id: String, admin: Int, minZoom: Double, dashed: Bool, color: String, widths: [[Any]]) -> [String: Any] {
             var layer = base
@@ -298,7 +311,24 @@ extension MapStyleCatalog {
             layer["paint"] = paint
             return layer
         }
-        return [
+        var layers: [[String: Any]] = []
+        if admin1OverviewGeoJSONObject() != nil {
+            var overview = base
+            overview["id"] = admin1OverviewLayerID
+            overview["source"] = admin1OverviewSourceID
+            overview.removeValue(forKey: "source-layer")
+            overview["minzoom"] = 0
+            overview["maxzoom"] = 7
+            overview.removeValue(forKey: "filter")
+            var paint = overview["paint"] as? [String: Any] ?? [:]
+            paint["line-color"] = "#9a74b8"
+            paint["line-opacity"] = 0.9
+            paint["line-width"] = ["stops": [[2, 0.7], [5, 1.0], [7, 1.2]]]
+            paint["line-dasharray"] = [4, 3]
+            overview["paint"] = paint
+            layers.append(overview)
+        }
+        layers.append(
             line(
                 id: "dirt-bound-country",
                 admin: 2,
@@ -306,7 +336,9 @@ extension MapStyleCatalog {
                 dashed: false,
                 color: "#7b4fa0",
                 widths: [[2, 0.9], [6, 1.5], [10, 2.1]]
-            ),
+            )
+        )
+        layers.append(
             line(
                 id: "dirt-bound-state",
                 admin: 4,
@@ -315,7 +347,35 @@ extension MapStyleCatalog {
                 color: "#9a74b8",
                 widths: [[7, 0.7], [10, 1.3]]
             )
-        ]
+        )
+        return layers
+    }
+
+    static func admin1OverviewResourceURL() -> URL? {
+        bundledJSONURL(resource: "ne-admin1-na", extensions: ["json", "geojson"])
+    }
+
+    static func admin1OverviewGeoJSONObject() -> Any? {
+        guard let url = admin1OverviewResourceURL(),
+              let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data)
+        else { return nil }
+        return object
+    }
+
+    private static func bundledJSONURL(
+        resource: String,
+        extensions: [String] = ["json"]
+    ) -> URL? {
+        let bundles = [Bundle.main, Bundle(for: BundleToken.self)]
+        for bundle in bundles {
+            for ext in extensions {
+                if let url = bundle.url(forResource: resource, withExtension: ext) {
+                    return url
+                }
+            }
+        }
+        return nil
     }
 
     private static func dirtBoundaryLabelLayers(from base: [String: Any]) -> [[String: Any]] {
@@ -339,7 +399,7 @@ extension MapStyleCatalog {
             var layout = layer["layout"] as? [String: Any] ?? [:]
             layout["text-field"] = ["coalesce", ["get", "name_en"], ["get", "name"]]
             layout["text-size"] = ["stops": sizeStops]
-            layout["text-padding"] = 4
+            layout["text-padding"] = 1
             layout["symbol-sort-key"] = ["-", ["get", "way_area"]]
             layout["text-font"] = ["Noto Sans Regular"]
             layer["layout"] = layout
@@ -356,7 +416,7 @@ extension MapStyleCatalog {
                 id: "dirt-bound-label-country",
                 admin: 2,
                 minZoom: 2,
-                maxZoom: 6.01,
+                maxZoom: 7.01,
                 color: "#2c3036",
                 sizeStops: [[2, 13], [5, 17]]
             ),
@@ -366,7 +426,7 @@ extension MapStyleCatalog {
                 minZoom: 3,
                 maxZoom: nil,
                 color: "#6a7380",
-                sizeStops: [[3, 10], [8, 14], [12, 16]]
+                sizeStops: [[3, 9], [8, 14], [12, 16]]
             )
         ]
     }
@@ -379,15 +439,16 @@ extension MapStyleCatalog {
         paint["text-color"] = "#1a1f24"
         paint["text-halo-color"] = "#f4f1ea"
         paint["text-halo-width"] = 1.6
+        layout["text-padding"] = 1
         if id.contains("capital") {
-            layer["minzoom"] = 3
-            layout["text-size"] = ["stops": [[3, 13], [8, 16], [12, 22]]]
+            layer["minzoom"] = 2
+            layout["text-size"] = ["stops": [[2, 12], [8, 16], [12, 22]]]
         } else if id.hasSuffix("-city") || id == "place_labels-city" {
-            layer["minzoom"] = 5
-            layout["text-size"] = ["stops": [[5, 12], [8, 15], [12, 20]]]
+            layer["minzoom"] = 4
+            layout["text-size"] = ["stops": [[4, 11], [8, 15], [12, 20]]]
         } else if id.contains("town") {
-            layer["minzoom"] = 7
-            layout["text-size"] = ["stops": [[7, 12], [12, 16]]]
+            layer["minzoom"] = 6
+            layout["text-size"] = ["stops": [[6, 11], [12, 16]]]
         } else if id.contains("village") {
             layer["minzoom"] = 10
             layout["text-size"] = ["stops": [[10, 11], [13, 14]]]

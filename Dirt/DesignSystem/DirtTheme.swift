@@ -197,6 +197,21 @@ extension View {
             )
     }
 
+    /// Fuel range and Your Ride — glass windows that drop from the top of the map.
+    func dirtTopAffordancePanel() -> some View {
+        padding(DirtSpace.row)
+            .frame(maxWidth: 420)
+            .background(
+                DirtTheme.sheetMaterial,
+                in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                    .stroke(DirtTheme.hairline, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
+    }
+
     /// Dark glass used by map controls, the dock, and the brand chip. `tint` replaces
     /// the scrim for selected states so brand orange stays solid and unmistakable.
     /// A tint replaces the scrimmed glass with a solid orange fill, which can only carry
@@ -433,7 +448,8 @@ struct DirtSheetHeader: View {
         }
         .frame(maxWidth: .infinity, minHeight: DirtHit.min)
         .padding(.horizontal, DirtSpace.row)
-        .padding(.bottom, DirtSpace.inner)
+        .padding(.top, DirtSpace.row)
+        .padding(.bottom, DirtSpace.row)
     }
 }
 

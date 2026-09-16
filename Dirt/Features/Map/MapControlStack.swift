@@ -129,10 +129,13 @@ struct MapControlStack: View {
         } label: {
             Image(systemName: increase ? "plus" : "minus")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.black)
+                .foregroundStyle(DirtTheme.ink)
                 .frame(width: 50, height: 50)
-                .background(.white, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(white: 0.6), lineWidth: 1))
+                .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
         .accessibilityLabel(increase ? "Zoom in" : "Zoom out")
