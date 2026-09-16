@@ -13,6 +13,16 @@ public struct RoutingRequest: Sendable {
         access = .init(allowUnknown: style == .cleanest ? false : allowUnknown)
         options = .init(); options.seed = seed; matchRadiusMeters = 250
     }
+    func with(start: Coordinate, end: Coordinate) -> RoutingRequest {
+        var copy = RoutingRequest(start: start, end: end, style: profile.style,
+                                  allowUnknown: access.allowUnknown, seed: options.seed)
+        copy.profile = profile
+        copy.access = access
+        copy.options = options
+        copy.matchRadiusMeters = matchRadiusMeters
+        copy.mapZoom = mapZoom
+        return copy
+    }
 }
 
 /// Orchestrates local matching, profile candidates and selection. Contains no HTTP client,
@@ -97,13 +107,14 @@ public struct RoutingEngine: Sendable {
         do {
             // The compass ignores access, so Allow Unknown shares it; the graph size
             // keeps a store that outlives a region change from reusing another graph's table.
-            let key = "\(pack.nodeCount):\(pack.edgeCount):\(end.edge):\(end.alongMeters)"
+            let cap = request.options.compassMaxRemaining
+            let key = "\(pack.nodeCount):\(pack.edgeCount):\(end.edge):\(end.alongMeters):\(cap)"
             if let store = compassStore {
                 compass = .init(remaining: try store.remaining(for: key) {
-                    try RoadCompass.toward(end: end, pack: pack, budget: budget).remaining
+                    try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: cap).remaining
                 })
             } else {
-                compass = try RoadCompass.toward(end: end, pack: pack, budget: budget)
+                compass = try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: cap)
             }
         }
         catch is CancellationError { throw CancellationError() }

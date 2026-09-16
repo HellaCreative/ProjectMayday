@@ -84,6 +84,17 @@ public struct PackRepository: Sendable {
         let seams = try manifest.seams.map { try verified($0).data }
         return .init(manifest: manifest,graph: graph,fuelData: fuel,seamsData: seams)
     }
+    func loadSeams(_ region: String) throws -> SeamDocument {
+        guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
+        let url = root.appendingPathComponent("cross-pack-seams.v2.json")
+        do { return try JSONDecoder().decode(SeamDocument.self, from: Data(contentsOf: url)) }
+        catch { throw RoutingFailure.invalidPack("seam unreadable: \(region)") }
+    }
+    func graphBytes(_ region: String) -> Int {
+        guard let root = directories[region] else { return .max }
+        let url = root.appendingPathComponent("graph.v4.bin")
+        return (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? .max
+    }
 }
 
 public struct RegionConnectivity: Sendable {

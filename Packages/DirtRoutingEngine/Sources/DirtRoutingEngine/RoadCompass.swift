@@ -37,7 +37,8 @@ public struct RoadCompass: Sendable {
     }
 
     public static func toward(end: RoadMatch, pack: any RoadGraph,
-                              budget: ComputationBudget) throws -> RoadCompass {
+                              budget: ComputationBudget,
+                              maxRemaining: Double = .infinity) throws -> RoadCompass {
         let count = pack.nodeCount
         var incoming = Array(repeating: [(Int, Double)](), count: count)
         if let indexed = pack as? IndexedGraph {
@@ -68,6 +69,7 @@ public struct RoadCompass: Sendable {
             if pops & 255 == 0 { try budget.check() }
             pops += 1
             if current.1 != remaining[current.0] { continue }
+            if current.1 > maxRemaining { continue }
             for (from, meters) in incoming[current.0] {
                 let candidate = current.1 + meters
                 if candidate < remaining[from] {

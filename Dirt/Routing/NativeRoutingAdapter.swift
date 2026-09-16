@@ -178,9 +178,18 @@ actor NativeRoutingSession {
         request.options.counter = counter
         var prepared = 0, prepareDetail: String?
         do {
-            let preparation = try prepare(directories,budget: budget)
-            prepared = elapsedMs(from: started); prepareDetail = preparation.detail
-            let result = try RoutingEngine(pack: preparation.graph, compassStore: compassStore).route(request,budget: budget)
+            let result: ComputedRoute
+            if StagedRouter.shouldStage(regionCount: directories.count, start: request.start, end: request.end) {
+                let repository = try PackRepository(installedDirectories: directories)
+                prepared = elapsedMs(from: started)
+                prepareDetail = "staged:\(directories.keys.sorted().joined(separator: ","))"
+                result = try StagedRouter.route(request, repository: repository,
+                                                regions: Array(directories.keys), budget: budget)
+            } else {
+                let preparation = try prepare(directories,budget: budget)
+                prepared = elapsedMs(from: started); prepareDetail = preparation.detail
+                result = try RoutingEngine(pack: preparation.graph, compassStore: compassStore).route(request,budget: budget)
+            }
             log("pack route",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
                 outcome: "selectedPops=\(result.poppedLabels) meters=\(Int(result.distanceMeters.rounded())) " +
                     "limit=\(result.limit ?? "-") candidates=[\(result.searchSummary ?? "-")]")

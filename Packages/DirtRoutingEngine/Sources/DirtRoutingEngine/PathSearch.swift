@@ -35,6 +35,10 @@ public struct SearchOptions: Sendable {
     /// When true, skip the geodesic progress-regression gate (fuel feelers and
     /// diagnostic shadows). Personality costs still apply.
     public var disableProgressRegression = false
+    /// Reverse-Dijkstra remaining cap. Infinity (default) visits every node, so
+    /// short matrix routes stay identical. Long internal stages pass a few
+    /// hundred kilometres so unused far-side provinces stay unexpanded.
+    public var compassMaxRemaining: Double = .infinity
     /// Fuel hops: blend a dirt-scaled geodesic pull so pavement search still
     /// prefers progress toward the hop end without drowning the dirt-rate cost
     /// (see `heapCost` — pull is 2× dirtWeight × geoKm, not raw geoKm).

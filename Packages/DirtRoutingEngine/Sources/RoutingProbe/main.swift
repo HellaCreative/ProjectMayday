@@ -54,32 +54,48 @@ var prepared = 0.0
 do {
     var isDirectory: ObjCBool = false
     FileManager.default.fileExists(atPath: arguments[0],isDirectory: &isDirectory)
-    let graph: any RoadGraph
+    var indexed: IndexedGraph?
+    var packRepository: PackRepository?
+    var regionList: [String] = []
     var identities: [[String:String]] = []
     var fuelStations: [FuelStation] = []
+    var stageLong = false
     if isDirectory.boolValue {
         let regions = arguments[1].split(separator: ",").map(String.init)
+        regionList = regions
         let root = URL(fileURLWithPath: arguments[0],isDirectory: true)
         let repository = try PackRepository(installedDirectories: Dictionary(uniqueKeysWithValues: regions.map { ($0,root.appendingPathComponent($0)) }))
-        let packs = try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
-        guard let first = packs.first else { throw RoutingFailure.missingPacks([]) }
-        graph = packs.count == 1 ? first.graph : try RegionalGraph(packs: packs,budget: budget)
-        identities = packs.map { ["region":$0.manifest.regionId,"graph":$0.graph.graphSHA256,"geometry":$0.graph.geometrySHA256] }
-        var seen = Set<String>()
-        for item in packs {
-            struct File: Decodable { struct Station: Decodable { let id: String; let lat: Double; let lon: Double; let name: String?; let brand: String?; let address: String? }; let stations: [Station] }
-            guard let decoded = try? JSONDecoder().decode(File.self,from: item.fuelData) else { throw RoutingFailure.invalidPack("fuel data") }
-            for station in decoded.stations where seen.insert(station.id).inserted {
-                fuelStations.append(.init(id: station.id,coordinate: .init(longitude: station.lon,latitude: station.lat),
-                                          name: station.name,brand: station.brand,address: station.address))
+        packRepository = repository
+        identities = regions.compactMap { id -> [String:String]? in
+            let url = root.appendingPathComponent(id).appendingPathComponent("pack-manifest.v2.json")
+            guard let data = try? Data(contentsOf: url),
+                  let manifest = try? JSONDecoder().decode(PackManifest.self, from: data) else { return nil }
+            return ["region":manifest.regionId,"graph":manifest.graph.sha256,"geometry":manifest.geometry.sha256]
+        }
+        let start = Coordinate(longitude: lonA, latitude: latA)
+        let dest = Coordinate(longitude: lonB, latitude: latB)
+        stageLong = fuelUsable == nil && StagedRouter.shouldStage(regionCount: regions.count, start: start, end: dest)
+        if !stageLong {
+            let packs = try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
+            guard let first = packs.first else { throw RoutingFailure.missingPacks([]) }
+            let graph: any RoadGraph = packs.count == 1 ? first.graph : try RegionalGraph(packs: packs,budget: budget)
+            identities = packs.map { ["region":$0.manifest.regionId,"graph":$0.graph.graphSHA256,"geometry":$0.graph.geometrySHA256] }
+            var seen = Set<String>()
+            for item in packs {
+                struct File: Decodable { struct Station: Decodable { let id: String; let lat: Double; let lon: Double; let name: String?; let brand: String?; let address: String? }; let stations: [Station] }
+                guard let decoded = try? JSONDecoder().decode(File.self,from: item.fuelData) else { throw RoutingFailure.invalidPack("fuel data") }
+                for station in decoded.stations where seen.insert(station.id).inserted {
+                    fuelStations.append(.init(id: station.id,coordinate: .init(longitude: station.lon,latitude: station.lat),
+                                              name: station.name,brand: station.brand,address: station.address))
+                }
             }
+            indexed = try IndexedGraph(graph,budget: budget)
         }
     } else {
         let pack = try GraphPack(graphURL: URL(fileURLWithPath: arguments[0]),geometryURL: URL(fileURLWithPath: arguments[1]),budget: budget)
-        graph = pack
         identities = [["region":pack.metadata.regionId ?? "","graph":pack.graphSHA256,"geometry":pack.geometrySHA256]]
+        indexed = try IndexedGraph(pack,budget: budget)
     }
-    let indexed = try IndexedGraph(graph,budget: budget)
     prepared = elapsed()
     let allowUnknown = environment["DIRT_ALLOW_UNKNOWN"] == "1"
     var request = RoutingRequest(start: .init(longitude: lonA,latitude: latA),end: .init(longitude: lonB,latitude: latB),
@@ -107,6 +123,7 @@ do {
         fuel.maximumStops = environment["DIRT_FUEL_MAX_STOPS"].flatMap(Int.init)
         fuel.allowPartialResult = environment["DIRT_FUEL_ALLOW_PARTIAL"] == "1"
         fuel.resumeAtPump = environment["DIRT_FUEL_RESUME_AT_PUMP"] == "1"
+        guard let indexed else { throw RoutingFailure.invalidRequest("fuel needs a prepared graph") }
         let plan = try FuelPlanner(graph: indexed,stations: fuelStations).plan(request,requirements: fuel,budget: budget)
         let total = plan.routes.reduce(0) { $0+$1.distanceMeters }
         let known = plan.routes.flatMap(\.segments).filter { $0.structure != "ferry" && ($0.surface == .gravel || $0.surface == .loose) }.reduce(0) { $0+$1.meters }
@@ -126,18 +143,27 @@ do {
             "foundationMeters":plan.foundation?.distanceMeters as Any? ?? NSNull(),
             "pops":plan.routes.reduce(0) { $0+$1.poppedLabels},"limit":plan.limit as Any? ?? NSNull()]) { $1 }
     } else {
-        // The app keeps one compass store per routing session; mirror it.
-        let result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore()).route(request,budget: budget)
+        let result: ComputedRoute
+        if stageLong, let packRepository {
+            result = try StagedRouter.route(request, repository: packRepository, regions: regionList, budget: budget)
+        } else if let indexed {
+            // The app keeps one compass store per routing session; mirror it.
+            result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore()).route(request,budget: budget)
+        } else {
+            throw RoutingFailure.invalidRequest("no prepared graph")
+        }
         let quality = RouteQuality(route: result)
         let edgeIDs = result.segments.map(\.edgeID)
         var classMeters: [String:Double] = [:]
         for segment in result.segments {
             classMeters[ProfilePolicy.tier(segment.roadClass), default: 0] += segment.meters
         }
+        let startEdge = result.segments.first?.edgeID ?? indexed?.edgeID(result.start.edge) ?? ""
+        let endEdge = result.segments.last?.edgeID ?? indexed?.edgeID(result.end.edge) ?? ""
         output.merge(["status":"complete",
             "matchedStart":[result.start.coordinate.longitude,result.start.coordinate.latitude],
             "matchedEnd":[result.end.coordinate.longitude,result.end.coordinate.latitude],
-            "matchedStartEdge":indexed.edgeID(result.start.edge),"matchedEndEdge":indexed.edgeID(result.end.edge),
+            "matchedStartEdge":startEdge,"matchedEndEdge":endEdge,
             "distanceMeters":result.distanceMeters,"knownDirtPercent":quality.knownDirtPercent,
             "minimumSectionDirtPercent":quality.minimumSectionDirtPercent,
             "unknownSurfacePercent":quality.unknownPercent,
