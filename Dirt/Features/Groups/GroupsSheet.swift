@@ -90,6 +90,9 @@ struct GroupsSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DirtSpace.section)
+        .padding(.horizontal, DirtSpace.row)
+        .dirtGroupingSurface(radius: DirtRadius.card)
+        .padding(.horizontal, DirtSpace.group)
         .background(
             GeometryReader { geo in
                 Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
@@ -140,11 +143,7 @@ struct GroupsSheet: View {
                         .foregroundStyle(DirtTheme.muted)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DirtSpace.group)
-                        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
-                                .stroke(DirtTheme.hairline, lineWidth: 1)
-                        )
+                        .dirtGroupingSurface(radius: DirtRadius.card)
                 } else {
                     ForEach(groups.groups) { group in
                         groupCard(group)
@@ -258,11 +257,7 @@ struct GroupsSheet: View {
             }
             .padding(.horizontal, DirtSpace.row)
             .frame(minHeight: DirtHit.control)
-            .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
-                    .stroke(DirtTheme.hairline, lineWidth: 1)
-            )
+            .dirtGroupingSurface(radius: DirtRadius.card)
             .contentShape(RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -308,6 +303,8 @@ struct GroupDetailView: View {
                     }.font(DirtType.rowTitle).frame(minHeight: 44)
                 }
                 .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
+                .padding(.horizontal, DirtSpace.row)
+                .dirtGroupingSurface()
             }
             ScrollView {
                 VStack(spacing: 0) {
@@ -327,6 +324,7 @@ struct GroupDetailView: View {
                     .disabled(groups.isMutatingGroup)
                     .font(DirtType.helper).frame(minHeight: 44).padding(.top, 10)
                 }
+                .dirtGroupingSurface(radius: DirtRadius.card)
                 .background(GeometryReader { geo in
                     Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height + 88)
                 })
@@ -403,7 +401,7 @@ struct GroupDetailView: View {
                             if groups.isSharing { groups.stopSharing() } else { groups.startSharing() }
                         }
                         .padding(.horizontal, 10).frame(minHeight: 44)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(groups.isSharing ? Color.white : DirtTheme.onOrange)
                         .background(groups.isSharing ? DirtTheme.chrome : DirtTheme.orange, in: RoundedRectangle(cornerRadius: 8))
                     } else {
                         Button {
@@ -428,7 +426,7 @@ struct GroupDetailView: View {
                 }
             }
         }
-        .background(expanded ? DirtTheme.rowFill : .clear, in: RoundedRectangle(cornerRadius: 10))
+        .background(expanded ? DirtTheme.wash : .clear, in: RoundedRectangle(cornerRadius: 10))
         .overlay(alignment: .bottom) { Divider() }
     }
 }
