@@ -19,37 +19,101 @@ struct LoopPlannerTests {
         return try IndexedGraph(PolicyTests.Line(nodes: nodes, edges: edges, surfaces: surfaces, roads: roads))
     }
 
-    @Test func twoSearchesCloseOnParallelRoadsWithoutReriding() throws {
+    @Test func aLoopToAFarPinReturnsStartFarStart() throws {
         let graph = try parallelRoads()
-        let counter = SearchCounter()
-        var request = LoopRequest(start: .init(longitude: 0.002, latitude: 0.002), headingRadians: .pi / 2,
-                                  targetMeters: 50_000, style: .dirt)
-        request.options.counter = counter
+        let start = Coordinate(longitude: 0.002, latitude: 0.002)
+        let far = Coordinate(longitude: 0.28, latitude: 0.002)
+        var request = LoopRequest(start: start, far: far, targetMeters: 50_000, style: .dirt)
         request.options.cityWall = false
         let result = try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10))
-        #expect(counter.searches <= 4)
+        #expect(result.outbound.start.coordinate.distance(to: start) < 500)
+        #expect(result.outbound.end.coordinate.distance(to: far) < 500)
+        #expect(result.inbound.end.coordinate.distance(to: start) < 500)
+        #expect(result.far.longitude == far.longitude)
         #expect(result.outbound.distanceMeters > 1_000)
         #expect(result.inbound.distanceMeters > 1_000)
-        #expect(result.far.longitude > request.start.longitude)
-        let quality = RouteQuality(route: result.combined)
-        #expect(quality.reriddenMeters < result.distanceMeters * 0.08)
     }
 
-    @Test func aSingleRoadDoesNotReturnAFoldedCircuit() throws {
+    @Test func returnPrefersTheOtherRoadWhenOneExists() throws {
+        let graph = try parallelRoads()
+        let start = Coordinate(longitude: 0.002, latitude: 0.002)
+        let far = Coordinate(longitude: 0.28, latitude: 0.002)
+        var request = LoopRequest(start: start, far: far, targetMeters: 50_000, style: .dirt)
+        request.options.cityWall = false
+        let result = try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10))
+        let quality = RouteQuality(route: result.combined)
+        #expect(quality.reriddenMeters < result.outbound.distanceMeters * 0.2)
+        let outboundIDs = Set(result.outbound.segments.map(\.edgeID))
+        let inboundReuse = result.inbound.segments.filter { outboundIDs.contains($0.edgeID) }.reduce(0.0) { $0 + $1.meters }
+        #expect(inboundReuse < result.inbound.distanceMeters * 0.5)
+    }
+
+    @Test func aDeadEndPinReturnsAnOutAndBackWithRepeatedDistance() throws {
         let nodes = (0...8).map { Coordinate(longitude: Double($0) * 0.01, latitude: 0) }
         let graph = try IndexedGraph(PolicyTests.Line(
             nodes: nodes, edges: (0..<8).map { ($0, $0 + 1) },
             surfaces: Array(repeating: "dirt", count: 8),
             roads: Array(repeating: "track", count: 8)))
-        #expect(throws: LoopFailure.self) {
-            try LoopPlanner(pack: graph).plan(
-                .init(start: .init(longitude: 0.002, latitude: 0), headingRadians: .pi / 2,
-                      targetMeters: 12_000, style: .dirt),
-                budget: .init(seconds: 10))
+        var request = LoopRequest(start: .init(longitude: 0.002, latitude: 0),
+                                  far: .init(longitude: 0.078, latitude: 0),
+                                  targetMeters: 12_000, style: .dirt)
+        request.options.cityWall = false
+        let result = try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10))
+        let quality = RouteQuality(route: result.combined)
+        #expect(quality.reriddenMeters > 1_000)
+        #expect(result.reriddenMeters == quality.reriddenMeters)
+    }
+
+    @Test func aLargerDistanceTargetOpensWanderAndStillReachesThePin() throws {
+        let hops = 12
+        var direct: [Coordinate] = []
+        var scenic: [Coordinate] = []
+        for i in 0...hops {
+            direct.append(.init(longitude: Double(i) * 0.01, latitude: 0))
+            scenic.append(.init(longitude: Double(i) * 0.01, latitude: 0.11))
+        }
+        let nodes = direct + scenic
+        var edges: [(Int, Int)] = []
+        var surfaces: [String] = []
+        var roads: [String] = []
+        func add(_ a: Int, _ b: Int, surface: String, road: String) {
+            edges.append((a, b)); surfaces.append(surface); roads.append(road)
+        }
+        for i in 0..<hops {
+            add(i, i + 1, surface: "asphalt", road: "tertiary")
+            add(hops + 1 + i, hops + 2 + i, surface: "dirt", road: "track")
+        }
+        add(0, hops + 1, surface: "dirt", road: "track")
+        add(hops, 2 * (hops + 1) - 1, surface: "dirt", road: "track")
+        let graph = try IndexedGraph(PolicyTests.Line(nodes: nodes, edges: edges, surfaces: surfaces, roads: roads))
+        let start = Coordinate(longitude: 0.002, latitude: 0)
+        let far = Coordinate(longitude: 0.118, latitude: 0)
+        var tight = LoopRequest(start: start, far: far, targetMeters: 20_000, style: .dirt)
+        tight.options.cityWall = false
+        var wide = LoopRequest(start: start, far: far, targetMeters: 120_000, style: .dirt)
+        wide.options.cityWall = false
+        let short = try LoopPlanner(pack: graph).plan(tight, budget: .init(seconds: 10))
+        let long = try LoopPlanner(pack: graph).plan(wide, budget: .init(seconds: 10))
+        #expect(short.outbound.end.coordinate.distance(to: far) < 500)
+        #expect(long.outbound.end.coordinate.distance(to: far) < 500)
+        let planner = LoopPlanner(pack: graph)
+        #expect(planner.aimedWander(start: start, far: far, target: 120_000)
+                > planner.aimedWander(start: start, far: far, target: 20_000) + 0.4)
+        #expect(long.distanceMeters >= short.distanceMeters)
+    }
+
+    @Test func anOffNetworkFarPinFailsInTermsOfThePin() throws {
+        let graph = try parallelRoads(hops: 4)
+        var request = LoopRequest(start: .init(longitude: 0.002, latitude: 0.002),
+                                  far: .init(longitude: 10, latitude: 10),
+                                  targetMeters: 20_000, style: .dirt)
+        request.options.cityWall = false
+        #expect(throws: LoopFailure.pinUnreachable) {
+            try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10))
         }
     }
 
-    @Test func headingExpansionDoesNotChangeOrdinaryABSearch() throws {
+    @Test func ordinaryABSearchIsUnchangedWhenRepeatEdgesAreEmpty() throws {
         let graph = try parallelRoads(hops: 8)
         let start = RoadMatch(edge: 0, coordinate: .init(longitude: 0.002, latitude: 0.002), distanceMeters: 0,
                               alongMeters: 1, geometryMeters: 1_112, forward: true)
@@ -59,10 +123,9 @@ struct LoopPlannerTests {
         options.cityWall = false
         let baseline = try PathSearch(pack: graph).search(start: start, end: end, policy: .init(style: .dirt),
                                                           access: .init(), options: options, budget: .init())
-        #expect(options.expandToCap == false)
-        #expect(options.headingRadians == nil)
         let again = try PathSearch(pack: graph).search(start: start, end: end, policy: .init(style: .dirt),
                                                        access: .init(), options: options, budget: .init())
         #expect(baseline.segments.map(\.edgeID) == again.segments.map(\.edgeID))
+        #expect(options.repeatEdges.isEmpty)
     }
 }
