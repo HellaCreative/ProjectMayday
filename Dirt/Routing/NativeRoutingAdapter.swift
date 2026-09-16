@@ -56,14 +56,8 @@ nonisolated enum NativeRoutingAdapter {
     }
     static func message(_ failure: LoopFailure) -> String {
         switch failure {
-        case .noOutbound:
-            return "No ride could be built from here in that direction. Try another heading or a shorter distance."
-        case .noReturn(_, let offered, let detail):
-            if let offered {
-                let km = Int((offered / 1000).rounded())
-                return "\(detail) A \(km) km loop is the distance that closed without re-riding the outbound."
-            }
-            return "\(detail) Try another direction or a shorter distance."
+        case .pinUnreachable:
+            return "That pin is not on a legally usable mapped road. Drop it somewhere else."
         }
     }
     static func accessName(_ code: UInt8) -> String {
@@ -224,7 +218,7 @@ actor NativeRoutingSession {
             prepared = elapsedMs(from: started); prepareDetail = preparation.detail
             let result = try LoopPlanner(pack: preparation.graph).plan(request, budget: budget)
             log("pack loop", started: started, prepared: prepared, prepareDetail: prepareDetail, counter: counter,
-                outcome: "outbound=\(Int(result.outbound.distanceMeters.rounded())) inbound=\(Int(result.inbound.distanceMeters.rounded())) far=\(String(format: "%.5f", result.far.longitude)),\(String(format: "%.5f", result.far.latitude)) relax=[\(result.relaxations.joined(separator: ","))]")
+                outcome: "outbound=\(Int(result.outbound.distanceMeters.rounded())) inbound=\(Int(result.inbound.distanceMeters.rounded())) far=\(String(format: "%.5f", result.far.longitude)),\(String(format: "%.5f", result.far.latitude)) reridden=\(Int(result.reriddenMeters.rounded())) return=\(Int(result.returnMeters.rounded()))")
             return result
         } catch {
             log("pack loop failed", started: started, prepared: prepared, prepareDetail: prepareDetail, counter: counter,

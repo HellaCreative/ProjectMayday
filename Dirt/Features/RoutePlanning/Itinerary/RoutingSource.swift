@@ -14,7 +14,7 @@ protocol RoutingSource: AnyObject {
 
 struct PlannedLoopRequest: Sendable {
     let start: RouteCoordinate
-    let headingRadians: Double
+    let far: RouteCoordinate
     let targetMeters: Double
     let profile: RouteProfile
     let allowUnknown: Bool
@@ -29,7 +29,6 @@ struct PlannedLoop: Sendable {
     let far: RouteCoordinate
     let outbound: RouteResponse
     let inbound: RouteResponse
-    let relaxations: [String]
     let reriddenMeters: Double
     let returnMeters: Double
     var distanceMeters: Double { (outbound.distanceMeters ?? 0) + (inbound.distanceMeters ?? 0) }
@@ -192,22 +191,17 @@ final class PackRoutingSource: RoutingSource {
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
         var engine = LoopRequest(
             start: .init(longitude: request.start.longitude, latitude: request.start.latitude),
-            headingRadians: request.headingRadians, targetMeters: request.targetMeters,
+            far: .init(longitude: request.far.longitude, latitude: request.far.latitude),
+            targetMeters: request.targetMeters,
             style: RidingStyle(rawValue: request.profile.rawValue) ?? .balanced,
             allowUnknown: request.allowUnknown, seed: request.seed)
         engine.profile.wander = request.wander
         engine.profile.avoidMajorHighways = request.avoidMotorways
         engine.profile.preferBackRoads = request.preferBackRoads
         engine.options.cityWall = request.avoidCities
-        let cap = max(5_000, request.targetMeters / 2)
-        var points = [request.start.locationCoordinate]
-        for index in 0..<8 {
-            let guide = LoopPlan.point(from: request.start, meters: cap, bearing: Double(index) * .pi / 4)
-            if GraphPackStore.primaryRegionId(containing: guide.locationCoordinate) != nil {
-                points.append(guide.locationCoordinate)
-            }
-        }
-        let directories = try packs.routingDirectories(for: points)
+        let directories = try packs.routingDirectories(for: [
+            request.start.locationCoordinate, request.far.locationCoordinate
+        ])
         do {
             let result = try await session.loop(engine, directories: directories)
             let style = engine.profile.style
@@ -217,7 +211,6 @@ final class PackRoutingSource: RoutingSource {
                 far: RouteCoordinate(longitude: result.far.longitude, latitude: result.far.latitude),
                 outbound: NativeRoutingAdapter.response(result.outbound, style: style),
                 inbound: NativeRoutingAdapter.response(result.inbound, style: style, prior: outboundIDs),
-                relaxations: result.relaxations,
                 reriddenMeters: quality.reriddenMeters,
                 returnMeters: quality.returnMeters)
         } catch let failure as RoutingFailure {

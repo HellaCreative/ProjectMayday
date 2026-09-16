@@ -137,14 +137,20 @@ final class RoutePlannerModel {
         didSet { modeChanged(from: oldValue) }
     }
     var showingLoop = false
-    var loopDistanceKM: Double = 100
-    var loopDirection: LoopDirection = .north
+    var loopDistanceKM: Double = 100 {
+        didSet {
+            guard oldValue != loopDistanceKM, showingLoop, loopFar != nil, hasRoute else { return }
+            generateLoop()
+        }
+    }
+    var loopFar: RouteCoordinate?
     var loopSummary: String?
     private var loopRunID: UUID?
 
     func selectLoop() {
         switchToPlanClearing()
         showingLoop = true
+        loopFar = nil
         fuelPlanningStatus = nil
         isAssemblingRoute = false
         loopSummary = nil
@@ -165,6 +171,10 @@ final class RoutePlannerModel {
             errorMessage = "Waiting for your location. Try again in a moment."
             return
         }
+        guard let far = loopFar else {
+            errorMessage = "Hold the map to drop a pin where you want the ride to reach."
+            return
+        }
         invalidateInFlightRoutes()
         let runID = UUID()
         loopRunID = runID
@@ -172,17 +182,16 @@ final class RoutePlannerModel {
         isAssemblingRoute = true
         errorMessage = nil
         loopSummary = nil
-        fuelPlanningStatus = "Finding loop"
+        fuelPlanningStatus = "Creating loop"
         let target = loopDistanceKM * 1000
         let selectedProfile = profile, selectedAllow = allowUnknown
-        let heading = loopDirection.bearing
         var preferences = displayedRidePreferences
         preferences.preferDifferentRoads = true
         let policy = routingSourcePolicy
         let dummy = RouteRequest(
             profile: selectedProfile,
             locations: [RouteLocation(latitude: start.latitude, longitude: start.longitude, label: "start"),
-                        RouteLocation(latitude: start.latitude, longitude: start.longitude, label: "start")],
+                        RouteLocation(latitude: far.latitude, longitude: far.longitude, label: "far")],
             allowUnknown: selectedAllow)
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -196,18 +205,18 @@ final class RoutePlannerModel {
             do {
                 let source = policy.select(for: dummy)
                 let result = try await source.planLoop(PlannedLoopRequest(
-                    start: start, headingRadians: heading, targetMeters: target,
+                    start: start, far: far, targetMeters: target,
                     profile: selectedProfile, allowUnknown: selectedAllow,
                     wander: preferences.normalized.wander, avoidCities: preferences.avoidCities,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads,
                     seed: UInt64.random(in: 1...9_007_199_254_740_991)))
                 guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
-                let far = result.far
                 let itinerary = reduce(RiderItinerary(), .replaceAll(
                     waypoints: [start, far, start],
                     profile: selectedProfile, allowUnknown: selectedAllow,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
-                guard itinerary.legs.count == 2, itinerary.legs.allSatisfy({ $0.profile == selectedProfile }) else {
+                guard itinerary.legs.count == 2, itinerary.legs.allSatisfy({ $0.profile == selectedProfile }),
+                      itinerary.legs.allSatisfy({ $0.allowUnknown == selectedAllow }) else {
                     self.errorMessage = "Loop legs must keep the selected riding style."
                     self.refreshMap()
                     return
@@ -224,14 +233,20 @@ final class RoutePlannerModel {
                     generation: itinerary.generation, legs: builtLegs,
                     riderLegStatus: Dictionary(uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.built) }),
                     riderRoutes: Dictionary(uniqueKeysWithValues: zip(itinerary.legs.map(\.id), responses)))
+                let inboundMeters = result.inbound.distanceMeters ?? 0
+                let outAndBack = inboundMeters > 0 && result.reriddenMeters > inboundMeters * 0.5
                 RoutingDebugLog.shared.event(
-                    "loop distance=\(Int(result.distanceMeters)) reridden=\(Int(result.reriddenMeters)) return=\(Int(result.returnMeters)) relax=[\(result.relaxations.joined(separator: ","))] style=\(selectedProfile.rawValue) legs=\(itinerary.legs.map(\.profile.rawValue).joined(separator: ","))")
+                    "loop distance=\(Int(result.distanceMeters)) reridden=\(Int(result.reriddenMeters)) return=\(Int(result.returnMeters)) style=\(selectedProfile.rawValue) allowUnknown=\(selectedAllow) outAndBack=\(outAndBack)")
                 self.ridePreferences = preferences
                 self.itinerary = itinerary
                 self.built = built
                 self.destination = start
                 self.routeIdentity = "loop:\(runID.uuidString)"
-                self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(result.distanceMeters / 1000)) km · \(Int(result.reriddenMeters)) m re-ridden"
+                if outAndBack {
+                    self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(result.distanceMeters / 1000)) km · only way back is the way you came, \(Int((result.reriddenMeters / 1000).rounded())) km repeated"
+                } else {
+                    self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(result.distanceMeters / 1000)) km · \(Int(result.reriddenMeters)) m re-ridden"
+                }
                 self.toast = "Loop ready"
                 self.mapState.fit(built.legs.flatMap { $0.response.coordinates })
             } catch is CancellationError {
@@ -255,14 +270,22 @@ final class RoutePlannerModel {
                 suppressPlannerReroute = false
             }
             syncNetworkAccessPolicy()
-            reroute()
+            if showingLoop, loopFar != nil, hasRoute {
+                generateLoop()
+            } else {
+                reroute()
+            }
         }
     }
     var allowUnknown = false {
         didSet {
             if oldValue != allowUnknown {
                 syncNetworkAccessPolicy()
-                reroute()
+                if showingLoop, loopFar != nil, hasRoute {
+                    generateLoop()
+                } else {
+                    reroute()
+                }
             }
         }
     }
@@ -783,6 +806,26 @@ final class RoutePlannerModel {
         buildTask?.cancel()
         itineraryBuilder.setCurrentGeneration(itinerary.generation)
 
+        if showingLoop {
+            switch action {
+            case .move(let id, let to):
+                if itinerary.waypoints.indices.contains(1), itinerary.waypoints[1].id == id {
+                    loopFar = to
+                }
+                generateLoop()
+                return
+            case .setProfile, .setAllowUnknown, .setAvoidMotorways, .setPreferBackRoads,
+                 .setHopProfile, .setHopAllowUnknown, .setHopAvoidMotorways:
+                generateLoop()
+                return
+            case .replaceAll, .clear, .markImpassable:
+                break
+            default:
+                generateLoop()
+                return
+            }
+        }
+
         // Navigation recovery already owns the rider-position → active-leg-end
         // request. Record the blocked edges canonically, preserve the visible
         // itinerary, and let applyRecoveryRoute commit that current-position leg.
@@ -1269,7 +1312,16 @@ final class RoutePlannerModel {
     func handleMapLongPress(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
-        if showingLoop { return }
+        if showingLoop {
+            loopFar = point
+            errorMessage = nil
+            if hasRoute, itinerary.waypoints.count >= 3 {
+                apply(.move(waypointID: itinerary.waypoints[1].id, to: point), source: "loopFar")
+            } else {
+                generateLoop()
+            }
+            return
+        }
         switch mode {
         case .plan:
             appendPlanPoint(point)
@@ -1896,6 +1948,15 @@ final class RoutePlannerModel {
         // Map coordinator already snaps the drop to a visible road; do not pull
         // it back onto the old route the rider is deliberately reshaping.
         let snapped = raw
+        if showingLoop {
+            if markerID == "loop-far" {
+                loopFar = snapped
+                generateLoop()
+                return
+            }
+            movePlanStyleWaypoint(markerID: markerID, snapped: snapped)
+            return
+        }
         switch mode {
         case .fromHere:
             // B relocates via long-press on the map (road-snapped) — pins are not draggable.
@@ -2275,6 +2336,8 @@ final class RoutePlannerModel {
             invalidateInFlightRoutes()
             showingLoop = false
             loopRunID = nil
+            loopFar = nil
+            loopSummary = nil
             errorMessage = nil
             fuelPlanningStatus = nil
             isAssemblingRoute = false
@@ -2500,6 +2563,17 @@ final class RoutePlannerModel {
         case .plan:
             markers.append(contentsOf: canonicalMarkers(riderPinsLocked: false))
         }
+        if showingLoop, !hasRoute, let far = loopFar {
+            markers.append(
+                MapState.Marker(
+                    id: "loop-far",
+                    latitude: far.latitude,
+                    longitude: far.longitude,
+                    label: "Far",
+                    kind: .destination
+                )
+            )
+        }
         if fuelPlanningStatus != nil {
             for (index, stop) in fuelPreviewStops.enumerated() {
                 markers.append(
@@ -2559,7 +2633,7 @@ final class RoutePlannerModel {
                 longitude: waypointMove?.id == waypoint.id ? waypointMove!.coordinate.longitude : waypoint.coordinate.longitude,
                 label: "\(index + 1)",
                 kind: index == 0 ? .start : (index == itinerary.waypoints.count - 1 ? .destination : .stage),
-                isLocked: riderPinsLocked
+                isLocked: showingLoop ? index != 1 : riderPinsLocked
             )
         }
         var fuelOrdinal = 0

@@ -3,17 +3,6 @@ import Testing
 @testable import Dirt
 
 @Suite struct LoopPlanTests {
-    @Test func compassChoicesFollowClockwiseBearingsFromNorth() {
-        let start = RouteCoordinate(longitude: -63.33, latitude: 44.76)
-        #expect(LoopDirection.allCases.map(\.rawValue) == ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"])
-        for (index, direction) in LoopDirection.allCases.enumerated() {
-            let guide = direction.guide(from: start)
-            let bearing = LoopPlan.bearing(from: start, toward: guide)
-            let expected = Double(index) * Double.pi / 4
-            #expect(abs(atan2(sin(bearing - expected), cos(bearing - expected))) < 0.000001)
-        }
-    }
-
     @Test func generatedLoopKeepsTwoRiderWaypointsAndTheReturnPin() {
         let start = RouteCoordinate(longitude: -63.33, latitude: 44.76)
         let far = LoopPlan.point(from: start, meters: 80_000, bearing: 0)
@@ -26,6 +15,7 @@ import Testing
         #expect(itinerary.waypoints[1].coordinate == far)
         #expect(itinerary.legs.count == 2)
         #expect(itinerary.legs.allSatisfy { $0.profile == .dirt })
+        #expect(itinerary.legs.allSatisfy { $0.allowUnknown == false })
         #expect(Set(itinerary.waypoints.map(\.id)).count == 3)
     }
 }

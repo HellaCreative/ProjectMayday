@@ -394,9 +394,9 @@ struct RoutePlannerCard: View {
 
     @ViewBuilder private var loopContent: some View {
         if planner.hasRoute && !planner.isRouting {
+            loopSetupContent
             stageList
             routingStatus
-            fuelCoverageNotices
             ferryNotice
             statsRow
             ctaRow
@@ -408,21 +408,11 @@ struct RoutePlannerCard: View {
 
     private var loopSetupContent: some View {
         VStack(spacing: 12) {
+            Text("Hold the map to drop the far pin. Drag it to reshape the loop.")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
             VStack(spacing: 8) {
-                loopControlLayout {
-                    Text("Direction")
-                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                    Picker("Direction", selection: Binding(get: { planner.loopDirection }, set: { planner.loopDirection = $0 })) {
-                        ForEach(LoopDirection.allCases) { direction in
-                            Text(direction.rawValue).tag(direction)
-                        }
-                    }
-                    .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Direction")
-                    .accessibilityValue(planner.loopDirection.rawValue)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(minHeight: DirtHit.min)
-                Divider()
                 loopControlLayout {
                     Text("Surface")
                     if !dynamicTypeSize.isAccessibilitySize { Spacer() }
@@ -437,6 +427,27 @@ struct RoutePlannerCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(minHeight: DirtHit.min)
+                if planner.profile != .cleanest {
+                    Divider()
+                    profilePolicyToggle(
+                        profile: planner.profile,
+                        allowUnknown: Binding(
+                            get: { planner.allowUnknown },
+                            set: { on in
+                                if on {
+                                    unknownAckStage = nil
+                                    showUnknownAck = true
+                                } else {
+                                    planner.allowUnknown = false
+                                }
+                            }
+                        ),
+                        avoidMotorways: Binding(
+                            get: { planner.avoidMotorways },
+                            set: { planner.avoidMotorways = $0 }
+                        )
+                    )
+                }
                 Divider()
                 VStack(spacing: 0) {
                     loopControlLayout {
@@ -466,7 +477,7 @@ struct RoutePlannerCard: View {
                     Button("Cancel") { planner.selectMode(.plan) }.frame(minHeight: DirtHit.min)
                 }
                 .font(.subheadline).tint(DirtTheme.action)
-            } else {
+            } else if !planner.hasRoute {
                 Button("Create Loop") { planner.generateLoop() }
                     .buttonStyle(DirtCTAStyle.brand())
             }
@@ -898,7 +909,7 @@ struct RoutePlannerCard: View {
                             .foregroundStyle(DirtTheme.action)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if stage.endsAtFuelStop, planner.canReplaceFuelStop(at: index) {
+                    if !planner.showingLoop, stage.endsAtFuelStop, planner.canReplaceFuelStop(at: index) {
                         Button {
                             planner.selectFuelWaypoint(at: index)
                         } label: {
@@ -911,6 +922,7 @@ struct RoutePlannerCard: View {
                         .foregroundStyle(DirtTheme.action)
                         .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
+                    if !planner.showingLoop {
                     profileSegments(active: stage.profile) { profile in
                         planner.setFuelHopProfile(profile, at: index)
                         withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
@@ -949,6 +961,7 @@ struct RoutePlannerCard: View {
                             .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                         }
                         .buttonStyle(.plain)
+                    }
                     }
                 }
             }
