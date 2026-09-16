@@ -50,8 +50,18 @@ struct PolicyTests {
         var wide = ProfilePolicy(style: .dirt); wide.wander = 1
         var tightBand = ProfilePolicy(style: .dirt); tightBand.wander = 0
         #expect(wide.corridorMeters(straightLine: 200_000) > tightBand.corridorMeters(straightLine: 200_000) * 3)
-        let wideGate = ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: wide.corridorMeters(straightLine: 200_000) * 2, hasRoadCompass: true)
-        let tightGate = ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: tightBand.corridorMeters(straightLine: 200_000) * 2, hasRoadCompass: true)
+        #expect(wide.corridorMeters(straightLine: 200_000) > wide.corridorMeters(straightLine: 50_000))
+        #expect(wide.roadExtraMeters(startRemaining: 200_000)
+                > tightBand.roadExtraMeters(startRemaining: 200_000) * 2)
+        #expect(wide.roadSidewaysFraction() > tightBand.roadSidewaysFraction())
+        #expect(wide.roadBackwardAllowanceMeters(startRemaining: 200_000)
+                > tightBand.roadBackwardAllowanceMeters(startRemaining: 200_000) * 5)
+        let wideGate = ProfilePolicy.progressRegressionMeters(
+            style: .dirt, corridorMeters: wide.corridorMeters(straightLine: 200_000) * 2,
+            hasRoadCompass: true, wander: 1)
+        let tightGate = ProfilePolicy.progressRegressionMeters(
+            style: .dirt, corridorMeters: tightBand.corridorMeters(straightLine: 200_000) * 2,
+            hasRoadCompass: true, wander: 0)
         #expect(wideGate > tightGate)
         policy.wander = 1
         let dirt = policy.step(pack: pack,edge: 0,meters: 1000,objective: .pavement,
@@ -125,14 +135,17 @@ struct PolicyTests {
         #expect(route.distanceMeters > 0)
     }
 
-    @Test func progressRegressionMatchesJavaScript() {
+    @Test func progressRegressionScalesWithWanderNotAFixedFifteenKm() {
         #expect(ProfilePolicy.progressRegressionMeters(style: .cleanest, corridorMeters: 60_000, hasRoadCompass: false).isInfinite)
-        #expect(ProfilePolicy.progressRegressionMeters(style: .balanced, corridorMeters: 240_000, hasRoadCompass: false) == 10_000)
-        #expect(ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: 60_000, hasRoadCompass: false) == 15_000)
-        #expect(ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: 120_000, hasRoadCompass: false) == 30_000)
-        #expect(ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: 240_000, hasRoadCompass: false) == 60_000)
         #expect(ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: .infinity, hasRoadCompass: false).isInfinite)
-        #expect(ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: 60_000, hasRoadCompass: true) == 15_000)
+        let tight = ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: 60_000, hasRoadCompass: true, wander: 0)
+        let full = ProfilePolicy.progressRegressionMeters(style: .dirt, corridorMeters: 60_000, hasRoadCompass: true, wander: 1)
+        #expect(tight == 2_000)
+        #expect(full > tight * 5)
+        let balancedTight = ProfilePolicy.progressRegressionMeters(style: .balanced, corridorMeters: 240_000, hasRoadCompass: false, wander: 0)
+        let balancedFull = ProfilePolicy.progressRegressionMeters(style: .balanced, corridorMeters: 240_000, hasRoadCompass: false, wander: 1)
+        #expect(balancedTight == 2_000)
+        #expect(balancedFull > balancedTight * 5)
     }
 
     @Test func shortDirtClawbackPricesNibblesAsPaved() {

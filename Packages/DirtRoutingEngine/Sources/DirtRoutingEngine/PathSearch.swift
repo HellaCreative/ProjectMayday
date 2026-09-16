@@ -315,12 +315,16 @@ public struct PathSearch: Sendable {
         let penalized = options.penalizedDirtEdges
         let needIdentity = !avoid.isEmpty || !prior.isEmpty || !penalized.isEmpty
         let startRemaining = remaining(of: startNode)
-        // Distance / fuel-feeler searches must cross regional seams and coastal
-        // wiggles; style progress-regression is for personality floods only.
+        let useRoadProgress = compass != nil && startRemaining.isFinite && !startRemaining.isInfinite
+            && options.objective != .distance && !options.disableProgressRegression
+            && policy.style != .cleanest
         let regression = (options.objective == .distance || options.disableProgressRegression)
             ? Double.infinity
             : ProfilePolicy.progressRegressionMeters(
-                style: policy.style, corridorMeters: options.corridorMeters, hasRoadCompass: compass != nil)
+                style: policy.style, corridorMeters: options.corridorMeters,
+                hasRoadCompass: compass != nil, wander: policy.wander)
+        let backwardAllowance = policy.roadBackwardAllowanceMeters(startRemaining: startRemaining)
+        let extraBudget = policy.roadExtraMeters(startRemaining: startRemaining)
         search: while let entry = heap.pop() {
             if pops & 255 == 0 {
                 do { try budget.check() }
@@ -403,16 +407,36 @@ public struct PathSearch: Sendable {
                     continue
                 }
                 let fromPoint = point(current.state.node), toPoint = point(arc.target)
-                if options.corridorMeters.isFinite && abs(toPoint.crossTrack(from: start.coordinate,to: end.coordinate)) > options.corridorMeters {
-                    options.boundary?.touched = true
-                    options.profile?.corridorRejects += 1
-                    continue
+                let left = remaining(of: arc.target)
+                let progress: Double
+                if useRoadProgress && left.isFinite {
+                    progress = startRemaining - left
+                } else {
+                    progress = RouteQuality.progress(toPoint, start.coordinate, end.coordinate)
                 }
-                let progress = RouteQuality.progress(toPoint, start.coordinate, end.coordinate)
-                if current.peakProgress - progress > regression {
-                    options.boundary?.touched = true
-                    options.profile?.regressionRejects += 1
-                    continue
+                if useRoadProgress && left.isFinite {
+                    if current.peakProgress - progress > backwardAllowance {
+                        options.boundary?.touched = true
+                        options.profile?.regressionRejects += 1
+                        continue
+                    }
+                    let extra = meters - max(0, progress)
+                    if extra > extraBudget {
+                        options.boundary?.touched = true
+                        options.profile?.corridorRejects += 1
+                        continue
+                    }
+                } else {
+                    if options.corridorMeters.isFinite && abs(toPoint.crossTrack(from: start.coordinate,to: end.coordinate)) > options.corridorMeters {
+                        options.boundary?.touched = true
+                        options.profile?.corridorRejects += 1
+                        continue
+                    }
+                    if current.peakProgress - progress > regression {
+                        options.boundary?.touched = true
+                        options.profile?.regressionRejects += 1
+                        continue
+                    }
                 }
                 let peak = max(current.peakProgress, progress)
                 let urban = cores.contains {

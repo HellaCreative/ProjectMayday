@@ -32,7 +32,7 @@ public struct RoutingEngine: Sendable {
     /// Corridor width for diagnostics. The widest pass is unbounded, and converting
     /// infinity to an integer traps.
     static func widthLabel(_ meters: Double) -> String {
-        meters.isFinite ? "\(Int(meters))m" : "∞"
+        meters.isFinite ? "\(Int(meters))m" : "road"
     }
     public func route(_ request: RoutingRequest,budget: ComputationBudget = .init(seconds: 45)) throws -> ComputedRoute {
         try budget.check()
@@ -127,15 +127,18 @@ public struct RoutingEngine: Sendable {
             return try run(clean)
         }
         if request.profile.style == .balanced {
-            return try balanced(request, run: run, budget: budget)
+            return try balanced(request, run: run, budget: budget, hasCompass: compass != nil)
         }
         var candidateLog: [String] = []
         var cap = request.options.maximumMeters
-        let base = request.profile.corridorMeters(straightLine: request.start.distance(to: request.end))
-        // Dirt scores 120 km then 60 km. Wider bands are connectivity only:
-        // stop at the first one that connects. Repeating 180/240/∞ on the owner
-        // replay produced the identical 63.3% ride and burned the phone's 60 s.
-        let multipliers: [Double] = [2,1,3,4,.infinity]
+        let hasCompass = compass != nil
+        let base = hasCompass
+            ? Double.infinity
+            : request.profile.corridorMeters(straightLine: request.start.distance(to: request.end))
+        // With a road compass, sideways/backward gates replace geodesic bands
+        // so going around a lake is legal (§5.5–6). Without one, Dirt still
+        // scores 120 km then 60 km geodesic widths.
+        let multipliers: [Double] = hasCompass ? [1] : [2,1,3,4,.infinity]
         var candidates: [Candidate] = []
         var incomplete: RoutingFailure?
         var comparisonFound = false
@@ -195,9 +198,19 @@ public struct RoutingEngine: Sendable {
                 if !comparison { break }
                 if !candidates.isEmpty, budget.remainingSeconds < 8 { break }
             } catch RoutingFailure.noPath {
+                if hasCompass && !options.disableProgressRegression {
+                    options.disableProgressRegression = true
+                    do {
+                        let route = try run(options)
+                        let quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
+                        candidates.append(.init(route: route,width: options.corridorMeters,quality: quality))
+                        comparisonFound = comparison
+                        candidateLog.append("relaxed/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p")
+                        continue
+                    } catch RoutingFailure.noPath { }
+                    catch let failure as RoutingFailure { incomplete = failure; break }
+                }
                 if width.isFinite { failedWidth = min(failedWidth,width) }
-                // No road was turned away at this width's limits, so every wider corridor
-                // sees the same roads and ends in "no path" too.
                 if !boundary.touched { break }
                 continue
             }
@@ -253,7 +266,8 @@ public struct RoutingEngine: Sendable {
     /// whose dirt weight is steered toward 45–55%. Stops at B; no resource flood.
     private func balanced(_ request: RoutingRequest,
                           run: (SearchOptions, ProfilePolicy?) throws -> ComputedRoute,
-                          budget: ComputationBudget) throws -> ComputedRoute {
+                          budget: ComputationBudget,
+                          hasCompass: Bool) throws -> ComputedRoute {
         var shortest = request.options
         shortest.objective = .distance
         shortest.corridorMeters = .infinity
@@ -285,8 +299,9 @@ public struct RoutingEngine: Sendable {
                 && quality.urbanMeters <= 100
         }
         let firstMix = candidates[0].quality.knownDirtPercent < 45 ? 1.0 : 0.0
-        for corridor in [25_000.0, 80_000.0, Double.infinity] {
-            let label = corridor.isFinite ? "\(Int(corridor/1000))k" : "∞"
+        let corridors: [Double] = hasCompass ? [.infinity] : [25_000.0, 80_000.0, Double.infinity]
+        for corridor in corridors {
+            let label = corridor.isFinite ? "\(Int(corridor/1000))k" : (hasCompass ? "road" : "∞")
             do {
                 let first = try profile(firstMix, corridor: corridor)
                 candidates.append(first)

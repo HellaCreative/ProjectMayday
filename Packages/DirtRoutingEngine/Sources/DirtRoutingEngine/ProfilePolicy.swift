@@ -43,22 +43,50 @@ public struct ProfilePolicy: Sendable {
         }
     }
     func corridorMeters(straightLine: Double) -> Double {
-        _ = straightLine
-        let full = style == .dirt ? 60_000.0 : 40_000.0
-        // Wander 0 is a tight band; full wander is the JS 60/40 km width.
-        return full * (0.15 + 0.85 * appetite)
+        let span = straightLine.isFinite && straightLine > 0 ? straightLine : 60_000
+        let clipped = min(max(span, 8_000), 400_000)
+        // Geodesic fallback only. Personality searches with a road compass use
+        // `roadSidewaysFraction` / `roadBackwardAllowanceMeters` instead (§5.6).
+        let tight = 0.04
+        let full = style == .dirt ? 0.25 : 0.18
+        return clipped * (tight + (full - tight) * appetite)
     }
-    /// JS `progressRegressionForAttempt` / `MAX_PROGRESS_REGRESSION_M`.
-    /// JS turns this off once a turn-state compass exists. Our compass is
-    /// node-level, so Dirt/Balanced keep the forward gate as well as away-tax.
-    /// The 5 km floor lets a tight Wander shrink the gate; 60 km corridors still
-    /// match the JS 15 km value (0.25 × 60 km).
+    /// Extra ridden meters beyond road-progress toward B. Wander 0 keeps a
+    /// modest wiggle; full wander pays for S-curves and wide swings (§5.6).
+    func roadExtraMeters(startRemaining: Double) -> Double {
+        let remaining = startRemaining.isFinite ? max(0, startRemaining) : 50_000
+        let tight = 0.42
+        let wide = 0.90
+        return remaining * (tight + (wide - tight) * appetite) + 8_000
+    }
+    /// Share of ridden meters that may go sideways. Diagnostic/legacy; search
+    /// uses `roadExtraMeters` so prefixes of a legal S-curve are not killed.
+    func roadSidewaysFraction() -> Double {
+        if style == .cleanest { return 1 }
+        let extra = roadExtraMeters(startRemaining: 100_000)
+        return min(1, extra / max(1, 100_000 + extra))
+    }
+    /// How far remaining-to-B may increase before the label is dropped.
+    /// Wander 0 keeps a 2 km jog; full wander opens a share of the remaining ride.
+    func roadBackwardAllowanceMeters(startRemaining: Double) -> Double {
+        if style == .cleanest { return .infinity }
+        let remaining = startRemaining.isFinite ? max(0, startRemaining) : 40_000
+        let tight = 8_000.0
+        let wide = min(120_000, max(20_000, remaining * 0.30))
+        return tight + (wide - tight) * appetite
+    }
+    /// Geodesic fallback when no road compass is available. Wander 0 is 2 km,
+    /// not a fixed 15 km gate; Clean never applies it.
     static func progressRegressionMeters(style: RidingStyle, corridorMeters: Double,
-                                         hasRoadCompass: Bool) -> Double {
+                                         hasRoadCompass: Bool, wander: Double = 1) -> Double {
         _ = hasRoadCompass
         if style == .cleanest || !corridorMeters.isFinite { return .infinity }
-        if style == .balanced { return 10_000 }
-        return max(5_000, min(60_000, corridorMeters * 0.25))
+        let appetite = min(1, max(0, wander.isFinite ? wander : 1))
+        let tight = 2_000.0
+        let wide = style == .balanced
+            ? 20_000.0
+            : min(60_000, max(12_000, corridorMeters * 0.25))
+        return tight + (wide - tight) * appetite
     }
     /// JS `approachAwayExtraCost`, including pavement-mode ×10.
     func approachAway(fromRemaining: Double, toRemaining: Double, startRemaining: Double,
