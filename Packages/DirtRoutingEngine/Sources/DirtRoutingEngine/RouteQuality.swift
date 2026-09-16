@@ -21,6 +21,13 @@ public struct RouteQuality: Sendable {
     /// loops and out-and-backs that use different roads, which edge reuse alone
     /// cannot see, without charging for weaving around a bay.
     public var returnMeters: Double = 0
+    /// Known dirt inside paved→dirt→paved scraps shorter than the useful-run
+    /// floor. Candidate selection prefers fewer scrap metres over a slightly
+    /// higher dirt % built from orange blips.
+    public var shortDirtScrapMeters: Double = 0
+    /// Paved metres before the first meaningful (≥1 km) dirt run. Dirt should
+    /// take the first proper dirt turn, not a long paved dip first.
+    public var leadingPavedMeters: Double = 0
     public static let returnRadiusMeters = 2_000.0
     public static let returnSpanMeters = 10_000.0
     public var totalMeters: Double = 0
@@ -62,6 +69,30 @@ public struct RouteQuality: Sendable {
                 lateralMeters += sqrt(max(0,meters*meters-along*along))
             }
         }
+        var leading = 0.0
+        var i = 0
+        var foundMeaningful = false
+        while i < roads.count {
+            let isDirt = roads[i].surface == .gravel || roads[i].surface == .loose
+            if !isDirt {
+                if !foundMeaningful { leading += roads[i].meters }
+                i += 1
+                continue
+            }
+            let start = i
+            var knownRun = 0.0
+            while i < roads.count && (roads[i].surface == .gravel || roads[i].surface == .loose) {
+                knownRun += roads[i].meters
+                i += 1
+            }
+            if knownRun >= 1_000 { foundMeaningful = true }
+            let pavedBefore = start > 0 && roads[start - 1].surface == .paved
+            let pavedAfter = i < roads.count && roads[i].surface == .paved
+            if pavedBefore && pavedAfter && knownRun < 2_500 {
+                shortDirtScrapMeters += knownRun
+            }
+        }
+        leadingPavedMeters = leading
         reriddenMeters = Self.reriddenMeters(roads)
         returnMeters = Self.returnMeters(roads)
         knownDirtPercent = (known/totalMeters*1000).rounded()/10
@@ -135,6 +166,14 @@ public struct RouteQuality: Sendable {
         return ab > 1 ? (ap*ap+ab*ab-pb*pb)/(2*ab) : 0
     }
     public static func prefersDirt(_ a: Self, over b: Self, widthA: Double, widthB: Double) -> Bool {
+        // Scraps that inflate dirt % lose to a slightly leaner continuous ride.
+        if abs(a.shortDirtScrapMeters - b.shortDirtScrapMeters) > 400 {
+            return a.shortDirtScrapMeters < b.shortDirtScrapMeters
+        }
+        // Prefer taking the first proper dirt turn over a long paved opening dip.
+        if abs(a.leadingPavedMeters - b.leadingPavedMeters) > 2_000 {
+            return a.leadingPavedMeters < b.leadingPavedMeters
+        }
         if abs(a.knownDirtPercent-b.knownDirtPercent) > 2 { return a.knownDirtPercent > b.knownDirtPercent }
         if abs(a.urbanMeters-b.urbanMeters) > 100 { return a.urbanMeters < b.urbanMeters }
         if abs(a.minimumSectionDirtPercent-b.minimumSectionDirtPercent) >= 5 {
@@ -147,7 +186,8 @@ public struct RouteQuality: Sendable {
         if a.knownDirtPercent != b.knownDirtPercent { return a.knownDirtPercent > b.knownDirtPercent }
         return widthA < widthB
     }
-    public static func shortDirtExcursions(_ segments: [RouteSegment]) -> Set<String> {
+    public static func shortDirtExcursions(_ segments: [RouteSegment],
+                                          maximumKnownMeters: Double = 2_500) -> Set<String> {
         var result: Set<String> = [], i = 0
         while i < segments.count {
             if segments[i].surface == .paved || segments[i].structure == "ferry" { i += 1; continue }
@@ -157,7 +197,8 @@ public struct RouteQuality: Sendable {
                 if segments[i].surface == .gravel || segments[i].surface == .loose { known += segments[i].meters }
                 i += 1
             }
-            if start > 0 && i < segments.count && segments[start-1].surface == .paved && segments[i].surface == .paved && known < 1000 {
+            if start > 0 && i < segments.count && segments[start-1].surface == .paved && segments[i].surface == .paved
+                && known < maximumKnownMeters {
                 result.formUnion(segments[start..<i].map(\.edgeID))
             }
         }

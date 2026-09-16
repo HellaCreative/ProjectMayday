@@ -196,6 +196,11 @@ public struct PathSearch: Sendable {
         let dirtMeters: Double
         /// Continuous dirt/gravel run ending at this label; resets on pavement.
         let contiguousDirtMeters: Double
+        /// True once any contiguous dirt run reached the meaningful floor.
+        let achievedMeaningfulDirt: Bool
+        /// Paved meters accumulated since start (or since the last meaningful
+        /// dirt completion). Drives deferred dirt-entry pressure.
+        let pavedWithoutMeaningfulMeters: Double
         let peakProgress: Double
         let parent: Int?
         let arc: Arc?
@@ -274,6 +279,7 @@ public struct PathSearch: Sendable {
         let initial = State(node: startNode,incoming: resolvedArrival,
                             restrictions: carriedRestrictions,bucket: 0)
         var labels = [Label(state: initial,cost: 0,meters: 0,dirtMeters: 0,contiguousDirtMeters: 0,
+                            achievedMeaningfulDirt: false,pavedWithoutMeaningfulMeters: 0,
                             peakProgress: 0,parent: nil,arc: nil)]
         var bestSimple: [SimpleKey:Int] = [:]
         var bestFull: [State:Int] = [:]
@@ -397,6 +403,8 @@ public struct PathSearch: Sendable {
                     labels.append(.init(state: state,cost: current.cost,meters: current.meters,
                                         dirtMeters: current.dirtMeters,
                                         contiguousDirtMeters: current.contiguousDirtMeters,
+                                        achievedMeaningfulDirt: current.achievedMeaningfulDirt,
+                                        pavedWithoutMeaningfulMeters: current.pavedWithoutMeaningfulMeters,
                                         peakProgress: current.peakProgress,
                                         parent: entry.label,arc: nil))
                     storeBest(state, index)
@@ -497,8 +505,18 @@ public struct PathSearch: Sendable {
                 var clawback = 0.0
                 let minDirt = policy.minimumMeaningfulDirtMeters.isFinite
                     ? max(0, policy.minimumMeaningfulDirtMeters) : 1_000
+                let hopSpan = options.maximumMeters.isFinite
+                    ? options.maximumMeters
+                    : start.coordinate.distance(to: end.coordinate)
+                var achievedMeaningful = current.achievedMeaningfulDirt
+                var pavedWithoutMeaningful = current.pavedWithoutMeaningfulMeters
                 if pack.structure(e) == "ferry" {
                     // Ferry breaks continuity; short dirt already taxed per arc.
+                    if current.contiguousDirtMeters > 0 && current.contiguousDirtMeters < minDirt {
+                        clawback += policy.shortDirtLeaveAbortCost(
+                            contiguousDirtMeters: current.contiguousDirtMeters,
+                            objective: options.objective)
+                    }
                     contiguousDirt = 0
                 } else if isDirt {
                     contiguousDirt = current.contiguousDirtMeters + arc.meters
@@ -512,16 +530,32 @@ public struct PathSearch: Sendable {
                     // Entering a new dirt run (paved→dirt) costs a transition so
                     // many separate >1 km grabs lose to one connected corridor.
                     // Scale by hop span so long fuel/A→B legs are not starved
-                    // of dirt by a flat per-enter constant.
+                    // of dirt by a flat per-enter constant (floored at half).
                     if current.contiguousDirtMeters <= 0 {
-                        let hopSpan = options.maximumMeters.isFinite
-                            ? options.maximumMeters
-                            : start.coordinate.distance(to: end.coordinate)
                         clawback += policy.dirtEnterTransitionCost(
                             objective: options.objective, hopMeters: hopSpan)
                     }
+                    if contiguousDirt >= minDirt {
+                        achievedMeaningful = true
+                        pavedWithoutMeaningful = 0
+                    }
                 } else {
+                    if current.contiguousDirtMeters > 0 {
+                        clawback += policy.shortDirtLeaveAbortCost(
+                            contiguousDirtMeters: current.contiguousDirtMeters,
+                            objective: options.objective)
+                    }
                     contiguousDirt = 0
+                    if !achievedMeaningful {
+                        let before = pavedWithoutMeaningful
+                        pavedWithoutMeaningful += arc.meters
+                        clawback += policy.deferredDirtEntryCost(
+                            pavedWithoutMeaningfulMeters: pavedWithoutMeaningful,
+                            objective: options.objective)
+                            - policy.deferredDirtEntryCost(
+                                pavedWithoutMeaningfulMeters: before,
+                                objective: options.objective)
+                    }
                 }
                 let bucket = resource ? min(19,max(0,Int((options.precedingDirtMeters+dirt)/max(1,options.precedingMeters+meters)*20))) : 0
                 let previousTier = current.state.incoming >= 0 && current.state.incoming < pack.edgeCount
@@ -574,6 +608,8 @@ public struct PathSearch: Sendable {
                 let index = labels.count
                 labels.append(.init(state: state,cost: cost,meters: meters,dirtMeters: dirt,
                                     contiguousDirtMeters: contiguousDirt,
+                                    achievedMeaningfulDirt: achievedMeaningful,
+                                    pavedWithoutMeaningfulMeters: pavedWithoutMeaningful,
                                     peakProgress: peak,parent: entry.label,arc: arc))
                 storeBest(state, index)
                 heap.push(.init(label: index,cost: heapCost(cost, arc.target)))

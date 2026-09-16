@@ -182,10 +182,62 @@ struct PolicyTests {
         let long = dirt.dirtEnterTransitionCost(objective: .pavement, hopMeters: 200_000)
         #expect(abs(short - 280) < 0.01)
         #expect(long < short)
-        #expect(abs(long - 280 * (50_000 / 200_000)) < 0.01)
-        // Dilution is linear in hop length past the reference; five enters at the
-        // long-hop rate remain cheaper in absolute terms than five at the short rate.
+        // Floor at half base so uncapped From-Here legs cannot erase scrap penalties.
+        #expect(abs(long - 140) < 0.01)
         #expect(long * 5 < short * 5)
+    }
+
+    @Test func shortDirtLeaveAbortPunishesIncompleteRuns() {
+        var dirt = ProfilePolicy(style: .dirt)
+        let nibble = dirt.shortDirtLeaveAbortCost(contiguousDirtMeters: 300, objective: .pavement)
+        let useful = dirt.shortDirtLeaveAbortCost(contiguousDirtMeters: 1_500, objective: .pavement)
+        let corridor = dirt.shortDirtLeaveAbortCost(contiguousDirtMeters: 2_500, objective: .pavement)
+        #expect(abs(nibble - 280) < 0.01)
+        #expect(useful > 0)
+        #expect(useful < nibble)
+        #expect(corridor == 0)
+        #expect(dirt.shortDirtLeaveAbortCost(contiguousDirtMeters: 300, objective: .distance) == 0)
+    }
+
+    @Test func deferredDirtEntryPressuresEarlyDirtTurn() {
+        var dirt = ProfilePolicy(style: .dirt)
+        #expect(dirt.deferredDirtEntryCost(pavedWithoutMeaningfulMeters: 2_000, objective: .pavement) == 0)
+        let late = dirt.deferredDirtEntryCost(pavedWithoutMeaningfulMeters: 8_000, objective: .pavement)
+        #expect(late > 50) // ~5 km × 18
+        #expect(dirt.deferredDirtEntryCost(pavedWithoutMeaningfulMeters: 8_000, objective: .distance) == 0)
+        var balanced = ProfilePolicy(style: .balanced)
+        #expect(balanced.deferredDirtEntryCost(pavedWithoutMeaningfulMeters: 8_000, objective: .profile) == 0)
+    }
+
+    @Test func prefersDirtRejectsScrapInflatedCandidates() {
+        var scraps = RouteQuality()
+        scraps.knownDirtPercent = 64
+        scraps.shortDirtScrapMeters = 2_400
+        scraps.leadingPavedMeters = 18_000
+        var continuous = RouteQuality()
+        continuous.knownDirtPercent = 60
+        continuous.shortDirtScrapMeters = 0
+        continuous.leadingPavedMeters = 2_000
+        #expect(RouteQuality.prefersDirt(continuous, over: scraps, widthA: .infinity, widthB: .infinity))
+        #expect(!RouteQuality.prefersDirt(scraps, over: continuous, widthA: .infinity, widthB: .infinity))
+    }
+
+    @Test func shortDirtExcursionsCatchUsefulLengthScraps() {
+        func seg(_ id: String, _ meters: Double, _ surface: Surface) -> RouteSegment {
+            RouteSegment(edge: 0, edgeID: id, forward: true, meters: meters, surface: surface,
+                         surfaceLeaf: surface == .paved ? "asphalt" : "dirt", roadClass: "track",
+                         structure: "", access: 0, geometry: [])
+        }
+        let scraps = [
+            seg("p0", 500, .paved),
+            seg("d0", 1_200, .loose),
+            seg("p1", 500, .paved),
+            seg("d1", 3_000, .loose),
+            seg("p2", 500, .paved)
+        ]
+        let flagged = RouteQuality.shortDirtExcursions(scraps)
+        #expect(flagged.contains("d0"))
+        #expect(!flagged.contains("d1"))
     }
 
     @Test func dirtPavementAwayScalesWithWander() {

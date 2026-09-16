@@ -18,6 +18,15 @@ public struct ProfilePolicy: Sendable {
     /// only nibble-grabs below this length is clawed back to paved cost so it
     /// loses to the direct alternative.
     public var minimumMeaningfulDirtMeters = 1_000.0
+    /// Paved→dirt→paved grabs shorter than this still count as scraps even when
+    /// they clear the 1 km meaningful floor. Leave-abort and post-search scrap
+    /// detection use this so on-path 1–2 km orange blips lose to staying paved
+    /// or taking the first real dirt corridor.
+    public var minimumUsefulDirtMeters = 2_500.0
+    /// After this much paved riding without ever completing a meaningful dirt
+    /// run, further pavement pays `deferredDirtEntryCost` so Dirt prefers the
+    /// first proper dirt turn over a long paved dip that harvests scraps later.
+    public var deferredDirtEntryAfterMeters = 3_000.0
     public init(style: RidingStyle) { self.style = style }
     public var appetite: Double { min(1, max(0, wander.isFinite ? wander : 1)) }
     public static func family(_ leaf: String) -> Surface {
@@ -230,25 +239,34 @@ public struct ProfilePolicy: Sendable {
     /// `dirtEnterTransitionReferenceMeters` so relative preference for one
     /// connected run over many grabs is preserved while absolute tax vs the
     /// paved corridor stays proportional to hop length.
+    ///
+    /// Dilution never drops below half the base: uncapped From-Here legs were
+    /// letting on-path 1–2 km scraps beat staying paved once enter fell to ~tens.
     func dirtEnterTransitionCost(objective: SearchObjective, hopMeters: Double = .infinity) -> Double {
         guard style != .cleanest, objective != .distance else { return 0 }
-        let base: Double
+        let base = dirtEnterTransitionBase(objective: objective)
+        guard base > 0 else { return 0 }
+        let reference = Self.dirtEnterTransitionReferenceMeters
+        guard hopMeters.isFinite, hopMeters > reference, hopMeters > 0 else { return base }
+        return max(base * 0.5, base * (reference / hopMeters))
+    }
+    /// Undiluted paved→dirt barrier. Leave-abort uses this so long hops cannot
+    /// erase the scrap penalty by diluting enter alone.
+    func dirtEnterTransitionBase(objective: SearchObjective) -> Double {
+        guard style != .cleanest, objective != .distance else { return 0 }
         switch objective {
         case .pavement:
             // ~1.9 km of paved at 150/km on a short hop — enough that an
             // isolated 1–2 km dirt patch via a detour loses to the corridor.
-            base = 280
+            return 280
         case .profile, .balancedResource:
             let mix = min(1, max(0, balancedDirtPreference.isFinite ? balancedDirtPreference : 0.5))
             // Profile surface gap is smaller than pavement-mode; keep the same
             // qualitative barrier at that scale.
-            base = 8 + mix * 10
+            return 8 + mix * 10
         case .distance:
             return 0
         }
-        let reference = Self.dirtEnterTransitionReferenceMeters
-        guard hopMeters.isFinite, hopMeters > reference, hopMeters > 0 else { return base }
-        return base * (reference / hopMeters)
     }
     /// Hop length at which `dirtEnterTransitionCost` is still the full barrier.
     static let dirtEnterTransitionReferenceMeters = 50_000.0
@@ -269,6 +287,41 @@ public struct ProfilePolicy: Sendable {
             let paved = style == .dirt ? 16.0 : (1.05 + mix * 6.95)
             let dirt = style == .dirt ? 0.05 : (0.98 - mix * 0.9)
             return km * max(0, paved - dirt)
+        case .distance:
+            return 0
+        }
+    }
+    /// Tax for leaving a dirt run that never became a useful corridor. Full
+    /// undiluted enter barrier below the meaningful floor; tapers to zero by
+    /// `minimumUsefulDirtMeters` so 1–2 km paved-sandwiched scraps lose.
+    func shortDirtLeaveAbortCost(contiguousDirtMeters: Double, objective: SearchObjective) -> Double {
+        guard style != .cleanest, objective != .distance, contiguousDirtMeters > 0 else { return 0 }
+        let useful = minimumUsefulDirtMeters.isFinite ? max(0, minimumUsefulDirtMeters) : 2_500
+        let meaningful = minimumMeaningfulDirtMeters.isFinite ? max(0, minimumMeaningfulDirtMeters) : 1_000
+        guard contiguousDirtMeters < useful else { return 0 }
+        let full = dirtEnterTransitionBase(objective: objective)
+        guard full > 0 else { return 0 }
+        if contiguousDirtMeters < meaningful || useful <= meaningful {
+            return full
+        }
+        return full * (useful - contiguousDirtMeters) / (useful - meaningful)
+    }
+    /// Growing pavement tax while Dirt has not yet completed a meaningful dirt
+    /// run. Pushes the search onto the first proper dirt turn instead of a
+    /// multi-kilometre paved dip that only harvests scraps later.
+    func deferredDirtEntryCost(pavedWithoutMeaningfulMeters: Double, objective: SearchObjective) -> Double {
+        guard style == .dirt, objective != .distance else { return 0 }
+        let after = deferredDirtEntryAfterMeters.isFinite ? max(0, deferredDirtEntryAfterMeters) : 3_000
+        let excess = pavedWithoutMeaningfulMeters - after
+        guard excess > 0 else { return 0 }
+        let km = excess / 1000
+        switch objective {
+        case .pavement:
+            // A few km of deferred tax ≈ staying on a scrap-free corridor until
+            // the first real dirt join; not enough to block necessary pavement.
+            return km * 18
+        case .profile, .balancedResource:
+            return km * 1.2
         case .distance:
             return 0
         }

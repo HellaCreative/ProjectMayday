@@ -912,8 +912,16 @@ From Here is the two-`.rider` case of the same list (origin, destination).
   `dirtEnterTransitionCost` so many separate >1 km grabs lose to fewer,
   longer connected runs. That enter tax dilutes past
   `dirtEnterTransitionReferenceMeters` (50 km) using the hop's
-  `maximumMeters` or geodesic span, so a flat per-transition constant cannot
-  starve dirt preference on 200 km+ fuel/A→B legs. Prior-edge
+  `maximumMeters` or geodesic span, but never below half the base — long
+  From-Here legs were otherwise letting on-path 1–2 km scraps win. Leaving a
+  run shorter than `minimumUsefulDirtMeters` (2.5 km) pays
+  `shortDirtLeaveAbortCost` (full undiluted enter below 1 km; tapered to
+  zero by 2.5 km). Dirt also accrues `deferredDirtEntryCost` after
+  `deferredDirtEntryAfterMeters` (3 km) of pavement without a meaningful
+  dirt completion, so the first proper dirt turn beats a long paved dip that
+  only harvests scraps later. Post-search `shortDirtExcursions` (useful-run
+  floor) and `RouteQuality.prefersDirt` (scrap metres / leading paved before
+  percent) reinforce the same rule. Prior-edge
   `backtrackFactor` still applies across hops (FuelPlanner unions every prior
   hop's edge IDs into `priorEdges`); within a hop, wander-band corridor +
   progress regression block out-and-back.
