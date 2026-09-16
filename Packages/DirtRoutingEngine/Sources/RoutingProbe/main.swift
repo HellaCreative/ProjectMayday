@@ -168,6 +168,7 @@ do {
             "minimumSectionDirtPercent":quality.minimumSectionDirtPercent,
             "unknownSurfacePercent":quality.unknownPercent,
             "backwardMeters":quality.backwardMeters,"lateralMeters":quality.lateralMeters,
+            "reriddenMeters":quality.reriddenMeters,"returnMeters":quality.returnMeters,
             "longestPavedRunMeters":quality.longestPavedRunMeters,"edgeIDsSHA256":sha256(edgeIDs),
             "searchSummary":result.searchSummary as Any? ?? NSNull(),
             "roadClassMeters":classMeters,

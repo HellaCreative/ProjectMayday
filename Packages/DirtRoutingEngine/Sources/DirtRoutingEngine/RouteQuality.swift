@@ -7,8 +7,22 @@ public struct RouteQuality: Sendable {
     public var longestPavedRunMeters: Double = 0
     public var urbanMeters: Double = 0
     public var pavedMeters: Double = 0
+    /// Metres whose progress along the straight start→finish chord decreases.
+    /// Riding around a bay or up a peninsula counts here even when no road is
+    /// repeated, so this is a chord diagnostic, not backtracking (§5 rule 5).
     public var backwardMeters: Double = 0
     public var lateralMeters: Double = 0
+    /// §5 rule 3: metres of road ridden more than once. Consecutive splits of one
+    /// edge in one direction are a single run; every later run of that edge is
+    /// re-ridden road, so an out-and-back counts its return.
+    public var reriddenMeters: Double = 0
+    /// Metres ridden while back within `returnRadiusMeters` of a place the route
+    /// already passed at least `returnSpanMeters` of riding earlier. Catches the
+    /// loops and out-and-backs that use different roads, which edge reuse alone
+    /// cannot see, without charging for weaving around a bay.
+    public var returnMeters: Double = 0
+    public static let returnRadiusMeters = 2_000.0
+    public static let returnSpanMeters = 10_000.0
     public var totalMeters: Double = 0
     public init() {}
 
@@ -48,9 +62,72 @@ public struct RouteQuality: Sendable {
                 lateralMeters += sqrt(max(0,meters*meters-along*along))
             }
         }
+        reriddenMeters = Self.reriddenMeters(roads)
+        returnMeters = Self.returnMeters(roads)
         knownDirtPercent = (known/totalMeters*1000).rounded()/10
         unknownPercent = (unknown/totalMeters*1000).rounded()/10
         minimumSectionDirtPercent = (0..<4).map { sectionTotal[$0] > 0 ? (sectionKnown[$0]/sectionTotal[$0]*1000).rounded()/10 : 0 }.min() ?? 0
+    }
+
+    /// One run per edge per direction; every repeat of an edge already ridden
+    /// counts as re-ridden road (§5 rule 3).
+    public static func reriddenMeters(_ segments: [RouteSegment]) -> Double {
+        var runs: [(id: String, forward: Bool, meters: Double)] = []
+        for segment in segments where segment.structure != "ferry" && !segment.edgeID.isEmpty {
+            if let last = runs.last, last.id == segment.edgeID, last.forward == segment.forward {
+                runs[runs.count-1].meters += segment.meters
+            } else {
+                runs.append((segment.edgeID, segment.forward, segment.meters))
+            }
+        }
+        var seen: Set<String> = [], total = 0.0
+        for run in runs {
+            if seen.insert(run.id).inserted { continue }
+            total += run.meters
+        }
+        return total
+    }
+
+    /// Metres ridden while within `radius` of a point the route passed at least
+    /// `span` of riding earlier. Cells keep the lookback linear on long routes.
+    public static func returnMeters(_ segments: [RouteSegment],
+                                    radius: Double = RouteQuality.returnRadiusMeters,
+                                    span: Double = RouteQuality.returnSpanMeters) -> Double {
+        var points: [(point: Coordinate, ridden: Double)] = []
+        var walked = 0.0
+        for segment in segments where segment.structure != "ferry" {
+            for (a,b) in zip(segment.geometry,segment.geometry.dropFirst()) {
+                if points.isEmpty { points.append((a,0)) }
+                walked += a.distance(to: b)
+                points.append((b,walked))
+            }
+        }
+        guard points.count > 2, radius > 0 else { return 0 }
+        struct Cell: Hashable { let x: Int; let y: Int }
+        func cell(_ c: Coordinate) -> Cell {
+            let perDegree = 111_320.0
+            let x = (c.longitude*perDegree*cos(c.latitude * .pi/180)/radius).rounded(.down)
+            let y = (c.latitude*perDegree/radius).rounded(.down)
+            return Cell(x: Int(x.isFinite ? x : 0), y: Int(y.isFinite ? y : 0))
+        }
+        var buckets: [Cell:[Int]] = [:]
+        var total = 0.0
+        for index in points.indices {
+            let here = points[index], home = cell(here.point)
+            var returning = false
+            for dx in -1...1 where !returning {
+                for dy in -1...1 where !returning {
+                    for earlier in buckets[Cell(x: home.x+dx,y: home.y+dy)] ?? [] {
+                        let past = points[earlier]
+                        guard here.ridden-past.ridden >= span else { continue }
+                        if here.point.distance(to: past.point) <= radius { returning = true; break }
+                    }
+                }
+            }
+            if returning, index > 0 { total += here.ridden-points[index-1].ridden }
+            buckets[home,default: []].append(index)
+        }
+        return total
     }
 
     static func progress(_ p: Coordinate,_ a: Coordinate,_ b: Coordinate) -> Double {

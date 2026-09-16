@@ -223,6 +223,37 @@ struct PolicyTests {
         #expect(first[0] == second[0])
     }
 
+    @Test func reriddenMetersCountsEveryRepeatOfARoad() {
+        func seg(_ id: String, _ meters: Double, forward: Bool = true) -> RouteSegment {
+            RouteSegment(edge: 0, edgeID: id, forward: forward, meters: meters, surface: .paved,
+                         surfaceLeaf: "asphalt", roadClass: "tertiary", structure: "", access: 0, geometry: [])
+        }
+        // Consecutive splits of one edge are one run, so nothing is re-ridden.
+        #expect(RouteQuality.reriddenMeters([seg("a", 200), seg("a", 200), seg("b", 500)]) == 0)
+        // Coming back down the same road is its return leg.
+        #expect(RouteQuality.reriddenMeters([seg("a", 400), seg("b", 400), seg("a", 400, forward: false)]) == 400)
+    }
+
+    @Test func returnMetersSeesALoopOnDifferentRoadsAndIgnoresAStraightRun() {
+        func chain(_ points: [Coordinate]) -> [RouteSegment] {
+            zip(points, points.dropFirst()).enumerated().map { index, pair in
+                RouteSegment(edge: index, edgeID: "e\(index)", forward: true,
+                             meters: pair.0.distance(to: pair.1), surface: .paved, surfaceLeaf: "asphalt",
+                             roadClass: "tertiary", structure: "", access: 0, geometry: [pair.0, pair.1])
+            }
+        }
+        // 20 km straight north: never returns to anywhere it has been.
+        let straight = (0...20).map { Coordinate(longitude: -63, latitude: 45 + Double($0) * 0.009) }
+        #expect(RouteQuality.returnMeters(chain(straight)) == 0)
+        // 15 km north, then back south on a road 400 m to the side: the return counts,
+        // and no edge id repeats, so edge reuse alone would report nothing.
+        var loop = (0...15).map { Coordinate(longitude: -63, latitude: 45 + Double($0) * 0.009) }
+        loop += (0...15).reversed().map { Coordinate(longitude: -63.005, latitude: 45 + Double($0) * 0.009) }
+        let segments = chain(loop)
+        #expect(RouteQuality.reriddenMeters(segments) == 0)
+        #expect(RouteQuality.returnMeters(segments) > 5_000)
+    }
+
     @Test func shapeFaultsCatchOutAndBackAndIgnoreSplitRuns() {
         func seg(_ id: String, _ meters: Double, forward: Bool = true) -> RouteSegment {
             RouteSegment(edge: 0, edgeID: id, forward: forward, meters: meters, surface: .paved,
