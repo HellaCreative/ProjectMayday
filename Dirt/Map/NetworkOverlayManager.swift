@@ -34,6 +34,12 @@ private enum NetC {
     static let maxFeaturesCorridor = 1600
     static let maxFeaturesLens = 5000
     static let refreshDelay = UInt64(450_000_000)
+    /// Coarse seed spacing for the per-route checkpoint index (see
+    /// `RouteAnchorCache`). Small relative to any `routeArmKm*` window, so
+    /// the nearest checkpoint is always within one window of the true
+    /// nearest vertex even on an out-and-back or loop that revisits the
+    /// same physical area far apart in along-route distance.
+    static let routeCheckpointStepKm = 5.0
 }
 
 /// Paints nearby edges from the installed on-device graph pack.
@@ -42,6 +48,25 @@ final class NetworkOverlayManager {
     private let mapState: MapState
     private let graphPacks: GraphPackStore
     private var debounceTask: Task<Void, Never>?
+
+    /// Per-`routeGeneration` cache: the route's flattened coordinates,
+    /// cumulative along-route distances, and a coarse checkpoint index.
+    /// Built once when the route changes, not on every camera-settle
+    /// refresh — a long DIRT route is tens of thousands of vertices, and
+    /// re-flattening + re-walking that with a `CLLocation` per vertex every
+    /// ~450 ms during a pan/zoom scan is the corridor-overlay half of the
+    /// map choke (see `internal/map-freeze.md`, `docs/play-map-freeze.md`).
+    private struct RouteAnchorCache {
+        let routeGeneration: Int
+        let coordinates: [RouteCoordinate]
+        /// Monotonic non-decreasing, same length as `coordinates`.
+        let cumulative: [Double]
+        /// Coarse samples every `NetC.routeCheckpointStepKm`, each paired
+        /// with its index into `coordinates`. Always includes the first and
+        /// last vertex.
+        let checkpoints: [(coordinate: RouteCoordinate, index: Int)]
+    }
+    private var routeAnchorCache: RouteAnchorCache?
 
     init(mapState: MapState, graphPacks: GraphPackStore) {
         self.mapState = mapState
@@ -78,8 +103,8 @@ final class NetworkOverlayManager {
         let zoom = mapState.mapZoom
         let center = mapState.mapCenter
         let prefs = LayerPrefsSnapshot()
-        let routeCoords = mapState.routePolylineCoordinates
-        let hasRoute = routeCoords.count >= 2
+        let routeCache = cachedRouteAnchors(matching: mapState.routeGeneration)
+        let hasRoute = routeCache != nil
         let detailZoom = zoom >= NetC.detailMinZoom
         let lensCode = prefs.lensProvince
 
@@ -106,8 +131,8 @@ final class NetworkOverlayManager {
         let maxFeatures = showLens ? NetC.maxFeaturesLens : NetC.maxFeaturesCorridor
 
         var anchors: [RouteCoordinate] = []
-        if hasRoute {
-            anchors = sampleRouteAnchors(around: focus, route: routeCoords, armKm: armKm)
+        if hasRoute, let routeCache {
+            anchors = sampleRouteAnchors(around: focus, cache: routeCache, armKm: armKm)
         }
 
         var bbox: _BBox
@@ -169,30 +194,86 @@ final class NetworkOverlayManager {
         mapState.updateNetworkFeatures(selected)
     }
 
+    /// Builds (or reuses) the per-route cache. Rebuilds only when
+    /// `routeGeneration` changes — the route's own geometry never moves on
+    /// a pan/zoom, only the camera does, so flattening/cumulative-distance
+    /// work is done once per route edit rather than on every ~450 ms settle.
+    private func cachedRouteAnchors(matching routeGeneration: Int) -> RouteAnchorCache? {
+        if let cache = routeAnchorCache, cache.routeGeneration == routeGeneration {
+            return cache
+        }
+        let coordinates = mapState.routePolylineCoordinates
+        guard coordinates.count >= 2 else {
+            routeAnchorCache = nil
+            return nil
+        }
+        let cumulative = GeoMath.cumulativeMeters(coordinates)
+        let checkpoints = Self.buildCheckpoints(coordinates: coordinates, cumulative: cumulative)
+        let cache = RouteAnchorCache(
+            routeGeneration: routeGeneration,
+            coordinates: coordinates,
+            cumulative: cumulative,
+            checkpoints: checkpoints
+        )
+        routeAnchorCache = cache
+        return cache
+    }
+
+    private static func buildCheckpoints(
+        coordinates: [RouteCoordinate],
+        cumulative: [Double]
+    ) -> [(coordinate: RouteCoordinate, index: Int)] {
+        guard !coordinates.isEmpty else { return [] }
+        var checkpoints: [(coordinate: RouteCoordinate, index: Int)] = [(coordinates[0], 0)]
+        let stepM = NetC.routeCheckpointStepKm * 1000
+        var nextAt = stepM
+        for i in 1..<coordinates.count {
+            if cumulative[i] >= nextAt {
+                checkpoints.append((coordinates[i], i))
+                nextAt = cumulative[i] + stepM
+            }
+        }
+        let lastIndex = coordinates.count - 1
+        if checkpoints.last?.index != lastIndex {
+            checkpoints.append((coordinates[lastIndex], lastIndex))
+        }
+        return checkpoints
+    }
+
     private func sampleRouteAnchors(
         around focus: RouteCoordinate,
-        route: [RouteCoordinate],
+        cache: RouteAnchorCache,
         armKm: Double
     ) -> [RouteCoordinate] {
+        let route = cache.coordinates
         guard route.count >= 2 else { return [] }
         let focusLoc = CLLocation(latitude: focus.latitude, longitude: focus.longitude)
-        guard let near = GeoMath.nearestVertex(to: focusLoc, in: route) else { return [] }
+        guard let near = nearestVertexBounded(to: focusLoc, cache: cache, searchWindowKm: armKm + 8)
+        else { return [] }
         if near.meters > (armKm + 8) * 1000 { return [] }
 
-        let alongAt = GeoMath.cumulativeMeters(route)
+        let alongAt = cache.cumulative
         let originAlong = alongAt[near.index]
         let minAlong = originAlong - armKm * 1000
         let maxAlong = originAlong + armKm * 1000
         let stepM = NetC.routeSampleStepKm * 1000
 
+        // `alongAt` is monotonic non-decreasing (built by consecutive-vertex
+        // accumulation), so the [minAlong, maxAlong] window is a contiguous
+        // index range — binary search it instead of scanning every vertex
+        // in the route just to reject the ones outside the arm window.
+        let lo = lowerBoundIndex(alongAt, minAlong)
+        let hi = upperBoundIndex(alongAt, maxAlong)
+
         var anchors: [RouteCoordinate] = [route[near.index]]
         var lastKeep = -Double.greatestFiniteMagnitude
-        for i in 0..<route.count {
-            let along = alongAt[i]
-            if along < minAlong || along > maxAlong { continue }
-            if !anchors.isEmpty && along - lastKeep < stepM { continue }
-            anchors.append(route[i])
-            lastKeep = along
+        if lo <= hi {
+            for i in lo...hi {
+                let along = alongAt[i]
+                if !anchors.isEmpty && along - lastKeep < stepM { continue }
+                anchors.append(route[i])
+                lastKeep = along
+            }
         }
         if anchors.count > NetC.maxAnchors {
             var picked: [RouteCoordinate] = []
@@ -203,6 +284,95 @@ final class NetworkOverlayManager {
             return picked
         }
         return anchors
+    }
+
+    /// Nearest-vertex search bounded to windows of the route instead of a
+    /// full linear scan. Seeds from the coarse `checkpoints` index (cheap —
+    /// a 1,500 km route is ~300 checkpoints at `routeCheckpointStepKm`
+    /// spacing), ranks every checkpoint by straight-line distance to
+    /// `focus`, then refines the full-resolution window around each
+    /// checkpoint in that ranked order until the reverse triangle
+    /// inequality proves no further checkpoint's window could contain a
+    /// closer vertex (`checkpoint.dist - windowM >= bestMeters so far`).
+    ///
+    /// The single-nearest-checkpoint version of this tried and failed a
+    /// standalone correctness check (`/tmp/dirt-anchor-cache-verify`, not
+    /// committed) on an out-and-back/loop: the *checkpoint* nearest to
+    /// `focus` is not always on the *pass* whose fine-grained vertices are
+    /// nearest, because checkpoint spacing is coarser than the gap between
+    /// two close-together passes. Ranking + pruning instead of picking one
+    /// seed makes this exact, not approximate, while staying bounded — it
+    /// explores extra checkpoint windows only when two passes are within
+    /// about `searchWindowKm` of each other, which is the only case where
+    /// exploring more than one window is actually necessary.
+    private func nearestVertexBounded(
+        to focus: CLLocation,
+        cache: RouteAnchorCache,
+        searchWindowKm: Double
+    ) -> (index: Int, meters: Double)? {
+        guard !cache.checkpoints.isEmpty else { return nil }
+        let windowM = max(searchWindowKm, NetC.routeCheckpointStepKm) * 1000
+
+        let ranked = cache.checkpoints
+            .map { checkpoint -> (checkpoint: (coordinate: RouteCoordinate, index: Int), dist: Double) in
+                let d = focus.distance(from: CLLocation(
+                    latitude: checkpoint.coordinate.latitude,
+                    longitude: checkpoint.coordinate.longitude
+                ))
+                return (checkpoint, d)
+            }
+            .sorted { $0.dist < $1.dist }
+
+        var bestIndex = ranked[0].checkpoint.index
+        var bestMeters = ranked[0].dist
+        var exploredWindows: [(lo: Int, hi: Int)] = []
+
+        for candidate in ranked {
+            if candidate.dist - windowM >= bestMeters { break }
+            let centerAlong = cache.cumulative[candidate.checkpoint.index]
+            let lo = lowerBoundIndex(cache.cumulative, centerAlong - windowM)
+            let hi = upperBoundIndex(cache.cumulative, centerAlong + windowM)
+            guard lo <= hi else { continue }
+            if exploredWindows.contains(where: { $0.lo <= lo && hi <= $0.hi }) { continue }
+            exploredWindows.append((lo, hi))
+            for i in lo...hi {
+                let d = focus.distance(from: CLLocation(
+                    latitude: cache.coordinates[i].latitude,
+                    longitude: cache.coordinates[i].longitude
+                ))
+                if d < bestMeters {
+                    bestMeters = d
+                    bestIndex = i
+                }
+            }
+        }
+        return (bestIndex, bestMeters)
+    }
+
+    /// First index in a sorted (non-decreasing) array whose value is >= `target`.
+    private func lowerBoundIndex(_ sorted: [Double], _ target: Double) -> Int {
+        guard !sorted.isEmpty else { return 0 }
+        if target <= sorted[0] { return 0 }
+        if target > sorted[sorted.count - 1] { return sorted.count - 1 }
+        var lo = 0, hi = sorted.count - 1
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if sorted[mid] < target { lo = mid + 1 } else { hi = mid }
+        }
+        return lo
+    }
+
+    /// Last index in a sorted (non-decreasing) array whose value is <= `target`.
+    private func upperBoundIndex(_ sorted: [Double], _ target: Double) -> Int {
+        guard !sorted.isEmpty else { return 0 }
+        if target >= sorted[sorted.count - 1] { return sorted.count - 1 }
+        if target < sorted[0] { return 0 }
+        var lo = 0, hi = sorted.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if sorted[mid] > target { hi = mid - 1 } else { lo = mid }
+        }
+        return lo
     }
 
     private func selectCorridorFeatures(
