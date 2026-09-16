@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Shared spring for Route / Layers / Group panels behind the dock.
 enum DockSheetMotion {
-    static let spring = Animation.easeOut(duration: 0.32)
+    static var spring: Animation { DirtMotion.sheet }
 
     /// Portrait: rise from bottom. Landscape: slide in from the dock edge.
     static func transition(dockLeading: Bool?) -> AnyTransition {
@@ -64,16 +64,24 @@ enum DockSheetContentHeightKey: PreferenceKey {
 }
 
 /// Panel that sits *behind* the dock — portrait (bottom) or landscape (side).
-/// Dismiss by tapping the dock tab again (no grab handle).
+/// Profile and Groups can drag like a system sheet: slide up for more, slide
+/// down, swipe to close. Layers stays a fixed full-height panel.
 struct DockSheetPanel<Content: View>: View {
-    /// Fixed height as a fraction of the screen, or the **maximum** when `fitsContent` is true.
+    /// Fixed height as a fraction of the screen, or the **collapsed** detent when
+    /// `expandedHeightFraction` is set. Also the **maximum** when `fitsContent` is true.
     var heightFraction: CGFloat = 0.58
-    /// When true, portrait height hugs measured content between a short minimum and `heightFraction`.
+    /// When true, portrait collapsed height hugs measured content between a short
+    /// minimum and `heightFraction`, plus `contentBreathing`.
     var fitsContent: Bool = false
     /// Absolute minimum portrait panel height when fitting (sits above the dock).
     var minContentHeight: CGFloat = 220
     /// Extra chrome above measured scroll content (inline nav title + top pad).
     var contentChromeHeight: CGFloat = 56
+    /// Visible glass under the last content row so the collapsed detent is not flush.
+    var contentBreathing: CGFloat = 0
+    /// When set, the portrait sheet drags between `heightFraction` and this fraction.
+    var expandedHeightFraction: CGFloat? = nil
+    var showsDragIndicator: Bool = false
     /// When set, drawer is a full-height side panel that extends under the vertical dock.
     var landscapeDockLeading: Bool? = nil
     /// Thin glass — the Layers look is the sheet standard. Groupings use `groupingFill`.
@@ -82,6 +90,8 @@ struct DockSheetPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     @State private var measuredContentHeight: CGFloat = 0
+    @State private var isExpanded = false
+    @State private var dragTranslation: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -98,33 +108,24 @@ struct DockSheetPanel<Content: View>: View {
     // MARK: - Portrait
 
     private func portraitBottom(geo: GeometryProxy) -> some View {
-        let maxPanel = min(geo.size.height * heightFraction, geo.size.height - (heightFraction < 1 ? 380 : 0))
-        let panelHeight: CGFloat
-        if fitsContent {
-            let minPanel = min(
-                maxPanel,
-                minContentHeight + contentChromeHeight + DockSheetMotion.dockClearance
-            )
-            let desired = measuredContentHeight > 0
-                ? measuredContentHeight + contentChromeHeight + DockSheetMotion.dockClearance + 14
-                : minPanel
-            panelHeight = min(max(desired, minPanel), maxPanel)
-        } else {
-            panelHeight = maxPanel
-        }
+        let collapsed = collapsedHeight(in: geo)
+        let expanded = geo.size.height * (expandedHeightFraction ?? heightFraction)
+        let base = isExpanded ? max(collapsed, expanded) : collapsed
+        let panelHeight = min(max(base - dragTranslation, 140), geo.size.height)
 
         return VStack(spacing: 0) {
+            if showsDragIndicator {
+                grabber
+            }
             content()
                 .dirtSheetContent()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.top, 14)
+                .padding(.top, showsDragIndicator ? 4 : 14)
         }
         .padding(.bottom, DockSheetMotion.dockClearance)
         .frame(width: geo.size.width, height: panelHeight, alignment: .top)
         .preference(key: PlannerSheetHeightKey.self, value: panelHeight)
         .clipShape(portraitShape)
-        // Surface only — content keeps its safe-area layout while the material runs
-        // past the home indicator, so no map shows under an open sheet.
         .background(alignment: .top) {
             portraitShape
                 .fill(material)
@@ -133,7 +134,69 @@ struct DockSheetPanel<Content: View>: View {
                 .ignoresSafeArea(edges: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .animation(DockSheetMotion.spring, value: panelHeight)
+        .animation(dragTranslation == 0 ? DirtMotion.sheet : nil, value: panelHeight)
+        .animation(DirtMotion.sheet, value: isExpanded)
+    }
+
+    private func collapsedHeight(in geo: GeometryProxy) -> CGFloat {
+        // Interactive sheets (Profile / Groups) honor the requested fraction so
+        // a 60% Groups detent is actually 60%. Fixed Layers still keeps map above.
+        let fractionCap: CGFloat
+        if expandedHeightFraction != nil {
+            fractionCap = geo.size.height * heightFraction
+        } else {
+            fractionCap = min(
+                geo.size.height * heightFraction,
+                geo.size.height - (heightFraction < 1 ? 380 : 0)
+            )
+        }
+        guard fitsContent else { return fractionCap }
+        let minPanel = min(
+            fractionCap,
+            minContentHeight + contentChromeHeight + DockSheetMotion.dockClearance
+        )
+        let desired = measuredContentHeight > 0
+            ? measuredContentHeight + contentChromeHeight + DockSheetMotion.dockClearance + 14 + contentBreathing
+            : minPanel
+        return min(max(desired, minPanel), fractionCap)
+    }
+
+    private var grabber: some View {
+        Capsule()
+            .fill(DirtTheme.muted.opacity(0.42))
+            .frame(width: 36, height: 5)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .gesture(sheetDrag)
+            .accessibilityLabel("Resize sheet")
+            .accessibilityHint("Slide up for more, slide down to close")
+            .accessibilityAddTraits(.isButton)
+    }
+
+    private var sheetDrag: some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .onChanged { value in
+                dragTranslation = value.translation.height
+            }
+            .onEnded { value in
+                let translation = value.translation.height
+                let predicted = value.predictedEndTranslation.height
+                dragTranslation = 0
+                if translation > 120 || predicted > 180 {
+                    DirtMotion.medium()
+                    onDismiss()
+                } else if translation < -36 {
+                    if !isExpanded {
+                        DirtMotion.light()
+                    }
+                    withAnimation(DirtMotion.sheet) { isExpanded = true }
+                } else if translation > 36, isExpanded {
+                    DirtMotion.light()
+                    withAnimation(DirtMotion.sheet) { isExpanded = false }
+                }
+            }
     }
 
     private var portraitShape: UnevenRoundedRectangle {
