@@ -4,7 +4,7 @@ import Testing
 @testable import Dirt
 
 struct NavigationSessionReliabilityTests {
-    @Test @MainActor func rerouteThrottleResetsBetweenRideSessions() {
+    @Test @MainActor func offRouteDoesNotAutoRerouteUntilContinue() {
         let session = NavigationSession()
         let route = Self.straightRoute()
         var rerouteRequests = 0
@@ -12,12 +12,93 @@ struct NavigationSessionReliabilityTests {
 
         session.activate(coordinates: route, maneuvers: [])
         sendOffRouteStrikes(to: session, startingAt: Date(timeIntervalSince1970: 1_000))
+        #expect(session.offRoute)
+        #expect(session.missTurnActive)
+        #expect(session.currentCue == "You're off the line.")
+        #expect(rerouteRequests == 0)
+
+        session.continueMissTurnReroute()
         #expect(rerouteRequests == 1)
 
         session.end()
         session.activate(coordinates: route, maneuvers: [])
         sendOffRouteStrikes(to: session, startingAt: Date(timeIntervalSince1970: 1_010))
+        #expect(rerouteRequests == 1)
+        session.continueMissTurnReroute()
         #expect(rerouteRequests == 2)
+    }
+
+    @Test @MainActor func namedMissFiresWhenTheTurnIsBehindTheRider() {
+        let session = NavigationSession()
+        var rerouteRequests = 0
+        session.onRerouteNeeded = { rerouteRequests += 1 }
+        session.activate(
+            coordinates: Self.straightRoute(),
+            maneuvers: [
+                RouteManeuver(
+                    instruction: "Turn left",
+                    type: "turn",
+                    kind: "junction",
+                    side: "left",
+                    distanceMeters: 0,
+                    alongMeters: 300
+                )
+            ]
+        )
+        let started = Date(timeIntervalSince1970: 1_500)
+        session.update(with: Self.location(
+            latitude: 45,
+            longitude: -62.9968,
+            speed: 12,
+            timestamp: started
+        ))
+        #expect(!session.offRoute)
+
+        session.update(with: Self.location(
+            latitude: 45.0100,
+            longitude: -62.9968,
+            speed: 12,
+            timestamp: started.addingTimeInterval(1)
+        ))
+        #expect(session.offRoute)
+        #expect(session.missTurnActive)
+        #expect(session.currentCue.contains("turn left"))
+        #expect(rerouteRequests == 0)
+    }
+
+    @Test @MainActor func fuelRemainingStartsAtUsableWhenNotificationsOn() {
+        let previous = UserDefaults.standard.object(forKey: FuelRangePrefs.notificationsEnabledKey)
+        FuelRangePrefs.notificationsEnabled = true
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: FuelRangePrefs.notificationsEnabledKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: FuelRangePrefs.notificationsEnabledKey)
+            }
+        }
+        let session = NavigationSession()
+        session.activate(coordinates: Self.straightRoute(), maneuvers: [])
+        #expect(session.fuelNotificationsOn)
+        let usable = FuelRangePrefs.snapshot.usableMeters
+        #expect(session.remainingFuelMeters != nil)
+        #expect(abs((session.remainingFuelMeters ?? 0) - usable) < 1)
+    }
+
+    @Test @MainActor func fuelRemainingHiddenWhenNotificationsOff() {
+        let previous = UserDefaults.standard.object(forKey: FuelRangePrefs.notificationsEnabledKey)
+        FuelRangePrefs.notificationsEnabled = false
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: FuelRangePrefs.notificationsEnabledKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: FuelRangePrefs.notificationsEnabledKey)
+            }
+        }
+        let session = NavigationSession()
+        session.activate(coordinates: Self.straightRoute(), maneuvers: [])
+        #expect(!session.fuelNotificationsOn)
+        #expect(session.remainingFuelMeters == nil)
+        #expect(!session.fuelStationPromptVisible)
     }
 
     @Test @MainActor func changingCueModeDoesNotReplayDeliveredJunction() {

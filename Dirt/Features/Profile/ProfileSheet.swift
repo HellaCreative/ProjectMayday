@@ -136,7 +136,7 @@ struct ProfileSheet: View {
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+        .dirtGroupingSurface(radius: DirtRadius.card)
     }
 
     private var signedOutHero: some View {
@@ -312,6 +312,8 @@ struct ProfileSheet: View {
                         .foregroundStyle(DirtTheme.action)
                         .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
                 }
+                .padding(DirtSpace.row)
+                .dirtGroupingSurface()
                 .padding(.horizontal, DirtSpace.group)
                 .padding(.top, DirtSpace.tight)
                 .padding(.bottom, DirtSpace.section)
@@ -462,11 +464,7 @@ struct ProfileSheet: View {
                     .foregroundStyle(DirtTheme.ink)
                     .padding(.horizontal, DirtSpace.row)
                     .frame(minHeight: DirtHit.control)
-                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                            .stroke(DirtTheme.hairline, lineWidth: 1)
-                    )
+                    .dirtGroupingSurface()
 
                 Button {
                     Task { await saveDisplayName() }
@@ -567,11 +565,7 @@ struct ProfileSheet: View {
         }
         .padding(.horizontal, DirtSpace.row)
         .frame(minHeight: DirtHit.min)
-        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .dirtGroupingSurface()
     }
 
     private func linkRow(_ title: String, systemImage: String) -> some View {
@@ -590,11 +584,7 @@ struct ProfileSheet: View {
         }
         .padding(.horizontal, DirtSpace.row)
         .frame(minHeight: DirtHit.min)
-        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .dirtGroupingSurface()
     }
 
     // MARK: - About / legal
@@ -711,11 +701,7 @@ struct ProfileSheet: View {
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .dirtGroupingSurface()
     }
 
     private func shareRouteDebug() {

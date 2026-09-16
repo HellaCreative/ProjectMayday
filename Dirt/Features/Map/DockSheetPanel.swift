@@ -76,7 +76,7 @@ struct DockSheetPanel<Content: View>: View {
     var contentChromeHeight: CGFloat = 56
     /// When set, drawer is a full-height side panel that extends under the vertical dock.
     var landscapeDockLeading: Bool? = nil
-    /// Layers uses thin glass so the map reads through; Groups/Profile keep the default.
+    /// Thin glass — the Layers look is the sheet standard. Groupings use `groupingFill`.
     var material: Material = DirtTheme.sheetMaterial
     var onDismiss: () -> Void
     @ViewBuilder var content: () -> Content

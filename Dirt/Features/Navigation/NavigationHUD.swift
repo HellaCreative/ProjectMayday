@@ -13,59 +13,61 @@ struct NavCueCard: View {
     private var nav: NavigationSession { app.navigation }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: arrowSymbol)
-                .font(.system(size: cueIconSize, weight: .bold))
-                .foregroundStyle(nav.offRoute ? DirtTheme.danger : DirtTheme.orange)
-                .frame(width: 48, height: 48)
-                .scaleEffect(cueBand == .now && !nav.offRoute ? 1.08 : 1)
+        VStack(alignment: .leading, spacing: nav.missTurnActive ? 10 : 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: arrowSymbol)
+                    .font(.system(size: cueIconSize, weight: .bold))
+                    .foregroundStyle(nav.offRoute ? DirtTheme.danger : DirtTheme.orange)
+                    .frame(width: 48, height: 48)
+                    .scaleEffect(cueBand == .now && !nav.offRoute ? 1.08 : 1)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(mainLabel)
                         .font(.dirtUI(cueTitleSize, weight: .heavy))
                         .foregroundStyle(DirtTheme.ink)
                         .tracking(0.3)
-                        .lineLimit(2)
+                        .lineLimit(3)
                         .minimumScaleFactor(0.55)
                         .multilineTextAlignment(.leading)
-                    if let number = rallyNumber {
-                        Text("\(number)")
-                            .font(.dirtMono(min(cueTitleSize, 16), weight: .bold))
-                            .foregroundStyle(DirtTheme.orange)
+                    // Distance matches the spoken cue — always show when we have meters.
+                    if let meters = nav.currentCueMeters {
+                        Text(Self.formatDistance(meters))
+                            .font(.dirtUI(cueDistanceSize, weight: .heavy))
+                            .foregroundStyle(DirtTheme.ink)
+                            .tracking(0.4)
+                            .monospacedDigit()
+                    } else if let reason = nav.missTurnReason, !reason.isEmpty {
+                        Text(reason)
+                            .font(.dirtUI(14, weight: .heavy))
+                            .foregroundStyle(DirtTheme.ink.opacity(0.78))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !nav.offRoute,
+                       app.cueSettings.mode == .rally,
+                       let following = nav.followingManeuver {
+                        Text("Next \(following.displayLabel(cueMode: .rally)) · \(Self.formatDistance(nav.followingManeuverMeters ?? 0))")
+                            .font(.dirtUI(11, weight: .semibold))
+                            .foregroundStyle(DirtTheme.ink.opacity(0.72))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                 }
-                // Distance matches the spoken cue — always show when we have meters.
-                if let meters = nav.currentCueMeters {
-                    Text(Self.formatDistance(meters))
-                        .font(.dirtUI(cueDistanceSize, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink)
-                        .tracking(0.4)
-                        .monospacedDigit()
-                } else if nav.offRoute {
-                    Text("Back on the line")
-                        .font(.dirtUI(14, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.7))
-                }
-                if !nav.offRoute,
-                   app.cueSettings.mode == .rally,
-                   let following = nav.followingManeuver {
-                    Text("Next \(following.displayLabel(cueMode: .rally)) · \(Self.formatDistance(nav.followingManeuverMeters ?? 0))")
-                        .font(.dirtUI(11, weight: .semibold))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.72))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilitySummary)
+
+            if nav.missTurnActive {
+                missTurnActions
+            }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, cueBand == .now ? 12 : 10)
+        .padding(.vertical, cueBand == .now || nav.missTurnActive ? 12 : 10)
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
         .background {
             ZStack {
-                Rectangle().fill(DirtTheme.sheetMaterial)
+                Rectangle().fill(.regularMaterial)
                 Rectangle().fill(Color.white.opacity(0.22))
             }
         }
@@ -76,8 +78,46 @@ struct NavCueCard: View {
                 .stroke(cueBorderColor, lineWidth: cueBorderWidth)
         )
         .shadow(color: .black.opacity(0.22), radius: 10, y: 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilitySummary)
+        .accessibilityElement(children: nav.missTurnActive ? .contain : .combine)
+    }
+
+    private var missTurnActions: some View {
+        VStack(spacing: 8) {
+            Button {
+                app.planner.continueAfterMissTurn()
+            } label: {
+                Text("Continue & reroute")
+                    .font(.dirtUI(15, weight: .heavy))
+                    .foregroundStyle(DirtTheme.onOrange)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(DirtTheme.orange)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .contentShape(Rectangle())
+            }
+            .disabled(nav.missTurnRerouting)
+            .opacity(nav.missTurnRerouting ? 0.55 : 1)
+            .accessibilityLabel("Continue and reroute")
+            .accessibilityHint("Rebuilds the line ahead with your last ride style")
+
+            Button {
+                app.planner.turnAroundAfterMissTurn()
+            } label: {
+                Text("Turn around")
+                    .font(.dirtUI(15, weight: .heavy))
+                    .foregroundStyle(DirtTheme.ink)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(DirtTheme.chromeBorder, lineWidth: 1.5)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Turn around")
+            .accessibilityHint("Follows the verified line back to the last junction")
+        }
+        .buttonStyle(.plain)
     }
 
     private var cueBand: NavigationCueBand {
@@ -130,31 +170,17 @@ struct NavCueCard: View {
     }
 
     private var accessibilitySummary: String {
-        if nav.offRoute { return "Off route" }
+        if let reason = nav.missTurnReason, !reason.isEmpty {
+            return "\(mainLabel). \(reason)"
+        }
         if let meters = nav.currentCueMeters {
             return "\(mainLabel), \(Self.formatDistance(meters))"
         }
         return mainLabel
     }
 
-    /// Rally severity number shown in orange next to the side (curve cues only).
-    private var rallyNumber: Int? {
-        guard let maneuver = nav.currentManeuver else { return nil }
-        guard maneuver.isRallyCurve || app.cueSettings.mode == .rally else { return nil }
-        if let side = maneuver.side, mainLabel.lowercased().contains(side.lowercased()),
-           let number = maneuver.number,
-           mainLabel.contains("\(number)") {
-            return nil
-        }
-        return maneuver.number
-    }
-
     private var mainLabel: String {
-        if nav.offRoute { return "Off route" }
-        if let maneuver = nav.currentManeuver {
-            return maneuver.displayLabel(cueMode: app.cueSettings.mode)
-        }
-        return nav.currentCue
+        nav.currentCue
     }
 
     /// Sized for the full-width card left by the relocated speed block; long idle copy
@@ -267,6 +293,21 @@ enum NavTripFormat {
         let climb = "+\(Self.climbMeters(climbMeters)) m"
         return "\(km) · \(time) · \(climb)"
     }
+
+    /// Quiet remaining-fuel figure on the same trip row as destination km · climb.
+    static func destinationClimbFuelLine(
+        remainingKm: Double,
+        climbMeters: Double,
+        fuelRemainingKm: Double?
+    ) -> String {
+        let base = String(
+            format: "Destination %.1f km · +%@ m",
+            remainingKm,
+            Self.climbMeters(climbMeters)
+        )
+        guard let fuelRemainingKm else { return base }
+        return String(format: "%@ · %.0f km fuel", base, max(0, fuelRemainingKm))
+    }
 }
 
 struct NavStatBox: View {
@@ -347,7 +388,7 @@ struct NavEndButton: View {
             .padding(.horizontal, 12)
             .frame(maxWidth: fillWidth ? .infinity : nil)
             .frame(minHeight: 48)
-            .background(DirtTheme.sheetMaterial)
+            .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -412,6 +453,7 @@ struct NavBottomPanel: View {
             VStack(alignment: .leading, spacing: 8) {
                 waypointProgress
                 statusRow
+                fuelChrome
 
                 if statsExpanded {
                     HStack(spacing: 10) {
@@ -431,7 +473,7 @@ struct NavBottomPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 ZStack {
-                    Rectangle().fill(DirtTheme.sheetMaterial)
+                    Rectangle().fill(.regularMaterial)
                     Rectangle().fill(Color.white.opacity(0.22))
                 }
             }
@@ -486,11 +528,7 @@ struct NavBottomPanel: View {
 
     /// Surface under the tires (left) + remaining trip (right) on one tappable line.
     private var statusRow: some View {
-        let summary = String(
-            format: "Destination %.1f km · +%@ m",
-            nav.remainingMeters / 1000,
-            NavTripFormat.climbMeters(nav.climbMeters)
-        )
+        let summary = tripSummaryLine
         return Button {
             withAnimation(.easeInOut(duration: 0.18)) { statsExpanded.toggle() }
         } label: {
@@ -527,10 +565,41 @@ struct NavBottomPanel: View {
         .accessibilityHint(statsExpanded ? "Hides trip detail" : "Shows trip detail")
     }
 
+    private var tripSummaryLine: String {
+        NavTripFormat.destinationClimbFuelLine(
+            remainingKm: nav.remainingMeters / 1000,
+            climbMeters: nav.climbMeters,
+            fuelRemainingKm: nav.remainingFuelMeters.map { $0 / 1000 }
+        )
+    }
+
     /// Upcoming change wins; otherwise the surface under the tires.
     private var surfaceLine: String {
         if let alert = nav.upcomingSurfaceAlert, !alert.isEmpty { return alert }
         return nav.currentSurfaceLabel ?? "On route"
+    }
+
+    @ViewBuilder
+    private var fuelChrome: some View {
+        if nav.fuelFillPromptVisible {
+            NavFuelPromptCard(
+                title: "Did you fuel up?",
+                primaryTitle: "Yes",
+                secondaryTitle: "No",
+                reason: nil,
+                onPrimary: { nav.confirmFuelFill() },
+                onSecondary: { nav.dismissFuelFillPrompt() }
+            )
+        } else if nav.fuelStationPromptVisible || (nav.fuelPromptReason != nil && nav.fuelNotificationsOn) {
+            NavFuelPromptCard(
+                title: "Do you want to route to the nearest fuel station?",
+                primaryTitle: "Route",
+                secondaryTitle: "Close",
+                reason: nav.fuelPromptReason,
+                onPrimary: { app.planner.routeToNearestPackedFuelStation() },
+                onSecondary: { nav.snoozeFuelStationPrompt() }
+            )
+        }
     }
 
     @ViewBuilder
@@ -572,7 +641,7 @@ struct NavBottomPanel: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(.regularMaterial)
         .clipShape(panelShape)
         .overlay(panelShape.stroke(DirtTheme.chromeBorder, lineWidth: 1))
         .accessibilityElement(children: .combine)
@@ -669,13 +738,19 @@ struct NavLandscapeRail: View {
             .background(surfaceIsAlert ? DirtTheme.orange.opacity(0.16) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
+            landscapeFuelChrome
+
             // Narrow rail can’t fit side-by-side labels — stack with 48pt hits.
             VStack(spacing: 10) {
                 NavReportButton(fillWidth: true) { app.incidents.open() }
                 NavEndButton(title: "END", fillWidth: true) { showEndConfirm = true }
             }
 
-            let summary = String(format: "Destination %.1f km · +%@ m", nav.remainingMeters / 1000, NavTripFormat.climbMeters(nav.climbMeters))
+            let summary = NavTripFormat.destinationClimbFuelLine(
+                remainingKm: nav.remainingMeters / 1000,
+                climbMeters: nav.climbMeters,
+                fuelRemainingKm: nav.remainingFuelMeters.map { $0 / 1000 }
+            )
             Button {
                 withAnimation(.easeInOut(duration: 0.18)) { statsExpanded.toggle() }
             } label: {
@@ -715,12 +790,37 @@ struct NavLandscapeRail: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(DirtTheme.chromeBorder, lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private var landscapeFuelChrome: some View {
+        if nav.fuelFillPromptVisible {
+            NavFuelPromptCard(
+                title: "Did you fuel up?",
+                primaryTitle: "Yes",
+                secondaryTitle: "No",
+                reason: nil,
+                compact: true,
+                onPrimary: { nav.confirmFuelFill() },
+                onSecondary: { nav.dismissFuelFillPrompt() }
+            )
+        } else if nav.fuelStationPromptVisible || (nav.fuelPromptReason != nil && nav.fuelNotificationsOn) {
+            NavFuelPromptCard(
+                title: "Do you want to route to the nearest fuel station?",
+                primaryTitle: "Route",
+                secondaryTitle: "Close",
+                reason: nav.fuelPromptReason,
+                compact: true,
+                onPrimary: { app.planner.routeToNearestPackedFuelStation() },
+                onSecondary: { nav.snoozeFuelStationPrompt() }
+            )
+        }
     }
 
     private static func waypointDistance(_ meters: Double) -> String {
@@ -749,7 +849,7 @@ struct NavLandscapeRail: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -778,5 +878,61 @@ struct FollowChip: View {
             .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
         }
         .accessibilityLabel("Recenter on your location")
+    }
+}
+
+/// Fill / station toast. Lives on the trip chrome, never on the cue card.
+struct NavFuelPromptCard: View {
+    let title: String
+    let primaryTitle: String
+    let secondaryTitle: String
+    var reason: String?
+    var compact: Bool = false
+    var onPrimary: () -> Void
+    var onSecondary: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 8 : 10) {
+            Text(title)
+                .font(.dirtUI(compact ? 13 : 15, weight: .heavy))
+                .foregroundStyle(DirtTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let reason, !reason.isEmpty {
+                Text(reason)
+                    .font(.dirtUI(compact ? 11 : 13, weight: .semibold))
+                    .foregroundStyle(DirtTheme.ink.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Button(action: onSecondary) {
+                    Text(secondaryTitle)
+                        .font(.dirtUI(compact ? 13 : 15, weight: .heavy))
+                        .foregroundStyle(DirtTheme.ink)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(.regularMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(DirtTheme.chromeBorder, lineWidth: 1.5)
+                        )
+                        .contentShape(Rectangle())
+                }
+                Button(action: onPrimary) {
+                    Text(primaryTitle)
+                        .font(.dirtUI(compact ? 13 : 15, weight: .heavy))
+                        .foregroundStyle(DirtTheme.onOrange)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(DirtTheme.orange)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(compact ? 8 : 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DirtTheme.orange.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .contain)
     }
 }

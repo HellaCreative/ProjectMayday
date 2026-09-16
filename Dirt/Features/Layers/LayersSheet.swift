@@ -31,20 +31,23 @@ struct LayersSheet: View {
             VStack(alignment: .leading, spacing: DirtSpace.group) {
                 HStack(spacing: 8) {
                     ForEach(MapStyleID.allCases) { style in
+                        let isSelected = selectedStyle == style
                         Button { selectStyle(style) } label: {
                             Text(style == .shortbread ? "Standard" : "Rich")
                                 .font(DirtType.rowTitle)
                                 .frame(maxWidth: .infinity, minHeight: 44)
-                                .foregroundStyle(selectedStyle == style ? DirtTheme.action : DirtTheme.ink)
+                                .foregroundStyle(isSelected ? DirtTheme.onOrange : DirtTheme.ink)
                                 .background(
-                                    LayersGlass.groupingFill,
+                                    isSelected ? DirtTheme.orange : DirtTheme.groupingFill,
                                     in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                                        .stroke(isSelected ? DirtTheme.orange : DirtTheme.hairline, lineWidth: 1)
                                 )
-                        }.buttonStyle(.plain)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
                 }
 
@@ -83,11 +86,7 @@ struct LayersSheet: View {
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .dirtGroupingSurface()
     }
 
     private var downloadedMapsCard: some View {
@@ -132,11 +131,7 @@ struct LayersSheet: View {
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .dirtGroupingSurface()
     }
 
     private func managePack(_ id: String, update: Bool) {
@@ -180,7 +175,3 @@ private enum RiderServiceDot {
     static let liquor = Color(dirtHex: 0x8E44C9)
 }
 
-/// Opaque islands on Layers’ thin glass. Local to this sheet — not a DirtTheme token change.
-private enum LayersGlass {
-    static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.94)
-}

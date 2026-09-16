@@ -245,6 +245,19 @@ struct PaywallView: View {
                 .accessibilityElement(children: .combine)
             }
         }
+        .padding(isHard ? 0 : DirtSpace.row)
+        .background {
+            if !isHard {
+                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                    .fill(DirtTheme.groupingFill)
+            }
+        }
+        .overlay {
+            if !isHard {
+                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                    .stroke(DirtTheme.hairline, lineWidth: 1)
+            }
+        }
     }
 
     private func featureIcon(_ symbol: String, index: Int) -> some View {

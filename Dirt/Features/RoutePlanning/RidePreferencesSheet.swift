@@ -42,7 +42,7 @@ struct RidePreferencesSheet: View {
                         }.font(DirtType.helper).foregroundStyle(DirtTheme.muted)
                     }
                     .padding(DirtSpace.row)
-                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+                    .dirtGroupingSurface()
                     VStack(spacing: DirtSpace.row) {
                         Toggle("Avoid cities and towns", isOn: $draft.avoidCities)
                         Divider()
@@ -51,7 +51,7 @@ struct RidePreferencesSheet: View {
                     .font(DirtType.rowTitle)
                     .tint(DirtTheme.orange)
                     .padding(DirtSpace.row)
-                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+                    .dirtGroupingSurface()
                     Text("A road may still be needed to reach a waypoint or a fuel stop.")
                         .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
                 }.padding(DirtSpace.group)

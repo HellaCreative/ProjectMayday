@@ -76,6 +76,8 @@ struct ContributeTrackSheet: View {
 
             Spacer(minLength: 0)
         }
+        .padding(DirtSpace.row)
+        .dirtGroupingSurface(radius: DirtRadius.card)
         .padding(.horizontal, DirtSpace.row)
         .padding(.bottom, DirtSpace.row)
         .background(DirtTheme.sheetMaterial)
