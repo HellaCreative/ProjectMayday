@@ -25,14 +25,12 @@ private enum NetC {
     static let detailMinZoom = 12.5
     static let corridorKmDetail = 3.0
     static let corridorKmOverview = 2.0
-    static let lensKm = 20.0
     static let routeArmKmDetail = 10.0
     static let routeArmKmOverview = 20.0
     static let routeSampleStepKm = 3.0
     static let maxAnchors = 8
     static let chunkPadDeg = 0.025
     static let maxFeaturesCorridor = 1600
-    static let maxFeaturesLens = 5000
     static let refreshDelay = UInt64(450_000_000)
     /// Coarse seed spacing for the per-route checkpoint index (see
     /// `RouteAnchorCache`). Small relative to any `routeArmKm*` window, so
@@ -82,6 +80,7 @@ final class NetworkOverlayManager {
             _ = mapState.layerPrefsGeneration
             _ = mapState.routeGeneration
             _ = mapState.networkAllowUnknown
+            _ = mapState.showRoutingGraphDebug
         } onChange: {
             Task { @MainActor [weak self] in
                 self?.scheduleRefresh()
@@ -102,50 +101,38 @@ final class NetworkOverlayManager {
     private func performRefresh() async {
         let zoom = mapState.mapZoom
         let center = mapState.mapCenter
-        let prefs = LayerPrefsSnapshot()
         let routeCache = cachedRouteAnchors(matching: mapState.routeGeneration)
         let hasRoute = routeCache != nil
         let detailZoom = zoom >= NetC.detailMinZoom
-        let lensCode = prefs.lensProvince
-
-        if prefs.showBCOSMHierarchy {
-            mapState.updateNetworkFeatures([])
-            return
-        }
-
-        if lensCode == nil && !detailZoom && !hasRoute {
+        // Built routes no longer force the corridor at overview zoom — that
+        // was the leftover hitch on NS→ON scans. Release DIRT-logo toggle
+        // (`showRoutingGraphDebug` when the debug HUD is compiled out) is
+        // the rider's explicit nearby-surfaces request.
+        let logoWantsNearby = !BuildChannel.debugRoutingGraphOverlay && mapState.showRoutingGraphDebug
+        let wantCorridor = detailZoom || logoWantsNearby
+        if !wantCorridor {
             mapState.updateNetworkFeatures([])
             return
         }
 
         let focus = RouteCoordinate(longitude: center.longitude, latitude: center.latitude)
-        let showLens = lensCode != nil
-        let wantCorridor = hasRoute || detailZoom
         let inferred = GraphPackStore.primaryRegionId(
             containing: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude)
         )?.uppercased()
-        let provinceCode = lensCode ?? inferred ?? "NS"
+        let provinceCode = inferred ?? "NS"
 
         let corridorKm = detailZoom ? NetC.corridorKmDetail : NetC.corridorKmOverview
         let armKm = detailZoom ? NetC.routeArmKmDetail : NetC.routeArmKmOverview
-        let maxFeatures = showLens ? NetC.maxFeaturesLens : NetC.maxFeaturesCorridor
+        let maxFeatures = NetC.maxFeaturesCorridor
 
         var anchors: [RouteCoordinate] = []
         if hasRoute, let routeCache {
             anchors = sampleRouteAnchors(around: focus, cache: routeCache, armKm: armKm)
         }
 
-        var bbox: _BBox
-        if showLens {
-            bbox = bboxFromCircle(center: center, radiusKm: NetC.lensKm, padDeg: NetC.chunkPadDeg)
-            if wantCorridor {
-                bbox = union(bbox, bboxFrom(points: [focus] + anchors, padDeg: NetC.chunkPadDeg))
-            }
-        } else {
-            var points = [focus] + anchors
-            if points.isEmpty { points = [focus] }
-            bbox = bboxFrom(points: points, padDeg: NetC.chunkPadDeg)
-        }
+        var points = [focus] + anchors
+        if points.isEmpty { points = [focus] }
+        let bbox = bboxFrom(points: points, padDeg: NetC.chunkPadDeg)
 
         guard let pack = graphPacks.packIfInstalled(provinceCode) else {
             mapState.updateNetworkFeatures([])
@@ -165,26 +152,13 @@ final class NetworkOverlayManager {
             )
         }.value
 
-        var selected: [NetworkLineFeature] = []
-        if showLens {
-            selected = selectCorridorFeatures(
-                pool: pool,
-                focus: focus,
-                anchors: [],
-                corridorKm: NetC.lensKm,
-                maxFeatures: maxFeatures
-            )
-        }
-        if wantCorridor {
-            let corridor = selectCorridorFeatures(
-                pool: pool,
-                focus: focus,
-                anchors: anchors,
-                corridorKm: corridorKm,
-                maxFeatures: maxFeatures
-            )
-            selected = mergeNetworkFeatures(selected, corridor, maxFeatures: maxFeatures)
-        }
+        var selected = selectCorridorFeatures(
+            pool: pool,
+            focus: focus,
+            anchors: anchors,
+            corridorKm: corridorKm,
+            maxFeatures: maxFeatures
+        )
         if !mapState.networkAllowUnknown {
             selected = selected.filter { feature in
                 feature.accessClass != "motorized_unknown"
@@ -439,63 +413,36 @@ final class NetworkOverlayManager {
             maxLat: maxLat + padDeg
         )
     }
-
-    private func bboxFromCircle(
-        center: CLLocationCoordinate2D,
-        radiusKm: Double,
-        padDeg: Double
-    ) -> _BBox {
-        let latPad = radiusKm / 111.32
-        let lonPad = radiusKm / (111.32 * max(0.2, cos(center.latitude * .pi / 180)))
-        return _BBox(
-            minLon: center.longitude - lonPad - padDeg,
-            minLat: center.latitude - latPad - padDeg,
-            maxLon: center.longitude + lonPad + padDeg,
-            maxLat: center.latitude + latPad + padDeg
-        )
-    }
-
-    private func union(_ a: _BBox, _ b: _BBox) -> _BBox {
-        _BBox(
-            minLon: min(a.minLon, b.minLon),
-            minLat: min(a.minLat, b.minLat),
-            maxLon: max(a.maxLon, b.maxLon),
-            maxLat: max(a.maxLat, b.maxLat)
-        )
-    }
-
-    private func mergeNetworkFeatures(
-        _ a: [NetworkLineFeature],
-        _ b: [NetworkLineFeature],
-        maxFeatures: Int
-    ) -> [NetworkLineFeature] {
-        var seen = Set<String>()
-        var out: [NetworkLineFeature] = []
-        for feature in a + b {
-            if seen.contains(feature.edgeId) { continue }
-            seen.insert(feature.edgeId)
-            out.append(feature)
-            if out.count >= maxFeatures { break }
-        }
-        return out
-    }
 }
 
 nonisolated enum PackNetworkOverlay {
+    /// Overlay paint keys. Loose/technical dirt must be `track` so
+    /// `dirt-net-track` actually draws it (a prior `dirt` tag ate the cap and
+    /// never matched a layer).
+    static func overlaySurfaceClass(_ family: SurfaceFamily) -> String {
+        family == .loose ? "track" : family.rawValue
+    }
+
     static func features(from pack: GraphPack,minLon: Double,minLat: Double,maxLon: Double,maxLat: Double,
                          province: String,cap: Int) -> [NetworkLineFeature] {
         var result: [NetworkLineFeature] = []
         for edge in 0..<pack.edgeCount {
             if Task.isCancelled { break }
             let line = pack.polyline(edge)
-            guard line.count >= 2,
-                  let west = line.map(\.longitude).min(), let east = line.map(\.longitude).max(),
-                  let south = line.map(\.latitude).min(), let north = line.map(\.latitude).max(),
-                  east >= minLon, west <= maxLon, north >= minLat, south <= maxLat else { continue }
+            guard line.count >= 2 else { continue }
+            var west = line[0].longitude, east = line[0].longitude
+            var south = line[0].latitude, north = line[0].latitude
+            for point in line {
+                west = min(west, point.longitude)
+                east = max(east, point.longitude)
+                south = min(south, point.latitude)
+                north = max(north, point.latitude)
+            }
+            guard east >= minLon, west <= maxLon, north >= minLat, south <= maxLat else { continue }
             let surface = ProfilePolicy.family(pack.surfaceLeaf(edge))
             result.append(NetworkLineFeature(edgeId: pack.edgeID(edge),
                 coordinates: line.map { .init(lat: $0.latitude,lon: $0.longitude) },
-                surfaceClass: surface == .loose ? "dirt" : surface.rawValue,
+                surfaceClass: overlaySurfaceClass(surface),
                 accessClass: NativeRoutingAdapter.accessName(pack.accessCode(edge,forward: true)),
                 structureType: pack.structure(edge),province: province,roadClass: pack.roadClass(edge),
                 surfaceLeaf: pack.surfaceLeaf(edge),surfaceFamily: surface.rawValue,

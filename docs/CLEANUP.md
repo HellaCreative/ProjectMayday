@@ -11,11 +11,10 @@ only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
       the live `debug_graph` endpoint or hide the leaf modes when no local pack. (audit P2-4)
 - [ ] Debounce the `debug graph live failed … cancelled` refetch spam on map pan.
 - [ ] General interface pass (Rick to enumerate: spacing, labels, control placement).
-- [ ] **Move GRAPH onto the DIRT logo (NOT the Layers sheet).** Remove the standalone GRAPH
-      map button from the routing screen. Tapping the **DIRT logo** toggles the graph on/off
-      (same behavior the GRAPH button has now). When on, the legend interface **animates down
-      and out from under the DIRT logo**, building downward then to the right, **left-justified**.
-      Tapping DIRT again turns the graph off and closes the legend.
+- [x] **Move GRAPH onto the DIRT logo (NOT the Layers sheet).** Remove the standalone GRAPH
+      map button from the routing screen. Tapping the **DIRT logo** toggles nearby surfaces.
+      DEBUG builds still show the GRAPH HUD from under the logo. Release uses the lighter
+      pack-network corridor overlay instead of `RoutingGraphDebugManager`.
 - [ ] **Compass ↔ re-center spacing.** The compass and re-center buttons (right side) are
       touching vertically. Give them the same vertical gap between them as the horizontal
       gap used between the icons elsewhere.
@@ -31,9 +30,8 @@ only in [the routing source of truth](ROUTING-SOURCE-OF-TRUTH.md).
       use the same surface colors as the graph legend (paved/gravel/dirt/etc.) along its length.
 
 ### Layers sheet
-- [ ] **Remove "Network lens" entirely** — all of its functionality AND its explanatory
-      text. No longer needed; that capability now lives in the graph function on the DIRT
-      logo (see GRAPH-on-DIRT item above).
+- [x] **Remove "Network lens" entirely** — prefs are cleared on launch and no longer read.
+      Nearby surfaces live on the DIRT logo (corridor overlay / DEBUG graph).
 
 ### Saved / GPX import sheet — REQUIRES WORK (image to come)
 - [ ] After importing a GPX via **Saved**, the detail interface shows the GPX with

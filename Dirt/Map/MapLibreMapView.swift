@@ -111,7 +111,7 @@ struct MapLibreMapView: UIViewRepresentable {
         static let fuelClusterCircleID = "dirt-poi-fuel-cluster"
         static let fuelClusterCountID = "dirt-poi-fuel-cluster-count"
         static let categories: [(id: String, color: UIColor)] = [
-            ("fuel",       UIColor(red: 0.910, green: 0.451, blue: 0.047, alpha: 1)),
+            ("fuel",       UIColor(DirtTheme.orange)),
             ("campground", UIColor(red: 0.184, green: 0.620, blue: 0.267, alpha: 1)),
             ("lodging",    UIColor(red: 0.541, green: 0.353, blue: 0.169, alpha: 1)),
             ("liquor",     UIColor(red: 0.557, green: 0.267, blue: 0.788, alpha: 1))
@@ -202,8 +202,6 @@ struct MapLibreMapView: UIViewRepresentable {
         private var appliedNetPrefs   = -1
         private var appliedDebugGraph = -1
         private var appliedDebugPaintMode: DebugGraphPaintMode?
-        private var appliedBCOSMGeneration = -1
-        private var appliedBCOSMTemplate: String?
 
         init(state: MapState) {
             self.state = state
@@ -219,9 +217,9 @@ struct MapLibreMapView: UIViewRepresentable {
             // Dual-sport nav: highway number shields (“NS 104 TCH”) crowd the
             // trail at mid zooms — hide them; keep ordinary street name labels.
             Self.hideHighwayShieldLabels(in: style)
-            // Layer insertion order: network overlays (below) → route → POI (above)
+            // Layer insertion order: admin outlines → network → route → POI
+            addAdminOutlineLayers(to: style)
             addNetworkLayers(to: style)
-            addBCOSMHierarchyLayers(to: style)
             addDebugGraphLayers(to: style)
             addRouteLayers(to: style)
             addPOILayers(to: style)
@@ -232,7 +230,6 @@ struct MapLibreMapView: UIViewRepresentable {
             appliedPoiData = -1; appliedPoiPrefs = -1
             appliedNetData = -1; appliedNetPrefs = -1
             appliedDebugGraph = -1
-            appliedBCOSMGeneration = -1
             sync(mapView: mapView)
         }
 
@@ -255,6 +252,39 @@ struct MapLibreMapView: UIViewRepresentable {
             }
         }
 
+        // MARK: - Low-zoom admin outlines (Shortbread has no state lines below z7)
+
+        private func addAdminOutlineLayers(to style: MLNStyle) {
+            guard style.source(withIdentifier: "dirt-admin-outlines") == nil else { return }
+            let rings = RegionPolygons.lowZoomOutlineRings()
+            let shapes: [MLNPolylineFeature] = rings.compactMap { ring in
+                guard ring.coordinates.count >= 2 else { return nil }
+                var coords = ring.coordinates.compactMap { pair -> CLLocationCoordinate2D? in
+                    guard pair.count >= 2 else { return nil }
+                    return CLLocationCoordinate2D(latitude: pair[1], longitude: pair[0])
+                }
+                guard coords.count >= 2 else { return nil }
+                let line = MLNPolylineFeature(coordinates: &coords, count: UInt(coords.count))
+                line.attributes = ["regionId": ring.regionId]
+                return line
+            }
+            let src = MLNShapeSource(
+                identifier: "dirt-admin-outlines",
+                shape: MLNShapeCollectionFeature(shapes: shapes),
+                options: nil
+            )
+            style.addSource(src)
+            let outline = MLNLineStyleLayer(identifier: "dirt-admin-outline", source: src)
+            outline.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.adminStateBorder))
+            outline.lineWidth = NSExpression(forConstantValue: 0.9)
+            outline.lineOpacity = NSExpression(forConstantValue: 0.85)
+            outline.lineDashPattern = NSExpression(forConstantValue: [4, 3] as [NSNumber])
+            outline.lineCap = NSExpression(forConstantValue: "round")
+            outline.lineJoin = NSExpression(forConstantValue: "round")
+            outline.maximumZoomLevel = 7
+            style.addLayer(outline)
+        }
+
         // MARK: - Network overlay layers
 
         private func addNetworkLayers(to style: MLNStyle) {
@@ -262,26 +292,27 @@ struct MapLibreMapView: UIViewRepresentable {
             let src = MLNShapeSource(identifier: "dirt-network", shape: nil, options: nil)
             style.addSource(src)
 
-            // access (blue) — exclude restricted
+            // Nearby network, not selected-route paint: access stays blue so it
+            // cannot be read as route unknown-access purple.
             let access = MLNLineStyleLayer(identifier: "dirt-net-access", source: src)
             access.predicate = NSPredicate(format: "surfaceClass == 'access' AND accessClass != 'motorized_restricted'")
-            access.lineColor = NSExpression(forConstantValue: UIColor(red: 0.039, green: 0.400, blue: 0.761, alpha: 1))
+            access.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.overlayAccess))
             access.lineWidth = NSExpression(forConstantValue: 2)
             access.lineOpacity = NSExpression(forConstantValue: 0.88)
             style.addLayer(access)
 
-            // gravel (gray)
+            // Nearby gravel stays cool gray so selected-route amber gravel still wins.
             let gravel = MLNLineStyleLayer(identifier: "dirt-net-gravel", source: src)
             gravel.predicate = NSPredicate(format: "surfaceClass == 'gravel' AND accessClass != 'motorized_restricted'")
-            gravel.lineColor = NSExpression(forConstantValue: UIColor(red: 0.365, green: 0.408, blue: 0.455, alpha: 1))
+            gravel.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.overlayGravel))
             gravel.lineWidth = NSExpression(forConstantValue: 2)
             gravel.lineOpacity = NSExpression(forConstantValue: 0.88)
             style.addLayer(gravel)
 
-            // branches/track (purple)
+            // Nearby dirt/track uses route-loose brown, not purple.
             let track = MLNLineStyleLayer(identifier: "dirt-net-track", source: src)
             track.predicate = NSPredicate(format: "surfaceClass == 'track' AND accessClass != 'motorized_restricted'")
-            track.lineColor = NSExpression(forConstantValue: UIColor(red: 0.486, green: 0.227, blue: 0.929, alpha: 1))
+            track.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.overlayTrack))
             track.lineWidth = NSExpression(forConstantValue: 2)
             track.lineOpacity = NSExpression(forConstantValue: 0.88)
             style.addLayer(track)
@@ -311,8 +342,8 @@ struct MapLibreMapView: UIViewRepresentable {
             tunnel.lineOpacity = NSExpression(forConstantValue: 0.92)
             tunnel.lineDashPattern = NSExpression(forConstantValue: [0.8, 0.8] as [NSNumber])
             style.addLayer(tunnel)
-            // Network surface classes always paint when features are loaded —
-            // Map visibility toggles were removed; corridor/lens control load.
+            // Network surface classes always paint when features are loaded.
+            // Map visibility toggles were removed; zoom / DIRT-logo control load.
         }
 
         private func addDebugGraphLayers(to style: MLNStyle) {
@@ -357,126 +388,6 @@ struct MapLibreMapView: UIViewRepresentable {
             guard appliedDebugPaintMode != state.debugGraphPaintMode else { return }
             rebuildDebugPaintLayers(on: style, mode: state.debugGraphPaintMode)
             appliedDebugPaintMode = state.debugGraphPaintMode
-        }
-
-        // MARK: - BC OSM hierarchy (feasibility mbtiles)
-
-        private enum BCOSMLayer {
-            static let sourceID = "bc-osm-hierarchy"
-            static let pavedID = "bc-osm-paved"
-            static let localID = "bc-osm-local"
-            static let trackID = "bc-osm-track"
-            static let pathID = "bc-osm-path"
-            static let allIDs = [pavedID, localID, trackID, pathID]
-        }
-
-        private func addBCOSMHierarchyLayers(to style: MLNStyle) {
-            // Source is added in syncBCOSMHierarchy when a tile template is live.
-            // Layers are created once the source exists.
-            _ = style
-        }
-
-        private func ensureBCOSMLayers(on style: MLNStyle, sourceID: String) {
-            guard style.layer(withIdentifier: BCOSMLayer.pavedID) == nil else { return }
-
-            func lineLayer(_ id: String, predicate: NSPredicate, color: UIColor, width: CGFloat) -> MLNLineStyleLayer {
-                let layer = MLNLineStyleLayer(identifier: id, source: style.source(withIdentifier: sourceID)!)
-                // Must match tippecanoe `-l dirt_roads` in scripts/build-bc-tiles.sh
-                // (and MBTilesVectorProxy tileJSON vector_layers id).
-                layer.sourceLayerIdentifier = "dirt_roads"
-                layer.predicate = predicate
-                layer.lineColor = NSExpression(forConstantValue: color)
-                layer.lineWidth = NSExpression(forConstantValue: width)
-                layer.lineOpacity = NSExpression(forConstantValue: 0.9)
-                layer.lineCap = NSExpression(forConstantValue: "round")
-                layer.lineJoin = NSExpression(forConstantValue: "round")
-                return layer
-            }
-
-            let paved = lineLayer(
-                BCOSMLayer.pavedID,
-                predicate: NSPredicate(format: "highway IN %@", [
-                    "motorway", "motorway_link", "trunk", "trunk_link",
-                    "primary", "primary_link", "secondary", "secondary_link",
-                    "tertiary", "tertiary_link"
-                ]),
-                color: UIColor(red: 0.20, green: 0.24, blue: 0.28, alpha: 1),
-                width: 2.2
-            )
-            let local = lineLayer(
-                BCOSMLayer.localID,
-                predicate: NSPredicate(format: "highway IN %@", [
-                    "unclassified", "residential", "living_street", "service", "road"
-                ]),
-                color: UIColor(red: 0.45, green: 0.50, blue: 0.55, alpha: 1),
-                width: 1.6
-            )
-            let track = lineLayer(
-                BCOSMLayer.trackID,
-                predicate: NSPredicate(format: "highway == %@", "track"),
-                color: UIColor(red: 0.486, green: 0.227, blue: 0.929, alpha: 1),
-                width: 2.0
-            )
-            let path = lineLayer(
-                BCOSMLayer.pathID,
-                predicate: NSPredicate(format: "highway IN %@", ["path", "cycleway"]),
-                color: UIColor(red: 0.90, green: 0.45, blue: 0.12, alpha: 1),
-                width: 1.4
-            )
-            path.lineDashPattern = NSExpression(forConstantValue: [1.5, 1.2] as [NSNumber])
-
-            // Insert under route layers when present.
-            if let routeBottom = style.layer(withIdentifier: RouteAccessPaint.lineID) {
-                style.insertLayer(paved, below: routeBottom)
-                style.insertLayer(local, below: routeBottom)
-                style.insertLayer(track, below: routeBottom)
-                style.insertLayer(path, below: routeBottom)
-            } else {
-                style.addLayer(paved)
-                style.addLayer(local)
-                style.addLayer(track)
-                style.addLayer(path)
-            }
-        }
-
-        private func syncBCOSMHierarchy(style: MLNStyle) {
-            let gen = state.bcOSMOverlayGeneration
-            let prefs = LayerPrefsSnapshot()
-            let template = state.bcOSMTileURLTemplate
-            let want = prefs.showBCOSMHierarchy && template != nil
-            guard gen != appliedBCOSMGeneration || template != appliedBCOSMTemplate else {
-                for id in BCOSMLayer.allIDs {
-                    style.layer(withIdentifier: id)?.isVisible = want
-                }
-                return
-            }
-            appliedBCOSMGeneration = gen
-            appliedBCOSMTemplate = template
-
-            for id in BCOSMLayer.allIDs {
-                if let layer = style.layer(withIdentifier: id) {
-                    style.removeLayer(layer)
-                }
-            }
-            if let existing = style.source(withIdentifier: BCOSMLayer.sourceID) {
-                style.removeSource(existing)
-            }
-
-            guard want, let template else { return }
-
-            let source = MLNVectorTileSource(
-                identifier: BCOSMLayer.sourceID,
-                tileURLTemplates: [template],
-                options: [
-                    .minimumZoomLevel: 4,
-                    .maximumZoomLevel: 14
-                ]
-            )
-            style.addSource(source)
-            ensureBCOSMLayers(on: style, sourceID: BCOSMLayer.sourceID)
-            for id in BCOSMLayer.allIDs {
-                style.layer(withIdentifier: id)?.isVisible = true
-            }
         }
 
         // MARK: - POI layers (drawn above route layers)
@@ -690,7 +601,6 @@ struct MapLibreMapView: UIViewRepresentable {
             syncNetwork(style: style)
             syncDebugGraphPaintMode(style: style)
             syncDebugGraph(style: style)
-            syncBCOSMHierarchy(style: style)
         }
 
         /// MapLibre recenters immediately when contentInset changes — only write

@@ -62,6 +62,32 @@ enum RegionPolygons {
         polygonOwner(longitude: lon, latitude: lat)
     }
 
+    /// Outer-ring outlines for low-zoom province/state borders. Display only —
+    /// Shortbread tile lines do not exist below zoom 7.
+    static func lowZoomOutlineRings(stride: Int = 8) -> [(regionId: String, coordinates: [[Double]])] {
+        let step = max(1, stride)
+        var out: [(String, [[Double]])] = []
+        for (id, geom) in geometries {
+            let type = geom["type"] as? String ?? ""
+            var rings: [[[Double]]] = []
+            if type == "Polygon", let one = asRings(geom["coordinates"]) {
+                rings = one
+            } else if type == "MultiPolygon", let many = asMultiRings(geom["coordinates"]) {
+                rings = many.compactMap(\.first)
+            }
+            for ring in rings {
+                guard ring.count >= 4 else { continue }
+                var simplified: [[Double]] = []
+                simplified.reserveCapacity(ring.count / step + 2)
+                for (index, point) in ring.enumerated() where index % step == 0 || index == ring.count - 1 {
+                    if simplified.last != point { simplified.append(point) }
+                }
+                if simplified.count >= 2 { out.append((id, simplified)) }
+            }
+        }
+        return out
+    }
+
     private static func geometryBbox(_ geom: [String: Any]) -> BBox? {
         var minLon = Double.infinity
         var minLat = Double.infinity

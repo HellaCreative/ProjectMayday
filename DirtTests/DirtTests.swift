@@ -199,6 +199,67 @@ struct DirtTests {
         })
     }
 
+    @Test func generatedStyleSplitsAdminBordersAndDropsPurple() throws {
+        let styleURL = MapStyleCatalog.styleURL(for: .shortbreadRich)
+        let data = try Data(contentsOf: styleURL)
+        let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let layers = try #require(root["layers"] as? [[String: Any]])
+        let byID = Dictionary(uniqueKeysWithValues: layers.compactMap { layer -> (String, [String: Any])? in
+            guard let id = layer["id"] as? String else { return nil }
+            return (id, layer)
+        })
+        #expect(byID["dirt-bound-country"] != nil)
+        #expect(byID["dirt-bound-state"] != nil)
+        #expect(byID["dirt-bound-label-country"] != nil)
+        #expect(byID["dirt-bound-label-state"] != nil)
+        #expect(byID["boundaries-0"] == nil)
+        #expect(byID["boundary_labels-named-0"] == nil)
+        let countryPaint = try #require(byID["dirt-bound-country"]?["paint"] as? [String: Any])
+        #expect(countryPaint["line-color"] as? String == "#3a424c")
+        let statePaint = try #require(byID["dirt-bound-state"]?["paint"] as? [String: Any])
+        #expect(statePaint["line-color"] as? String == "#5a6470")
+        #expect(intZoom(byID["dirt-bound-country"]?["minzoom"]) == 7)
+        let town = byID.first(where: { $0.key.contains("town") })?.value
+        #expect(intZoom(town?["minzoom"]) <= 7)
+        if let island = byID.first(where: { $0.key.contains("island") })?.value {
+            #expect(intZoom(island["minzoom"]) <= 14)
+        }
+        #expect(intZoom(byID["dirt-bound-label-country"]?["maxzoom"]) <= 6)
+    }
+
+    @Test func richSaturationHelperUsesOnePointOneFiveBoost() {
+        let boosted = MapStyleCatalog.boostedSaturationHex("#96ce74")
+        #expect(boosted.hasPrefix("#"))
+        #expect(boosted.count == 7)
+        #expect(boosted != "#96ce74")
+        #expect(MapStyleCatalog.boostedSaturationHex("#96ce74") == boosted)
+    }
+
+    @Test func overlaySurfaceClassMapsLooseDirtToTrack() {
+        #expect(PackNetworkOverlay.overlaySurfaceClass(.loose) == "track")
+        #expect(PackNetworkOverlay.overlaySurfaceClass(.gravel) == "gravel")
+        #expect(PackNetworkOverlay.overlaySurfaceClass(.paved) == "paved")
+        #expect(PackNetworkOverlay.overlaySurfaceClass(.unknown) == "unknown")
+    }
+
+    @Test func lowZoomOutlineRingsCoverProvincesAndStates() {
+        let rings = RegionPolygons.lowZoomOutlineRings()
+        let ids = Set(rings.map(\.regionId))
+        #expect(ids.contains("ns"))
+        #expect(ids.contains("on"))
+        #expect(ids.contains("ny"))
+        #expect(ids.contains("ca"))
+        #expect(rings.count >= 50)
+        #expect(rings.allSatisfy { $0.coordinates.count >= 2 })
+    }
+
+    private func intZoom(_ raw: Any?) -> Int {
+        if let value = raw as? Int { return value }
+        if let value = raw as? Double { return Int(value.rounded()) }
+        if let value = raw as? NSNumber { return value.intValue }
+        return .max
+    }
+
     private func testShortbreadManifest(
         schema: String = "1.0",
         sampleHost: String = "tiles.example.test"

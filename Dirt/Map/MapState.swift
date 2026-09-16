@@ -225,7 +225,7 @@ final class MapState {
     /// When false, Layers omits `motorized_unknown` (purple Access the router will not use).
     private(set) var networkAllowUnknown = false
 
-    /// DEBUG: paint installed BC routing graph by access class.
+    /// DEBUG: heavy graph HUD. Release DIRT-logo uses the lighter corridor overlay.
     var showRoutingGraphDebug = false
     /// Phase E3: which leaf dimension colors the debug graph (Access / Surface / Road class).
     var debugGraphPaintMode: DebugGraphPaintMode = .surfaceFamily
@@ -235,11 +235,9 @@ final class MapState {
     var debugGraphCapped = false
     var debugGraphHit: RoutingGraphDebugHit?
 
-    /// Localhost XYZ template for BC OSM hierarchy mbtiles (nil = off / missing).
+    /// Retired BC OSM experiment. Kept so RootView observation still compiles.
     private(set) var bcOSMTileURLTemplate: String?
-    /// Status when the hierarchy toggle is on but tiles cannot load.
     private(set) var bcOSMStatusMessage: String?
-    /// Bumped whenever the BC OSM vector source must be rebuilt.
     private(set) var bcOSMOverlayGeneration = 0
 
     /// POI tapped on the map; RootView observes this to present the routing sheet.

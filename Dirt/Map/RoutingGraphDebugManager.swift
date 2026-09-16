@@ -109,6 +109,11 @@ final class RoutingGraphDebugManager {
     }
 
     private func performRefresh() async {
+        // Release DIRT-logo taps use the lighter corridor overlay instead.
+        guard BuildChannel.debugRoutingGraphOverlay else {
+            mapState.updateDebugGraphFeatures([], status: nil, capped: false)
+            return
+        }
         guard mapState.showRoutingGraphDebug else {
             mapState.updateDebugGraphFeatures([], status: nil, capped: false)
             return

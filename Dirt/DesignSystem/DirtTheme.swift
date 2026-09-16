@@ -95,6 +95,13 @@ enum DirtTheme {
     /// ferry reads immediately over water without entering the Dirt/Paved mix.
     static let routeFerry = Color(dirtHex: 0x005A70)
 
+    /// Nearby pack-network overlay — thinner, distinct from selected-route paint.
+    static let overlayAccess = Color(dirtHex: 0x0A66C2)
+    static let overlayGravel = Color(dirtHex: 0x5D6874)
+    static let overlayTrack = routeLoose
+    /// Low-zoom bundled province/state outlines (tile lines start at z7).
+    static let adminStateBorder = Color(dirtHex: 0x5A6470)
+
     /// Dirt % text + mix bar — matches map dirt (warm brand orange).
     static let dirtMix = orange
     /// Paved % text + mix bar — matches the four-family map legend.
