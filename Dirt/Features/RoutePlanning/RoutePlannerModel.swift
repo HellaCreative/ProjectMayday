@@ -165,7 +165,6 @@ final class RoutePlannerModel {
             errorMessage = "Waiting for your location. Try again in a moment."
             return
         }
-        let direction = loopDirection.guide(from: start)
         invalidateInFlightRoutes()
         let runID = UUID()
         loopRunID = runID
@@ -173,69 +172,73 @@ final class RoutePlannerModel {
         isAssemblingRoute = true
         errorMessage = nil
         loopSummary = nil
+        fuelPlanningStatus = "Finding loop"
         let target = loopDistanceKM * 1000
         let selectedProfile = profile, selectedAllow = allowUnknown
+        let heading = loopDirection.bearing
         var preferences = displayedRidePreferences
         preferences.preferDifferentRoads = true
-        let fuel = FuelRangePrefs.snapshot
         let policy = routingSourcePolicy
+        let dummy = RouteRequest(
+            profile: selectedProfile,
+            locations: [RouteLocation(latitude: start.latitude, longitude: start.longitude, label: "start"),
+                        RouteLocation(latitude: start.latitude, longitude: start.longitude, label: "start")],
+            allowUnknown: selectedAllow)
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            var winner: (RiderItinerary, BuiltItinerary, Double, Double, Double)?
-            var distanceScale = 1.0
-            for index in 0..<6 {
+            defer {
+                if self.loopRunID == runID {
+                    self.isRouting = false
+                    self.isAssemblingRoute = false
+                    self.fuelPlanningStatus = nil
+                }
+            }
+            do {
+                let source = policy.select(for: dummy)
+                let result = try await source.planLoop(PlannedLoopRequest(
+                    start: start, headingRadians: heading, targetMeters: target,
+                    profile: selectedProfile, allowUnknown: selectedAllow,
+                    wander: preferences.normalized.wander, avoidCities: preferences.avoidCities,
+                    avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads,
+                    seed: UInt64.random(in: 1...9_007_199_254_740_991)))
                 guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
-                self.fuelPlanningStatus = "Finding loop \(index + 1) of 6"
-                let adjustedTarget = index >= 2 ? (target * min(1.35, max(0.4, 1 / max(distanceScale, 0.01))) / 1000).rounded() * 1000 : target
-                var candidate = reduce(RiderItinerary(), .replaceAll(
-                    waypoints: LoopPlan.anchors(start: start, direction: direction, targetMeters: adjustedTarget, variant: index),
+                let far = result.far
+                let itinerary = reduce(RiderItinerary(), .replaceAll(
+                    waypoints: [start, far, start],
                     profile: selectedProfile, allowUnknown: selectedAllow,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
-                // Keep the outward surface choice; try a cleaner return when
-                // dirt-led circuits would fold back over the same corridor.
-                if index >= 4, selectedProfile != .cleanest {
-                    for leg in Array(candidate.legs.suffix(2)) {
-                        candidate = reduce(candidate, .setProfile(legID: leg.id, .cleanest)).itinerary
-                    }
+                guard itinerary.legs.count == 2, itinerary.legs.allSatisfy({ $0.profile == selectedProfile }) else {
+                    self.errorMessage = "Loop legs must keep the selected riding style."
+                    self.refreshMap()
+                    return
                 }
-                let builder = ItineraryBuilder()
-                builder.mapZoom = 7
-                let result = await RidePreferenceContext.$current.withValue(preferences) {
-                    await RoutingSessionContext.$seed.withValue(
-                        UInt64.random(in: 1...9_007_199_254_740_991)
-                    ) {
-                        await builder.build(candidate, from: 0, reuse: nil, fuel: fuel, source: policy, onProgress: { _ in })
-                    }
+                let responses = [result.outbound, result.inbound]
+                let builtLegs = itinerary.legs.enumerated().map { index, leg in
+                    BuiltLeg(riderLegID: leg.id,
+                             fromCoordinate: itinerary.waypoints[index].coordinate,
+                             toCoordinate: itinerary.waypoints[index + 1].coordinate,
+                             endsAtFuelStop: nil, response: responses[index],
+                             fuelUsedOnArrivalMeters: 0, routeProfile: selectedProfile)
                 }
-                guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
-                guard !result.legs.isEmpty, candidate.legs.allSatisfy({ result.riderLegStatus[$0.id] == .built }) else { continue }
-                let distance = result.legs.reduce(0) { $0 + ($1.response.distanceMeters ?? 0) }
-                if index < 2, distanceScale == 1 { distanceScale = distance / max(adjustedTarget, 1) }
-                let repeated = LoopPlan.repeatedMeters(paths: result.legs.map { $0.response.coordinates })
-                let stops = result.legs.compactMap { $0.endsAtFuelStop?.stationID }
-                let fill = LoopPlan.circuitFill(paths: result.legs.map { $0.response.coordinates })
-                let accepted = LoopPlan.acceptable(distance: distance, repeated: repeated, fill: fill, target: target)
-                RoutingDebugLog.shared.event("loop candidate=\(index + 1) distance=\(Int(distance)) repeated=\(Int(repeated)) fill=\(String(format: "%.2f", fill)) accepted=\(accepted)")
-                guard accepted else { continue }
-                let score = LoopPlan.score(distance: distance, repeated: repeated, target: target,
-                                           reusedStops: stops.count - Set(stops).count, fill: fill)
-                if winner == nil || score < winner!.2 { winner = (candidate, result, score, distance, repeated) }
-            }
-            guard !Task.isCancelled, self.loopRunID == runID else { return }
-            self.isRouting = false
-            self.isAssemblingRoute = false
-            self.fuelPlanningStatus = nil
-            if let winner {
+                let built = BuiltItinerary(
+                    generation: itinerary.generation, legs: builtLegs,
+                    riderLegStatus: Dictionary(uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.built) }),
+                    riderRoutes: Dictionary(uniqueKeysWithValues: zip(itinerary.legs.map(\.id), responses)))
+                RoutingDebugLog.shared.event(
+                    "loop distance=\(Int(result.distanceMeters)) reridden=\(Int(result.reriddenMeters)) return=\(Int(result.returnMeters)) relax=[\(result.relaxations.joined(separator: ","))] style=\(selectedProfile.rawValue) legs=\(itinerary.legs.map(\.profile.rawValue).joined(separator: ","))")
                 self.ridePreferences = preferences
-                self.itinerary = winner.0
-                self.built = winner.1
+                self.itinerary = itinerary
+                self.built = built
                 self.destination = start
                 self.routeIdentity = "loop:\(runID.uuidString)"
-                self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(winner.3 / 1000)) km · About \(Int(winner.4 / 1000)) km shared roads"
+                self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(result.distanceMeters / 1000)) km · \(Int(result.reriddenMeters)) m re-ridden"
                 self.toast = "Loop ready"
-                self.mapState.fit(winner.1.legs.flatMap { $0.response.coordinates })
-            } else {
-                self.errorMessage = "No clean circuit found without substantial backtracking. Try another direction or distance."
+                self.mapState.fit(built.legs.flatMap { $0.response.coordinates })
+            } catch is CancellationError {
+                return
+            } catch {
+                guard self.loopRunID == runID else { return }
+                self.errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
             self.refreshMap()
         }
@@ -1113,7 +1116,7 @@ final class RoutePlannerModel {
                 detail: "Creating the route to your waypoint"
             )
         default:
-            if message.hasPrefix("Finding loop ") {
+            if message.hasPrefix("Finding loop") {
                 return ProgressToastContent(
                     title: message,
                     detail: "Comparing roads for your round trip"

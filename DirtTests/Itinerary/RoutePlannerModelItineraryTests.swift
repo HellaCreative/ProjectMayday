@@ -70,12 +70,9 @@ struct RoutePlannerModelItineraryTests {
     }
 
     @Test func loopSearchUsesPersistentAnimatedProgressContent() {
-        for number in 1...6 {
-            let message = "Finding loop \(number) of 6"
-            #expect(RoutePlannerModel.isPersistentProgressToast(message))
-            #expect(RoutePlannerModel.progressToastContent(for: message)?.title == message)
-            #expect(RoutePlannerModel.progressToastContent(for: message)?.detail == "Comparing roads for your round trip")
-        }
+        #expect(RoutePlannerModel.isPersistentProgressToast("Finding loop"))
+        #expect(RoutePlannerModel.progressToastContent(for: "Finding loop")?.title == "Finding loop")
+        #expect(RoutePlannerModel.progressToastContent(for: "Finding loop")?.detail == "Comparing roads for your round trip")
         #expect(!RoutePlannerModel.isPersistentProgressToast("Route overview"))
     }
 

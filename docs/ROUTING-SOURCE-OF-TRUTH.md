@@ -151,11 +151,12 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 ### Loop and navigation handoff
 
 Preserve the accepted Loop experience while repairing destination routing.
-A loop returns to its original start, seeks a circuit with limited retracing,
-and respects the configured target and preferred exploration direction.
-That direction is not a mandatory first bearing. Shared access roads may be
-necessary; a perfect circle is not promised. Initial refuelling does not replace
-the original return anchor. Do not incidentally reopen Loop tuning.
+A loop is the rider's start pin, a heading, and a target distance. Outbound is
+one styled search to about half the target (the fog-of-war cap); the far point
+is wherever that ride reached, saved as a draggable rider waypoint. Return is
+one styled search that excludes outbound edges. The rider's style is never
+overridden on any leg. Shared access roads may be necessary; a perfect circle
+is not promised. Do not silently return a folded circuit.
 
 Navigation receives the same chosen route and ordered named stages. Recalculation
 preserves completed progress, remaining rider anchors, and fuel state. Cue,
@@ -324,6 +325,10 @@ code comment disagrees, this contract wins.
 6. Wander sets how far the ride may roam: tight and direct at low wander, big
    S-curves and wide swings at high wander. It sets how much of each leg's ridden
    distance may go sideways instead of toward the next rider waypoint.
+
+Loops are rides. Generate Loop uses the rider's start pin, a heading, and a
+target distance. Outbound and return are ordinary styled legs (rule 2) and
+must obey leg shape (rule 3). The app never changes a loop leg's style.
 
 **Waypoints and experience**
 
@@ -650,7 +655,7 @@ are still proposal-only until Stage 3.
 | Pump pick | `RiderLeg.fuelStopOverrides: [String: String]` | Departure anchor (`from.uuidString` or previous `stationID`) → chosen `stationID`. |
 | Rider drag | `ItineraryAction.move(waypointID:to:)` | Marker `wp:{UUID}`. Confirm-then-rebuild. `reduce` sets `rebuildFromLegIndex = max(0, waypointIndex-1)` and `rebuildThroughLegIndex = nil` → rebuilds the **suffix**, then fuel re-solves. |
 | Fuel “drag” | `RoutePlannerModel.moveFuelStop` / `beginPlannerPinDrag` | Separate path. Drop must land on `validFuelTargets` within 5 km (or a probed replacement). Writes `setFuelStopOverride`. Not free placement. |
-| Loop (Generate) | `LoopPlan.anchors` → `ItineraryAction.replaceAll` | Five rider coordinates `[start, left, far, right, start]` (or mirrored). Last point is a **new** `RiderWaypoint` whose coordinate equals the first; two UUIDs, same place. Fuel then runs per `RiderLeg`. |
+| Loop (Generate) | start + heading + target → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is chosen by the outbound ride, not a trigonometric box. Both legs keep the rider's style. Fuel is not consulted while building. |
 | Loop (Plan close) | `closeLoop()` → `.append(coordinate: start)` | Same: extra rider waypoint at the start pin, not a special route type. |
 | Saved library | `SavedRoute` (`SwiftData`) | `coordinatesData` (full polyline), `segmentsData?`, `profileRawValue` (one profile for the whole record), `ridePreferencesData?`, `routeSeedsData?`, stats. **No `RiderItinerary`.** |
 | Reopen | `loadSavedRoute` → `applyStoredRouteGeometry` | Frozen `.saved` track with pins `start`/`dest`. Does not restore waypoints or fuel stops. Re-planning requires a new From Here / Plan. |
@@ -775,8 +780,8 @@ not a re-solve.
 
 #### 4. Loops
 
-No loop-specific fuel type. Generate Loop already materializes rider waypoints
-`[start, side, far, side, start]`. Plan “close loop” already `.append`s the
+No loop-specific fuel type. Generate Loop materializes rider waypoints
+`[start, far, start]`. Plan “close loop” already `.append`s the
 start coordinate as a new `.rider` with a new `id`.
 
 The “final destination” is that last `.rider` row. Chaining in §1 runs inside

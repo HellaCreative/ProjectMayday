@@ -12,6 +12,8 @@ import DirtRoutingEngine
 //   DIRT_PROBE_COMPACT=1           omit geometry and edge IDs; their hash is always printed
 //   DIRT_DIRT_PAVEMENT_AWAY=<n>    Dirt pavement away multiplier at full wander (10/4/2/1)
 //   DIRT_WANDER=<0..1>             detour appetite (default 1)
+//   DIRT_LOOP_METERS=<n>           build a loop of n metres from FROM; TO is ignored
+//   DIRT_LOOP_BEARING_DEG=<n>      compass degrees (0=north, 90=east); default 0
 let arguments = Array(CommandLine.arguments.dropFirst())
 let environment = ProcessInfo.processInfo.environment
 guard (8...12).contains(arguments.count),
@@ -142,6 +144,38 @@ do {
             "destinationEscapeMeters":plan.destinationEscapeMeters as Any? ?? NSNull(),
             "foundationMeters":plan.foundation?.distanceMeters as Any? ?? NSNull(),
             "pops":plan.routes.reduce(0) { $0+$1.poppedLabels},"limit":plan.limit as Any? ?? NSNull()]) { $1 }
+    } else if let loopMeters = environment["DIRT_LOOP_METERS"].flatMap(Double.init), loopMeters > 0 {
+        guard let indexed else { throw RoutingFailure.invalidRequest("loop needs a prepared graph") }
+        let heading = (environment["DIRT_LOOP_BEARING_DEG"].flatMap(Double.init) ?? 0) * .pi / 180
+        var loop = LoopRequest(start: request.start, headingRadians: heading, targetMeters: loopMeters,
+                               style: style, allowUnknown: allowUnknown, seed: seed)
+        loop.profile = request.profile
+        loop.access = request.access
+        loop.options = request.options
+        loop.mapZoom = request.mapZoom
+        loop.matchRadiusMeters = request.matchRadiusMeters
+        let planned = try LoopPlanner(pack: indexed).plan(loop, budget: budget)
+        let result = planned.combined
+        let quality = RouteQuality(route: result)
+        let edgeIDs = result.segments.map(\.edgeID)
+        output.merge(["status":"complete",
+            "matchedStart":[result.start.coordinate.longitude,result.start.coordinate.latitude],
+            "matchedEnd":[result.end.coordinate.longitude,result.end.coordinate.latitude],
+            "distanceMeters":result.distanceMeters,"knownDirtPercent":quality.knownDirtPercent,
+            "minimumSectionDirtPercent":quality.minimumSectionDirtPercent,
+            "unknownSurfacePercent":quality.unknownPercent,
+            "backwardMeters":quality.backwardMeters,"lateralMeters":quality.lateralMeters,
+            "reriddenMeters":quality.reriddenMeters,"returnMeters":quality.returnMeters,
+            "longestPavedRunMeters":quality.longestPavedRunMeters,"edgeIDsSHA256":sha256(edgeIDs),
+            "loopFar":[planned.far.longitude, planned.far.latitude],
+            "loopRelaxations":planned.relaxations,
+            "outboundMeters":planned.outbound.distanceMeters,
+            "inboundMeters":planned.inbound.distanceMeters,
+            "pops":result.poppedLabels,"limit":result.limit as Any? ?? NSNull()]) { $1 }
+        if !compact {
+            output["edgeIDs"] = edgeIDs
+            output["geometry"] = result.geometry.map { [$0.longitude,$0.latitude] }
+        }
     } else {
         let result: ComputedRoute
         if stageLong, let packRepository {

@@ -39,6 +39,11 @@ public struct SearchOptions: Sendable {
     /// short matrix routes stay identical. Long internal stages pass a few
     /// hundred kilometres so unused far-side provinces stay unexpanded.
     public var compassMaxRemaining: Double = .infinity
+    /// Loop outbound: expand to `maximumMeters` and take the frontier as the
+    /// far point. Destination arrival is ignored. Heading is compass radians
+    /// (0 = north). Unset keeps A→B search identical.
+    public var expandToCap = false
+    public var headingRadians: Double? = nil
     /// Fuel hops: blend a dirt-scaled geodesic pull so pavement search still
     /// prefers progress toward the hop end without drowning the dirt-rate cost
     /// (see `heapCost` — pull is 2× dirtWeight × geoKm, not raw geoKm).
@@ -221,9 +226,17 @@ public struct PathSearch: Sendable {
                     min(startAlong,match.alongMeters),max(startAlong,match.alongMeters))
             }
         }
-        attachEnd(end)
-        for extra in options.additionalEnds { attachEnd(extra) }
+        if !options.expandToCap {
+            attachEnd(end)
+            for extra in options.additionalEnds { attachEnd(extra) }
+        }
         func point(_ n: Int) -> Coordinate { n == startNode ? start.coordinate : n == endNode ? end.coordinate : pack.coordinate(node: n) }
+        func headingProgress(_ p: Coordinate) -> Double {
+            guard let heading = options.headingRadians else { return 0 }
+            let delta = p.longitude == start.coordinate.longitude && p.latitude == start.coordinate.latitude
+                ? 0 : start.coordinate.bearing(to: p) - heading
+            return start.coordinate.distance(to: p) * cos(delta)
+        }
         let customerStart = try customerEdges(match: start,seeds: virtual[startNode] ?? [],reverse: false,
                                               enabled: access.startIsCustomer,budget: budget)
         let endSeeds = (virtual[ea] ?? []).filter { $0.target == endNode }.map {
@@ -270,6 +283,11 @@ public struct PathSearch: Sendable {
             return compass[node]
         }
         func heapCost(_ pathCost: Double, _ node: Int) -> Double {
+            if options.expandToCap {
+                let left = max(0, options.maximumMeters - max(0, headingProgress(point(node))))
+                let weight = policy.style == .cleanest ? 0.69 : 0.25
+                return pathCost + left / 1000 * weight
+            }
             let geoKm = point(node).distance(to: end.coordinate) / 1000
             if options.objective == .distance {
                 return pathCost + geoKm
@@ -318,8 +336,10 @@ public struct PathSearch: Sendable {
         let prior = options.priorEdges
         let penalized = options.penalizedDirtEdges
         let needIdentity = !avoid.isEmpty || !prior.isEmpty || !penalized.isEmpty
-        let startRemaining = remaining(of: startNode)
-        let useRoadProgress = compass != nil && startRemaining.isFinite && !startRemaining.isInfinite
+        let startRemaining = options.expandToCap ? options.maximumMeters : remaining(of: startNode)
+        let useHeadingProgress = options.expandToCap && options.headingRadians != nil
+            && options.objective != .distance && !options.disableProgressRegression
+        let useRoadProgress = !useHeadingProgress && compass != nil && startRemaining.isFinite && !startRemaining.isInfinite
             && options.objective != .distance && !options.disableProgressRegression
             && policy.style != .cleanest
         let regression = (options.objective == .distance || options.disableProgressRegression)
@@ -338,7 +358,7 @@ public struct PathSearch: Sendable {
             let current = labels[entry.label]
             guard bestIndex(current.state) == entry.label else { continue }
             pops += 1
-            if current.state.node == endNode {
+            if current.state.node == endNode, !options.expandToCap {
                 goals.append(entry.label)
                 if resource {
                     if policy.style == .balanced && abs((options.precedingDirtMeters+current.dirtMeters)/max(1,options.precedingMeters+current.meters)-0.5) <= 0.005 { break }
@@ -377,7 +397,11 @@ public struct PathSearch: Sendable {
                 let e = arc.edge
                 let physicalEdge = pack.restrictionEdge(e)
                 if let previous = current.arc, previous.edge == e, current.state.node < pack.nodeCount { continue }
-                if !avoid.isEmpty && pack.matches(e, identities: avoid) { continue }
+                if !avoid.isEmpty && pack.matches(e, identities: avoid) {
+                    let leavingPin = current.state.node == startNode
+                    let arrivingPin = arc.target == endNode
+                    if !leavingPin && !arrivingPin { continue }
+                }
                 let isStart = e == start.edge || customerStart.contains(e)
                 let isEnd = e == end.edge || extraEndEdges.contains(e) || customerEnd.contains(e)
                 if !access.permits(pack.accessCode(e,forward: arc.forward),isStart: isStart,isEnd: isEnd) { continue }
@@ -407,18 +431,23 @@ public struct PathSearch: Sendable {
                     if options.maximumMeters.isFinite {
                         frontierHits.append((entry.label, current.meters, current.state.node))
                         options.profile?.meterRejects += 1
+                        if options.expandToCap, current.meters >= options.maximumMeters * 0.8 {
+                            break search
+                        }
                     }
                     continue
                 }
                 let fromPoint = point(current.state.node), toPoint = point(arc.target)
                 let left = remaining(of: arc.target)
                 let progress: Double
-                if useRoadProgress && left.isFinite {
+                if useHeadingProgress {
+                    progress = headingProgress(toPoint)
+                } else if useRoadProgress && left.isFinite {
                     progress = startRemaining - left
                 } else {
                     progress = RouteQuality.progress(toPoint, start.coordinate, end.coordinate)
                 }
-                if useRoadProgress && left.isFinite {
+                if useHeadingProgress || (useRoadProgress && left.isFinite) {
                     if current.peakProgress - progress > backwardAllowance {
                         options.boundary?.touched = true
                         options.profile?.regressionRejects += 1
@@ -568,7 +597,12 @@ public struct PathSearch: Sendable {
             let lastEdge = lastArc?.edge ?? end.edge
             let ends = [end] + options.additionalEnds
             var arrived = ends.first { $0.edge == lastEdge }
-            if arrived == nil, let lastArc {
+            if options.expandToCap, let lastArc {
+                let coord = clippedGeometry(lastArc).last ?? pack.coordinate(node: pack.endpoint(lastArc.edge, from: lastArc.forward))
+                arrived = RoadMatch(edge: lastArc.edge, coordinate: coord, distanceMeters: 0,
+                                    alongMeters: lastArc.upper, geometryMeters: pack.distance(lastArc.edge),
+                                    forward: lastArc.forward)
+            } else if arrived == nil, let lastArc {
                 let coord = clippedGeometry(lastArc).last ?? end.coordinate
                 if let nearest = ends.min(by: {
                     $0.coordinate.distance(to: coord) < $1.coordinate.distance(to: coord)
@@ -620,6 +654,21 @@ public struct PathSearch: Sendable {
             }
             return adjusted(a) < adjusted(b)
         }), let result = reconstruct(chosen) else {
+            if options.expandToCap {
+                let heading = options.headingRadians ?? 0
+                let near = options.maximumMeters.isFinite ? options.maximumMeters * 0.8 : 0
+                func score(_ hit: (label: Int, meters: Double, node: Int)) -> Double {
+                    let at = point(hit.node)
+                    let align = start.coordinate.distance(to: at) < 1
+                        ? 1 : max(0, cos(start.coordinate.bearing(to: at) - heading))
+                    return hit.meters * (0.3 + 0.7 * align)
+                }
+                let pool = frontierHits.filter { $0.meters >= near }
+                let ranked = (pool.isEmpty ? frontierHits : pool).sorted { score($0) > score($1) }
+                if let hit = ranked.first, let route = reconstruct(hit.label) {
+                    return .reached(route)
+                }
+            }
             if options.maximumMeters.isFinite, !frontierHits.isEmpty {
                 let nearCutoff = options.maximumMeters * 0.8
                 var seen = Set<Int>()

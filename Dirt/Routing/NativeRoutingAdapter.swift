@@ -54,6 +54,18 @@ nonisolated enum NativeRoutingAdapter {
         case .resourceLimit: return "The route calculation reached its limit before it could finish. Your points are preserved."
         }
     }
+    static func message(_ failure: LoopFailure) -> String {
+        switch failure {
+        case .noOutbound:
+            return "No ride could be built from here in that direction. Try another heading or a shorter distance."
+        case .noReturn(_, let offered, let detail):
+            if let offered {
+                let km = Int((offered / 1000).rounded())
+                return "\(detail) A \(km) km loop is the distance that closed without re-riding the outbound."
+            }
+            return "\(detail) Try another direction or a shorter distance."
+        }
+    }
     static func accessName(_ code: UInt8) -> String {
         switch code { case 0: "motorized_permissive"; case 1: "motorized_unknown"; case 3: "destination"; case 4: "customers"; default: "motorized_prohibited" }
     }
@@ -196,6 +208,26 @@ actor NativeRoutingSession {
             return result
         } catch {
             log("pack route failed",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
+                outcome: "error=\(error)")
+            throw error
+        }
+    }
+    func loop(_ request: LoopRequest, directories: [String:URL]) throws -> LoopPlanResult {
+        let started = ContinuousClock.now
+        let budget = ComputationBudget(seconds: 60)
+        let counter = request.options.counter ?? SearchCounter()
+        var request = request
+        request.options.counter = counter
+        var prepared = 0, prepareDetail: String?
+        do {
+            let preparation = try prepare(directories, budget: budget)
+            prepared = elapsedMs(from: started); prepareDetail = preparation.detail
+            let result = try LoopPlanner(pack: preparation.graph).plan(request, budget: budget)
+            log("pack loop", started: started, prepared: prepared, prepareDetail: prepareDetail, counter: counter,
+                outcome: "outbound=\(Int(result.outbound.distanceMeters.rounded())) inbound=\(Int(result.inbound.distanceMeters.rounded())) far=\(String(format: "%.5f", result.far.longitude)),\(String(format: "%.5f", result.far.latitude)) relax=[\(result.relaxations.joined(separator: ","))]")
+            return result
+        } catch {
+            log("pack loop failed", started: started, prepared: prepared, prepareDetail: prepareDetail, counter: counter,
                 outcome: "error=\(error)")
             throw error
         }
