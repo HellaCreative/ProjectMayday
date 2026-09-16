@@ -299,7 +299,7 @@ struct GroupDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: DirtSpace.inner) {
                 HStack {
                     Text("\(group.memberCount) riders · \(group.liveCount) sharing")
                         .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
@@ -315,41 +315,44 @@ struct GroupDetailView: View {
                             Spacer()
                             Text(invite.lowercased()).monospaced()
                             Image(systemName: "doc.on.doc")
-                        }.font(DirtType.rowTitle).frame(minHeight: 44)
+                        }.font(DirtType.rowTitle).frame(minHeight: DirtHit.min)
                     }
                     .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
                     .padding(.horizontal, DirtSpace.row)
                     .dirtGroupingSurface()
                 }
-                ownSharingCard
-                VStack(alignment: .leading, spacing: 0) {
-                    DirtSectionLabel(title: "Other members")
-                        .padding(.horizontal, DirtSpace.inner)
-                        .padding(.top, DirtSpace.inner)
-                        .padding(.bottom, DirtSpace.tight)
-                    ForEach(otherMembers) { member in riderRow(member) }
-                    if otherMembers.isEmpty {
-                        Text("No other members yet")
-                            .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.muted)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, DirtSpace.group)
-                    }
-                    if let error = groups.errorMessage {
-                        Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
-                    }
-                    Button(group.role == "owner" ? "Delete group" : "Leave group", role: .destructive) {
-                        Task {
-                            if group.role == "owner" { await groups.deleteGroup(group) }
-                            else { await groups.leaveGroup(group) }
-                        }
-                    }
-                    .disabled(groups.isMutatingGroup)
-                    .font(DirtType.helper).frame(minHeight: 44).padding(.top, 10)
+
+                ForEach(rosterMembers) { member in
+                    riderRow(member)
                 }
-                .dirtGroupingSurface(radius: DirtRadius.card)
+
+                if rosterMembers.isEmpty {
+                    Text("No riders yet")
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DirtSpace.group)
+                        .dirtGroupingSurface(radius: DirtRadius.card)
+                }
+
+                if let error = groups.errorMessage {
+                    Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
+                }
+
+                Button(group.role == "owner" ? "Delete group" : "Leave group", role: .destructive) {
+                    Task {
+                        if group.role == "owner" { await groups.deleteGroup(group) }
+                        else { await groups.leaveGroup(group) }
+                    }
+                }
+                .disabled(groups.isMutatingGroup)
+                .font(DirtType.helper)
+                .frame(minHeight: DirtHit.min)
+                .padding(.top, DirtSpace.tight)
             }
             .padding(.horizontal, DirtSpace.group)
+            .padding(.top, DirtSpace.inner)
+            .padding(.bottom, DirtSpace.group)
             .background(
                 GeometryReader { geo in
                     Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
@@ -372,86 +375,33 @@ struct GroupDetailView: View {
         }
     }
 
-    private var otherMembers: [GroupMemberRow] {
-        groups.members.filter { $0.userID != app.supabase.userID }
+    /// You first, then everyone else. If presence hasn't landed yet, still show a me-row
+    /// so Start/Stop sharing isn't missing.
+    private var rosterMembers: [GroupMemberRow] {
+        let selfID = app.supabase.userID
+        let others = groups.members.filter { $0.userID != selfID }
+        if let own = groups.members.first(where: { $0.userID == selfID }) {
+            return [own] + others
+        }
+        guard let selfID else { return others }
+        return [
+            GroupMemberRow(
+                userID: selfID,
+                role: group.role,
+                displayName: ownDisplayName,
+                isLive: groups.isSharing,
+                latitude: nil,
+                longitude: nil,
+                status: groups.isSharing ? groups.status : "offline",
+                lastSeenAt: nil,
+                accuracyMeters: nil
+            )
+        ] + others
     }
 
     private var ownDisplayName: String {
         let name = app.supabase.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         return name.isEmpty ? "You" : name
-    }
-
-    private var ownSharingCard: some View {
-        VStack(alignment: .leading, spacing: DirtSpace.inner) {
-            HStack(alignment: .center, spacing: DirtSpace.inner) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(ownDisplayName)
-                        .font(DirtType.rowTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DirtTheme.ink)
-                    Text(ownSharingHelper)
-                        .font(DirtType.helper)
-                        .foregroundStyle(DirtTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                Button(groups.isSharing ? "Stop sharing" : "Start sharing") {
-                    DirtMotion.medium()
-                    withAnimation(DirtMotion.affordance) {
-                        app.planner.toast = groups.toggleSharingFromUI()
-                    }
-                }
-                .font(DirtType.chip)
-                .fontWeight(.bold)
-                .padding(.horizontal, 10)
-                .frame(minHeight: DirtHit.min)
-                .foregroundStyle(groups.isSharing ? Color.white : DirtTheme.onOrange)
-                .background(
-                    groups.isSharing ? DirtTheme.chrome : DirtTheme.orange,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
-                .accessibilityLabel(groups.isSharing ? "Stop sharing location" : "Start sharing location")
-
-                Menu {
-                    ForEach(GroupsViewModel.selectableStatuses, id: \.self) { status in
-                        Button(GroupsViewModel.statusLabel(status)) { groups.setStatus(status) }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("Status")
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                    .font(DirtType.chip)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DirtTheme.ink)
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: DirtHit.min)
-                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-                .dirtDropdownSurface()
-                .disabled(!groups.isSharing)
-                .accessibilityLabel("Share status")
-                .accessibilityHint(groups.isSharing ? "Choose the status your riders see" : "Start sharing to set status")
-            }
-
-            if let distress = groups.distressScopeCopy {
-                Text(distress)
-                    .font(DirtType.helper)
-                    .foregroundStyle(DirtTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(DirtSpace.row)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dirtGroupingSurface()
-    }
-
-    private var ownSharingHelper: String {
-        if groups.isSharing {
-            return groups.isWaitingForLocation ? "Waiting for GPS" : groups.sharingScopeCopy
-        }
-        return "Share your position and status with this group."
     }
 
     private func locationKey(_ member: GroupMemberRow) -> String {
@@ -465,52 +415,156 @@ struct GroupDetailView: View {
 
     private func riderRow(_ member: GroupMemberRow) -> some View {
         let expanded = expandedRider == member.id
+        let own = member.userID == app.supabase.userID
         let status = member.isLive ? (member.status ?? "riding") : "offline"
-        let color: Color = !member.isLive ? DirtTheme.muted : (status == "riding" ? DirtTheme.navGreen : (status == "injured" || status == "unrepairable" ? DirtTheme.danger : DirtTheme.action))
+        let color: Color = !member.isLive
+            ? DirtTheme.muted
+            : (status == "riding"
+                ? DirtTheme.navGreen
+                : (status == "injured" || status == "unrepairable" ? DirtTheme.danger : DirtTheme.action))
         return VStack(alignment: .leading, spacing: 0) {
             Button {
+                DirtMotion.light()
                 withAnimation(DirtMotion.affordance) { expandedRider = expanded ? nil : member.id }
             } label: {
-                HStack(spacing: 8) {
-                    Circle().fill(member.isLive ? DirtTheme.navGreen : DirtTheme.muted.opacity(0.4))
+                HStack(spacing: DirtSpace.inner) {
+                    Circle()
+                        .fill(member.isLive ? DirtTheme.navGreen : DirtTheme.muted.opacity(0.4))
                         .frame(width: 7, height: 7)
-                    Text(member.displayName).font(DirtType.rowTitle).fontWeight(.bold)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Current location").font(.caption2).foregroundStyle(DirtTheme.muted)
-                        Text(member.isLive ? (locationKeys[member.id] == locationKey(member) ? (locations[member.id] ?? coordinateLabel(member)) : coordinateLabel(member)) : "Unavailable")
-                            .font(.caption).lineLimit(2)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+                        Text(own ? ownDisplayName : member.displayName)
+                            .font(DirtType.rowTitle)
+                            .fontWeight(.bold)
+                        if own {
+                            Text("You")
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.muted)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Current location")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                        Text(
+                            member.isLive
+                                ? (locationKeys[member.id] == locationKey(member)
+                                    ? (locations[member.id] ?? coordinateLabel(member))
+                                    : coordinateLabel(member))
+                                : "Unavailable"
+                        )
+                        .font(DirtType.helper)
+                        .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Text(member.isLive ? GroupsViewModel.statusLabel(status) : "Offline")
-                        .font(.caption.weight(.semibold)).foregroundStyle(color)
-                        .padding(.horizontal, 8).padding(.vertical, 6)
-                        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+                        .font(DirtType.chip)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(color)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
                 .foregroundStyle(DirtTheme.ink)
-                .padding(.horizontal, 8).frame(minHeight: 62)
-                .contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityValue(expanded ? "Expanded" : "Collapsed")
+                .padding(.horizontal, DirtSpace.row)
+                .padding(.vertical, DirtSpace.tight)
+                .frame(minHeight: 62)
+                .contentShape(RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(own ? "\(ownDisplayName), you" : member.displayName)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(own ? "Opens sharing and status" : "Opens rider actions")
+
             if expanded {
-                HStack(spacing: 8) {
+                riderRowActions(member, own: own)
+            }
+        }
+        .background(expanded ? DirtTheme.wash : DirtTheme.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                .stroke(own ? DirtTheme.orange.opacity(0.45) : DirtTheme.hairline, lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private func riderRowActions(_ member: GroupMemberRow, own: Bool) -> some View {
+        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+            HStack(spacing: DirtSpace.inner) {
+                if own {
+                    Menu {
+                        ForEach(GroupsViewModel.selectableStatuses, id: \.self) { status in
+                            Button(GroupsViewModel.statusLabel(status)) { groups.setStatus(status) }
+                        }
+                    } label: {
+                        Label("Status", systemImage: "slider.horizontal.3")
+                    }
+                    .dirtDropdownSurface()
+                    .disabled(!groups.isSharing)
+                    .accessibilityLabel("Share status")
+                    .accessibilityHint(groups.isSharing ? "Choose the status your riders see" : "Start sharing to set status")
+                    Spacer()
+                    Button(groups.isSharing ? "Stop sharing" : "Start sharing") {
+                        DirtMotion.medium()
+                        withAnimation(DirtMotion.affordance) {
+                            app.planner.toast = groups.toggleSharingFromUI()
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: DirtHit.min)
+                    .foregroundStyle(groups.isSharing ? Color.white : DirtTheme.onOrange)
+                    .background(
+                        groups.isSharing ? DirtTheme.chrome : DirtTheme.orange,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .accessibilityLabel(groups.isSharing ? "Stop sharing location" : "Start sharing location")
+                } else {
                     Button {
                         if let lat = member.latitude, let lon = member.longitude {
                             app.mapState.fly(to: RouteCoordinate(longitude: lon, latitude: lat), zoom: 13)
                             onClose()
                         }
-                    } label: { Label("View on map", systemImage: "map") }
+                    } label: {
+                        Label("View on map", systemImage: "map")
+                    }
                     Spacer()
                     Button {
-                        guard let lat = member.latitude, let lon = member.longitude, let seen = member.lastSeenAt else { return }
-                        app.planner.routeToMember(GroupMemberRouteTarget(groupID: group.id, userID: member.userID, displayName: member.displayName, coordinate: RouteCoordinate(longitude: lon, latitude: lat), lastSeenAt: seen, accuracyMeters: member.accuracyMeters, isLive: member.isLive))
+                        guard let target = member.routeTarget(groupID: group.id) else { return }
+                        app.planner.routeToMember(target)
                         onRoute()
-                    } label: { Label("Route to rider", systemImage: "arrow.triangle.turn.up.right.diamond") }
+                    } label: {
+                        Label("Route to rider", systemImage: "arrow.triangle.turn.up.right.diamond")
+                    }
                 }
-                .font(.caption.weight(.semibold)).buttonStyle(.plain).tint(DirtTheme.action)
-                .frame(minHeight: 44).padding(.horizontal, 10).padding(.bottom, 6)
-                .disabled(!member.isLive || member.latitude == nil || member.longitude == nil)
+            }
+            .font(DirtType.chip)
+            .fontWeight(.semibold)
+            .buttonStyle(.plain)
+            .tint(DirtTheme.action)
+            .frame(minHeight: DirtHit.min)
+            .disabled(!own && member.routeTarget(groupID: group.id) == nil)
+
+            if own {
+                Text(ownSharingHelper)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let distress = groups.distressScopeCopy {
+                    Text(distress)
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
-        .background(expanded ? DirtTheme.wash : .clear, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(alignment: .bottom) { Divider() }
+        .padding(.horizontal, DirtSpace.row)
+        .padding(.bottom, DirtSpace.inner)
+    }
+
+    private var ownSharingHelper: String {
+        if groups.isSharing {
+            return groups.isWaitingForLocation ? "Waiting for GPS" : groups.sharingScopeCopy
+        }
+        return "Share your position and status with this group."
     }
 }
