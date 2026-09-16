@@ -52,8 +52,6 @@ struct BuiltLeg: Equatable, Sendable {
     let fromCoordinate: RouteCoordinate
     let toCoordinate: RouteCoordinate
     let endsAtFuelStop: FuelStop?
-    /// True when this hop ends at a generated 350–400 km distance-break waypoint.
-    let endsAtDistanceBreak: Bool
     let response: RouteResponse
     let fuelUsedOnArrivalMeters: Double
     /// The effective profile for this generated hop. Nil decodes legacy/test
@@ -66,7 +64,6 @@ struct BuiltLeg: Equatable, Sendable {
         fromCoordinate: RouteCoordinate,
         toCoordinate: RouteCoordinate,
         endsAtFuelStop: FuelStop?,
-        endsAtDistanceBreak: Bool = false,
         response: RouteResponse,
         fuelUsedOnArrivalMeters: Double,
         routeProfile: RouteProfile? = nil,
@@ -76,7 +73,6 @@ struct BuiltLeg: Equatable, Sendable {
         self.fromCoordinate = fromCoordinate
         self.toCoordinate = toCoordinate
         self.endsAtFuelStop = endsAtFuelStop
-        self.endsAtDistanceBreak = endsAtDistanceBreak
         self.response = response
         self.fuelUsedOnArrivalMeters = fuelUsedOnArrivalMeters
         self.routeProfile = routeProfile
@@ -88,7 +84,6 @@ struct BuiltLeg: Equatable, Sendable {
             && lhs.fromCoordinate == rhs.fromCoordinate
             && lhs.toCoordinate == rhs.toCoordinate
             && lhs.endsAtFuelStop == rhs.endsAtFuelStop
-            && lhs.endsAtDistanceBreak == rhs.endsAtDistanceBreak
             && lhs.fuelUsedOnArrivalMeters == rhs.fuelUsedOnArrivalMeters
             && lhs.routeProfile == rhs.routeProfile
             && lhs.validFuelTargets.map(\.id) == rhs.validFuelTargets.map(\.id)

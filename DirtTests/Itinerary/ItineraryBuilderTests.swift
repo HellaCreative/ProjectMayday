@@ -51,7 +51,6 @@ struct ItineraryBuilderTests {
         let dirtPlans = dirtSource.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
         #expect(dirtPlans.isEmpty)
         #expect(dirt.legs.filter { $0.endsAtFuelStop != nil }.isEmpty)
-        #expect(dirt.legs.filter(\.endsAtDistanceBreak).isEmpty)
         let dirtMeters = dirt.legs.reduce(0.0) { $0 + ($1.response.distanceMeters ?? 0) }
         let dirtShare = dirt.legs.reduce(0.0) {
             $0 + Double($1.response.dirtPercent) * ($1.response.distanceMeters ?? 0)
@@ -69,19 +68,16 @@ struct ItineraryBuilderTests {
         #expect(clean.legs.first?.endsAtFuelStop == nil)
     }
 
-    @Test func single475KmLegBuildsADistanceBreakAndTwoLegs() async throws {
+    @Test func single475KmLegStaysOneBuiltLeg() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
         source.distances[key(points[0], points[1])] = 475_000
 
         let result = await build(points, source: source, usable: 237_500)
 
-        #expect(result.legs.count == 2)
-        #expect(result.legs[0].endsAtDistanceBreak)
+        #expect(result.legs.count == 1)
         #expect(result.legs[0].endsAtFuelStop == nil)
-        #expect(!result.legs[1].endsAtDistanceBreak)
-        #expect((result.legs[0].response.distanceMeters ?? 0) <= 400_000)
-        #expect((result.legs[1].response.distanceMeters ?? 0) <= 400_000)
+        #expect((result.legs[0].response.distanceMeters ?? 0) == 475_000)
         #expect(source.fuelChainRequests.isEmpty)
     }
 
@@ -122,7 +118,6 @@ struct ItineraryBuilderTests {
 
         #expect(result.legs.count == 1)
         #expect(result.legs.first?.endsAtFuelStop == nil)
-        #expect(result.legs.filter(\.endsAtDistanceBreak).isEmpty)
         #expect(source.fuelChainRequests.isEmpty)
         #expect(source.routeRequests.count == 1)
         #expect(result.riderLegStatus.values.allSatisfy {

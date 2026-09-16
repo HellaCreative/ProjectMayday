@@ -123,10 +123,10 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 - Rider points and generated fuel stops have distinct stable identities. A
   rider-selected station remains a rider point; generated stops remain F1, F2,
   and so on. Internal regional boundaries are not extra rider waypoints.
-- Fuel stops and distance breaks are movable like rider waypoints (see the owner
-  contract in §5, rule 14). A dropped fuel stop snaps to a mapped pump when one
-  is under it. A replacement must verify legal incoming and onward routing/fuel,
-  retain unaffected earlier stages, and reject stale results.
+- Fuel stops are movable like rider waypoints. A dropped fuel stop snaps to a
+  mapped pump when one is under it. A replacement must verify legal incoming
+  and onward routing/fuel, retain unaffected earlier stages, and reject stale
+  results.
 - A selected rider waypoint highlights and can be dragged. After movement and
   release, ask the rider to confirm placement. Yes initiates rebuilding; No
   permits further refinement. Inserting a draft into a leg alone does not show
@@ -302,8 +302,8 @@ code comment disagrees, this contract wins.
 1. The ride is the product. Every leg between two waypoints is the best, most
    interesting ride in that leg's style. It is never the simplest or shortest
    route.
-2. Every leg is selectable, whatever its waypoints are (rider-placed or distance
-   break). Each leg has its own style and is held to that style's target:
+2. Every leg is selectable. Each leg has its own style and is held to that
+   style's target:
    - Dirt: strive for 100% dirt.
    - Balanced: strive for 50% dirt and 50% pavement on that leg.
    - Clean: strive for 100% pavement on back roads, no highways.
@@ -322,22 +322,18 @@ code comment disagrees, this contract wins.
 
 **Waypoints and experience**
 
-7. Long legs are broken up. Where a leg would run past 350 to 400 km, place a
-   distance-break waypoint and continue from there, so the route builds in
-   pieces the rider can reshape.
-8. Waypoint kinds are rider-placed and distance break. Both are movable with the
-   same drag and confirm. Moving one rebuilds only the legs on either side. Both
-   are saved and restored with the route.
-9. Legs appear one after another as they are built. A long trip may take longer
+7. Waypoint kinds are rider-placed. Long trips stay one rider-to-rider leg until
+   the rider drops their own waypoints on the route to reshape it.
+8. Legs appear one after another as they are built. A long trip may take longer
    to finish; the rider watches it grow.
 
 **Fuel is not part of route building (owner decision, 15 Sep evening)**
 
-10. Route building never consults fuel range, reserve, or pumps, and never places
-    a fuel stop. No fuel windows, sweeps, fans, progress shares, or fuel gap
-    cards take part in building a route. Hunting for fuel while composing the
-    ride produced paved legs and wrong-way detours; the ride comes first.
-11. Fuel becomes an advisory layer in a later phase (below). Until it ships,
+9. Route building never consults fuel range, reserve, or pumps, and never places
+   a fuel stop. No fuel windows, sweeps, fans, progress shares, or fuel gap
+   cards take part in building a route. Hunting for fuel while composing the
+   ride produced paved legs and wrong-way detours; the ride comes first.
+10. Fuel becomes an advisory layer in a later phase (below). Until it ships,
     routes are ridden with the rider's own fuel judgement, and the app must not
     imply a route has been checked for fuel.
 
@@ -626,10 +622,12 @@ whole-route overlap checking as its own tested change.
 
 ### Waypoint-chaining redesign (Stage 0 approved 15 Sep; Stage 1 in progress)
 
-Waypoints are the only mechanism. Rider taps, fuel stops, and distance-based
-breaks are the same kind of object: a point the route passes through. Some are
-rider-movable; all are built with the same bounded, personality-aware per-leg
-search. This replaces “solve fuel as a separate reachability problem.”
+Waypoints are the only mechanism. Rider taps and (later) fuel stops are points
+the route passes through. Distance-break waypoints were removed: a long trip
+stays one rider-to-rider leg until the rider drops their own waypoints on the
+route to reshape it. Some points are rider-movable; all are built with the same
+bounded, personality-aware per-leg search. This replaces “solve fuel as a
+separate reachability problem.”
 
 Owner approved Stage 0 with two Stage 1 fold-ins (below). Persistence formats
 are still proposal-only until Stage 3.
@@ -654,8 +652,8 @@ are still proposal-only until Stage 3.
 
 §2 still says generated fuel points stay bound to mapped stations and are not
 freely draggable. This redesign **supersedes that sentence** if approved: fuel
-and distance-break pins use the same drag/confirm path as rider pins. A fuel
-stop should still prefer a mapped `stationID` when the drop is on a pump.
+pins use the same drag/confirm path as rider pins. A fuel stop should still
+prefer a mapped `stationID` when the drop is on a pump.
 
 #### 1. Single waypoint list
 
@@ -793,11 +791,6 @@ From Here is the two-`.rider` case of the same list (origin, destination).
 
 #### Leg budget and prepare (Stage 1)
 
-- Superseded by the §5 owner contract (15 Sep). First pump: nearest reachable
-  pump by the most direct legal route (rule 8). After that: the sweep and fan
-  choose pumps (rules 9 to 11); shortest distance and `nearestReachable` never
-  pick a pump after the first one; no `planTank` slack factor. Fuel off:
-  distance breaks at 350 to 400 km (rule 13).
 - Fuel on: `legBudgetMeters = FuelRangePrefs.snapshot.usableMeters` after a
   refill; at trip start do **not** invent a remaining-fuel UX (see Backlog).
 - Hard cutoff: do not expand a `PathSearch` label whose accumulated meters
@@ -848,12 +841,13 @@ Do not handle these inside Stages 0–3. After Stages 0–3 are phone-tested,
 resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
 
 - Stage 1 fuel/dirt residual (15 Sep): first-pump approaches remain short
-  distance legs (rule 8). Later `planTank` / `distanceFallback` / dest-closeness
+  distance legs. Later `planTank` / `distanceFallback` / dest-closeness
   picks are removed in Step B (sweep + fan). Do not reopen fuelGoalPull /
-  transition tuning. Step C (wander vs road progress) and Step D (fuel-off
-  350–400 km breaks) wait on phone tests. Still deferred: loops/W at waypoints
-  (rule 3), 1 km dirt rule (rule 4), movable fuel/distance-break save/restore
-  (rule 14), legs appearing as they build (rule 15). `preferredStationIDs` is
+  transition tuning. Step C (wander vs road progress) waits on phone tests.
+  Distance-break waypoints were removed: the rider drops their own waypoints
+  to reshape a long trip (rule 7). Still deferred: loops/W at waypoints
+  (rule 3), 1 km dirt rule (rule 4), movable fuel save/restore, legs appearing
+  as they build (rule 8). `preferredStationIDs` is
   unused. Clean fuel sweeps turn `pavedOnly` off so they can leave an unpaved
   first pump; Clean cost still prefers pavement. Contract probes (180 km
   usable): Yarmouth Dirt/Balanced and north-NB Dirt/Balanced empty-fan gaps;

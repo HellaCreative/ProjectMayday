@@ -498,109 +498,6 @@ struct DirtTests {
         #expect(mix.loosePercent == 0)
     }
 
-    @Test @MainActor func distanceBreakChunksSplitBoundarySegmentsAndPreserveSurface() {
-        let start = RouteCoordinate(longitude: -63.34, latitude: 44.76)
-        let mid = RouteCoordinate(longitude: -64.70, latitude: 46.20)
-        let end = RouteCoordinate(longitude: -66.07, latitude: 47.90)
-        let gravel = RouteSegment(
-            surfaceClass: "gravel",
-            trackClass: "track",
-            accessClass: "motorized_permissive",
-            distanceMeters: 567_252,
-            geometry: [start, mid],
-            coords: nil,
-            edgeId: "dirt-run",
-            surfaceLeaf: "fine_gravel"
-        )
-        let paved = RouteSegment(
-            surfaceClass: "paved",
-            trackClass: "secondary",
-            accessClass: "motorized_permissive",
-            distanceMeters: 333_148,
-            geometry: [mid, end],
-            coords: nil,
-            edgeId: "paved-run",
-            surfaceLeaf: "asphalt"
-        )
-        let response = RouteResponse(
-            status: "complete", error: nil, message: nil,
-            distanceMeters: 900_400,
-            estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
-            geometry: [start, mid, end],
-            segments: [gravel, paved],
-            stats: RouteStats(dirtPercent: 63, pavedPercent: 37, surfaceFamilyMode: "leaf-v3"),
-            maneuvers: nil, warnings: nil,
-            dirtPercentValue: 63, pavedPercentValue: 37
-        )
-
-        let chunks = ItineraryRangeArithmetic.distanceBreakChunks(response)
-        #expect(chunks.count == 3)
-        #expect(chunks[0].endsAtDistanceBreak)
-        #expect(chunks[1].endsAtDistanceBreak)
-        #expect(!chunks[2].endsAtDistanceBreak)
-
-        for chunk in chunks {
-            let meters = chunk.response.distanceMeters ?? 0
-            let segmentSum = (chunk.response.segments ?? []).compactMap(\.distanceMeters).reduce(0, +)
-            #expect(abs(segmentSum - meters) < 0.02)
-            #expect(chunk.response.segments?.isEmpty == false)
-        }
-
-        let painted = MapState.displaySegments(from: chunks.map(\.response))
-        #expect(!painted.isEmpty)
-        #expect(painted.allSatisfy { $0.surfaceKey != SurfaceFamily.unknown.rawValue })
-        #expect(painted.contains { $0.surfaceKey == SurfaceFamily.gravel.rawValue })
-        #expect(painted.contains { $0.surfaceKey == SurfaceFamily.paved.rawValue })
-
-        let mix = RouteSurfaceComposition.from(responses: chunks.map(\.response))
-        #expect(mix.dirtPercent == 63)
-        #expect(mix.pavedPercent == 37)
-        #expect(mix.unknownPercent == 0)
-    }
-
-    @Test @MainActor func distanceBreakChunksOneBreakKeepsSegmentMeterSum() {
-        let start = RouteCoordinate(longitude: -63.34, latitude: 44.76)
-        let end = RouteCoordinate(longitude: -64.86, latitude: 46.66)
-        let gravel = RouteSegment(
-            surfaceClass: "gravel",
-            trackClass: "track",
-            accessClass: "motorized_permissive",
-            distanceMeters: 299_250,
-            geometry: [start, end],
-            coords: nil,
-            edgeId: "g1",
-            surfaceLeaf: "fine_gravel"
-        )
-        let paved = RouteSegment(
-            surfaceClass: "paved",
-            trackClass: "secondary",
-            accessClass: "motorized_permissive",
-            distanceMeters: 175_750,
-            geometry: [start, end],
-            coords: nil,
-            edgeId: "p1",
-            surfaceLeaf: "asphalt"
-        )
-        let response = RouteResponse(
-            status: "complete", error: nil, message: nil,
-            distanceMeters: 475_000,
-            estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
-            geometry: [start, end],
-            segments: [gravel, paved],
-            stats: RouteStats(dirtPercent: 63, pavedPercent: 37, surfaceFamilyMode: "leaf-v3"),
-            maneuvers: nil, warnings: nil,
-            dirtPercentValue: 63, pavedPercentValue: 37
-        )
-        let chunks = ItineraryRangeArithmetic.distanceBreakChunks(response)
-        #expect(chunks.count == 2)
-        for chunk in chunks {
-            let meters = chunk.response.distanceMeters ?? 0
-            let segmentSum = (chunk.response.segments ?? []).compactMap(\.distanceMeters).reduce(0, +)
-            #expect(abs(segmentSum - meters) < 0.02)
-        }
-        #expect(RouteSurfaceComposition.from(responses: chunks.map(\.response)).dirtPercent == 63)
-    }
-
     @Test func gpxParserReadsTrackPoints() throws {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -1051,57 +948,104 @@ struct POIActionPolicyTests {
 }
 
 @MainActor
-struct DistanceBreakPackVerificationTests {
-    @Test     @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_PACK_VERIFY"] == "1"))
-    func portersLakeLongDirtRoutesKeepLoggedDirtAfterSlicing() async throws {
+private final class PackSessionRoutingSource: RoutingSource {
+    let name = "pack"
+    private let session: NativeRoutingSession
+    private let directories: [String: URL]
+
+    init(session: NativeRoutingSession, directories: [String: URL]) {
+        self.session = session
+        self.directories = directories
+    }
+
+    func route(_ req: RouteRequest) async throws -> RouteResponse {
+        let native = try NativeRoutingAdapter.request(req)
+        let computed = try await session.route(native, directories: directories)
+        return NativeRoutingAdapter.response(computed)
+    }
+
+    func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
+        FuelChainResponse(
+            status: "complete", error: nil, message: nil, regionIds: nil,
+            stops: [], graphMeters: [], diagnostics: nil
+        )
+    }
+
+    func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
+        nil
+    }
+}
+
+@MainActor
+struct LongRouteNoDistanceBreakTests {
+    @Test(.timeLimit(.minutes(5)))
+    func portersLakeLongDirtRoutesStayOneLegAndKeepLoggedDirt() async throws {
         let packs = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(".build/greenfield-routing-evidence/packs")
         let ns = packs.appendingPathComponent("ns")
         let nb = packs.appendingPathComponent("nb")
+        let qc = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("scripts/pack-fabric/routing/candidates/fabric-v4-20260909-02/packs/qc")
         try #require(FileManager.default.fileExists(atPath: ns.appendingPathComponent("graph.v4.bin").path))
         try #require(FileManager.default.fileExists(atPath: nb.appendingPathComponent("graph.v4.bin").path))
+        try #require(FileManager.default.fileExists(atPath: qc.appendingPathComponent("graph.v4.bin").path))
 
-        let cases: [(name: String, lat: Double, lon: Double, breaks: Int)] = [
-            ("two-break", 47.902233, -66.071079, 2),
-            ("one-break", 46.657892, -64.859104, 1)
+        let cases: [(name: String, lat: Double, lon: Double, regions: [String])] = [
+            ("cape-breton", 46.931127, -60.477673, ["ns", "nb"]),
+            ("gaspe", 48.922934, -64.273363, ["ns", "nb", "qc"])
         ]
+        let origin = RouteCoordinate(longitude: -63.34024797349485, latitude: 44.764804567541226)
         let session = NativeRoutingSession()
-        let directories = ["ns": ns, "nb": nb]
+        let packsByRegion = ["ns": ns, "nb": nb, "qc": qc]
+        let peakBefore = ProcessMemory.megabytes().peak
         for item in cases {
-            let request = RouteRequest(
-                profile: .dirt,
-                locations: [
-                    RouteLocation(latitude: 44.764804567541226, longitude: -63.34024797349485, label: "PL"),
-                    RouteLocation(latitude: item.lat, longitude: item.lon, label: item.name)
-                ],
-                allowUnknown: false,
-                sessionSeed: 3806057305948982,
-                mapZoom: 12.5
-            )
-            let native = try NativeRoutingAdapter.request(request)
-            let computed = try await session.route(native, directories: directories)
-            let response = NativeRoutingAdapter.response(computed)
-            let loggedDirt = response.dirtPercent
-            let chunks = ItineraryRangeArithmetic.distanceBreakChunks(response)
-            #expect(chunks.filter(\.endsAtDistanceBreak).count == item.breaks)
-            for chunk in chunks {
-                let meters = chunk.response.distanceMeters ?? 0
-                let segmentSum = (chunk.response.segments ?? []).compactMap(\.distanceMeters).reduce(0, +)
-                #expect(abs(segmentSum - meters) < 1)
-                #expect(chunk.response.segments?.isEmpty == false)
+            let directories = Dictionary(uniqueKeysWithValues: item.regions.map { ($0, packsByRegion[$0]!) })
+            let source = PackSessionRoutingSource(session: session, directories: directories)
+            let destination = RouteCoordinate(longitude: item.lon, latitude: item.lat)
+            let itinerary = reduce(
+                RiderItinerary(),
+                .replaceAll(
+                    waypoints: [origin, destination],
+                    profile: .dirt,
+                    allowUnknown: false,
+                    avoidMotorways: false,
+                    preferBackRoads: false
+                )
+            ).itinerary
+            let builder = ItineraryBuilder()
+            builder.mapZoom = 12.5
+            let caseStarted = ContinuousClock.now
+            let built = await RoutingSessionContext.$seed.withValue(3806057305948982) {
+                await builder.build(
+                    itinerary,
+                    from: 0,
+                    reuse: nil,
+                    fuel: .routeOnly,
+                    source: .fixed(source),
+                    onProgress: { _ in }
+                )
             }
-            let painted = MapState.displaySegments(from: chunks.map(\.response))
+            #expect(built.legs.count == 1)
+            let response = try #require(built.legs.first?.response)
+            let loggedDirt = response.dirtPercent
+            #expect(response.segments?.isEmpty == false)
+            let painted = MapState.displaySegments(from: [response])
             #expect(painted.contains { $0.surfaceKey == SurfaceFamily.gravel.rawValue || $0.surfaceKey == SurfaceFamily.loose.rawValue })
             #expect(painted.contains { $0.surfaceKey == SurfaceFamily.paved.rawValue })
             #expect(painted.contains { $0.surfaceKey != SurfaceFamily.unknown.rawValue })
-            let card = RouteSurfaceComposition.from(responses: chunks.map(\.response))
-            #expect(card.dirtPercent == loggedDirt)
+            let card = RouteSurfaceComposition.from(responses: [response])
+            #expect(abs(card.dirtPercent - loggedDirt) <= 1)
+            let elapsed = caseStarted.duration(to: .now)
+            let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+            let peak = ProcessMemory.megabytes().peak
             print(
-                "DIRT_PACK_VERIFY \(item.name) km=\(String(format: "%.1f", (response.distanceMeters ?? 0) / 1000)) " +
-                "loggedDirt=\(loggedDirt) cardDirt=\(card.dirtPercent) chunks=\(chunks.count) " +
-                "breaks=\(chunks.filter(\.endsAtDistanceBreak).count)"
+                "LONG_ROUTE \(item.name) legs=\(built.legs.count) km=\(String(format: "%.1f", (response.distanceMeters ?? 0) / 1000)) " +
+                "loggedDirt=\(loggedDirt) cardDirt=\(card.dirtPercent) " +
+                "seconds=\(String(format: "%.1f", seconds)) peakMB=\(peak) (before=\(peakBefore))"
             )
         }
     }

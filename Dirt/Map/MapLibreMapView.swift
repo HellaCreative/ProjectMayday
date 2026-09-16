@@ -1360,7 +1360,7 @@ struct MapLibreMapView: UIViewRepresentable {
             // Fuel pins expose the packed station name on tap. Other planner
             // pins use direct selection/drag behavior and need no callout.
             guard let dirtAnnotation = annotation as? DirtAnnotation else { return false }
-            return dirtAnnotation.kind == .fuel || dirtAnnotation.kind == .distanceBreak
+            return dirtAnnotation.kind == .fuel
         }
 
         func mapView(_ mapView: MLNMapView, didSelect annotation: MLNAnnotation) {
@@ -1554,7 +1554,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 // The annotation coordinate is the tip. The view frame covers the
                 // full body and tip and already reflects the selected scale.
                 let selectedScale: CGFloat = annotation.markerID == state.selectedPlannerPinID ? 1.18 : 1
-                let kindScale: CGFloat = annotation.kind == .fuel || annotation.kind == .distanceBreak ? 0.82 : 1
+                let kindScale: CGFloat = annotation.kind == .fuel ? 0.82 : 1
                 let scale = selectedScale * kindScale
                 let fallbackFrame: CGRect
                 if annotation.markerID.hasPrefix("fuel-target:") {
@@ -1907,7 +1907,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
         if isCustomDragging { restoreMapGestures(reason: "pinReconfigured") }
         isFuelCandidate = annotation.markerID.hasPrefix("fuel-target:")
         labelView.text = annotation.label
-        baseScale = annotation.kind == .fuel || annotation.kind == .distanceBreak ? 0.82 : 1
+        baseScale = annotation.kind == .fuel ? 0.82 : 1
         centerOffset = isFuelCandidate
             ? .zero
             : CGVector(dx: 0, dy: -(Self.pinHeight * baseScale / 2))
@@ -1924,8 +1924,6 @@ final class DirtPlannerPinView: MLNAnnotationView {
             ? "Alternative fuel station, \(title)"
             : annotation.kind == .fuel
             ? "Fuel stop \(annotation.label), \(title)"
-            : annotation.kind == .distanceBreak
-            ? "Distance break \(annotation.label). \(annotation.title ?? "Placed every 350 to 400 kilometers. Drag to move")"
             : "Route pin \(annotation.label)"
         // All planner pins: dark #111820 body + orange circle.
         bodyLayer.fillColor = UIColor(red: 17/255, green: 24/255, blue: 32/255, alpha: 1).cgColor
