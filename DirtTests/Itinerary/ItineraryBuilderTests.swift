@@ -81,7 +81,7 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests.isEmpty)
     }
 
-    @Test func automaticFuelPlanningOffBuildsTheRideWithoutFuelRequests() async throws {
+    @Test func fuelNotificationsOffBuildsTheRideWithoutFuelRequests() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
         source.distances[key(points[0], points[1])] = 300_000
@@ -94,7 +94,7 @@ struct ItineraryBuilderTests {
                 tankMeters: 150_000,
                 usableMeters: 135_000,
                 reservePercent: 10,
-                automaticPlanningEnabled: false
+                notificationsEnabled: false
             ),
             source: .fixed(source),
             onFuelStatus: { fuelMilestones.append($0) },

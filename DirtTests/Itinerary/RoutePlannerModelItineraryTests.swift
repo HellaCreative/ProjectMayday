@@ -10,7 +10,7 @@ struct RoutePlannerModelItineraryTests {
     @Test func profileRebuildReplacesDisplayedGeometryAtTheSameEndpoints() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
-        FuelRangePrefs.automaticPlanningEnabled = false
+        FuelRangePrefs.notificationsEnabled = false
         let source = PlannerFakeRoutingSource()
         let map = MapState()
         let model = makeModel(source: source, mapState: map)
@@ -29,18 +29,18 @@ struct RoutePlannerModelItineraryTests {
         }
     }
 
-    @Test func progressNotificationMatchesAutomaticFuelPlanningState() {
+    @Test func progressNotificationMatchesFuelNotificationsState() {
         let fuelOn = FuelRangePrefs.Snapshot(
             tankMeters: 260_000,
             usableMeters: 247_000,
             reservePercent: 5,
-            automaticPlanningEnabled: true
+            notificationsEnabled: true
         )
         let fuelOff = FuelRangePrefs.Snapshot(
             tankMeters: 260_000,
             usableMeters: 247_000,
             reservePercent: 5,
-            automaticPlanningEnabled: false
+            notificationsEnabled: false
         )
 
         #expect(RoutePlannerModel.initialBuildProgressToast(for: fuelOn)
@@ -721,12 +721,12 @@ private final class PlannerFakeRoutingSource: RoutingSource {
 private struct FuelPrefsRestore {
     let kilometers = FuelRangePrefs.kilometers
     let reserve = FuelRangePrefs.reservePercent
-    let automatic = FuelRangePrefs.automaticPlanningEnabled
+    let notifications = FuelRangePrefs.notificationsEnabled
 
     func restore() {
         FuelRangePrefs.kilometers = kilometers
         FuelRangePrefs.reservePercent = reserve
-        FuelRangePrefs.automaticPlanningEnabled = automatic
+        FuelRangePrefs.notificationsEnabled = notifications
     }
 }
 

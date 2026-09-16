@@ -6,18 +6,18 @@ enum FuelRangePrefs {
         let tankMeters: Double
         let usableMeters: Double
         let reservePercent: Double
-        let automaticPlanningEnabled: Bool
+        let notificationsEnabled: Bool
 
         init(
             tankMeters: Double,
             usableMeters: Double,
             reservePercent: Double,
-            automaticPlanningEnabled: Bool = true
+            notificationsEnabled: Bool = true
         ) {
             self.tankMeters = tankMeters
             self.usableMeters = usableMeters
             self.reservePercent = reservePercent
-            self.automaticPlanningEnabled = automaticPlanningEnabled
+            self.notificationsEnabled = notificationsEnabled
         }
 
         /// Internal route-only diagnostics retain a zero-range snapshot so the
@@ -27,13 +27,13 @@ enum FuelRangePrefs {
             tankMeters: 0,
             usableMeters: 0,
             reservePercent: 0,
-            automaticPlanningEnabled: false
+            notificationsEnabled: false
         )
     }
     static let key = "dirt.rider.fuelRangeKm"
     static let lastEnabledKey = "dirt.rider.lastEnabledFuelRangeKm"
     static let reservePercentKey = "dirt.rider.fuelReservePercent"
-    static let automaticPlanningKey = "dirt.rider.automaticFuelPlanning"
+    static let notificationsEnabledKey = "dirt.rider.fuelNotificationsEnabled"
     /// Sensible dual-sport default when the rider enables the control blank.
     static let suggestedDefaultKm: Double = 200
     static let minimumKm: Double = 40
@@ -63,21 +63,22 @@ enum FuelRangePrefs {
             tankMeters: tankKm * 1_000,
             usableMeters: usableKilometers(for: tankKm, reservePercent: reserve) * 1_000,
             reservePercent: reserve,
-            automaticPlanningEnabled: automaticPlanningEnabled
+            notificationsEnabled: notificationsEnabled
         )
     }
 
-    /// Automatic planning is the safe default. Riders may deliberately turn it
-    /// off and place their own fuel waypoints without losing their saved range.
-    static var automaticPlanningEnabled: Bool {
+    /// Whether Dirt surfaces fuel notifications (ride-start check-ins and fuel-stop
+    /// prompts) during navigation. On by default; riders may turn it off without
+    /// losing their saved range, reserve, or usable-fuel figures.
+    static var notificationsEnabled: Bool {
         get {
-            guard UserDefaults.standard.object(forKey: automaticPlanningKey) != nil else {
+            guard UserDefaults.standard.object(forKey: notificationsEnabledKey) != nil else {
                 return true
             }
-            return UserDefaults.standard.bool(forKey: automaticPlanningKey)
+            return UserDefaults.standard.bool(forKey: notificationsEnabledKey)
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: automaticPlanningKey)
+            UserDefaults.standard.set(newValue, forKey: notificationsEnabledKey)
         }
     }
 

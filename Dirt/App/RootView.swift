@@ -48,6 +48,13 @@ enum ActiveSheet: String, Identifiable {
     var id: String { rawValue }
 }
 
+/// Two questions, maximum, asked once at the very start of a ride when fuel
+/// notifications are on. Never reopens mid-ride.
+enum RideStartFuelPrompt {
+    case fullTank
+    case willFuel
+}
+
 enum NavigationChrome {
     static func showsRideHUD(for phase: NavigationSession.Phase) -> Bool {
         phase == .active
@@ -98,7 +105,12 @@ struct RootView: View {
     @State private var ridePreferencesOpen = false
     @State private var mapFuelRangeKm = FuelRangePrefs.kilometers
     @State private var mapFuelReservePercent = FuelRangePrefs.reservePercent
-    @State private var mapAutomaticFuelPlanning = FuelRangePrefs.automaticPlanningEnabled
+    @State private var mapFuelNotificationsEnabled = FuelRangePrefs.notificationsEnabled
+    /// Ride-start check-in ("Full tank?" → optionally "Will you be fueling up?").
+    @State private var rideStartFuelPrompt: RideStartFuelPrompt?
+    /// One "Did you fuel up?" ask per fuel-stop stage the rider rides past.
+    @State private var fuelStopRefuelPrompt: NavigationStage?
+    @State private var promptedFuelStopStageIDs: Set<String> = []
     @State private var coachStep: CoachStep? = OnboardingPrefs.coachComplete ? nil : .openRoute
     /// Left↔right landscape keeps the same size; this ticket forces chrome to re-read
     /// island-side safe-area insets when the device flips.
@@ -278,10 +290,12 @@ struct RootView: View {
             }
         }
         // Consume a free taste when the live ride actually begins (not on prep cancel).
-        .onChange(of: app.navigation.phase) { _, phase in
-            if phase == .active {
-                app.trial.consumeFreeStartIfNeeded()
-            }
+        // Also covers the fuel-stop hook: `NavigationStage.kind == .fuelStop` already
+        // exists on the itinerary, so riding past one is a one-shot "Did you fuel
+        // up?" ask — no new geofencing. One combined onChange keeps this chain flat.
+        .onChange(of: navigationPhaseAndStage) { old, new in
+            if old.phase != new.phase { handleNavigationPhaseChange(new.phase) }
+            handleNavigationStageChange(from: old.stageID, to: new.stageID)
         }
         .modifier(KeepAwakeLifecycle())
         .overlay(alignment: .top) {
@@ -300,9 +314,10 @@ struct RootView: View {
                 .frame(maxWidth: 280)
                 .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 16))
                 .padding(.top, 68)
+            } else {
+                fuelNavigationPromptOverlay
             }
         }
-
         .overlay {
             if app.planner.activeRouteProgressMessage == nil,
                let toast = app.planner.toast {
@@ -1034,11 +1049,116 @@ struct RootView: View {
         .accessibilityHint("Adjust wander, cities and highways")
     }
 
+    /// One Equatable key for both signals the fuel prompts key off, so a single
+    /// `onChange` covers ride-start and fuel-stop hooks without lengthening the
+    /// modifier chain in `body`.
+    private struct NavigationPhaseStageKey: Equatable {
+        let phase: NavigationSession.Phase
+        let stageID: String?
+    }
+
+    private var navigationPhaseAndStage: NavigationPhaseStageKey {
+        NavigationPhaseStageKey(phase: app.navigation.phase, stageID: app.navigation.currentStage?.id)
+    }
+
+    /// Ride-start check-in: fires once per ride, max two questions.
+    private func handleNavigationPhaseChange(_ phase: NavigationSession.Phase) {
+        switch phase {
+        case .active:
+            app.trial.consumeFreeStartIfNeeded()
+            promptedFuelStopStageIDs = []
+            rideStartFuelPrompt = FuelRangePrefs.notificationsEnabled ? .fullTank : nil
+        case .idle:
+            rideStartFuelPrompt = nil
+            fuelStopRefuelPrompt = nil
+            promptedFuelStopStageIDs = []
+        case .prefetching:
+            break
+        }
+    }
+
+    /// Riding past a fuel-stop stage is the trivial hook for "Did you fuel up?" —
+    /// reuses the existing stage model, no new geofencing.
+    private func handleNavigationStageChange(from oldValue: String?, to newValue: String?) {
+        guard navActive, FuelRangePrefs.notificationsEnabled,
+              let oldValue, oldValue != newValue,
+              let leftStage = app.navigation.stages.first(where: { $0.id == oldValue }),
+              leftStage.kind == .fuelStop,
+              !promptedFuelStopStageIDs.contains(leftStage.id)
+        else { return }
+        promptedFuelStopStageIDs.insert(leftStage.id)
+        fuelStopRefuelPrompt = leftStage
+    }
+
+    /// Pulled out of `body` so the giant view-modifier chain there stays cheap
+    /// to type-check; this branches its own small tree independently.
+    @ViewBuilder
+    private var fuelNavigationPromptOverlay: some View {
+        if let prompt = rideStartFuelPrompt {
+            Group {
+                switch prompt {
+                case .fullTank:
+                    fuelPromptCard(
+                        "Full tank?",
+                        onYes: { rideStartFuelPrompt = nil },
+                        onNo: { rideStartFuelPrompt = .willFuel }
+                    )
+                case .willFuel:
+                    fuelPromptCard(
+                        "Will you be fueling up?",
+                        onYes: { rideStartFuelPrompt = nil },
+                        onNo: { rideStartFuelPrompt = nil }
+                    )
+                }
+            }
+            .padding(.top, 68)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .zIndex(30)
+        } else if let stage = fuelStopRefuelPrompt {
+            fuelPromptCard(
+                "Did you fuel up?",
+                onYes: {
+                    app.planner.reapplyFuelAssist(rangeKm: FuelRangePrefs.kilometers)
+                    app.planner.toast = "Fuel top-up recorded"
+                    fuelStopRefuelPrompt = nil
+                },
+                onNo: { fuelStopRefuelPrompt = nil }
+            )
+            .padding(.top, 68)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .zIndex(30)
+            .id(stage.id)
+        }
+    }
+
+    /// Small reusable Yes/No card for the lean ride-start and fuel-stop check-ins.
+    /// Styled to match the existing waypoint-placement confirmation overlay.
+    private func fuelPromptCard(
+        _ question: String,
+        onYes: @escaping () -> Void,
+        onNo: @escaping () -> Void
+    ) -> some View {
+        VStack(spacing: 12) {
+            Text(question)
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 12) {
+                Button("No", action: onNo)
+                    .buttonStyle(.bordered)
+                Button("Yes", action: onYes)
+                    .buttonStyle(.borderedProminent).tint(DirtTheme.orange)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: 280)
+        .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
     private var fuelRangeButton: some View {
         Button {
             mapFuelRangeKm = FuelRangePrefs.kilometers
             mapFuelReservePercent = FuelRangePrefs.reservePercent
-            mapAutomaticFuelPlanning = FuelRangePrefs.automaticPlanningEnabled
+            mapFuelNotificationsEnabled = FuelRangePrefs.notificationsEnabled
             withAnimation(.easeInOut(duration: 0.18)) {
                 fuelControlsOpen.toggle()
             }
@@ -1046,9 +1166,7 @@ struct RootView: View {
             VStack(spacing: 1) {
                 Image(systemName: "fuelpump.fill")
                     .font(.system(size: 14, weight: .bold))
-                Text(FuelRangePrefs.automaticPlanningEnabled
-                    ? "\(Int(FuelRangePrefs.kilometers))"
-                    : "OFF")
+                Text("\(Int(FuelRangePrefs.kilometers))")
                     .font(.dirtMono(8, weight: .bold))
                     .monospacedDigit()
             }
@@ -1063,13 +1181,14 @@ struct RootView: View {
         }
         .accessibilityLabel("Fuel range")
         .accessibilityValue(
-            FuelRangePrefs.automaticPlanningEnabled
-                ? "Automatic planning on, \(Int(FuelRangePrefs.kilometers)) kilometers, \(Int(FuelRangePrefs.reservePercent)) percent reserve"
-                : "Automatic planning off"
+            "\(Int(FuelRangePrefs.kilometers)) kilometers, \(Int(FuelRangePrefs.reservePercent)) percent reserve, notifications \(FuelRangePrefs.notificationsEnabled ? "on" : "off")"
         )
         .accessibilityHint("Opens fuel range controls")
     }
 
+    /// Fuel pump panel above the route sheet. Owns the rider's tank range,
+    /// reserve, and usable fuel; the switch here is a notifications preference,
+    /// not a route-planning toggle — Dirt does not silently add fuel stops.
     private var fuelControlPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -1080,10 +1199,6 @@ struct RootView: View {
                     .fontWeight(.bold)
                     .foregroundStyle(DirtTheme.ink)
                 Spacer(minLength: 0)
-                Text("\(Int(mapFuelRangeKm)) km")
-                    .font(DirtType.metricInline)
-                    .foregroundStyle(DirtTheme.ink)
-                    .monospacedDigit()
                 Button("Done") {
                     withAnimation(.easeInOut(duration: 0.18)) { fuelControlsOpen = false }
                 }
@@ -1094,50 +1209,58 @@ struct RootView: View {
             }
 
             Toggle(
-                "Automatic fuel planning",
+                "Turn on fuel notifications",
                 isOn: Binding(
-                    get: { mapAutomaticFuelPlanning },
+                    get: { mapFuelNotificationsEnabled },
                     set: { enabled in
-                        mapAutomaticFuelPlanning = enabled
-                        FuelRangePrefs.automaticPlanningEnabled = enabled
+                        mapFuelNotificationsEnabled = enabled
+                        FuelRangePrefs.notificationsEnabled = enabled
                         RoutingDebugLog.shared.event(
-                            "ui automatic fuel planning=\(enabled ? 1 : 0) recalc=1"
+                            "ui fuel notifications=\(enabled ? 1 : 0)"
                         )
-                        app.planner.reapplyFuelAssist(rangeKm: mapFuelRangeKm)
                     }
                 )
             )
             .font(DirtType.rowTitle)
             .tint(DirtTheme.orange)
 
-            Text(mapAutomaticFuelPlanning
-                ? "Dirt adds only the fuel stops needed to finish safely."
-                : "Off — Dirt will not add fuel stops or check whether this route has enough fuel.")
+            Text(mapFuelNotificationsEnabled
+                ? "Dirt checks in at the start of your ride and at fuel stops along the way."
+                : "Off — no fuel check-ins during navigation.")
                 .font(DirtType.helper)
-                .foregroundStyle(mapAutomaticFuelPlanning ? DirtTheme.muted : DirtTheme.danger)
+                .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Slider(
-                value: $mapFuelRangeKm,
-                in: FuelRangePrefs.minimumKm...FuelRangePrefs.maximumKm,
-                step: 10
-            ) { editing in
-                if editing {
-                    app.planner.cancelFuelAssistForRangeEdit()
-                    RoutingDebugLog.shared.event(
-                        "ui fuel slider begin range=\(Int(mapFuelRangeKm))km"
-                    )
-                } else {
-                    FuelRangePrefs.kilometers = mapFuelRangeKm
-                    FuelRangePrefs.lastEnabledKilometers = mapFuelRangeKm
-                    RoutingDebugLog.shared.event(
-                        "ui fuel slider release range=\(Int(mapFuelRangeKm))km recalc=1"
-                    )
-                    app.planner.reapplyFuelAssist(rangeKm: mapFuelRangeKm)
+            // Range value sits directly beside the slider it controls, not up in
+            // the header — the two read as one control.
+            HStack(spacing: DirtSpace.inner) {
+                Text("\(Int(mapFuelRangeKm)) km")
+                    .font(DirtType.metricInline)
+                    .foregroundStyle(DirtTheme.ink)
+                    .monospacedDigit()
+                    .frame(minWidth: 56, alignment: .leading)
+                Slider(
+                    value: $mapFuelRangeKm,
+                    in: FuelRangePrefs.minimumKm...FuelRangePrefs.maximumKm,
+                    step: 10
+                ) { editing in
+                    if editing {
+                        app.planner.cancelFuelAssistForRangeEdit()
+                        RoutingDebugLog.shared.event(
+                            "ui fuel slider begin range=\(Int(mapFuelRangeKm))km"
+                        )
+                    } else {
+                        FuelRangePrefs.kilometers = mapFuelRangeKm
+                        FuelRangePrefs.lastEnabledKilometers = mapFuelRangeKm
+                        RoutingDebugLog.shared.event(
+                            "ui fuel slider release range=\(Int(mapFuelRangeKm))km recalc=1"
+                        )
+                        app.planner.reapplyFuelAssist(rangeKm: mapFuelRangeKm)
+                    }
                 }
+                .tint(DirtTheme.orange)
+                .accessibilityLabel("Kilometers per tank")
             }
-            .tint(DirtTheme.orange)
-            .accessibilityLabel("Kilometers per tank")
 
             HStack {
                 Text("Usable \(Int(FuelRangePrefs.usableKilometers(for: mapFuelRangeKm, reservePercent: mapFuelReservePercent))) km")

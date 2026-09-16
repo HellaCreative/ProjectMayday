@@ -89,7 +89,7 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
-    func testFuelPanelOffersReversibleAutomaticPlanningControl() throws {
+    func testFuelPanelOffersReversibleFuelNotificationsControl() throws {
         let app = XCUIApplication()
         app.launch()
 
@@ -103,31 +103,31 @@ final class DirtUITests: XCTestCase {
         XCTAssertTrue(fuelRange.waitForExistence(timeout: 8))
         fuelRange.tap()
 
-        let automatic = app.switches["Automatic fuel planning"]
-        XCTAssertTrue(automatic.waitForExistence(timeout: 2))
+        let notifications = app.switches["Turn on fuel notifications"]
+        XCTAssertTrue(notifications.waitForExistence(timeout: 2))
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Fuel Panel — Automatic Planning"
+        attachment.name = "Fuel Panel — Fuel Notifications"
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        let original = automatic.value as? String ?? String(describing: automatic.value)
-        automatic.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let original = notifications.value as? String ?? String(describing: notifications.value)
+        notifications.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         let changed = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value != %@", original),
-            object: automatic
+            object: notifications
         )
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 3), .completed)
 
         let changedAttachment = XCTAttachment(screenshot: app.screenshot())
-        changedAttachment.name = "Fuel Panel — Automatic Planning Changed"
+        changedAttachment.name = "Fuel Panel — Fuel Notifications Changed"
         changedAttachment.lifetime = .keepAlways
         add(changedAttachment)
 
-        automatic.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        notifications.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         let restored = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", original),
-            object: automatic
+            object: notifications
         )
         XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 3), .completed)
     }
