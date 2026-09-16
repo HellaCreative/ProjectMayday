@@ -76,11 +76,7 @@ struct OfflinePacksSheet: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(DirtSpace.row)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                    .stroke(DirtTheme.hairline, lineWidth: 1)
-            )
+            .dirtGroupingSurface()
     }
 
     private func installedRow(_ row: GraphPackStore.InstalledPackManagementRow) -> some View {
@@ -120,14 +116,7 @@ struct OfflinePacksSheet: View {
         }
         .padding(DirtSpace.inner)
         .frame(minHeight: DirtHit.control)
-        .background(
-            DirtTheme.rowFill,
-            in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .dirtGroupingSurface()
     }
 
     private func perform(_ id: String, update: Bool) {

@@ -65,7 +65,7 @@ struct NavCueCard: View {
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
         .background {
             ZStack {
-                Rectangle().fill(DirtTheme.sheetMaterial)
+                Rectangle().fill(.regularMaterial)
                 Rectangle().fill(Color.white.opacity(0.22))
             }
         }
@@ -347,7 +347,7 @@ struct NavEndButton: View {
             .padding(.horizontal, 12)
             .frame(maxWidth: fillWidth ? .infinity : nil)
             .frame(minHeight: 48)
-            .background(DirtTheme.sheetMaterial)
+            .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -431,7 +431,7 @@ struct NavBottomPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 ZStack {
-                    Rectangle().fill(DirtTheme.sheetMaterial)
+                    Rectangle().fill(.regularMaterial)
                     Rectangle().fill(Color.white.opacity(0.22))
                 }
             }
@@ -572,7 +572,7 @@ struct NavBottomPanel: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(.regularMaterial)
         .clipShape(panelShape)
         .overlay(panelShape.stroke(DirtTheme.chromeBorder, lineWidth: 1))
         .accessibilityElement(children: .combine)
@@ -715,7 +715,7 @@ struct NavLandscapeRail: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -749,7 +749,7 @@ struct NavLandscapeRail: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
+        .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)

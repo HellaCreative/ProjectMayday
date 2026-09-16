@@ -365,7 +365,7 @@ struct RootView: View {
                 }
                 .padding(16)
                 .frame(maxWidth: 280)
-                .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .dirtGroupingSurface(radius: 16)
                 .padding(.top, 68)
             } else {
                 fuelNavigationPromptOverlay
@@ -764,7 +764,6 @@ struct RootView: View {
             DockSheetPanel(
                 heightFraction: 1,
                 landscapeDockLeading: landscapeDockLeading,
-                material: .thinMaterial,
                 onDismiss: dismissDockSheet
             ) {
                 LayersSheet(onClose: dismissDockSheet)
@@ -1161,7 +1160,7 @@ struct RootView: View {
         }
         .padding(16)
         .frame(maxWidth: 280)
-        .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .dirtGroupingSurface(radius: 16)
     }
 
     private var fuelRangeButton: some View {
@@ -1997,6 +1996,8 @@ private struct GroupPeerDetailSheet: View {
                 .buttonStyle(DirtCTAStyle.brand())
         }
         .padding(DirtSpace.group)
+        .dirtGroupingSurface(radius: DirtRadius.card)
+        .padding(DirtSpace.inner)
         .background(DirtTheme.sheetMaterial)
     }
 
