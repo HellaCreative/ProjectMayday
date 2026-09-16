@@ -29,7 +29,7 @@ struct RoutePlannerModelItineraryTests {
         }
     }
 
-    @Test func progressNotificationMatchesFuelNotificationsState() {
+    @Test func progressNotificationUsesCraftHypeCopy() {
         let fuelOn = FuelRangePrefs.Snapshot(
             tankMeters: 260_000,
             usableMeters: 247_000,
@@ -44,29 +44,29 @@ struct RoutePlannerModelItineraryTests {
         )
 
         #expect(RoutePlannerModel.initialBuildProgressToast(for: fuelOn)
-            == RoutePlannerModel.creatingRouteWithoutFuelToast)
+            == RoutePlannerModel.craftingRouteToast)
         #expect(RoutePlannerModel.initialBuildProgressToast(for: fuelOff)
-            == RoutePlannerModel.creatingRouteWithoutFuelToast)
+            == RoutePlannerModel.craftingRouteToast)
         #expect(RoutePlannerModel.progressToastContent(
-            for: RoutePlannerModel.creatingRouteWithoutFuelToast
-        ) == RoutePlannerModel.ProgressToastContent(
-            title: "Creating route",
-            detail: "Fuel planning is off · Calculating distance"
-        ))
+            for: RoutePlannerModel.craftingRouteToast
+        ) == RoutePlannerModel.routeBuildHypeLines[0])
+        #expect(RoutePlannerModel.usesRotatingBuildHype(for: RoutePlannerModel.craftingRouteToast))
+        #expect(!RoutePlannerModel.routeBuildHypeLines.contains(where: {
+            $0.title.localizedCaseInsensitiveContains("fuel")
+                || $0.detail.localizedCaseInsensitiveContains("fuel")
+                || $0.title.localizedCaseInsensitiveContains("automatic")
+                || $0.detail.localizedCaseInsensitiveContains("planning")
+        }))
     }
 
-    @Test func progressNotificationNumbersEachFuelStop() {
+    @Test func progressNotificationKeepsFuelInternalsOffRiderToastCopy() {
         #expect(RoutePlannerModel.progressToastContent(for: "Creating fuel stop 1")
-            == RoutePlannerModel.ProgressToastContent(
-                title: "Creating fuel stop 1",
-                detail: "Fuel stop required"
-            ))
+            == RoutePlannerModel.routeBuildHypeLines[0])
         #expect(RoutePlannerModel.progressToastContent(for: "Fuel stop 2 added")
-            == RoutePlannerModel.ProgressToastContent(
-                title: "Fuel stop 2 added",
-                detail: "Continuing the route"
-            ))
+            == RoutePlannerModel.routeBuildHypeLines[0])
         #expect(RoutePlannerModel.isPersistentProgressToast("Checking range after fuel stop 2"))
+        #expect(RoutePlannerModel.progressToastContent(for: "Checking range after fuel stop 2")
+            == RoutePlannerModel.routeBuildHypeLines[0])
     }
 
     @Test func loopSearchUsesPersistentAnimatedProgressContent() {

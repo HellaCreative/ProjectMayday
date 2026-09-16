@@ -1822,12 +1822,21 @@ struct ToastView: View {
     let text: String
     var isBuildingRoute = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hypeLineIndex = 0
+
+    private var rotatesHype: Bool {
+        isBuildingRoute && RoutePlannerModel.usesRotatingBuildHype(for: text)
+    }
+
     private var progress: RoutePlannerModel.ProgressToastContent? {
-        RoutePlannerModel.progressToastContent(for: text)
-            ?? (isBuildingRoute ? RoutePlannerModel.ProgressToastContent(
-                title: text,
-                detail: "Finding roads and checking your route"
-            ) : nil)
+        if rotatesHype {
+            let lines = RoutePlannerModel.routeBuildHypeLines
+            guard !lines.isEmpty else { return nil }
+            return lines[hypeLineIndex % lines.count]
+        }
+        return RoutePlannerModel.progressToastContent(for: text)
+            ?? (isBuildingRoute ? RoutePlannerModel.routeBuildHypeLines.first : nil)
     }
 
     private var isSuccess: Bool {
@@ -1841,10 +1850,12 @@ struct ToastView: View {
                     Text(progress.title)
                         .font(DirtType.rowTitle)
                         .foregroundStyle(.white)
+                        .contentTransition(.opacity)
                     Text(progress.detail)
                         .font(DirtType.helper)
                         .foregroundStyle(.white.opacity(0.78))
                         .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
                     RouteBuildPistonIndicator()
                         .accessibilityHidden(true)
                 }
@@ -1854,6 +1865,22 @@ struct ToastView: View {
                 .accessibilityLabel(progress.title)
                 .accessibilityValue("\(progress.detail). In progress.")
                 .accessibilityAddTraits(.updatesFrequently)
+                .task(id: "\(text)-\(rotatesHype)-\(reduceMotion)") {
+                    hypeLineIndex = 0
+                    guard rotatesHype, !reduceMotion else { return }
+                    let lineCount = RoutePlannerModel.routeBuildHypeLines.count
+                    guard lineCount > 1 else { return }
+                    while !Task.isCancelled {
+                        do {
+                            try await Task.sleep(for: .milliseconds(2_400))
+                        } catch {
+                            return
+                        }
+                        withAnimation(.easeInOut(duration: 0.28)) {
+                            hypeLineIndex = (hypeLineIndex + 1) % lineCount
+                        }
+                    }
+                }
             } else {
                 Text(text)
                     .font(.dirtUI(12, weight: .bold))

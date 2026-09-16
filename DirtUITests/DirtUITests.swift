@@ -133,19 +133,21 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
-    func testRouteProgressExplainsThatFuelPlanningIsOff() throws {
+    func testRouteProgressShowsCraftHypeCopy() throws {
         let app = XCUIApplication()
-        app.launchEnvironment["DIRT_UI_TEST_ROUTE_PROGRESS"] = "fuel-off"
+        app.launchEnvironment["DIRT_UI_TEST_ROUTE_PROGRESS"] = "craft"
         app.launch()
 
         skipOnboardingIfPresented(in: app)
 
         let progress = app.descendants(matching: .any)["route-progress-toast"]
         XCTAssertTrue(progress.waitForExistence(timeout: 8))
-        XCTAssertEqual(progress.label, "Creating route")
-        XCTAssertTrue((progress.value as? String)?.contains(
-            "Fuel planning is off · Calculating distance"
-        ) == true)
+        XCTAssertEqual(progress.label, "Creating the time of your life…")
+        let value = progress.value as? String ?? ""
+        XCTAssertTrue(value.contains("Scouting roads worth the ride"))
+        XCTAssertFalse(value.localizedCaseInsensitiveContains("fuel"))
+        XCTAssertFalse(value.localizedCaseInsensitiveContains("automatic"))
+        XCTAssertFalse(value.localizedCaseInsensitiveContains("planning"))
         XCTAssertLessThan(
             progress.frame.midX,
             app.windows.firstMatch.frame.midX,
@@ -153,7 +155,7 @@ final class DirtUITests: XCTestCase {
         )
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Route Progress — Fuel Planning Off"
+        attachment.name = "Route Progress — Craft Hype"
         attachment.lifetime = .keepAlways
         add(attachment)
     }

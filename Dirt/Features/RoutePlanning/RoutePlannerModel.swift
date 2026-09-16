@@ -956,10 +956,11 @@ final class RoutePlannerModel {
                         fuel: fuel,
                         source: self.routingSourcePolicy,
                         replanFromStationID: replanFromStationID,
-                        onFuelStatus: { [weak self] status in
+                        onFuelStatus: { [weak self] _ in
                             guard let self, self.itinerary.generation == requested.generation else { return }
-                            self.fuelPlanningStatus = status
-                            self.toast = status
+                            // Keep the map toast on craft hype — never surface fuel-planning copy.
+                            self.fuelPlanningStatus = Self.craftingRouteToast
+                            self.toast = Self.craftingRouteToast
                         },
                         onProgress: { [weak self] progress in
                             guard let self, self.itinerary.generation == progress.generation else { return }
@@ -1136,7 +1137,8 @@ final class RoutePlannerModel {
     static let calculatingRouteToast = "Calculating route"
     static let routeReadyToast = "Route successful"
     static let calculatingFuelRangeToast = "Checking fuel range"
-    static let creatingRouteWithoutFuelToast = "Building route without automatic fuel planning"
+    /// Stable build-progress key. ToastView rotates rider-facing hype over this — never show raw.
+    static let craftingRouteToast = "Crafting your route"
     static let noFuelStopRequiredToast = "No fuel stop required"
     static let legCompleteToast = "Leg complete"
 
@@ -1145,37 +1147,53 @@ final class RoutePlannerModel {
         let detail: String
     }
 
+    /// Rotating build lines — outdoor-legible, rider hype, zero fuel/corporate planning speak.
+    static let routeBuildHypeLines: [ProgressToastContent] = [
+        ProgressToastContent(
+            title: "Creating the time of your life…",
+            detail: "Scouting roads worth the ride"
+        ),
+        ProgressToastContent(
+            title: "Adding twisty pavement…",
+            detail: "Dirt's lining up the good miles"
+        ),
+        ProgressToastContent(
+            title: "Stitching a proper adventure…",
+            detail: "One turn at a time"
+        ),
+        ProgressToastContent(
+            title: "Hunting the sweet line…",
+            detail: "Almost ready to twist the throttle"
+        ),
+        ProgressToastContent(
+            title: "Loading up the fun…",
+            detail: "Crafting something you'll want again"
+        )
+    ]
+
     static func initialBuildProgressToast(for _: FuelRangePrefs.Snapshot) -> String {
-        creatingRouteWithoutFuelToast
+        craftingRouteToast
+    }
+
+    /// True when the map progress toast should rotate craft hype instead of raw status.
+    static func usesRotatingBuildHype(for message: String) -> Bool {
+        switch message {
+        case craftingRouteToast, calculatingRouteToast:
+            return true
+        default:
+            return false
+        }
     }
 
     static func progressToastContent(for message: String) -> ProgressToastContent? {
         switch message {
-        case calculatingRouteToast:
-            return ProgressToastContent(
-                title: "Creating route",
-                detail: "Calculating distance"
-            )
-        case creatingRouteWithoutFuelToast:
-            return ProgressToastContent(
-                title: "Creating route",
-                detail: "Fuel planning is off · Calculating distance"
-            )
-        case calculatingFuelRangeToast:
-            return ProgressToastContent(
-                title: "Checking fuel range",
-                detail: "Calculating distance and fuel needs"
-            )
-        case "Checking fuel after destination":
-            return ProgressToastContent(
-                title: "Checking destination fuel",
-                detail: "Confirming a pump is reachable after arrival"
-            )
-        case noFuelStopRequiredToast:
-            return ProgressToastContent(
-                title: "No fuel stop needed",
-                detail: "Creating the route to your waypoint"
-            )
+        case calculatingRouteToast, craftingRouteToast:
+            return routeBuildHypeLines[0]
+        case calculatingFuelRangeToast,
+             "Checking fuel after destination",
+             noFuelStopRequiredToast:
+            // Fuel-chain internals may still emit these; rider toast stays on craft hype.
+            return routeBuildHypeLines[0]
         default:
             if message.hasPrefix("Finding loop") {
                 return ProgressToastContent(
@@ -1183,23 +1201,10 @@ final class RoutePlannerModel {
                     detail: "Comparing roads for your round trip"
                 )
             }
-            if message.hasPrefix("Creating fuel stop ") {
-                return ProgressToastContent(
-                    title: message,
-                    detail: "Fuel stop required"
-                )
-            }
-            if message.hasPrefix("Fuel stop "), message.hasSuffix(" added") {
-                return ProgressToastContent(
-                    title: message,
-                    detail: "Continuing the route"
-                )
-            }
-            if message.hasPrefix("Checking range after fuel stop ") {
-                return ProgressToastContent(
-                    title: message,
-                    detail: "Calculating the remaining route"
-                )
+            if message.hasPrefix("Creating fuel stop ")
+                || (message.hasPrefix("Fuel stop ") && message.hasSuffix(" added"))
+                || message.hasPrefix("Checking range after fuel stop ") {
+                return routeBuildHypeLines[0]
             }
             return nil
         }
