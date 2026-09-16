@@ -23,7 +23,8 @@ struct RiderServiceColorTests {
             #expect(colorsMatch(map, UIColor(dirtHex: hex)))
             #expect(colorsMatch(theme, UIColor(dirtHex: hex)))
             #expect(colorsMatch(map, theme))
-            #expect(MapLibreMapView.POILayer.systemSymbolName(for: id).hasSuffix(".fill"))
+            #expect(DirtTheme.poiSymbolName(for: id) == MapLibreMapView.POILayer.systemSymbolName(for: id))
+            #expect(DirtTheme.poiSymbolName(for: id).hasSuffix(".fill"))
         }
     }
 

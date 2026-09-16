@@ -120,6 +120,16 @@ enum DirtTheme {
         }
     }
 
+    static func poiSymbolName(for category: String) -> String {
+        switch category {
+        case "fuel": return "fuelpump.fill"
+        case "campground": return "tent.fill"
+        case "lodging": return "bed.double.fill"
+        case "liquor": return "wineglass.fill"
+        default: return "mappin"
+        }
+    }
+
     // Selected-route surface families. Rich, deep colors stay legible against
     // the white route casing; purple remains an independent access warning.
     static let routeAccess = Color(dirtHex: 0x54208F)

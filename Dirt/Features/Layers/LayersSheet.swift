@@ -101,7 +101,7 @@ struct LayersSheet: View {
     private func serviceToggle(_ title: String, category: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             HStack(spacing: DirtSpace.inner) {
-                Image(systemName: MapLibreMapView.POILayer.systemSymbolName(for: category))
+                Image(systemName: DirtTheme.poiSymbolName(for: category))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(DirtTheme.poiColor(for: category))
                     .frame(width: 22)

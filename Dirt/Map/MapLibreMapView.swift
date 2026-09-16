@@ -145,13 +145,7 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         static func systemSymbolName(for category: String) -> String {
-            switch category {
-            case "fuel": return "fuelpump.fill"
-            case "campground": return "tent.fill"
-            case "lodging": return "bed.double.fill"
-            case "liquor": return "wineglass.fill"
-            default: return "mappin"
-            }
+            DirtTheme.poiSymbolName(for: category)
         }
 
         static func makeIcon(category: String, color _: UIColor) -> UIImage? {
