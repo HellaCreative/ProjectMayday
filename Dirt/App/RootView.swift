@@ -121,6 +121,18 @@ struct RootView: View {
     // OfflineMapPrepOverlay exclusively owns prefetch progress. Showing the ride
     // HUD during `.prefetching` duplicated the same loading state behind the modal.
     private var navActive: Bool { NavigationChrome.showsRideHUD(for: app.navigation.phase) }
+    private var memberRouteReplacementPresented: Binding<Bool> {
+        Binding(
+            get: { app.planner.pendingMemberRouteReplacement != nil },
+            set: { if !$0 { app.planner.cancelReplaceMemberRoute() } }
+        )
+    }
+    private var selectedPeerPresented: Binding<SelectedGroupPeer?> {
+        Binding(
+            get: { app.groups.selectedPeer },
+            set: { if $0 == nil { app.groups.clearSelectedPeer() } }
+        )
+    }
 
     /// iPhone landscape — Figma `Navigation — Landscape` packing while navigating.
     private var isLandscape: Bool { verticalSizeClass == .compact }
@@ -232,6 +244,47 @@ struct RootView: View {
 
     var body: some View {
         mapShell
+            .sheet(item: selectedPeerPresented) { peer in
+                GroupPeerDetailSheet(
+                    peer: peer,
+                    onRoute: {
+                        app.planner.routeToMember(peer.routeTarget)
+                        app.groups.clearSelectedPeer()
+                        if app.planner.pendingMemberRouteReplacement == nil {
+                            withAnimation(DockSheetMotion.spring) {
+                                activeSheet = nil
+                                routeCardOpen = true
+                            }
+                        }
+                    },
+                    onClose: { app.groups.clearSelectedPeer() }
+                )
+                .presentationDetents([.height(280)])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(DirtTheme.sheetMaterial)
+            }
+            .confirmationDialog(
+                "Route to a different rider?",
+                isPresented: memberRouteReplacementPresented,
+                titleVisibility: .visible
+            ) {
+                if let name = app.planner.pendingMemberRouteReplacement?.displayName {
+                    Button("Route to \(name)") {
+                        app.planner.confirmReplaceMemberRoute()
+                        withAnimation(DockSheetMotion.spring) {
+                            activeSheet = nil
+                            routeCardOpen = true
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    app.planner.cancelReplaceMemberRoute()
+                }
+            } message: {
+                if let name = app.planner.pendingMemberRouteReplacement?.displayName {
+                    Text("Ends the current ride and routes to \(name).")
+                }
+            }
             .sheet(isPresented: $ridePreferencesOpen) {
                 RidePreferencesSheet(initial: app.planner.displayedRidePreferences) {
                     app.planner.applyRidePreferences($0)
@@ -411,53 +464,6 @@ struct RootView: View {
             titleVisibility: .visible
         ) {
             poiDialogButtons
-        }
-        .sheet(item: Binding(
-            get: { app.groups.selectedPeer },
-            set: { if $0 == nil { app.groups.clearSelectedPeer() } }
-        )) { peer in
-            GroupPeerDetailSheet(
-                peer: peer,
-                onRoute: {
-                    app.planner.routeToMember(peer.routeTarget)
-                    app.groups.clearSelectedPeer()
-                    if app.planner.pendingMemberRouteReplacement == nil {
-                        withAnimation(DockSheetMotion.spring) {
-                            activeSheet = nil
-                            routeCardOpen = true
-                        }
-                    }
-                },
-                onClose: { app.groups.clearSelectedPeer() }
-            )
-            .presentationDetents([.height(280)])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(DirtTheme.sheetMaterial)
-        }
-        .confirmationDialog(
-            "Route to a different rider?",
-            isPresented: Binding(
-                get: { app.planner.pendingMemberRouteReplacement != nil },
-                set: { if !$0 { app.planner.cancelReplaceMemberRoute() } }
-            ),
-            titleVisibility: .visible
-        ) {
-            if let name = app.planner.pendingMemberRouteReplacement?.displayName {
-                Button("Route to \(name)") {
-                    app.planner.confirmReplaceMemberRoute()
-                    withAnimation(DockSheetMotion.spring) {
-                        activeSheet = nil
-                        routeCardOpen = true
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                app.planner.cancelReplaceMemberRoute()
-            }
-        } message: {
-            if let name = app.planner.pendingMemberRouteReplacement?.displayName {
-                Text("Ends the current ride and routes to \(name).")
-            }
         }
     }
 
