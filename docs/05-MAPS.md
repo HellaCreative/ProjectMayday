@@ -15,7 +15,7 @@ MapLibre Native integration, route paint, markers, location, and offline tile se
 | `Dirt/Map/OfflineTileManager.swift` | Offline pack prefetch (active basemap) |
 | `Dirt/Map/POIManager.swift` | Rider Services POIs from DIRT `/api/poi` + packed fuel → MapState |
 | `Dirt/Map/NetworkOverlayManager.swift` | Paints nearby edges from the installed graph pack |
-| `Dirt/Map/GeoJSON+Utils.swift` | `Data.gunzipped()` gzip decompression; `LayerPrefsSnapshot` |
+| `Dirt/Map/ne-admin1-na.json` | Simplified Natural Earth 50m admin-1 interior lines (US+CA) for overview |
 | `Dirt/Networking/AppConfig.swift` | Shortbread URL + idle camera |
 | `Dirt/Features/Layers/LayersSheet.swift` | Basemap picker + all overlay toggles |
 | `scripts/shortbread-edge/` | Reproducible PMTiles build, R2 Worker, deploy and verification |
@@ -149,7 +149,7 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ### Basemap labels and borders
 
-`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v1`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines from the tile schema. Country borders (`admin_level=2`) from z0; province/state borders (`admin_level=4`) from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v2`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from Shortbread z0. Province/state borders: bundled Natural Earth 50m Admin-1 (lakes) linework from z0–7, then Shortbread `admin_level=4` from z7. Shortbread has no state geometry below z7; overzooming those tiles at continental view is not used. Do **not** paint `RegionPolygons` pack bounds. Country names stay through z7; province names are quieter gray. Place collision padding is 1 so more names survive overview. Rich is the same structure with ×1.15 saturation.
 
 ### Rider Services POIs
 
