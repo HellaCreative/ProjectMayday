@@ -390,6 +390,63 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.stages.map(\.profile) == [.dirt, .balanced])
     }
 
+    @Test func stageCardFuelHopControlsDriveCleanPlanRebuild() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 220
+        FuelRangePrefs.reservePercent = 5
+
+        let first = point(0)
+        let second = point(0.5)
+        let third = point(1)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(first, second)] = 80_000
+        source.distanceOverrides[key(second, third)] = 90_000
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(
+                waypoints: [first, second, third],
+                profile: .cleanest,
+                allowUnknown: false,
+                avoidMotorways: true,
+                preferBackRoads: false
+            ),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.stages.map(\.profile) == [.cleanest, .cleanest])
+        #expect(model.built?.legs.allSatisfy { $0.endsAtFuelStop == nil } == true)
+
+        source.routeRequests.removeAll()
+        model.setFuelHopProfile(.balanced, at: 0)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.legs[0].profile == .balanced)
+        #expect(model.itinerary.legs[0].hopOverrides.isEmpty)
+        #expect(model.stages[0].profile == .balanced)
+        #expect(source.routeRequests.contains { $0.profile == .balanced })
+        #expect(source.routeRequests.contains {
+            $0.profile == .balanced && $0.accessPolicy.motorizedUnknown == false
+        })
+
+        source.routeRequests.removeAll()
+        model.setStageAllowUnknown(true, at: 0)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.legs[0].allowUnknown)
+        #expect(model.stages[0].allowUnknown)
+        #expect(source.routeRequests.contains {
+            $0.profile == .balanced && $0.accessPolicy.motorizedUnknown == true
+        })
+        #expect(model.built?.legs.allSatisfy { $0.endsAtFuelStop == nil } == true)
+
+        source.routeRequests.removeAll()
+        model.setFuelHopProfile(.dirt, at: 1)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.legs[1].profile == .dirt)
+        #expect(model.stages[1].profile == .dirt)
+        #expect(model.stages[0].profile == .balanced)
+        #expect(source.routeRequests.contains { $0.profile == .dirt })
+    }
+
     @Test func cleanSecondLegOwnsItsHighwayPolicy() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }

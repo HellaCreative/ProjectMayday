@@ -220,6 +220,8 @@ final class ItineraryBuilder {
                 let riderLeg = itinerary.legs[index]
                 let from = itinerary.waypoints[index].coordinate
                 let to = itinerary.waypoints[index + 1].coordinate
+                let departureID = riderLeg.from.uuidString
+                let intentProfile = riderLeg.effectiveProfile(departingFrom: departureID)
                 let straightMeters = straightLineMeters(from, to)
                 // Province/state families only — never treat internal pack-shard
                 // seams (or coarse bbox overlaps within one province) as cross-region.
@@ -230,7 +232,7 @@ final class ItineraryBuilder {
                     straightMeters >= 1_000_000
                         || crossProvince
                 )
-                var discoveryProfile: RouteProfile = cleanFoundation ? .cleanest : riderLeg.profile
+                var discoveryProfile: RouteProfile = cleanFoundation ? .cleanest : intentProfile
                 var response: RouteResponse
                 if (index < startIndex || (resume != nil && index == startIndex)),
                    let cached = reuse?.riderRoutes[riderLeg.id] ?? reusableRoutes[riderLeg.id] {
@@ -266,9 +268,9 @@ final class ItineraryBuilder {
                 }
                 baseline[index] = response
                 baselineProfiles[index] = discoveryProfile
-                if discoveryProfile == .cleanest, riderLeg.profile != .cleanest {
+                if discoveryProfile == .cleanest, intentProfile != .cleanest {
                     RoutingDebugLog.shared.event(
-                        "fuel longhaul default riderLeg=\(riderLeg.id) requested=\(riderLeg.profile.rawValue) " +
+                        "fuel longhaul default riderLeg=\(riderLeg.id) requested=\(intentProfile.rawValue) " +
                         "sections=clean reason=\(crossProvince ? "cross_region" : "over_1000km")"
                     )
                 }
@@ -1867,14 +1869,23 @@ final class ItineraryBuilder {
         }
         let meters = try responseMeters(effectiveBaseline)
         guard fuel.usableMeters > 0 else {
-            let finalResponse = baselineHistory == history && resumeAfterStation == nil
+            let activeAllowUnknown = allowUnknown(
+                for: activeProfile,
+                departingFrom: initialDepartureID
+            )
+            // Route-only builds normally reuse discovery. When a hop/leg override
+            // changed the search profile or Allow Unknown, discovery may still be
+            // the parent Clean baseline — search again with the stage intent.
+            let baselineMatchesIntent = activeProfile == defaultProfile
+                && allowUnknown(for: defaultProfile, departingFrom: initialDepartureID)
+                    == activeAllowUnknown
+            let finalResponse = baselineHistory == history
+                && resumeAfterStation == nil
+                && baselineMatchesIntent
                 ? effectiveBaseline
                 : try await source.route(routeRequest(
                     profile: activeProfile,
-                    allowUnknown: allowUnknown(
-                        for: activeProfile,
-                        departingFrom: initialDepartureID
-                    ),
+                    allowUnknown: activeAllowUnknown,
                     from: from,
                     to: to,
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
@@ -2511,8 +2522,8 @@ private func routeRequest(
     mapZoom: Double? = nil
 ) -> RouteRequest {
     let leg = itinerary.legs[legIndex]
-    let profile = profileOverride ?? leg.profile
     let departureID = leg.from.uuidString
+    let profile = profileOverride ?? leg.effectiveProfile(departingFrom: departureID)
     return routeRequest(
         profile: profile,
         allowUnknown: leg.allowsUnknown(
