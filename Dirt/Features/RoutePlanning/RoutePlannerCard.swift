@@ -375,9 +375,9 @@ struct RoutePlannerCard: View {
                 Text(title == "Plan a route" ? "Plan" : title).font(.caption.weight(selected ? .bold : .medium))
                     .lineLimit(2).multilineTextAlignment(.center)
             }
-            .foregroundStyle(selected ? Color.white : DirtTheme.muted)
+            .foregroundStyle(selected ? DirtTheme.onOrange : DirtTheme.muted)
             .frame(maxWidth: .infinity, minHeight: min(planningTabHeight, 76))
-            .background(selected ? DirtTheme.navigationSurface : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .background(selected ? DirtTheme.orange : .clear, in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
