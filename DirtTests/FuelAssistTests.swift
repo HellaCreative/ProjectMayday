@@ -16,6 +16,20 @@ struct FuelAssistTests {
         #expect(FuelRangePrefs.usableKilometers(for: 100, reservePercent: 80) == 70)
     }
 
+    @Test func fuelNotificationsDefaultOffWhenNeverSet() {
+        let key = FuelRangePrefs.notificationsEnabledKey
+        let previous = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        #expect(FuelRangePrefs.notificationsEnabled == false)
+    }
+
     @Test func profileFailureExplainsWhyCleanStillWorks() {
         let message = RoutePlannerModel.profileRouteFailureMessage(
             requestedProfile: .dirt,

@@ -12,7 +12,7 @@ enum FuelRangePrefs {
             tankMeters: Double,
             usableMeters: Double,
             reservePercent: Double,
-            notificationsEnabled: Bool = true
+            notificationsEnabled: Bool = false
         ) {
             self.tankMeters = tankMeters
             self.usableMeters = usableMeters
@@ -67,13 +67,13 @@ enum FuelRangePrefs {
         )
     }
 
-    /// Whether Dirt surfaces fuel notifications (ride-start check-ins and fuel-stop
-    /// prompts) during navigation. On by default; riders may turn it off without
-    /// losing their saved range, reserve, or usable-fuel figures.
+    /// Whether Navigation shows remaining kilometres and fill toasts.
+    /// Defaults off: a rider who never opened Fuel Range gets no remaining-km
+    /// and no fuel toasts. Range / reserve / usable figures are kept either way.
     static var notificationsEnabled: Bool {
         get {
             guard UserDefaults.standard.object(forKey: notificationsEnabledKey) != nil else {
-                return true
+                return false
             }
             return UserDefaults.standard.bool(forKey: notificationsEnabledKey)
         }
