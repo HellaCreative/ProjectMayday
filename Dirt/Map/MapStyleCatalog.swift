@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v7"
+    static let generatedStyleRevision = "osmand-v8"
     /// Natural Earth 50m admin-1 (lakes), US+CA interior borders. Not pack bounds.
     static let admin1OverviewSourceID = "dirt-admin1-overview"
     static let admin1OverviewLayerID = "dirt-bound-state-overview"
@@ -497,13 +497,22 @@ extension MapStyleCatalog {
         layer["paint"] = paint
     }
 
-    /// Lake names must read in sun on saturated green/blue land. No halo —
-    /// Play of osmand-v6 called the white outline too busy. Same paint on
-    /// Standard and Rich. City/town halos stay on `retunePlaceLabel`.
+    /// Lake names must read in sun on saturated green/blue land. Play of
+    /// osmand-v6 called the white outline too busy; osmand-v7 then vanished
+    /// because MapLibre SDF skips glyphs when halo width is 0. Same-color
+    /// halo = intense blue only, no white ring. City/town stay on
+    /// `retunePlaceLabel`.
     static let lakeLabelBlue = "#0033cc"
 
     static func isWaterNameLayer(_ id: String) -> Bool {
         id.contains("water_polygons_labels-water-name") || id.hasPrefix("label-waterway")
+    }
+
+    /// Shortbread water-name ids, used so visibility is not limited to
+    /// whatever `style.layers` happens to enumerate.
+    static var waterNameLayerIDs: [String] {
+        (8...15).map { "water_polygons_labels-water-name-\($0)" }
+            + ["label-waterway-bottom-12", "label-waterway-bottom-14"]
     }
 
     private static func retuneWaterLabel(_ layer: inout [String: Any]) {
@@ -514,10 +523,13 @@ extension MapStyleCatalog {
         var paint = layer["paint"] as? [String: Any] ?? [:]
         paint["text-color"] = Self.lakeLabelBlue
         paint["text-opacity"] = 1
-        paint["text-halo-width"] = 0
+        // Same blue as fill — MapLibre needs a halo to rasterize SDF text,
+        // but it must not read as a white outline.
+        paint["text-halo-color"] = Self.lakeLabelBlue
+        paint["text-halo-width"] = 0.8
         paint["text-halo-blur"] = 0
-        paint["text-halo-opacity"] = 0
-        paint.removeValue(forKey: "text-halo-color")
+        paint.removeValue(forKey: "text-halo-opacity")
+        layout["visibility"] = "visible"
         layout["text-font"] = ["Noto Sans Bold"]
         if isLake {
             layout["text-size"] = ["stops": Self.lakeLabelSizeStops]

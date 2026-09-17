@@ -764,10 +764,20 @@ struct MapLibreMapView: UIViewRepresentable {
             for id in MapAttraction.builtinLayerIDs {
                 style.layer(withIdentifier: id)?.isVisible = !prefs.showAttractions
             }
-            for layer in style.layers where MapStyleCatalog.isWaterNameLayer(layer.identifier) {
-                layer.isVisible = prefs.showWaterNames
-            }
+            applyWaterNameVisibility(to: style, visible: prefs.showWaterNames)
             applyFuelReplacementEmphasis(to: style)
+        }
+
+        /// Look up live layers by id. Mutating `style.layers` copies is a no-op
+        /// on MapLibre Native, which made the Lake names switch appear dead.
+        private func applyWaterNameVisibility(to style: MLNStyle, visible: Bool) {
+            var ids = Set(MapStyleCatalog.waterNameLayerIDs)
+            for layer in style.layers where MapStyleCatalog.isWaterNameLayer(layer.identifier) {
+                ids.insert(layer.identifier)
+            }
+            for id in ids {
+                style.layer(withIdentifier: id)?.isVisible = visible
+            }
         }
 
         private func applyFuelReplacementEmphasis(to style: MLNStyle) {

@@ -60,8 +60,15 @@ struct LayerPrefsSnapshot {
         showCampgrounds = ud.bool(forKey: "dirt.layers.camp")
         showLodging     = ud.bool(forKey: "dirt.layers.lodging")
         showLiquor      = ud.bool(forKey: "dirt.layers.liquor")
-        showAttractions = (ud.object(forKey: "dirt.layers.attractions") as? Bool) ?? true
-        showWaterNames  = (ud.object(forKey: "dirt.layers.water-names") as? Bool) ?? true
+        showAttractions = Self.boolPref(ud, "dirt.layers.attractions", default: true)
+        showWaterNames  = Self.boolPref(ud, "dirt.layers.water-names", default: true)
+    }
+
+    /// `@AppStorage` Bool can land as Bool or NSNumber. `as? Bool` misses 0/1.
+    private static func boolPref(_ ud: UserDefaults, _ key: String, default fallback: Bool) -> Bool {
+        if let value = ud.object(forKey: key) as? Bool { return value }
+        if let value = ud.object(forKey: key) as? NSNumber { return value.boolValue }
+        return fallback
     }
 
     var anyPOIEnabled: Bool { showFuel || showCampgrounds || showLodging || showLiquor }

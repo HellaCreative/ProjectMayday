@@ -149,11 +149,11 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ### Basemap labels and borders
 
-`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v7`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from z0. Province/state: Natural Earth 50m admin-1 (US+CA, lakes-clipped, OsmAnd purple dashed) from z0–7, then Shortbread `admin_level=4` from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v8`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from z0. Province/state: Natural Earth 50m admin-1 (US+CA, lakes-clipped, OsmAnd purple dashed) from z0–7, then Shortbread `admin_level=4` from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
 
-City and town names use the former lake headline size (Bold) with the cream halo. Lake and waterway names stay intense `#0033cc` Bold at **half** that size and **no** white halo. Street and path names (`label-street-centre-12`, `label-path-bottom-12`) start at z10/z11 in near-black. Selected-route paint is unchanged (dirt browny-orange, pavement black, gravel grey, unknown purple). Attractions stay as Played.
+City and town names use the former lake headline size (Bold) with the cream halo. Lake and waterway names stay intense `#0033cc` Bold at **half** that size. MapLibre SDF needs a halo to rasterize glyphs, so lakes use a **same-color** blue halo (not white). Street and path names (`label-street-centre-12`, `label-path-bottom-12`) start at z10/z11 in near-black. Selected-route paint is unchanged (dirt browny-orange, pavement black, gravel grey, unknown purple). Attractions stay as Played.
 
-Layers → Rider services: Fuel, Campgrounds, Attractions (default on), **Lake names** (default on), then lodging/liquor. Lake names toggle `dirt.layers.water-names` hides `water_polygons_labels-water-name-*` and `label-waterway-*`. Attractions are OSM Shortbread marks, not `/api/poi`.
+Layers → Rider services: Fuel, Campgrounds, Attractions (default on), **Lake names** (default on), then lodging/liquor. Lake names toggle `dirt.layers.water-names` looks up live MapLibre layers by id (`water_polygons_labels-water-name-*`, `label-waterway-*`). Generated style keeps `visibility: visible`; the switch hides them at runtime. Attractions are OSM Shortbread marks, not `/api/poi`.
 
 ### Rider Services POIs
 
