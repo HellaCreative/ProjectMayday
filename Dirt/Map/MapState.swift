@@ -162,8 +162,8 @@ final class MapState {
         applyBasemapStyleURL(MapStyleCatalog.styleURL(tileSource: tileSource))
     }
 
-    func applySelectedMapStyle() {
-        applyBasemapStyleURL(MapStyleCatalog.styleURL(tileSource: tileSource))
+    func applySelectedMapStyle(_ id: MapStyleID = MapStyleCatalog.selectedID) {
+        applyBasemapStyleURL(MapStyleCatalog.styleURL(for: id, tileSource: tileSource))
     }
 
     // MARK: - Map viewport (set by Coordinator on regionDidChange)

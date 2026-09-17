@@ -298,14 +298,17 @@ struct RootView: View {
     /// Map + chrome only — kept separate so the type checker can digest the overlays.
     private var mapShell: some View {
         ZStack(alignment: .bottom) {
-            // Observe overlay insets so MapLibre gets updateUIView when the
-            // landscape route drawer opens/closes (camera centers in open map).
-            let _ = app.mapState.overlayInsetsGeneration
-            let _ = app.mapState.layerPrefsGeneration
-            let _ = app.mapState.bcOSMOverlayGeneration
-            let _ = app.mapState.styleGeneration
-            MapLibreMapView(state: app.mapState, location: app.location)
-                .ignoresSafeArea()
+            // Generations are stored inputs so MapLibre's UIViewRepresentable
+            // actually gets updateUIView when Standard/Rich (or overlays) change.
+            MapLibreCanvas(
+                state: app.mapState,
+                location: app.location,
+                overlayInsetsGeneration: app.mapState.overlayInsetsGeneration,
+                layerPrefsGeneration: app.mapState.layerPrefsGeneration,
+                bcOSMOverlayGeneration: app.mapState.bcOSMOverlayGeneration,
+                styleGeneration: app.mapState.styleGeneration
+            )
+            .ignoresSafeArea()
 
             if useLandscapeNavChrome {
                 landscapeNavigationChrome
@@ -1871,6 +1874,26 @@ struct RootView: View {
         .accessibilityAddTraits(state == .open ? [.isSelected] : [])
     }
 
+}
+
+/// Stored generation counters so MapLibre's UIViewRepresentable receives
+/// `updateUIView` when Standard/Rich or overlay prefs change. Class-typed
+/// `MapState` alone does not.
+private struct MapLibreCanvas: View {
+    var state: MapState
+    var location: LocationService
+    var overlayInsetsGeneration: Int
+    var layerPrefsGeneration: Int
+    var bcOSMOverlayGeneration: Int
+    var styleGeneration: Int
+
+    var body: some View {
+        let _ = overlayInsetsGeneration
+        let _ = layerPrefsGeneration
+        let _ = bcOSMOverlayGeneration
+        let _ = styleGeneration
+        MapLibreMapView(state: state, location: location)
+    }
 }
 
 /// Load entrance: wrapper grows down from the hardware Island, then `DIRT.` plops

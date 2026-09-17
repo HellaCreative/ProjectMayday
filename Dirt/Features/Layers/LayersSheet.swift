@@ -49,8 +49,10 @@ struct LayersSheet: View {
                                             lineWidth: 1
                                         )
                                 )
+                                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
                         .buttonStyle(.plain)
+                        .animation(DirtMotion.affordance, value: selected)
                         .accessibilityLabel(style.title)
                         .accessibilityAddTraits(selected ? .isSelected : [])
                     }
@@ -174,9 +176,10 @@ struct LayersSheet: View {
     }
 
     private func selectStyle(_ style: MapStyleID) {
+        DirtMotion.selection()
         styleIDRaw = style.rawValue
         MapStyleCatalog.selectedID = style
-        app.mapState.applySelectedMapStyle()
+        app.mapState.applySelectedMapStyle(style)
     }
 }
 
