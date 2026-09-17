@@ -95,6 +95,7 @@ struct LayersSheet: View {
                 Divider()
                 serviceToggle("Lake names", icon: "drop.fill", color: RiderServiceDot.water, isOn: $showWaterNames)
                     .frame(minHeight: DirtHit.control)
+                    .accessibilityIdentifier("layer-toggle-lake-names")
                 Divider()
                 serviceToggle("Lodging", icon: "bed.double.fill", color: RiderServiceDot.lodging, isOn: $showLodging)
                     .frame(minHeight: DirtHit.control)

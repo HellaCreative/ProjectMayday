@@ -287,9 +287,10 @@ struct DirtTests {
     }
 
     @Test func generatedStyleShowsWaterAndStreetNames() throws {
-        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v9")
+        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v10")
         #expect(MapStyleCatalog.darkenedHex("#7eb8d4") == "#3f5c6a")
-        #expect(MapStyleCatalog.lakeLabelColor(rich: false) == "#3f5c6a")
+        #expect(MapStyleCatalog.darkenedHex("#7eb8d4", factor: 0.8) == "#6593aa")
+        #expect(MapStyleCatalog.lakeLabelColor(rich: false) == "#6593aa")
         #expect(MapStyleCatalog.lakeLabelColor(rich: false) != "#0033cc")
         #expect(MapStyleCatalog.lakeLabelColor(rich: true) != MapStyleCatalog.lakeLabelColor(rich: false))
         #expect(MapStyleCatalog.isWaterNameLayer("water_polygons_labels-water-name-8"))
@@ -1187,11 +1188,13 @@ struct MapAttractionTests {
         #expect(MapAttraction.kind(from: ["kind": "beach"]) == "beach")
         #expect(MapAttraction.kind(from: ["waterway": "waterfall"]) == "waterfall")
         #expect(MapAttraction.kind(from: ["tourism": "viewpoint"]) == "viewpoint")
+        #expect(MapAttraction.kind(from: ["kind": "viewing_point"]) == "viewpoint")
         #expect(MapAttraction.kind(from: ["historic": "monument"]) == "landmark")
         #expect(MapAttraction.kind(from: ["man_made": "lighthouse"]) == "landmark")
         #expect(MapAttraction.kind(from: ["tourism": "museum"]) == "museum")
         #expect(MapAttraction.kind(from: ["tourism": "artwork"]) == "sculpture")
         #expect(MapAttraction.kind(from: ["natural": "rock"]) == "rock")
+        #expect(MapAttraction.kind(from: ["natural": "cave_entrance"]) == "cave")
         #expect(MapAttraction.kind(from: ["tourism": "hotel"]) == nil)
         #expect(MapAttraction.systemSymbolName == "binoculars.fill")
     }
@@ -1231,8 +1234,11 @@ struct MapAttractionTests {
         #expect(MapAttraction.title(for: "museum") == "Museum")
         #expect(MapAttraction.title(for: "sculpture") == "Sculpture")
         #expect(MapAttraction.title(for: "rock") == "Rock formation")
+        #expect(MapAttraction.title(for: "cave") == "Cave")
+        #expect(MapAttraction.title(for: "viewpoint") == "Viewpoint")
+        #expect(MapAttraction.title(for: "waterfall") == "Waterfall")
         #expect(MapAttraction.layerIDs.contains("dirt-attraction-pois"))
-        #expect(MapAttraction.layerIDs.contains("dirt-attraction-land"))
+        #expect(!MapAttraction.layerIDs.contains("dirt-attraction-land"))
         #expect(!MapAttraction.layerIDs.contains("dirt-attraction-beach"))
     }
 }

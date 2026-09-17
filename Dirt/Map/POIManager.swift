@@ -66,9 +66,10 @@ struct POIFeature: Sendable {
 }
 
 enum MapAttraction {
+    /// Point POIs only. Shortbread `land` `kind=beach` polygons cover whole
+    /// coasts and stole every tap as "Beach".
     static let layerIDs = [
-        "dirt-attraction-pois",
-        "dirt-attraction-land"
+        "dirt-attraction-pois"
     ]
     static let builtinLayerIDs = [
         "pois-tourism-lightbrown-imagename-15",
@@ -76,7 +77,9 @@ enum MapAttraction {
         "pois-historic-brown-imagename-16"
     ]
     static let color = UIColor(red: 0.055, green: 0.486, blue: 0.482, alpha: 1)
-    static let minZoom: Double = 9
+    /// Shortbread `pois` exist from z14; start a notch earlier so binoculars
+    /// appear as the rider zooms toward a mark.
+    static let minZoom: Double = 13
     static let iconName = "dirt-attraction-icon"
     static let systemSymbolName = "binoculars.fill"
 
@@ -86,15 +89,17 @@ enum MapAttraction {
     ]
     static let historicKinds = [
         "monument", "memorial", "castle", "ruins",
-        "archaeological_site", "battlefield", "fort"
+        "archaeological_site", "battlefield", "fort",
+        "wayside_cross", "wayside_shrine"
     ]
     static let naturalKinds = [
         "beach", "waterfall", "rock", "stone", "cave_entrance", "peak", "cliff"
     ]
-    static let shortbreadKinds = [
-        "beach", "waterfall", "viewpoint", "attraction", "museum", "gallery",
-        "artwork", "monument", "memorial", "castle", "ruins", "lighthouse",
-        "rock", "stone", "cave", "peak", "theme_park", "zoo", "sculpture"
+    static let manMadeKinds = [
+        "lighthouse", "obelisk", "tower", "watermill", "windmill"
+    ]
+    static let amenityKinds = [
+        "arts_centre", "theatre", "cinema"
     ]
 
     static func title(for kind: String?) -> String? {
@@ -102,6 +107,7 @@ enum MapAttraction {
         case "beach": return "Beach"
         case "waterfall": return "Waterfall"
         case "viewpoint": return "Viewpoint"
+        case "cave": return "Cave"
         case "museum": return "Museum"
         case "sculpture": return "Sculpture"
         case "rock": return "Rock formation"
@@ -120,22 +126,33 @@ enum MapAttraction {
         let historic = token("historic")
         let waterway = token("waterway")
         let manMade = token("man_made")
+        let amenity = token("amenity")
         let kind = token("kind")
-        if natural == "beach" || leisure == "beach" || kind == "beach" { return "beach" }
-        if natural == "waterfall" || waterway == "waterfall" || kind == "waterfall" { return "waterfall" }
-        if tourism == "viewpoint" || kind == "viewpoint" { return "viewpoint" }
-        if tourism == "museum" || tourism == "gallery" || kind == "museum" || kind == "gallery" {
+        if tourism == "viewpoint" || kind == "viewpoint" || kind == "viewing_point" {
+            return "viewpoint"
+        }
+        if natural == "waterfall" || waterway == "waterfall" || kind == "waterfall" {
+            return "waterfall"
+        }
+        if natural == "cave_entrance" || kind == "cave" || kind == "cave_entrance" {
+            return "cave"
+        }
+        if tourism == "museum" || tourism == "gallery"
+            || kind == "museum" || kind == "gallery" || amenity == "arts_centre" {
             return "museum"
         }
-        if tourism == "artwork" || kind == "artwork" || kind == "sculpture" { return "sculpture" }
-        if ["rock", "stone", "cave_entrance", "peak", "cliff"].contains(natural)
-            || ["rock", "stone", "cave", "peak"].contains(kind) {
+        if tourism == "artwork" || kind == "artwork" || kind == "sculpture" {
+            return "sculpture"
+        }
+        if ["rock", "stone", "peak", "cliff"].contains(natural)
+            || ["rock", "stone", "peak"].contains(kind) {
             return "rock"
         }
+        if natural == "beach" || leisure == "beach" || kind == "beach" { return "beach" }
         if tourismKinds.contains(tourism)
             || historicKinds.contains(historic)
-            || manMade == "lighthouse" || manMade == "obelisk"
-            || shortbreadKinds.contains(kind) {
+            || manMadeKinds.contains(manMade)
+            || amenityKinds.contains(amenity) {
             return "landmark"
         }
         return nil

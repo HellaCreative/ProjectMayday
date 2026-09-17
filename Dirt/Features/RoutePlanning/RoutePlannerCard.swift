@@ -397,6 +397,7 @@ struct RoutePlannerCard: View {
             loopSetupContent
             stageList
             routingStatus
+            ferryNotice
             statsRow
             ctaRow
             clearAllButton
@@ -507,9 +508,7 @@ struct RoutePlannerCard: View {
 
             routingStatus
             fuelCoverageNotices
-            if !planner.hasFuelAssistedPlan {
-                ferryNotice
-            }
+            ferryNotice
             statsRow
             ctaRow
             clearAllButton
@@ -649,6 +648,7 @@ struct RoutePlannerCard: View {
 
         if planner.hasRoute {
             fuelCoverageNotices
+            ferryNotice
             statsRow
             ctaRow
             clearAllButton
@@ -802,12 +802,6 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder private var stageListContent: some View {
-        if planner.ferrySummary.hasCrossing {
-            ferryNotice
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-        }
         ForEach(Array(planner.stages.enumerated()), id: \.element.id) { stageIndex, stage in
             stageBlock(index: stageIndex, stage: stage)
                 .id(stage.id)

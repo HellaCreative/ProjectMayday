@@ -47,6 +47,9 @@ struct MapLibreMapView: UIViewRepresentable {
     private enum RoutePaintMetrics {
         static let surfaceWidth: CGFloat = 8
         static let casingWidth: CGFloat = 10
+        /// Ferry is a water crossing, not a road surface — keep it thin and dotted.
+        static let ferryWidth: CGFloat = 2.6
+        static let ferryDash: [NSNumber] = [0.55, 1.35]
     }
 
     func makeCoordinator() -> Coordinator {
@@ -533,7 +536,7 @@ struct MapLibreMapView: UIViewRepresentable {
             style.setImage(image, forName: name)
         }
 
-        /// OSM Shortbread `pois` / `land` — not Rider Services. Camps and fuel stay on `/api/poi`.
+        /// OSM Shortbread `pois` — not Rider Services and not landcover beaches.
         private func addAttractionLayers(to style: MLNStyle) {
             guard style.layer(withIdentifier: MapAttraction.layerIDs[0]) == nil,
                   let source = style.source(withIdentifier: "someoneelse")
@@ -543,22 +546,14 @@ struct MapLibreMapView: UIViewRepresentable {
                 (
                     "pois",
                     NSPredicate(
-                        format: "natural IN %@ OR leisure == 'beach' OR waterway == 'waterfall' OR tourism IN %@ OR historic IN %@ OR man_made IN %@ OR kind IN %@",
-                        MapAttraction.naturalKinds,
+                        format: "tourism IN %@ OR historic IN %@ OR man_made IN %@ OR amenity IN %@ OR natural IN %@ OR waterway == 'waterfall' OR leisure == 'beach'",
                         MapAttraction.tourismKinds,
                         MapAttraction.historicKinds,
-                        ["lighthouse", "obelisk"],
-                        MapAttraction.shortbreadKinds
+                        MapAttraction.manMadeKinds,
+                        MapAttraction.amenityKinds,
+                        MapAttraction.naturalKinds
                     ),
                     "pois"
-                ),
-                (
-                    "land",
-                    NSPredicate(
-                        format: "kind IN %@",
-                        ["beach", "rock", "stone", "cliff", "peak"]
-                    ),
-                    "land"
                 )
             ]
             for spec in layers {
@@ -634,9 +629,10 @@ struct MapLibreMapView: UIViewRepresentable {
                 identifier: RouteFerryPaint.casingID,
                 source: ferrySource
             )
-            ferryCasing.lineColor = NSExpression(forConstantValue: UIColor.white)
-            ferryCasing.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.casingWidth)
-            ferryCasing.lineOpacity = NSExpression(forConstantValue: 0.72)
+            ferryCasing.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.routeFerry))
+            ferryCasing.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.ferryWidth + 1.4)
+            ferryCasing.lineOpacity = NSExpression(forConstantValue: 0.28)
+            ferryCasing.lineDashPattern = NSExpression(forConstantValue: RoutePaintMetrics.ferryDash)
             ferryCasing.lineCap = NSExpression(forConstantValue: "round")
             ferryCasing.lineJoin = NSExpression(forConstantValue: "round")
 
@@ -645,9 +641,9 @@ struct MapLibreMapView: UIViewRepresentable {
                 source: ferrySource
             )
             ferryLine.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.routeFerry))
-            ferryLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.surfaceWidth)
-            ferryLine.lineOpacity = NSExpression(forConstantValue: 0.92)
-            ferryLine.lineDashPattern = NSExpression(forConstantValue: [2.4, 1.1] as [NSNumber])
+            ferryLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.ferryWidth)
+            ferryLine.lineOpacity = NSExpression(forConstantValue: 1)
+            ferryLine.lineDashPattern = NSExpression(forConstantValue: RoutePaintMetrics.ferryDash)
             ferryLine.lineCap = NSExpression(forConstantValue: "round")
             ferryLine.lineJoin = NSExpression(forConstantValue: "round")
 
@@ -1794,7 +1790,7 @@ struct MapLibreMapView: UIViewRepresentable {
             )
             let poiLayerIDs = Set(POILayer.individualLayerIDs + MapAttraction.layerIDs)
             let poiHits = mapView.visibleFeatures(in: box, styleLayerIdentifiers: poiLayerIDs)
-            guard let hit = poiHits.first else { return nil }
+            guard let hit = Self.preferredPOIHit(poiHits) else { return nil }
             let attrs = hit.attributes
             let existingCategory = attrs["category"] as? String
             let isPackedPOI = existingCategory == "fuel"
@@ -1854,6 +1850,24 @@ struct MapLibreMapView: UIViewRepresentable {
             return mapView.visibleFeatures(in: box, styleLayerIdentifiers: layerIDs)
                 .compactMap { $0 as? MLNPointFeature }
                 .first
+        }
+
+        /// Prefer a packed station, then a named non-beach attraction, then any point.
+        private static func preferredPOIHit(_ hits: [MLNFeature]) -> MLNFeature? {
+            func isPacked(_ feature: MLNFeature) -> Bool {
+                let category = feature.attributes["category"] as? String
+                return category == "fuel"
+                    || category == "campground"
+                    || category == "lodging"
+                    || category == "liquor"
+            }
+            if let packed = hits.first(where: isPacked) { return packed }
+            let attractions: [(MLNFeature, String)] = hits.compactMap { hit in
+                guard let kind = MapAttraction.kind(from: hit.attributes) else { return nil }
+                return (hit, kind)
+            }
+            if let named = attractions.first(where: { $0.1 != "beach" }) { return named.0 }
+            return attractions.first?.0 ?? hits.first
         }
 
         private func zoomIntoFuelCluster(_ cluster: MLNPointFeature, on mapView: MLNMapView) {

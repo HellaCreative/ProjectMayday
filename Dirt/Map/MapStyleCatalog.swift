@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v9"
+    static let generatedStyleRevision = "osmand-v10"
     /// Natural Earth 50m admin-1 (lakes), US+CA interior borders. Not pack bounds.
     static let admin1OverviewSourceID = "dirt-admin1-overview"
     static let admin1OverviewLayerID = "dirt-bound-state-overview"
@@ -237,16 +237,16 @@ extension MapStyleCatalog {
         return hexString(from: rgb(from: color))
     }
 
-    /// Halfway to black from a hex (`factor` 0.5 = 50% darker). Used so lake
-    /// names derive from the painted water fill instead of a third blue.
+    /// Scale RGB toward black (`factor` 0.8 = 20% darker). Lake names derive
+    /// from the painted water fill instead of a third blue.
     static func darkenedHex(_ hex: String, factor: Double = 0.5) -> String {
         guard let base = rgb(from: hex) else { return hex }
         return hexString(from: (base.r * factor, base.g * factor, base.b * factor))
     }
 
-    /// Lake/water names: one color, 50% darker than this style's water fill.
+    /// Lake/water names: one color, 20% darker than this style's water fill.
     static func lakeLabelColor(rich: Bool) -> String {
-        darkenedHex(paintHex("water-fill", rich: rich))
+        darkenedHex(paintHex("water-fill", rich: rich), factor: 0.8)
     }
 
     private static func paintHex(_ key: String, rich: Bool) -> String {
@@ -510,7 +510,7 @@ extension MapStyleCatalog {
     }
 
     /// Lake names sit on the same water fill they name. Play of `#0033cc`
-    /// plus a thicker halo read as two blues. Color is 50% darker than this
+    /// plus a thicker halo read as two blues. Color is 20% darker than this
     /// style's water hex; halo is the same color and as thin as MapLibre SDF
     /// will still rasterize. City/town stay on `retunePlaceLabel`.
     static let lakeLabelHaloWidth = 0.2
