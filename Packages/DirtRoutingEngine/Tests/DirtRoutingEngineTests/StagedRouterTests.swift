@@ -82,13 +82,108 @@ struct StagedRouterTests {
             "nb": root.appendingPathComponent("nb"),
             "qc": root.appendingPathComponent("qc")
         ])
-        let ranked = try StagedRouter.handoverCandidates(from: "nb", into: "qc", toward: dest, repository: repository)
+        let ranked = try StagedRouter.handoverCandidates(from: "nb", into: "qc", toward: dest,
+                                                         from: portersLake, repository: repository)
         #expect(ranked.count == 3)
         #expect(abs(ranked[0].longitude - (-68.99963)) < 1e-5)
         #expect(abs(ranked[0].latitude - 47.31007) < 1e-5)
         // Unknown-only seam is after every known-yes pin, even though it is nearest the dest.
         #expect(abs(ranked[2].longitude - (-69.07672)) < 1e-5)
         #expect(abs(ranked[2].latitude - 47.28765) < 1e-5)
+    }
+
+    @Test func handoverDiversifiesClusteredStubsNearestDestination() throws {
+        // Three known-yes stubs within 1 km of each other (ME-side cluster), plus one
+        // reachable corridor seam ~20 km east. Cursor-biased ranking + diversification
+        // must surface the corridor pin (not burn retries on the stub cluster).
+        let dest = Coordinate(longitude: -69.05, latitude: 44.08)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dirt-staged-diverse-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let seamsJSON = """
+        {
+          "schemaVersion": "dirt-cross-pack-seams.v2",
+          "fabricReleaseId": "fixture",
+          "sourceEpoch": "fixture",
+          "regionId": "REGION",
+          "neighbors": {
+            "OTHER": [
+              {
+                "coordinate": [-67.41452, 45.15490],
+                "gapMeters": 0, "osmNodeId": "1", "osmWayId": "10",
+                "proof": "shared-osm-node-way-edge-legal-topology.v1",
+                "edge": {
+                  "osmWayId": "10", "fromOsmNodeId": "1", "toOsmNodeId": "2",
+                  "accessForward": 0, "accessReverse": 0, "layer": 0, "structureLeaf": null
+                },
+                "barrierDecision": 0
+              },
+              {
+                "coordinate": [-67.41219, 45.15378],
+                "gapMeters": 0, "osmNodeId": "3", "osmWayId": "20",
+                "proof": "shared-osm-node-way-edge-legal-topology.v1",
+                "edge": {
+                  "osmWayId": "20", "fromOsmNodeId": "3", "toOsmNodeId": "4",
+                  "accessForward": 0, "accessReverse": 0, "layer": 0, "structureLeaf": null
+                },
+                "barrierDecision": 0
+              },
+              {
+                "coordinate": [-67.40992, 45.15269],
+                "gapMeters": 0, "osmNodeId": "5", "osmWayId": "30",
+                "proof": "shared-osm-node-way-edge-legal-topology.v1",
+                "edge": {
+                  "osmWayId": "30", "fromOsmNodeId": "5", "toOsmNodeId": "6",
+                  "accessForward": 0, "accessReverse": 0, "layer": 0, "structureLeaf": null
+                },
+                "barrierDecision": 0
+              },
+              {
+                "coordinate": [-67.15023, 45.12417],
+                "gapMeters": 0, "osmNodeId": "7", "osmWayId": "40",
+                "proof": "shared-osm-node-way-edge-legal-topology.v1",
+                "edge": {
+                  "osmWayId": "40", "fromOsmNodeId": "7", "toOsmNodeId": "8",
+                  "accessForward": 0, "accessReverse": 0, "layer": 0, "structureLeaf": null
+                },
+                "barrierDecision": 0
+              }
+            ]
+          }
+        }
+        """
+        for (id, other) in [("nb", "me"), ("me", "nb")] {
+            let dir = root.appendingPathComponent(id, isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let body = seamsJSON
+                .replacingOccurrences(of: "REGION", with: id)
+                .replacingOccurrences(of: "OTHER", with: other)
+            try Data(body.utf8).write(to: dir.appendingPathComponent("cross-pack-seams.v2.json"))
+        }
+        let repository = try PackRepository(installedDirectories: [
+            "nb": root.appendingPathComponent("nb"),
+            "me": root.appendingPathComponent("me")
+        ])
+        let ranked = try StagedRouter.handoverCandidates(from: "nb", into: "me", toward: dest,
+                                                         from: portersLake, repository: repository)
+        #expect(ranked.count == 2)
+        // Cluster collapses to one pin; corridor must appear in the shortlist.
+        let lons = ranked.map(\.longitude)
+        #expect(lons.contains { abs($0 - (-67.15023)) < 1e-4 })
+        #expect(lons.contains { abs($0 - (-67.41452)) < 1e-4 || abs($0 - (-67.41219)) < 1e-4 || abs($0 - (-67.40992)) < 1e-4 })
+    }
+
+    @Test func diversifySkipsNearDuplicates() {
+        let cluster = [
+            Coordinate(longitude: -67.41452, latitude: 45.15490),
+            Coordinate(longitude: -67.41219, latitude: 45.15378),
+            Coordinate(longitude: -67.40992, latitude: 45.15269),
+            Coordinate(longitude: -67.15023, latitude: 45.12417)
+        ]
+        let picked = StagedRouter.diversify(cluster, minSeparation: 8_000)
+        #expect(picked.count == 2)
+        #expect(abs(picked[0].longitude - (-67.41452)) < 1e-4)
+        #expect(abs(picked[1].longitude - (-67.15023)) < 1e-4)
     }
 
     @Test func compassCapDoesNotChangeAnUncappedTableOnATinyGraph() throws {

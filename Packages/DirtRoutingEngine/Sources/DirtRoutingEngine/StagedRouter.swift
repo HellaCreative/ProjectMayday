@@ -33,15 +33,21 @@ public enum StagedRouter {
             let isFinal = index + 1 >= windows.count
             let candidates: [Coordinate]
             if !isFinal, let next = windows[index + 1].last, let shared = window.last {
-                // Yes-access B→C seams first (short hops like NS→Gaspé). Far seams
-                // such as QC→ON often sit on stubs that only connect once C loads;
-                // after those fail, an on-road interior pin inside the shared pack
-                // keeps the current two-pack window legal.
-                var pins = Array(try handoverCandidates(from: shared, into: next, toward: request.end,
-                                                        repository: repository).prefix(2))
+                // Interior of the shared pack first: nearest-to-dest border seams are
+                // often stubs that only connect after the next pack joins (QC→ON,
+                // and NB→ME toward southern Maine). An on-road pin inside B keeps
+                // the current window legal, then the next window opens B+C.
+                var pins: [Coordinate] = []
                 if let interior = try? roadInteriorTarget(in: shared, from: cursor, toward: request.end,
                                                           repository: repository, budget: budget) {
                     pins.append(interior)
+                }
+                // Diversified known-yes seams, biased toward the current ride so
+                // far-side stub clusters do not monopolise the first retries.
+                for seam in try handoverCandidates(from: shared, into: next, toward: request.end,
+                                                   from: cursor, repository: repository).prefix(6) {
+                    if pins.contains(where: { $0.distance(to: seam) < 2_500 }) { continue }
+                    pins.append(seam)
                 }
                 candidates = pins
             } else {
@@ -71,7 +77,7 @@ public enum StagedRouter {
         let indexed = try IndexedGraph(graph, budget: budget)
         let engine = RoutingEngine(pack: indexed)
         var lastFailure: RoutingFailure = .noPath
-        let targets = ends.isEmpty ? [request.end] : Array(ends.prefix(4))
+        let targets = ends.isEmpty ? [request.end] : Array(ends.prefix(8))
         for hopEnd in targets {
             try budget.check()
             let hop = decorated(request, from: cursor, to: hopEnd, preceding: preceding)
@@ -150,18 +156,21 @@ public enum StagedRouter {
     static func handover(from shared: String, into next: String, toward dest: Coordinate,
                          repository: PackRepository) throws -> Coordinate {
         guard let best = try handoverCandidates(from: shared, into: next, toward: dest,
-                                                repository: repository).first else {
+                                                from: dest, repository: repository).first else {
             throw RoutingFailure.noPath
         }
         return best
     }
 
-    /// Border pins for the next hop, nearest the destination first.
+    /// Border pins for the next hop.
     /// Prefer seams whose pack edge is known-yes access (code 0): nearest-to-dest
     /// alone can land on unknown-only tracks that Clean cannot match and Dirt cannot
     /// legally leave, which produced `noPath` on NS→ON while Gaspé still worked.
+    /// Among known-yes (then other) pins, rank by destination distance plus a pull
+    /// toward `cursor` so deep next-pack stub clusters (NB→ME toward Owls Head)
+    /// lose to the nearer shared-side corridor, then spread geographically.
     static func handoverCandidates(from shared: String, into next: String, toward dest: Coordinate,
-                                   repository: PackRepository) throws -> [Coordinate] {
+                                   from cursor: Coordinate, repository: PackRepository) throws -> [Coordinate] {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
@@ -174,15 +183,28 @@ public enum StagedRouter {
             guard point.isValid else { continue }
             let key = String(format: "%.5f,%.5f", point.latitude, point.longitude)
             guard seen.insert(key).inserted else { continue }
-            let distance = point.distance(to: dest)
+            // Dest pull + cursor pull: stubs deep in the next pack are near dest but
+            // far from the ride so far; shared-side corridor seams score better.
+            let score = point.distance(to: dest) + 0.55 * point.distance(to: cursor)
             let knownYes = row.edge.accessForward == 0 || row.edge.accessReverse == 0
-            if knownYes { yes.append((point, distance)) } else { other.append((point, distance)) }
+            if knownYes { yes.append((point, score)) } else { other.append((point, score)) }
         }
         yes.sort { $0.1 < $1.1 }
         other.sort { $0.1 < $1.1 }
-        let ordered = yes.map(\.0) + other.map(\.0)
+        let ordered = diversify(yes.map(\.0)) + diversify(other.map(\.0))
         if ordered.isEmpty { throw RoutingFailure.noPath }
         return ordered
+    }
+
+    /// Keep ranked order, but skip pins that sit within `minSeparation` of an
+    /// already-chosen pin so one stub cluster cannot monopolise retries.
+    static func diversify(_ points: [Coordinate], minSeparation: Double = 8_000) -> [Coordinate] {
+        var picked: [Coordinate] = []
+        for point in points {
+            if picked.contains(where: { $0.distance(to: point) < minSeparation }) { continue }
+            picked.append(point)
+        }
+        return picked
     }
 
     /// On-road pin inside `region`, toward `dest` from `cursor`.
