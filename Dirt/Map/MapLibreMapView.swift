@@ -524,15 +524,13 @@ struct MapLibreMapView: UIViewRepresentable {
                       let image = POILayer.makeIcon(category: cat, color: color) else { continue }
                 style.setImage(image, forName: name)
             }
-            for kind in ["beach", "waterfall", "viewpoint", "landmark"] {
-                let name = "dirt-attraction-icon-\(kind)"
-                guard style.image(forName: name) == nil,
-                      let image = POILayer.makeAttractionIcon(
-                        symbolName: MapAttraction.systemSymbolName(for: kind),
-                        color: MapAttraction.color
-                      ) else { continue }
-                style.setImage(image, forName: name)
-            }
+            let name = MapAttraction.iconName
+            guard style.image(forName: name) == nil,
+                  let image = POILayer.makeAttractionIcon(
+                    symbolName: MapAttraction.systemSymbolName,
+                    color: MapAttraction.color
+                  ) else { return }
+            style.setImage(image, forName: name)
         }
 
         /// OSM Shortbread `pois` / `land` — not Rider Services. Camps and fuel stay on `/api/poi`.
@@ -541,45 +539,36 @@ struct MapLibreMapView: UIViewRepresentable {
                   let source = style.source(withIdentifier: "someoneelse")
             else { return }
 
-            let kinds: [(id: String, predicate: NSPredicate, sourceLayer: String)] = [
+            let layers: [(id: String, predicate: NSPredicate, sourceLayer: String)] = [
                 (
-                    "beach",
-                    NSPredicate(format: "natural == 'beach' OR leisure == 'beach' OR kind == 'beach'"),
-                    "pois"
-                ),
-                (
-                    "waterfall",
-                    NSPredicate(format: "natural == 'waterfall' OR waterway == 'waterfall' OR kind == 'waterfall'"),
-                    "pois"
-                ),
-                (
-                    "viewpoint",
-                    NSPredicate(format: "tourism == 'viewpoint' OR kind == 'viewpoint'"),
-                    "pois"
-                ),
-                (
-                    "landmark",
+                    "pois",
                     NSPredicate(
-                        format: "tourism == 'attraction' OR man_made == 'lighthouse' OR kind == 'attraction' OR historic IN %@",
-                        ["monument", "memorial", "castle", "ruins", "archaeological_site", "battlefield", "fort"]
+                        format: "natural IN %@ OR leisure == 'beach' OR waterway == 'waterfall' OR tourism IN %@ OR historic IN %@ OR man_made IN %@ OR kind IN %@",
+                        MapAttraction.naturalKinds,
+                        MapAttraction.tourismKinds,
+                        MapAttraction.historicKinds,
+                        ["lighthouse", "obelisk"],
+                        MapAttraction.shortbreadKinds
                     ),
                     "pois"
                 ),
                 (
-                    "beach-land",
-                    NSPredicate(format: "kind == 'beach'"),
+                    "land",
+                    NSPredicate(
+                        format: "kind IN %@",
+                        ["beach", "rock", "stone", "cliff", "peak"]
+                    ),
                     "land"
                 )
             ]
-            for spec in kinds {
-                let iconKind = spec.id.hasPrefix("beach") ? "beach" : spec.id
+            for spec in layers {
                 let layer = MLNSymbolStyleLayer(
                     identifier: "dirt-attraction-\(spec.id)",
                     source: source
                 )
                 layer.sourceLayerIdentifier = spec.sourceLayer
                 layer.predicate = spec.predicate
-                layer.iconImageName = NSExpression(forConstantValue: "dirt-attraction-icon-\(iconKind)")
+                layer.iconImageName = NSExpression(forConstantValue: MapAttraction.iconName)
                 layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
                 layer.iconIgnoresPlacement = NSExpression(forConstantValue: false)
                 layer.iconAnchor = NSExpression(forConstantValue: "center")
@@ -764,10 +753,20 @@ struct MapLibreMapView: UIViewRepresentable {
             for id in MapAttraction.builtinLayerIDs {
                 style.layer(withIdentifier: id)?.isVisible = !prefs.showAttractions
             }
-            for layer in style.layers where MapStyleCatalog.isWaterNameLayer(layer.identifier) {
-                layer.isVisible = prefs.showWaterNames
-            }
+            applyWaterNameVisibility(to: style, visible: prefs.showWaterNames)
             applyFuelReplacementEmphasis(to: style)
+        }
+
+        /// Look up live layers by id. Mutating `style.layers` copies is a no-op
+        /// on MapLibre Native, which made the Lake names switch appear dead.
+        private func applyWaterNameVisibility(to style: MLNStyle, visible: Bool) {
+            var ids = Set(MapStyleCatalog.waterNameLayerIDs)
+            for layer in style.layers where MapStyleCatalog.isWaterNameLayer(layer.identifier) {
+                ids.insert(layer.identifier)
+            }
+            for id in ids {
+                style.layer(withIdentifier: id)?.isVisible = visible
+            }
         }
 
         private func applyFuelReplacementEmphasis(to style: MLNStyle) {

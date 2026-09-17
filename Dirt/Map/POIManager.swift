@@ -16,7 +16,7 @@ struct POIFeature: Sendable {
     let openingHours: String?
     let phone: String?
     let website: String?
-    /// OSM attraction subclass: beach, waterfall, viewpoint, landmark.
+    /// OSM attraction subclass: beach, waterfall, museum, sculpture, rock, …
     let kind: String?
 
     init(
@@ -67,11 +67,8 @@ struct POIFeature: Sendable {
 
 enum MapAttraction {
     static let layerIDs = [
-        "dirt-attraction-beach",
-        "dirt-attraction-beach-land",
-        "dirt-attraction-waterfall",
-        "dirt-attraction-viewpoint",
-        "dirt-attraction-landmark"
+        "dirt-attraction-pois",
+        "dirt-attraction-land"
     ]
     static let builtinLayerIDs = [
         "pois-tourism-lightbrown-imagename-15",
@@ -80,12 +77,34 @@ enum MapAttraction {
     ]
     static let color = UIColor(red: 0.055, green: 0.486, blue: 0.482, alpha: 1)
     static let minZoom: Double = 9
+    static let iconName = "dirt-attraction-icon"
+    static let systemSymbolName = "binoculars.fill"
+
+    static let tourismKinds = [
+        "viewpoint", "attraction", "museum", "gallery", "artwork",
+        "theme_park", "zoo", "aquarium"
+    ]
+    static let historicKinds = [
+        "monument", "memorial", "castle", "ruins",
+        "archaeological_site", "battlefield", "fort"
+    ]
+    static let naturalKinds = [
+        "beach", "waterfall", "rock", "stone", "cave_entrance", "peak", "cliff"
+    ]
+    static let shortbreadKinds = [
+        "beach", "waterfall", "viewpoint", "attraction", "museum", "gallery",
+        "artwork", "monument", "memorial", "castle", "ruins", "lighthouse",
+        "rock", "stone", "cave", "peak", "theme_park", "zoo", "sculpture"
+    ]
 
     static func title(for kind: String?) -> String? {
         switch kind {
         case "beach": return "Beach"
         case "waterfall": return "Waterfall"
         case "viewpoint": return "Viewpoint"
+        case "museum": return "Museum"
+        case "sculpture": return "Sculpture"
+        case "rock": return "Rock formation"
         case "landmark": return "Landmark"
         default: return nil
         }
@@ -105,23 +124,21 @@ enum MapAttraction {
         if natural == "beach" || leisure == "beach" || kind == "beach" { return "beach" }
         if natural == "waterfall" || waterway == "waterfall" || kind == "waterfall" { return "waterfall" }
         if tourism == "viewpoint" || kind == "viewpoint" { return "viewpoint" }
-        if tourism == "attraction"
-            || ["monument", "memorial", "castle", "ruins", "archaeological_site", "battlefield", "fort"]
-                .contains(historic)
-            || manMade == "lighthouse"
-            || kind == "attraction" {
+        if tourism == "museum" || tourism == "gallery" || kind == "museum" || kind == "gallery" {
+            return "museum"
+        }
+        if tourism == "artwork" || kind == "artwork" || kind == "sculpture" { return "sculpture" }
+        if ["rock", "stone", "cave_entrance", "peak", "cliff"].contains(natural)
+            || ["rock", "stone", "cave", "peak"].contains(kind) {
+            return "rock"
+        }
+        if tourismKinds.contains(tourism)
+            || historicKinds.contains(historic)
+            || manMade == "lighthouse" || manMade == "obelisk"
+            || shortbreadKinds.contains(kind) {
             return "landmark"
         }
         return nil
-    }
-
-    static func systemSymbolName(for kind: String) -> String {
-        switch kind {
-        case "beach": return "beach.umbrella.fill"
-        case "waterfall": return "drop.fill"
-        case "viewpoint": return "binoculars.fill"
-        default: return "building.columns.fill"
-        }
     }
 }
 

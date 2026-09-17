@@ -287,12 +287,19 @@ struct DirtTests {
     }
 
     @Test func generatedStyleShowsWaterAndStreetNames() throws {
-        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v7")
+        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v9")
+        #expect(MapStyleCatalog.darkenedHex("#7eb8d4") == "#3f5c6a")
+        #expect(MapStyleCatalog.lakeLabelColor(rich: false) == "#3f5c6a")
+        #expect(MapStyleCatalog.lakeLabelColor(rich: false) != "#0033cc")
+        #expect(MapStyleCatalog.lakeLabelColor(rich: true) != MapStyleCatalog.lakeLabelColor(rich: false))
         #expect(MapStyleCatalog.isWaterNameLayer("water_polygons_labels-water-name-8"))
         #expect(MapStyleCatalog.isWaterNameLayer("label-waterway-bottom-12"))
         #expect(!MapStyleCatalog.isWaterNameLayer("place_labels-city"))
         #expect(!MapStyleCatalog.isWaterNameLayer("water_polygons_labels-glacier-name-8"))
+        #expect(MapStyleCatalog.waterNameLayerIDs.contains("water_polygons_labels-water-name-8"))
+        #expect(MapStyleCatalog.waterNameLayerIDs.contains("label-waterway-bottom-14"))
         for style in [MapStyleID.shortbread, .shortbreadRich] {
+            let expected = MapStyleCatalog.lakeLabelColor(rich: style == .shortbreadRich)
             let styleURL = MapStyleCatalog.styleURL(for: style)
             let data = try Data(contentsOf: styleURL)
             let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -304,13 +311,17 @@ struct DirtTests {
             let lake = try #require(byID["water_polygons_labels-water-name-8"])
             #expect(intZoom(lake["minzoom"]) <= 5)
             let lakePaint = try #require(lake["paint"] as? [String: Any])
-            #expect(lakePaint["text-color"] as? String == MapStyleCatalog.lakeLabelBlue)
-            #expect(lakePaint["text-halo-color"] == nil)
-            #expect(numericPaint(lakePaint, "text-halo-width") == 0)
-            #expect(lakePaint["text-color"] as? String != "#163a52")
-            #expect(lakePaint["text-color"] as? String != "#4f8fb0")
+            #expect(lakePaint["text-color"] as? String == expected)
+            #expect(lakePaint["text-halo-color"] as? String == expected)
+            #expect(lakePaint["text-halo-color"] as? String != "#ffffff")
+            #expect(lakePaint["text-halo-color"] as? String != "#f4f1ea")
+            #expect(lakePaint["text-halo-color"] as? String != "#0033cc")
+            #expect(abs(numericPaint(lakePaint, "text-halo-width") - MapStyleCatalog.lakeLabelHaloWidth) < 0.05)
+            #expect(numericPaint(lakePaint, "text-halo-width") > 0)
+            #expect(numericPaint(lakePaint, "text-halo-width") < 0.5)
             let lakeLayout = try #require(lake["layout"] as? [String: Any])
             #expect(lakeLayout["text-font"] as? [String] == ["Noto Sans Bold"])
+            #expect(lakeLayout["visibility"] as? String == "visible")
             #expect(firstTextSize(lake) <= 8)
             if let city = byID["place_labels-city"] {
                 #expect(firstTextSize(city) >= 14)
@@ -328,9 +339,11 @@ struct DirtTests {
             let river = try #require(byID["label-waterway-bottom-12"])
             #expect(intZoom(river["minzoom"]) <= 10)
             let riverPaint = try #require(river["paint"] as? [String: Any])
-            #expect(riverPaint["text-color"] as? String == MapStyleCatalog.lakeLabelBlue)
-            #expect(riverPaint["text-halo-color"] == nil)
-            #expect(numericPaint(riverPaint, "text-halo-width") == 0)
+            #expect(riverPaint["text-color"] as? String == expected)
+            #expect(riverPaint["text-halo-color"] as? String == expected)
+            #expect(numericPaint(riverPaint, "text-halo-width") == MapStyleCatalog.lakeLabelHaloWidth)
+            let riverLayout = try #require(river["layout"] as? [String: Any])
+            #expect(riverLayout["visibility"] as? String == "visible")
             let street = try #require(byID["label-street-centre-12"])
             #expect(intZoom(street["minzoom"]) <= 10)
             let streetPaint = try #require(street["paint"] as? [String: Any])
@@ -345,7 +358,6 @@ struct DirtTests {
         let ud = UserDefaults.standard
         let key = "dirt.layers.water-names"
         let previous = ud.object(forKey: key)
-        ud.removeObject(forKey: key)
         defer {
             if let previous {
                 ud.set(previous, forKey: key)
@@ -353,7 +365,14 @@ struct DirtTests {
                 ud.removeObject(forKey: key)
             }
         }
+        ud.removeObject(forKey: key)
         #expect(LayerPrefsSnapshot().showWaterNames == true)
+        ud.set(false, forKey: key)
+        #expect(LayerPrefsSnapshot().showWaterNames == false)
+        ud.set(NSNumber(value: true), forKey: key)
+        #expect(LayerPrefsSnapshot().showWaterNames == true)
+        ud.set(NSNumber(value: false), forKey: key)
+        #expect(LayerPrefsSnapshot().showWaterNames == false)
     }
 
     @Test func richSaturationHelperUsesOnePointOneFiveBoost() {
@@ -1170,7 +1189,11 @@ struct MapAttractionTests {
         #expect(MapAttraction.kind(from: ["tourism": "viewpoint"]) == "viewpoint")
         #expect(MapAttraction.kind(from: ["historic": "monument"]) == "landmark")
         #expect(MapAttraction.kind(from: ["man_made": "lighthouse"]) == "landmark")
+        #expect(MapAttraction.kind(from: ["tourism": "museum"]) == "museum")
+        #expect(MapAttraction.kind(from: ["tourism": "artwork"]) == "sculpture")
+        #expect(MapAttraction.kind(from: ["natural": "rock"]) == "rock")
         #expect(MapAttraction.kind(from: ["tourism": "hotel"]) == nil)
+        #expect(MapAttraction.systemSymbolName == "binoculars.fill")
     }
 
     @Test func tapLabelNamesTheAttractionKind() {
@@ -1205,7 +1228,12 @@ struct MapAttractionTests {
         #expect(named.categoryLabel == "Attraction · Landmark")
         #expect(named.displayName == "Peggy's Cove")
         #expect(MapAttraction.title(for: "beach") == "Beach")
-        #expect(MapAttraction.layerIDs.contains("dirt-attraction-viewpoint"))
+        #expect(MapAttraction.title(for: "museum") == "Museum")
+        #expect(MapAttraction.title(for: "sculpture") == "Sculpture")
+        #expect(MapAttraction.title(for: "rock") == "Rock formation")
+        #expect(MapAttraction.layerIDs.contains("dirt-attraction-pois"))
+        #expect(MapAttraction.layerIDs.contains("dirt-attraction-land"))
+        #expect(!MapAttraction.layerIDs.contains("dirt-attraction-beach"))
     }
 }
 
