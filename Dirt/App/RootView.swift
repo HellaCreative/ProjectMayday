@@ -674,26 +674,26 @@ struct RootView: View {
                 // Hide map chrome (recenter, etc.) while a dock sheet is open —
                 // the panel owns the lower screen.
                 if showsMapControlStack {
-                    HStack(alignment: .bottom) {
+                    HStack(alignment: .bottom, spacing: 8) {
                         if navActive {
-                            NavSpeedReadout()
+                            NavCueCard()
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.leading, 12)
-                                .transition(.opacity.combined(with: .move(edge: .leading)))
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        } else {
+                            Spacer(minLength: 0)
                         }
-                        Spacer()
-                        mapControlStack
+                        mapControlStack(showsZoom: !navActive)
                             .padding(.trailing, 12)
                     }
                     // Sit fully above the sticky dock (was 24pt — stack slid under the bar).
                     // The sharing card below supplies that clearance when it's open.
-                    .padding(.bottom, showsDock ? DockSheetMotion.dockClearance + 8 : 24)
+                    .padding(.bottom, navActive ? 8 : (showsDock ? DockSheetMotion.dockClearance + 8 : 24))
                     .transition(.opacity)
                 }
 
                 if navActive {
                     NavBottomPanel()
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 16)
                 }
             }
 
@@ -719,7 +719,7 @@ struct RootView: View {
                         ridePreferencesButton
                     }
                     Spacer(minLength: 0)
-                    mapControlStack
+                    mapControlStack()
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 12)
@@ -782,7 +782,11 @@ struct RootView: View {
     }
 
     @ViewBuilder
-    private func dockSheet(_ sheet: ActiveSheet, landscapeDockLeading: Bool?) -> some View {
+    private func dockSheet(
+        _ sheet: ActiveSheet,
+        landscapeDockLeading: Bool?,
+        landscapeHasIslandColumn: Bool = false
+    ) -> some View {
         switch sheet {
         case .layers:
             // Same top gap as Profile fully extended — sheet must not run under the DIRT logo.
@@ -790,6 +794,7 @@ struct RootView: View {
                 heightFraction: 0.92,
                 expandedHeightFraction: 0.92,
                 landscapeDockLeading: landscapeDockLeading,
+                landscapeHasIslandColumn: landscapeHasIslandColumn,
                 material: .thinMaterial,
                 onDismiss: dismissDockSheet
             ) {
@@ -801,6 +806,7 @@ struct RootView: View {
                 expandedHeightFraction: 0.92,
                 showsDragIndicator: true,
                 landscapeDockLeading: landscapeDockLeading,
+                landscapeHasIslandColumn: landscapeHasIslandColumn,
                 onDismiss: dismissDockSheet
             ) {
                 GroupsSheet(onClose: dismissDockSheet, onRoute: {
@@ -817,6 +823,7 @@ struct RootView: View {
                 expandedHeightFraction: 0.92,
                 showsDragIndicator: true,
                 landscapeDockLeading: landscapeDockLeading,
+                landscapeHasIslandColumn: landscapeHasIslandColumn,
                 onDismiss: dismissDockSheet
             ) {
                 ProfileSheet(onClose: dismissDockSheet)
@@ -834,8 +841,8 @@ struct RootView: View {
 
     // MARK: - Landscape primary (Figma landscape-primary view)
 
-    /// Dock always opposite the Dynamic Island, flush to that edge. Drawers slide
-    /// horizontally (≤50% width). Map controls run as a bottom strip on the open map.
+    /// Dock always on the Dynamic Island edge. Drawers slide horizontally
+    /// (≤50% width) under the rail. Map controls run as a bottom strip on the open map.
     private var landscapePrimaryChrome: some View {
         GeometryReader { geo in
             landscapePrimaryChromeContent(
@@ -855,39 +862,46 @@ struct RootView: View {
         let insets = Self.foregroundSafeAreaInsets
         let orientation = Self.foregroundInterfaceOrientation
         let islandOnLeading = Self.islandOnLeadingSide(insets: insets, orientation: orientation)
-        let dockLeading = !islandOnLeading
-        let dockW = DockSheetMotion.landscapeDockWidth
-        let islandPad = islandOnLeading ? max(insets.left, 12) : max(insets.right, 12)
+        let dockLeading = islandOnLeading
+        let hasIslandColumn = DirtIsland.hasHardwareCutout(insets: insets)
+        let dockW = DockSheetMotion.landscapeDockWidth(hasIslandColumn: hasIslandColumn)
         let sheetW = screenW * DockSheetMotion.landscapeMaxDrawerFraction
         let routeSheetOpen = routeCardOpen
 
         ZStack {
-            // Brand chip on the open-map corner opposite the dock (near island, cleared).
-            VStack {
-                HStack {
-                    if dockLeading { Spacer(minLength: 0) }
-                    idleBrandStack
-                    if !dockLeading { Spacer(minLength: 0) }
+            // Wordmark lives in the dock. Build/debug toasts stay on the open map.
+            if islandTickerHasContent {
+                VStack {
+                    HStack {
+                        if dockLeading { Spacer(minLength: 0) }
+                        landscapeMapStatusStack
+                        if !dockLeading { Spacer(minLength: 0) }
+                    }
+                    .padding(.top, max(insets.top, 12))
+                    .padding(.leading, dockLeading ? dockW + 12 : 12)
+                    .padding(.trailing, dockLeading ? 12 : dockW + 12)
+                    Spacer(minLength: 0)
                 }
-                .padding(.top, max(insets.top, 12))
-                .padding(.leading, dockLeading ? dockW + 12 : islandPad)
-                .padding(.trailing, dockLeading ? islandPad : dockW + 12)
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             // Side drawers behind the vertical dock (wash extends under the rail).
             if routeCardOpen {
                 RoutePlannerCard(
                     isOpen: $routeCardOpen,
                     sitsBehindDock: false,
-                    landscapeDockLeading: dockLeading
+                    landscapeDockLeading: dockLeading,
+                    landscapeHasIslandColumn: hasIslandColumn
                 )
                     .coachTarget(.routeCard)
                 .transition(DockSheetMotion.transition(dockLeading: dockLeading))
                 .zIndex(1)
             } else if let sheet = activeSheet {
-                dockSheet(sheet, landscapeDockLeading: dockLeading)
+                dockSheet(
+                    sheet,
+                    landscapeDockLeading: dockLeading,
+                    landscapeHasIslandColumn: hasIslandColumn
+                )
                     .transition(DockSheetMotion.transition(dockLeading: dockLeading))
                     .zIndex(1)
             }
@@ -923,14 +937,14 @@ struct RootView: View {
                 .zIndex(2)
             }
 
-            // Vertical dock — full height, flush to the non-island edge.
+            // Vertical dock — full height, flush to the Island edge.
             HStack(spacing: 0) {
                 if dockLeading {
-                    verticalDock(dockLeading: true)
+                    verticalDock(dockLeading: true, hasIslandColumn: hasIslandColumn)
                     Spacer(minLength: 0)
                 } else {
                     Spacer(minLength: 0)
-                    verticalDock(dockLeading: false)
+                    verticalDock(dockLeading: false, hasIslandColumn: hasIslandColumn)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1045,9 +1059,9 @@ struct RootView: View {
         }
     }
 
-    private var graphBrandButton: some View {
+    private func graphBrandButton(fillsWidth: Bool = false) -> some View {
         Button(action: toggleRoutingGraphDebug) {
-            BrandChip(minHeight: 48)
+            BrandChip(minHeight: 48, fillsWidth: fillsWidth)
             .overlay(
                 RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous)
                     .stroke(
@@ -1083,16 +1097,6 @@ struct RootView: View {
         return max(0, barBottom + MapControlStack.afterZoomGap - safeTop - portraitTopChromeInset)
     }
 
-    /// In-ride cue needs more than minus→3D so the callout clearly sits under
-    /// the Island+DIRT wrapper, not tucked into it.
-    private var islandCueClearance: CGFloat {
-        guard hasDynamicIsland else { return 0 }
-        let barBottom = DirtIsland.cutoutTop + DirtIsland.restingHeight
-        let safeTop = Self.foregroundSafeAreaInsets.top
-        let gap = MapControlStack.afterZoomGap + DirtIsland.wordmarkBand
-        return max(0, barBottom + gap - safeTop - portraitTopChromeInset)
-    }
-
     private var islandTickerHasContent: Bool {
         app.planner.activeRouteProgressMessage != nil
             || (BuildChannel.debugRoutingGraphOverlay && app.mapState.showRoutingGraphDebug)
@@ -1102,7 +1106,7 @@ struct RootView: View {
     private var idleBrandStack: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !hasDynamicIsland {
-                graphBrandButton
+                graphBrandButton()
             }
 
             if let progress = app.planner.activeRouteProgressMessage {
@@ -1121,6 +1125,28 @@ struct RootView: View {
             }
         }
         .padding(.top, hasDynamicIsland && islandTickerHasContent ? islandTickerClearance : 0)
+        .frame(maxWidth: 300, alignment: .leading)
+    }
+
+    /// Landscape map toasts only — the wordmark is in the vertical dock.
+    @ViewBuilder
+    private var landscapeMapStatusStack: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let progress = app.planner.activeRouteProgressMessage {
+                ToastView(text: progress, isBuildingRoute: true)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if BuildChannel.debugRoutingGraphOverlay, app.mapState.showRoutingGraphDebug {
+                routingGraphDebugHUD
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity
+                        )
+                    )
+            }
+        }
         .frame(maxWidth: 300, alignment: .leading)
     }
 
@@ -1418,18 +1444,40 @@ struct RootView: View {
         )
     }
 
-    private func verticalDock(dockLeading: Bool) -> some View {
-        // Figma: VERTICAL + SPACE_BETWEEN, paddingTop/Bottom 47.
-        VStack(spacing: 0) {
+    private func verticalDock(dockLeading: Bool, hasIslandColumn: Bool) -> some View {
+        let islandCol = DockSheetMotion.landscapeIslandColumn
+        let tabs = VStack(spacing: 0) {
             ForEach(Array(DockTab.allCases.enumerated()), id: \.element.id) { index, tab in
                 if index > 0 { Spacer(minLength: 0) }
                 dockButton(tab)
             }
         }
         .padding(.horizontal, 6)
-        .padding(.top, DockSheetMotion.landscapeDockEndPadding)
         .padding(.bottom, DockSheetMotion.landscapeDockEndPadding)
-        .frame(width: DockSheetMotion.landscapeDockWidth)
+        .frame(width: DockSheetMotion.landscapeDockRailWidth)
+        .frame(maxHeight: .infinity)
+
+        return VStack(spacing: 0) {
+            graphBrandButton(fillsWidth: true)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
+            HStack(spacing: 0) {
+                if hasIslandColumn, dockLeading {
+                    Color.clear.frame(width: islandCol)
+                    tabs
+                } else if hasIslandColumn {
+                    tabs
+                    Color.clear.frame(width: islandCol)
+                } else {
+                    tabs
+                }
+            }
+            .frame(maxHeight: .infinity)
+        }
+        .frame(width: DockSheetMotion.landscapeDockWidth(hasIslandColumn: hasIslandColumn))
         .frame(maxHeight: .infinity)
         .dirtDenseChrome()
         .background {
@@ -1454,12 +1502,8 @@ struct RootView: View {
         )
     }
 
-    /// Figma 65:6 — brand-width left rail, cue + speed in the open map, PiP top-right, controls on the trailing edge.
-    ///
-    /// Horizontal safe area is asymmetric in landscape (Dynamic Island on leading *or*
-    /// trailing depending on rotation). We ignore the default inset on both sides, then
-    /// clear each edge from live window insets — and mirror the rail/controls so the
-    /// island side never eats the map-control stack.
+    /// Ride chrome clusters on the side opposite the Dynamic Island so that
+    /// edge stays open map. +/− sit at the top of the island-side map.
     private var landscapeNavigationChrome: some View {
         GeometryReader { geo in
             landscapeNavigationChromeContent(
@@ -1479,41 +1523,54 @@ struct RootView: View {
         let insets = Self.foregroundSafeAreaInsets
         let orientation = Self.foregroundInterfaceOrientation
         let islandOnLeading = Self.islandOnLeadingSide(insets: insets, orientation: orientation)
-        // Always honor live insets on both sides (fixes sticky leading-only pad).
-        let leadingPad = max(insets.left, 12)
-        let trailingPad = max(insets.right, 12)
+        let islandPad = max(islandOnLeading ? insets.left : insets.right, 12)
+        let clusterPad = NavChromeMetrics.landscapeClusterEdgePad
 
+        let band = NavChromeMetrics.landscapeTopBandHeight
         let rail = VStack(alignment: .leading, spacing: 8) {
-            BrandChip(minHeight: 68, fillsWidth: true)
-                .frame(width: NavChromeMetrics.landscapeBrandColumn)
+            BrandChip(minHeight: band, fillsWidth: true)
+                .frame(width: NavChromeMetrics.landscapeBrandColumn, height: band)
             NavLandscapeRail()
             Spacer(minLength: 0)
         }
 
         let cueCluster = HStack(alignment: .top, spacing: 8) {
-            NavCueCard()
+            NavCueCard(bandHeight: band)
                 .frame(maxWidth: NavChromeMetrics.landscapeCueMaxWidth, alignment: .leading)
             NavSpeedReadout(compact: true)
         }
 
+        let islandZoom = MapZoomControls()
+
+        let rideChips = MapControlStack(
+            compact: NavigationChrome.mapStackCompact(
+                routeCardOpen: routeCardOpen,
+                phase: app.navigation.phase
+            ),
+            groupOnly: activeSheet == .group,
+            savedOnly: routeCardOpen && app.planner.mode == .saved && !app.planner.showingLoop,
+            showsZoom: false,
+            landscapeChipsOnTrailing: islandOnLeading
+        )
+
         ZStack {
             HStack(alignment: .top, spacing: 8) {
                 if islandOnLeading {
-                    // Island on leading → rail/cue clear the island; controls on open trailing.
-                    rail
-                    cueCluster
+                    islandZoom
                     Spacer(minLength: 8)
-                    mapControlStack
+                    cueCluster
+                    rail
+                    rideChips
                 } else {
-                    // Island on trailing → flip so controls stay reachable on the open side.
-                    mapControlStack
-                    Spacer(minLength: 8)
-                    cueCluster
+                    rideChips
                     rail
+                    cueCluster
+                    Spacer(minLength: 8)
+                    islandZoom
                 }
             }
-            .padding(.leading, leadingPad)
-            .padding(.trailing, trailingPad)
+            .padding(.leading, islandOnLeading ? islandPad : clusterPad)
+            .padding(.trailing, islandOnLeading ? clusterPad : islandPad)
             .padding(.top, max(insets.top, 6))
             .padding(.bottom, max(insets.bottom, 12))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -1574,13 +1631,15 @@ struct RootView: View {
         )
     }
 
-    private var mapControlStack: some View {
+    private func mapControlStack(showsZoom: Bool = true) -> some View {
         MapControlStack(
             compact: NavigationChrome.mapStackCompact(
                 routeCardOpen: routeCardOpen,
                 phase: app.navigation.phase
             ),
-            groupOnly: activeSheet == .group
+            groupOnly: activeSheet == .group,
+            savedOnly: routeCardOpen && app.planner.mode == .saved && !app.planner.showingLoop,
+            showsZoom: showsZoom
         )
     }
 
@@ -1591,12 +1650,12 @@ struct RootView: View {
                     if !hasDynamicIsland {
                         BrandChip(minHeight: 68)
                     }
-                    NavCueCard()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: MapControlStack.itemSpacing) {
+                        NavSpeedReadout(compact: true)
+                        MapZoomControls(axis: .vertical)
+                    }
                 }
-                // Stop at the inner edge of +/−/3D. Left matches ticker/logo (12pt).
-                .padding(.trailing, DirtHit.control + MapControlStack.itemSpacing)
-                .padding(.top, hasDynamicIsland ? islandCueClearance : 0)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 HStack(alignment: .top, spacing: 8) {

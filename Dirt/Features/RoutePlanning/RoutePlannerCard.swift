@@ -22,6 +22,7 @@ struct RoutePlannerCard: View {
     var sitsBehindDock: Bool = false
     /// Figma landscape-primary side drawer. `true` = dock leading; `false` = dock trailing.
     var landscapeDockLeading: Bool? = nil
+    var landscapeHasIslandColumn: Bool = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppEnvironment.self) private var app
     @Environment(\.modelContext) private var modelContext
@@ -290,7 +291,7 @@ struct RoutePlannerCard: View {
         GeometryReader { geo in
             // Half screen including the strip under the dock.
             let panelW = geo.size.width * DockSheetMotion.landscapeMaxDrawerFraction
-            let dockW = DockSheetMotion.landscapeDockWidth
+            let dockW = DockSheetMotion.landscapeDockWidth(hasIslandColumn: landscapeHasIslandColumn)
 
             HStack(spacing: 0) {
                 if dockLeading {
@@ -556,6 +557,7 @@ struct RoutePlannerCard: View {
             }
             .pickerStyle(.menu)
             .dirtDropdownSurface(titleColor: DirtTheme.ink)
+            .frame(minWidth: DirtHit.dropdown, alignment: .leading)
             .labelsHidden()
             .accessibilityLabel("Surface")
             .accessibilityValue(planner.profile.title)
@@ -570,7 +572,6 @@ struct RoutePlannerCard: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
-        .fixedSize(horizontal: true, vertical: false)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: DirtHit.min, alignment: .leading)
     }
