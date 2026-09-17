@@ -18,11 +18,17 @@ final class SavedRoute {
     var routeSeedsData: Data?
     var surfaceFamilyMode: String?
     var createdAt: Date
+    /// Set when this library record is a GPS ride saved after End. Nil for
+    /// planned / imported routes. Created and ridden entries can both exist.
+    var riddenSavedAt: Date?
 
     var profile: RouteProfile {
         get { RouteProfile(rawValue: profileRawValue) ?? .balanced }
         set { profileRawValue = newValue.rawValue }
     }
+
+    /// GPS ride from End, distinct from a planned line of the same name.
+    var isRidden: Bool { riddenSavedAt != nil }
 
     var coordinates: [RouteCoordinate] {
         get { (try? JSONDecoder().decode([RouteCoordinate].self, from: coordinatesData)) ?? [] }
@@ -49,7 +55,8 @@ final class SavedRoute {
         pavedPercent: Int,
         segments: [RouteSegment]? = nil,
         surfaceFamilyMode: String? = nil,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        riddenSavedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -61,6 +68,7 @@ final class SavedRoute {
         segmentsData = segments.flatMap { try? JSONEncoder().encode($0) }
         self.surfaceFamilyMode = surfaceFamilyMode
         self.createdAt = createdAt
+        self.riddenSavedAt = riddenSavedAt
     }
 }
 

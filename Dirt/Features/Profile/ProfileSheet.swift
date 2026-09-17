@@ -90,7 +90,16 @@ struct ProfileSheet: View {
             .scrollEdgeEffectStyle(.soft, for: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { displayName = supabase.displayName }
+        .onAppear {
+            displayName = supabase.displayName
+            if app.pendingProfileContributeFocus {
+                app.pendingProfileContributeFocus = false
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    showRideSettings = true
+                }
+            }
+        }
         .onChange(of: supabase.displayName) { _, name in
             if !showEditName {
                 displayName = name
@@ -298,7 +307,7 @@ struct ProfileSheet: View {
                         .foregroundStyle(DirtTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                     Toggle(
-                        "Ask to contribute rides",
+                        "Contribute passable roads",
                         isOn: Binding(
                             get: { TrackContributePrefs.isEnabled },
                             set: {
@@ -309,7 +318,7 @@ struct ProfileSheet: View {
                     )
                     .font(DirtType.rowTitle)
                     .tint(DirtTheme.orange)
-                    Text("After End navigation, optionally share the roads you rode — not a GPS trail — so packs stay better.")
+                    Text("When this is on, End Ride silently uploads the pack roads we classified. Never a GPS trail, crumbs, or heatmap. Saving a ride does not contribute.")
                         .font(DirtType.helper)
                         .foregroundStyle(DirtTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)

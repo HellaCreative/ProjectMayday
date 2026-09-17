@@ -31,8 +31,11 @@ final class AppEnvironment {
     /// Retired BC OSM mbtiles experiment (no-op; kept to avoid a pbxproj delete).
     let bcOSMHierarchy: BCOSMHierarchyOverlay
 
-    /// Pending opt-in contribute sheet after End navigation.
-    var pendingTrackContribution: RideContributionCandidate?
+    /// Pending post-ride prompt (save GPS ride, then maybe a Profile nudge).
+    var postRidePrompt: PostRidePrompt?
+    /// Opens Keep-awake & contribute after Profile appears from the nudge.
+    var pendingProfileContributeFocus = false
+    private var pendingContributeNudge = false
 
     private enum TesterKey {
         static let bypassAuth = "dirt_debug_bypass_auth_v1"
@@ -151,15 +154,20 @@ final class AppEnvironment {
                 cueSettings.speakCueIfNeeded(text, announceKey: announceKey)
             }
         }
-        planner.onNavigationEnded = { [weak self] candidate in
+        planner.onNavigationEnded = { [weak self] payload in
             Task { @MainActor in
                 guard let self else { return }
                 self.cueSettings.stopSpeaking()
                 await self.rideIntelligence.flushPendingIncidents()
-                guard let candidate else { return }
-                // Prompt when preference on, or first time with a meaningful ride.
-                if TrackContributePrefs.isEnabled || !TrackContributePrefs.hasBeenAsked {
-                    self.pendingTrackContribution = candidate
+                if TrackContributePrefs.isEnabled, let candidate = payload.contribution {
+                    await self.silentlyContribute(candidate)
+                }
+                let offerNudge = TrackContributePrefs.recordCompletedNavigation()
+                if let ridden = payload.riddenSave {
+                    self.pendingContributeNudge = offerNudge
+                    self.postRidePrompt = .save(ridden)
+                } else if offerNudge {
+                    self.postRidePrompt = .contributeNudge
                 }
             }
         }
@@ -255,6 +263,46 @@ final class AppEnvironment {
             planner.installFerryPresentationFixtureForTesting()
         }
 #endif
+    }
+
+    /// Dismiss the current post-ride sheet. Closing the save prompt may then nudge.
+    func dismissPostRidePrompt() {
+        let previous = postRidePrompt
+        postRidePrompt = nil
+        if case .save = previous {
+            scheduleContributeNudgeIfPending()
+        }
+    }
+
+    /// After the save prompt closes, maybe show the occasional Profile nudge.
+    private func scheduleContributeNudgeIfPending() {
+        guard pendingContributeNudge else { return }
+        pendingContributeNudge = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(420))
+            postRidePrompt = .contributeNudge
+        }
+    }
+
+    func openProfileFromContributeNudge() {
+        pendingContributeNudge = false
+        postRidePrompt = nil
+        pendingProfileContributeFocus = true
+    }
+
+    /// Pref-on path: classified pack edge ids only. No GPS trail, crumbs, or heatmap.
+    private func silentlyContribute(_ candidate: RideContributionCandidate) async {
+        var coords: [CLLocationCoordinate2D] = []
+        if let c = location.currentCoordinate {
+            coords.append(CLLocationCoordinate2D(latitude: c.latitude, longitude: c.longitude))
+        }
+        _ = await rideIntelligence.contributeTrack(
+            edgeIds: candidate.edgeIds,
+            distanceMeters: candidate.distanceMeters,
+            regionCodes: GraphPackStore.regionIds(containingAny: coords),
+            packVersion: graphPacks.lastManifestVersion,
+            startedAt: candidate.startedAt
+        )
     }
 
     func setCueMode(_ mode: NavigationCueMode) {
