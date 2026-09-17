@@ -241,6 +241,24 @@ struct DirtTests {
         #expect(PackNetworkOverlay.overlaySurfaceClass(.gravel) == "gravel")
         #expect(PackNetworkOverlay.overlaySurfaceClass(.paved) == "paved")
         #expect(PackNetworkOverlay.overlaySurfaceClass(.unknown) == "unknown")
+        #expect(PackNetworkOverlay.overlaySurfaceClass(.unknown, roadClass: "track") == "track")
+        #expect(PackNetworkOverlay.overlaySurfaceClass(.unknown, roadClass: "path") == "track")
+        #expect(PackNetworkOverlay.overlaySurfaceClass(.paved, roadClass: "track") == "track")
+    }
+
+    @Test func overlayAccessClassMatchesGraphLegend() {
+        #expect(PackNetworkOverlay.overlayAccessClass(0) == "motorized_verified")
+        #expect(PackNetworkOverlay.overlayAccessClass(0, leaf: "permissive") == "motorized_permissive")
+        #expect(PackNetworkOverlay.overlayAccessClass(1) == "motorized_unknown")
+        #expect(PackNetworkOverlay.overlayAccessClass(3) == "motorized_restricted")
+        #expect(PackNetworkOverlay.overlayAccessClass(4) == "motorized_restricted")
+        #expect(PackNetworkOverlay.overlayAccessClass(2) == "motorized_excluded")
+        #expect(PackNetworkOverlay.overlayAccessClass(5) == "motorized_excluded")
+        #expect(PackNetworkOverlay.overlayAccessName("destination") == "motorized_restricted")
+        #expect(PackNetworkOverlay.overlayAccessName("motorized_prohibited") == "motorized_excluded")
+        #expect(PackNetworkOverlay.isTendrilSurface(.loose, roadClass: "residential"))
+        #expect(PackNetworkOverlay.isTendrilSurface(.paved, roadClass: "track"))
+        #expect(!PackNetworkOverlay.isTendrilSurface(.paved, roadClass: "primary"))
     }
 
     private func intZoom(_ raw: Any?) -> Int {

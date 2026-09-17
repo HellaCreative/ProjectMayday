@@ -172,18 +172,21 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 | | |
 |---|---|
 | **Data source** | Compatible installed graph and paired geometry for the displayed area |
-| **When it paints** | Zoom ≥ 12.5, or Release DIRT-logo toggle (`showRoutingGraphDebug` without the DEBUG HUD). Built routes do **not** force the overlay at overview. |
-| **Feature cap** | 1600 GeoJSON lines, bbox around map focus + route anchors |
+| **When it paints** | Zoom ≥ 12.5 when the DIRT logo is off. Built routes do **not** force the overlay at overview. |
+| **Feature cap** | 1600 GeoJSON lines, bbox around map focus + route anchors; dirt/track/gravel fill the cap first |
 | **MapLibre source** | `dirt-network` (GeoJSON) |
 | **Layers** | `dirt-net-access` (blue), `dirt-net-gravel` (gray), `dirt-net-track` (brown / `track` tag), `dirt-net-restricted` (red dashed), `dirt-net-bridge` (teal), `dirt-net-tunnel` (brown dashed) |
-| **DEBUG logo** | Heavy `RoutingGraphDebugManager` + GRAPH HUD. Release logo uses this lighter corridor instead. |
+| **DIRT logo** | `RoutingGraphDebugManager` + GRAPH HUD (DEBUG). Same tendril source in Release without the HUD. Viewport bbox, Access colors, dirt tracks. Not limited to z12.5. |
 
-Loose/technical pack edges tag `surfaceClass: track` so `dirt-net-track` actually draws them.
+Loose/technical pack edges and `highway=track|path` tag `surfaceClass: track` so `dirt-net-track` and GRAPH tendrils actually draw them. Legal-topology access codes map to legend keys (`motorized_verified|permissive|unknown|restricted|excluded`) for paint only.
+
+DIRT-logo GRAPH: `RoutingGraphDebugManager` paints dirt/track tendrils colored by Access (default) from local zoom through the visible province — not the z12.5 corridor gate. The nearby `dirt-network` corridor still auto-paints only at zoom ≥ 12.5 when the logo is off.
 
 ### Layer insertion order
 
 ```
 dirt-net-access / gravel / track / restricted / bridge / tunnel   ← nearby network
+dirt-debug-track-glow + dirt-debug-{mode}-{key}                  ← DIRT-logo tendrils
 dirt-route-{bucket}-line                                           ← selected route
 dirt-poi-{category}                                                ← above route
 street-name labels                                                 ← above route (style)

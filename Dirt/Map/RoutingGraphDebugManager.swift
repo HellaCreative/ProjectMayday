@@ -55,8 +55,8 @@ private struct LiveDebugGraphResponse: Decodable {
     let matchingCount: Int?
 }
 
-/// DEBUG: paints viewport edges from the installed pack (v3 leaves when present).
-/// Live API is a fallback only when no pack is installed — it has no leaf fields.
+/// Paints viewport dirt/track tendrils from the installed pack when the DIRT
+/// logo is on. Live API is a fallback only when no pack is installed.
 @MainActor
 final class RoutingGraphDebugManager {
     private let mapState: MapState
@@ -79,6 +79,7 @@ final class RoutingGraphDebugManager {
             _ = mapState.mapCenter.latitude
             _ = mapState.mapCenter.longitude
             _ = mapState.mapZoom
+            _ = mapState.visibleCoordinateBounds
             _ = network.isOnline
             _ = graphPacks.loadedRegionIds
         } onChange: {
@@ -109,18 +110,14 @@ final class RoutingGraphDebugManager {
     }
 
     private func performRefresh() async {
-        // Release DIRT-logo taps use the lighter corridor overlay instead.
-        guard BuildChannel.debugRoutingGraphOverlay else {
-            mapState.updateDebugGraphFeatures([], status: nil, capped: false)
-            return
-        }
         guard mapState.showRoutingGraphDebug else {
             mapState.updateDebugGraphFeatures([], status: nil, capped: false)
             return
         }
 
         let center = mapState.mapCenter
-        guard let region = GraphPackStore.primaryRegionId(containing: center) else {
+        let bbox = overlayBBox()
+        guard let region = overlayRegion(around: center, bbox: bbox) else {
             mapState.updateDebugGraphFeatures(
                 [],
                 status: "No live routing region at this map location.",
@@ -129,25 +126,22 @@ final class RoutingGraphDebugManager {
             return
         }
 
-        // Viewport-bounded so this temporary diagnostic never downloads a pack.
-        let pad = max(0.035, 1.2 / pow(2, max(mapState.mapZoom - 8, 1)))
-        let minLon = center.longitude - pad
-        let maxLon = center.longitude + pad
-        let minLat = center.latitude - pad * 0.7
-        let maxLat = center.latitude + pad * 0.7
-        let cap = 4000
+        // Viewport-bounded tendrils: dirt/track + access classes, local through
+        // province-wide. Do not gate on z12.5 — the logo is the rider's ask.
+        let cap = 4800
 
         // Phase E3: prefer installed pack so surface/road-class leaves paint.
         if let pack = graphPacks.packIfInstalled(region.uppercased()) {
             let pool = await Task.detached(priority: .userInitiated) {
                 PackNetworkOverlay.features(
                     from: pack,
-                    minLon: minLon,
-                    minLat: minLat,
-                    maxLon: maxLon,
-                    maxLat: maxLat,
+                    minLon: bbox.minLon,
+                    minLat: bbox.minLat,
+                    maxLon: bbox.maxLon,
+                    maxLat: bbox.maxLat,
                     province: region.uppercased(),
-                    cap: cap
+                    cap: cap,
+                    preferTendrils: true
                 )
             }.value
             guard mapState.showRoutingGraphDebug else { return }
@@ -155,7 +149,7 @@ final class RoutingGraphDebugManager {
             let fmt = "v4"
             let mode = mapState.debugGraphPaintMode.title
             let status = capped
-                ? "PACK \(fmt) · \(mode) · \(pool.count) edges (capped — zoom in)"
+                ? "PACK \(fmt) · \(mode) · \(pool.count) edges (capped — pan or zoom)"
                 : "PACK \(fmt) · \(mode) · \(pool.count) edges"
             mapState.updateDebugGraphFeatures(pool, status: status, capped: capped)
             return
@@ -172,17 +166,17 @@ final class RoutingGraphDebugManager {
             )
             do {
                 let response = try await liveFeatures(
-                    minLon: minLon,
-                    minLat: minLat,
-                    maxLon: maxLon,
-                    maxLat: maxLat,
+                    minLon: bbox.minLon,
+                    minLat: bbox.minLat,
+                    maxLon: bbox.maxLon,
+                    maxLat: bbox.maxLat,
                     cap: cap,
                     region: region.uppercased()
                 )
                 guard mapState.showRoutingGraphDebug else { return }
                 let count = response.features.count
                 let status = response.capped
-                    ? "LIVE graph · \(count) edges (capped — zoom in)"
+                    ? "LIVE graph · \(count) edges (capped — pan or zoom)"
                     : "LIVE graph · \(count) edges · coarse only"
                 mapState.updateDebugGraphFeatures(
                     response.features,
@@ -206,6 +200,59 @@ final class RoutingGraphDebugManager {
             status: "Install the \(region.uppercased()) pack from Layers to paint graph leaves.",
             capped: false
         )
+    }
+
+    private struct OverlayBBox {
+        let minLon: Double
+        let minLat: Double
+        let maxLon: Double
+        let maxLat: Double
+    }
+
+    /// Visible map, not a ~3 km centre pad. Province-wide zoom must still
+    /// collect dirt tracks across the frame.
+    private func overlayBBox() -> OverlayBBox {
+        if let bounds = mapState.visibleCoordinateBounds {
+            let lonPad = max(bounds.longitudeSpan * 0.03, 0.02)
+            let latPad = max(bounds.latitudeSpan * 0.03, 0.015)
+            return OverlayBBox(
+                minLon: bounds.minLongitude - lonPad,
+                minLat: bounds.minLatitude - latPad,
+                maxLon: bounds.maxLongitude + lonPad,
+                maxLat: bounds.maxLatitude + latPad
+            )
+        }
+        let zoom = max(mapState.mapZoom, 1)
+        let pad = max(0.25, 6.0 / pow(2, max(zoom - 5, 1)))
+        let center = mapState.mapCenter
+        return OverlayBBox(
+            minLon: center.longitude - pad,
+            minLat: center.latitude - pad * 0.7,
+            maxLon: center.longitude + pad,
+            maxLat: center.latitude + pad * 0.7
+        )
+    }
+
+    private func overlayRegion(around center: CLLocationCoordinate2D, bbox: OverlayBBox) -> String? {
+        if let region = GraphPackStore.primaryRegionId(containing: center) {
+            return region
+        }
+        let samples: [CLLocationCoordinate2D] = [
+            CLLocationCoordinate2D(
+                latitude: (bbox.minLat + bbox.maxLat) / 2,
+                longitude: (bbox.minLon + bbox.maxLon) / 2
+            ),
+            CLLocationCoordinate2D(latitude: bbox.minLat, longitude: bbox.minLon),
+            CLLocationCoordinate2D(latitude: bbox.minLat, longitude: bbox.maxLon),
+            CLLocationCoordinate2D(latitude: bbox.maxLat, longitude: bbox.minLon),
+            CLLocationCoordinate2D(latitude: bbox.maxLat, longitude: bbox.maxLon)
+        ]
+        for sample in samples {
+            if let region = GraphPackStore.primaryRegionId(containing: sample) {
+                return region
+            }
+        }
+        return graphPacks.loadedRegionIds.first
     }
 
     private func liveFeatures(
@@ -261,8 +308,8 @@ final class RoutingGraphDebugManager {
             return NetworkLineFeature(
                 edgeId: feature.edgeId,
                 coordinates: coordinates,
-                surfaceClass: feature.surfaceClass,
-                accessClass: feature.accessClass,
+                surfaceClass: feature.surfaceClass == "dirt" ? "track" : feature.surfaceClass,
+                accessClass: PackNetworkOverlay.overlayAccessName(feature.accessClass),
                 structureType: feature.structureType,
                 province: region,
                 roadClass: feature.roadClass,

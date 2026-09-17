@@ -13,5 +13,8 @@ struct PackDebugPaintTests {
         #expect(PackDebugPaint.legend(for: .surfaceFamily).contains { $0.key == "gravel" })
         #expect(PackDebugPaint.legend(for: .roadTier).contains { $0.key == "collector" })
         #expect(PackDebugPaint.legend(for: .access).contains { $0.key == "atv" })
+        #expect(PackDebugPaint.legend(for: .access).contains { $0.key == "motorized_verified" })
+        #expect(PackDebugPaint.legend(for: .access).contains { $0.key == "motorized_restricted" })
+        #expect(PackDebugPaint.attributeKey(for: .access) == "accessClass")
     }
 }
