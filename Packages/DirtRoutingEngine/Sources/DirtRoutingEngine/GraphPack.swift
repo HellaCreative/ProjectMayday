@@ -229,7 +229,16 @@ public final class GraphPack: Sendable {
     public func accessLeaf(_ edge: Int) -> String { enums.accessLeafNames[Int(accessLeaves[edge])] }
     public func atvDesignated(_ edge: Int) -> Bool { edgeFlags[edge] & 1 != 0 }
     public func layer(_ edge: Int) -> Int { Int(layers[edge]) }
-    public func structure(_ edge: Int) -> String { enums.structureLeafNames[Int(structures[edge])] }
+    public func structure(_ edge: Int) -> String {
+        let leaf = enums.structureLeafNames[Int(structures[edge])]
+        if !leaf.isEmpty { return leaf }
+        // fabric-v4 packs keep ferry timing (and coarse attrs bit ferry=4) but
+        // omit structureLeaf "ferry" from the leaf dictionary. crossingSeconds
+        // is ferry-only in the pack contract — restore the UI/routing signifier.
+        if crossingSeconds[edge] > 0 { return "ferry" }
+        if (attrs[edge] >> 6) & 7 == 4 { return "ferry" }
+        return leaf
+    }
     public func polyline(_ edge: Int) -> [Coordinate] {
         let start = Int(geometryOffsets[edge]), end = Int(geometryOffsets[edge+1])
         return stride(from: start,to: end,by: 2).map { i in

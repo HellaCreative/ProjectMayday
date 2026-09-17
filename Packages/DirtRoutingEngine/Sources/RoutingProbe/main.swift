@@ -191,6 +191,11 @@ do {
         for segment in result.segments {
             classMeters[ProfilePolicy.tier(segment.roadClass), default: 0] += segment.meters
         }
+        let ferrySegments = result.segments.filter { $0.structure == "ferry" }
+        let ferryMeters = ferrySegments.reduce(0.0) { $0 + $1.meters }
+        let ferryCrossingSeconds = ferrySegments.reduce(0.0) { sum, segment in
+            sum + (indexed?.crossingTime(segment.edge) ?? 0)
+        }
         let startEdge = result.segments.first?.edgeID ?? indexed?.edgeID(result.start.edge) ?? ""
         let endEdge = result.segments.last?.edgeID ?? indexed?.edgeID(result.end.edge) ?? ""
         output.merge(["status":"complete",
@@ -205,6 +210,9 @@ do {
             "longestPavedRunMeters":quality.longestPavedRunMeters,"edgeIDsSHA256":sha256(edgeIDs),
             "searchSummary":result.searchSummary as Any? ?? NSNull(),
             "roadClassMeters":classMeters,
+            "ferrySegmentCount":ferrySegments.count,
+            "ferryMeters":ferryMeters,
+            "ferryCrossingSeconds":ferryCrossingSeconds,
             "pops":result.poppedLabels,"limit":result.limit as Any? ?? NSNull()]) { $1 }
         if !compact {
             output["edgeIDs"] = edgeIDs

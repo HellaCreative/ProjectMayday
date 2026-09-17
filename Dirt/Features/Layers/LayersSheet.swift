@@ -48,6 +48,7 @@ struct LayersSheet: View {
                     }
                 }
 
+                routePaintCard
                 riderServicesCard
                 downloadedMapsCard
             }
@@ -61,6 +62,39 @@ struct LayersSheet: View {
         .onChange(of: showCampgrounds) { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLodging)     { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLiquor)      { _, _ in app.mapState.bumpLayerPrefs() }
+    }
+
+    private var routePaintCard: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            DirtSectionLabel(title: "Route paint")
+            VStack(alignment: .leading, spacing: DirtSpace.tight) {
+                legendRow(color: DirtTheme.routePaved, title: "Paved", detail: "Sealed surface")
+                legendRow(color: DirtTheme.routeGravel, title: "Gravel", detail: "Gravel, compacted, or generic unpaved")
+                legendRow(color: DirtTheme.routeLoose, title: "Loose", detail: "Dirt, earth, mud, sand, or natural surface")
+                legendRow(color: DirtTheme.routeUnknown, title: "Unknown surface", detail: "Surface is not identified in map data")
+                legendRow(
+                    color: DirtTheme.routeAccess,
+                    title: "Unknown access",
+                    detail: "Purple halo · motorcycle permission unproven"
+                )
+                legendRow(
+                    color: DirtTheme.routeFerry,
+                    title: "Ferry crossing",
+                    detail: "Scheduled transport · verify service before riding",
+                    dashed: true
+                )
+            }
+            Text("Dirt includes gravel, loose, and unknown surface.")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
+        }
+        .padding(DirtSpace.row)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
     }
 
     private var riderServicesCard: some View {
@@ -88,6 +122,28 @@ struct LayersSheet: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
+    }
+
+    private func legendRow(
+        color: Color,
+        title: String,
+        detail: String,
+        dashed: Bool = false
+    ) -> some View {
+        HStack(spacing: DirtSpace.inner) {
+            RoutePaintLegendSwatch(color: color, dashed: dashed)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                Text(title)
+                    .font(DirtType.rowTitle)
+                    .foregroundStyle(DirtTheme.ink)
+                Text(detail)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var downloadedMapsCard: some View {
@@ -183,4 +239,31 @@ private enum RiderServiceDot {
 /// Opaque islands on Layers’ thin glass. Local to this sheet — not a DirtTheme token change.
 private enum LayersGlass {
     static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.94)
+}
+
+private struct RoutePaintLegendSwatch: View {
+    let color: Color
+    var dashed = false
+
+    var body: some View {
+        ZStack {
+            Capsule()
+                .fill(Color.white.opacity(0.92))
+                .frame(width: 32, height: 10)
+            if dashed {
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Capsule()
+                            .fill(color)
+                            .frame(width: 8, height: 6)
+                    }
+                }
+            } else {
+                Capsule()
+                    .fill(color)
+                    .frame(width: 30, height: 6)
+            }
+        }
+        .frame(width: 32, height: 10)
+    }
 }
