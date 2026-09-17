@@ -59,6 +59,24 @@ enum RegionPolygons {
             if lat < 46.0, onHalves.contains("on-s") { return "on-s" }
             return onHalves[0]
         }
+        let qcHalves = hits.filter { $0 == "qc-s" || $0 == "qc-n" }
+        if !qcHalves.isEmpty {
+            if lat >= 49.0, qcHalves.contains("qc-n") { return "qc-n" }
+            if lat < 49.0, qcHalves.contains("qc-s") { return "qc-s" }
+            return qcHalves[0]
+        }
+        let caHalves = hits.filter { $0 == "ca-s" || $0 == "ca-n" }
+        if !caHalves.isEmpty {
+            if lat >= 37.0, caHalves.contains("ca-n") { return "ca-n" }
+            if lat < 37.0, caHalves.contains("ca-s") { return "ca-s" }
+            return caHalves[0]
+        }
+        let nlHalves = hits.filter { $0 == "nl-island" || $0 == "nl-lab" }
+        if !nlHalves.isEmpty {
+            if lon <= -56.8, nlHalves.contains("nl-lab") { return "nl-lab" }
+            if lon > -56.8, nlHalves.contains("nl-island") { return "nl-island" }
+            return nlHalves[0]
+        }
         hits.sort { (bboxes[$0]?.area ?? .infinity) < (bboxes[$1]?.area ?? .infinity) }
         return hits[0]
     }

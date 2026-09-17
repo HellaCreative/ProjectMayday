@@ -16,10 +16,14 @@ test("western Nova Scotia stays NS despite NB bbox overlap", () => {
   assert.equal(primaryRegionForPoint(-66.0633, 45.2733), "nb"); // Saint John
   assert.equal(primaryRegionForPoint(-64.368, 45.918), "nb"); // Sackville — not stolen by NS bbox
   assert.equal(primaryRegionForPoint(-63.1316, 46.2382), "pe"); // Charlottetown
-  assert.equal(primaryRegionForPoint(-54.6103, 48.9544), "nl"); // Gander
-  assert.equal(primaryRegionForPoint(-52.7126, 47.5615), "nl"); // St. John's
-  assert.equal(primaryRegionForPoint(-71.2075, 46.8139), "qc"); // Québec City
-  assert.equal(primaryRegionForPoint(-73.5673, 45.5017), "qc"); // Montréal
+  assert.equal(primaryRegionForPoint(-54.6103, 48.9544), "nl-island"); // Gander
+  assert.equal(primaryRegionForPoint(-52.7126, 47.5615), "nl-island"); // St. John's
+  assert.equal(primaryRegionForPoint(-71.2075, 46.8139), "qc-s"); // Québec City
+  assert.equal(primaryRegionForPoint(-73.5673, 45.5017), "qc-s"); // Montréal
+  assert.equal(primaryRegionForPoint(-60.3256, 53.3013), "nl-lab"); // Happy Valley-Goose Bay
+  assert.equal(primaryRegionForPoint(-118.2437, 34.0522), "ca-s"); // Los Angeles
+  assert.equal(primaryRegionForPoint(-122.4194, 37.7749), "ca-n"); // San Francisco
+  assert.equal(primaryRegionForPoint(-74.365, 49.9167), "qc-n"); // Chibougamau
   assert.equal(primaryRegionForPoint(-75.6972, 45.4215), "on-s"); // Ottawa — not stolen by QC
   assert.equal(primaryRegionForPoint(-63.814, 46.162), "nb"); // Cape Jourimain — not PE
   assert.equal(primaryRegionForPoint(-81.25, 42.98), "on-s"); // London

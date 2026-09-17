@@ -15,7 +15,10 @@ const US_STATE_BBOX = {
   al: [-88.5, 30.2, -84.9, 35.0],
   ar: [-94.6, 33.0, -89.7, 36.5],
   az: [-114.8, 31.3, -109.0, 37.0],
+  // California South / North — cut at 37.0°N (Bay / Central Valley).
   ca: [-124.4, 32.5, -114.1, 42.0],
+  "ca-s": [-124.4, 32.5, -114.1, 37.0],
+  "ca-n": [-124.4, 37.0, -114.1, 42.0],
   co: [-109.1, 37.0, -102.0, 41.0],
   ct: [-73.7, 41.0, -71.8, 42.1],
   de: [-75.8, 38.5, -75.0, 39.8],
@@ -69,10 +72,14 @@ const REGION_BBOX = {
   ns: [-66.6, 43.3, -59.5, 47.2],
   pe: [-64.6, 45.8, -61.9, 47.2],
   nb: [-69.3, 44.5, -63.8, 48.2],
+  // NL island / Labrador — ownership cut lon -56.8° (Strait of Belle Isle).
   nl: [-67.9, 46.5, -52.5, 60.5],
-  // One province pack (OSM-only longhaul). Legacy qc-* quadrant ids still
-  // map via provinceFamily / isQcRegion for emergency packs and old deploys.
+  "nl-island": [-59.0, 46.5, -52.5, 52.0],
+  "nl-lab": [-67.9, 51.2, -55.5, 60.5],
+  // Quebec South / North — cut at 49.0°N (Saguenay south vs Nord-du-Québec).
   qc: [-79.8, 44.9, -57.0, 62.7],
+  "qc-s": [-79.8, 44.9, -57.0, 49.0],
+  "qc-n": [-79.8, 49.0, -57.0, 62.7],
   // Ontario South / North — cut at 46.0°N (French River / Near North).
   // Parent `on` bbox kept for legacy packs and provinceFamily fallback.
   on: [-95.2, 41.6, -74.3, 56.9],
@@ -100,6 +107,16 @@ function isOnRegion(id) {
   return key === "on" || key.startsWith("on-");
 }
 
+function isCaRegion(id) {
+  const key = String(id || "").toLowerCase();
+  return key === "ca" || key.startsWith("ca-");
+}
+
+function isNlRegion(id) {
+  const key = String(id || "").toLowerCase();
+  return key === "nl" || key.startsWith("nl-");
+}
+
 /**
  * Piecewise Ottawa River bank split for overlapping ON/QC bboxes.
  * South bank ≈ Ontario (Ottawa metro); north bank ≈ Québec (Gatineau / Aylmer).
@@ -112,17 +129,31 @@ function isNorthOfOttawaRiver(lon, lat) {
   return lat >= 45.38; // west toward Quyon
 }
 
-/** Collapse QC quadrant / ON subregion ids to one province family. */
+/** Collapse QC / ON / CA / NL subregion ids to one province/state family. */
 function provinceFamily(regionId) {
   const id = String(regionId || "").toLowerCase();
   if (isQcRegion(id)) return "qc";
   if (isOnRegion(id)) return "on";
+  if (isCaRegion(id)) return "ca";
+  if (isNlRegion(id)) return "nl";
   return id;
 }
 
 /** Prefer published ON subregions over the legacy monolithic pack id. */
 function ontarioHalfForPoint(lon, lat) {
   return lat >= 46.0 ? "on-n" : "on-s";
+}
+
+function quebecHalfForPoint(lon, lat) {
+  return lat >= 49.0 ? "qc-n" : "qc-s";
+}
+
+function californiaHalfForPoint(lon, lat) {
+  return lat >= 37.0 ? "ca-n" : "ca-s";
+}
+
+function newfoundlandHalfForPoint(lon, lat) {
+  return lon <= -56.8 ? "nl-lab" : "nl-island";
 }
 
 function bboxArea(bbox) {
@@ -226,11 +257,11 @@ function primaryRegionForPoint(lon, lat) {
   const qcHit = [...ids].find((id) => isQcRegion(id));
   if (onHit && qcHit) {
     // Montreal side / east of Ottawa River mouth.
-    if (lon >= -74.5) return "qc";
+    if (lon >= -74.5) return quebecHalfForPoint(lon, lat);
     // Laurentian / Tremblant plateau (north), but not upper Ottawa Valley ON towns.
-    if (lat >= 45.9 && lon >= -76.0) return "qc";
+    if (lat >= 45.9 && lon >= -76.0) return quebecHalfForPoint(lon, lat);
     // Gatineau / Outaouais — north bank of Ottawa River only (not Parliament / Orleans).
-    if (isNorthOfOttawaRiver(lon, lat)) return "qc";
+    if (isNorthOfOttawaRiver(lon, lat)) return quebecHalfForPoint(lon, lat);
     return ontarioHalfForPoint(lon, lat);
   }
 
@@ -240,6 +271,25 @@ function primaryRegionForPoint(lon, lat) {
     if (!usOverlap && !qcHit && !ids.has("mb") && !ids.has("mn")) {
       return ontarioHalfForPoint(lon, lat);
     }
+  }
+
+  // Within Quebec — prefer published South/North halves over legacy `qc`.
+  if (qcHit && (ids.has("qc-s") || ids.has("qc-n") || ids.has("qc"))) {
+    const usOverlap = [...ids].some((id) => US_STATE_IDS.has(id));
+    if (!usOverlap && !onHit && !ids.has("nb") && !ids.has("nl") && !ids.has("nl-island") && !ids.has("nl-lab")) {
+      return quebecHalfForPoint(lon, lat);
+    }
+  }
+
+  const nlHit = [...ids].find((id) => isNlRegion(id));
+  if (nlHit && (ids.has("nl-island") || ids.has("nl-lab") || ids.has("nl"))) {
+    if (!qcHit && !ids.has("ns")) return newfoundlandHalfForPoint(lon, lat);
+  }
+
+  const caHit = [...ids].find((id) => isCaRegion(id));
+  if (caHit && (ids.has("ca-s") || ids.has("ca-n") || ids.has("ca"))) {
+    const otherUs = [...ids].some((id) => US_STATE_IDS.has(id) && !isCaRegion(id));
+    if (!otherUs) return californiaHalfForPoint(lon, lat);
   }
 
   // NS vs NB — Tantramar / Missaguash. Must run before NB↔QC: Quebec's
@@ -279,8 +329,8 @@ function primaryRegionForPoint(lon, lat) {
 
   // NB vs Quebec river corridor (Dégelis / Témiscouata) only — not Maritimes.
   if (ids.has("nb") && qcHit && !ids.has("ns") && !ids.has("pe")) {
-    if (lon <= -68.45) return "qc";
-    if (lat >= 47.7 && lon <= -68.2) return "qc";
+    if (lon <= -68.45) return quebecHalfForPoint(lon, lat);
+    if (lat >= 47.7 && lon <= -68.2) return quebecHalfForPoint(lon, lat);
     // Only claim NB when we're in the Madawaska / Témiscouata pocket.
     if (lon <= -67.2 && lat >= 47.0) return "nb";
   }
@@ -297,12 +347,12 @@ function primaryRegionForPoint(lon, lat) {
   if (ids.has("nb") && ids.has("me")) return lon <= -67.78 ? "me" : "nb";
 
   // QC↔US — 45th for NY/VT/NH; Maine's rectangle steals Beauce if smallest-bbox wins.
-  if (qcHit && ids.has("ny")) return lat >= 45.01 ? "qc" : "ny";
-  if (qcHit && ids.has("vt")) return lat >= 45.01 ? "qc" : "vt";
-  if (qcHit && ids.has("nh")) return lat >= 45.01 ? "qc" : "nh";
+  if (qcHit && ids.has("ny")) return lat >= 45.01 ? quebecHalfForPoint(lon, lat) : "ny";
+  if (qcHit && ids.has("vt")) return lat >= 45.01 ? quebecHalfForPoint(lon, lat) : "vt";
+  if (qcHit && ids.has("nh")) return lat >= 45.01 ? quebecHalfForPoint(lon, lat) : "nh";
   if (qcHit && ids.has("me")) {
-    if (lon <= -70.55) return "qc";
-    if (lat >= 47.35 && lon <= -69.05) return "qc";
+    if (lon <= -70.55) return quebecHalfForPoint(lon, lat);
+    if (lat >= 47.35 && lon <= -69.05) return quebecHalfForPoint(lon, lat);
     return "me";
   }
 
@@ -649,6 +699,11 @@ module.exports = {
   provinceFamily,
   isQcRegion,
   isOnRegion,
+  isCaRegion,
+  isNlRegion,
   ontarioHalfForPoint,
+  quebecHalfForPoint,
+  californiaHalfForPoint,
+  newfoundlandHalfForPoint,
   regionPackAvailable
 };

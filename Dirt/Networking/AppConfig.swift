@@ -132,18 +132,15 @@ enum AppConfig {
     }
 
     #if DIRT_DEVELOPMENT
-    /// Complete DEV catalog. Production keeps its approved release bytes.
-    /// Partial candidate fabric-v4-20260917-01 (on-s/on-n only) broke pin→download
-    /// prompts outside Ontario; Dev stays on the full production release until a
-    /// national candidate that includes on-s/on-n (and every other region) ships.
-    /// ON-split resolution remains in GraphPackStore (halves when published, else `on`).
+    /// Full national DEV candidate with ON/QC/CA/NL splits. Production keeps
+    /// its approved release bytes. Never pin a partial-only catalog again.
     nonisolated static let v4ConnectionRevision = v4CandidateReleaseId
     nonisolated static var v4ConnectionBaseURL: URL {
         v4CandidateBaseURL
     }
-    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260909-02"
+    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260917-02"
     nonisolated static var v4CandidateBaseURL: URL {
-        v4ProductionBaseURL
+        packCDNBaseURL.appendingPathComponent("v4/candidates/\(v4CandidateReleaseId)")
     }
     #endif
 

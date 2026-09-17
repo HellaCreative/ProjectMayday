@@ -844,22 +844,28 @@ final class GraphPackStore {
         "ab": ["bc", "sk", "nt", "mt"],
         "sk": ["ab", "mb", "mt", "nd"],
         "mb": ["sk", "on-n", "on", "nd", "mn"],
-        "on": ["mb", "qc", "mn", "mi", "ny", "on-s", "on-n"],
-        "on-s": ["on-n", "qc", "mi", "ny", "on"],
-        "on-n": ["on-s", "mb", "qc", "mn", "mi", "on"],
-        "qc": ["on-s", "on-n", "on", "nb", "nl", "ny", "vt", "nh", "me"],
-        "nb": ["qc", "ns", "pe", "me"],
-        "ns": ["nb", "pe", "nl"],
+        "on": ["mb", "qc", "qc-s", "qc-n", "mn", "mi", "ny", "on-s", "on-n"],
+        "on-s": ["on-n", "qc", "qc-s", "mi", "ny", "on"],
+        "on-n": ["on-s", "mb", "qc", "qc-s", "qc-n", "mn", "mi", "on"],
+        "qc": ["on-s", "on-n", "on", "nb", "nl", "nl-island", "nl-lab", "ny", "vt", "nh", "me", "qc-s", "qc-n"],
+        "qc-s": ["qc-n", "qc", "on-s", "on-n", "on", "nb", "ny", "vt", "nh", "me", "nl", "nl-island"],
+        "qc-n": ["qc-s", "qc", "on", "on-n", "nl-lab", "nl-island", "nl"],
+        "nb": ["qc", "qc-s", "ns", "pe", "me"],
+        "ns": ["nb", "pe", "nl", "nl-island"],
         "pe": ["nb", "ns"],
-        "nl": ["qc", "ns"],
+        "nl": ["qc", "qc-n", "qc-s", "ns", "nl-island", "nl-lab"],
+        "nl-island": ["nl-lab", "nl", "qc-s", "qc-n", "qc", "ns"],
+        "nl-lab": ["nl-island", "nl", "qc-n", "qc"],
         "yt": ["bc", "nt", "ak"],
         "nt": ["yt", "bc", "ab"],
         "nu": [],
         "ak": ["yt", "bc"],
         "al": ["fl", "ga", "ms", "tn"],
         "ar": ["mo", "tn", "ms", "la", "tx", "ok"],
-        "az": ["ca", "nv", "ut", "nm"],
-        "ca": ["or", "nv", "az"],
+        "az": ["ca", "ca-s", "nv", "ut", "nm"],
+        "ca": ["or", "nv", "az", "ca-s", "ca-n"],
+        "ca-s": ["ca-n", "ca", "az", "nv"],
+        "ca-n": ["ca-s", "ca", "or", "nv"],
         "co": ["wy", "ne", "ks", "ok", "nm", "ut"],
         "ct": ["ny", "ma", "ri"],
         "de": ["md", "pa", "nj"],
@@ -875,7 +881,7 @@ final class GraphPackStore {
         "la": ["tx", "ar", "ms"],
         "ma": ["ri", "ct", "ny", "vt", "nh"],
         "md": ["va", "wv", "pa", "de"],
-        "me": ["nh", "qc", "nb"],
+        "me": ["nh", "qc", "qc-s", "nb"],
         "mi": ["wi", "in", "oh", "on-s", "on-n", "on"],
         "mn": ["nd", "sd", "ia", "wi", "on-n", "on", "mb"],
         "mo": ["ia", "il", "ky", "tn", "ar", "ok", "ks", "ne"],
@@ -884,14 +890,14 @@ final class GraphPackStore {
         "nc": ["va", "tn", "ga", "sc"],
         "nd": ["mt", "sd", "mn", "mb", "sk"],
         "ne": ["sd", "ia", "mo", "ks", "co", "wy"],
-        "nh": ["me", "ma", "vt", "qc"],
+        "nh": ["me", "ma", "vt", "qc", "qc-s"],
         "nj": ["ny", "pa", "de"],
         "nm": ["az", "co", "ok", "tx"],
-        "nv": ["or", "id", "ut", "az", "ca"],
-        "ny": ["pa", "nj", "ct", "ma", "vt", "qc", "on-s", "on"],
+        "nv": ["or", "id", "ut", "az", "ca", "ca-s", "ca-n"],
+        "ny": ["pa", "nj", "ct", "ma", "vt", "qc", "qc-s", "on-s", "on"],
         "oh": ["mi", "pa", "wv", "ky", "in"],
         "ok": ["co", "ks", "mo", "ar", "tx", "nm"],
-        "or": ["wa", "id", "nv", "ca"],
+        "or": ["wa", "id", "nv", "ca", "ca-n"],
         "pa": ["ny", "nj", "de", "md", "wv", "oh"],
         "ri": ["ct", "ma"],
         "sc": ["nc", "ga"],
@@ -900,7 +906,7 @@ final class GraphPackStore {
         "tx": ["nm", "ok", "ar", "la"],
         "ut": ["id", "wy", "co", "az", "nv"],
         "va": ["md", "wv", "ky", "tn", "nc"],
-        "vt": ["ny", "ma", "nh", "qc"],
+        "vt": ["ny", "ma", "nh", "qc", "qc-s"],
         "wa": ["bc", "id", "or"],
         "wi": ["mi", "mn", "ia", "il"],
         "wv": ["oh", "pa", "md", "va", "ky"],
@@ -946,7 +952,9 @@ final class GraphPackStore {
             .init(id: "ns", title: "Nova Scotia", subtitle: "Home turf · dual-sport reference", approxBytes: 101_000_000, install: .unavailable, country: .canada),
             .init(id: "nb", title: "New Brunswick", subtitle: "Maritime connector", approxBytes: 38_000_000, install: .unavailable, country: .canada),
             .init(id: "pe", title: "Prince Edward Island", subtitle: "Island rides", approxBytes: 3_000_000, install: .unavailable, country: .canada),
-            .init(id: "qc", title: "Québec", subtitle: "Large province · download on Wi‑Fi", approxBytes: 97_000_000, install: .unavailable, country: .canada),
+            .init(id: "qc-s", title: "Québec South", subtitle: "Montréal–Saguenay · denser half", approxBytes: 70_000_000, install: .unavailable, country: .canada),
+            .init(id: "qc-n", title: "Québec North", subtitle: "Nord-du-Québec · Côte-Nord", approxBytes: 40_000_000, install: .unavailable, country: .canada),
+            .init(id: "qc", title: "Québec", subtitle: "Full province · legacy catalog", approxBytes: 97_000_000, install: .unavailable, country: .canada),
             .init(id: "on", title: "Ontario", subtitle: "Full province · legacy catalog", approxBytes: 165_000_000, install: .unavailable, country: .canada),
             .init(id: "on-s", title: "Ontario South", subtitle: "Windsor–Ottawa · denser half", approxBytes: 95_000_000, install: .unavailable, country: .canada),
             .init(id: "on-n", title: "Ontario North", subtitle: "Sudbury–Thunder Bay · shield", approxBytes: 70_000_000, install: .unavailable, country: .canada),
@@ -954,13 +962,16 @@ final class GraphPackStore {
             .init(id: "sk", title: "Saskatchewan", subtitle: "Prairie", approxBytes: 29_000_000, install: .unavailable, country: .canada),
             .init(id: "ab", title: "Alberta", subtitle: "Fresh OSM + Access Roads", approxBytes: 85_000_000, install: .unavailable, country: .canada),
             .init(id: "bc", title: "British Columbia", subtitle: "OSM highway → ATV/track · mountains & coast", approxBytes: 148_000_000, install: .unavailable, country: .canada),
-            .init(id: "nl", title: "Newfoundland and Labrador", subtitle: "OSM + FFA Resource Roads", approxBytes: 22_385_478, install: .unavailable, country: .canada),
+            .init(id: "nl-island", title: "Newfoundland", subtitle: "Island · Avalon to Northern Peninsula", approxBytes: 18_000_000, install: .unavailable, country: .canada),
+            .init(id: "nl-lab", title: "Labrador", subtitle: "Mainland · Trans-Labrador", approxBytes: 12_000_000, install: .unavailable, country: .canada),
+            .init(id: "nl", title: "Newfoundland and Labrador", subtitle: "Full province · legacy catalog", approxBytes: 22_385_478, install: .unavailable, country: .canada),
             .init(id: "yt", title: "Yukon", subtitle: "North", approxBytes: 3_000_000, install: .unavailable, country: .canada),
             .init(id: "nt", title: "Northwest Territories", subtitle: "North", approxBytes: 3_000_000, install: .unavailable, country: .canada),
             .init(id: "nu", title: "Nunavut", subtitle: "North", approxBytes: 2_000_000, install: .unavailable, country: .canada)
         ]
         let us: [(String, String, Int64)] = [
             ("al", "Alabama", 99252068), ("ak", "Alaska", 15983907), ("az", "Arizona", 121010897), ("ar", "Arkansas", 69446135),
+            ("ca-s", "California South", 160_000_000), ("ca-n", "California North", 100_000_000),
             ("ca", "California", 244199538), ("co", "Colorado", 114113249), ("ct", "Connecticut", 52608872), ("de", "Delaware", 13537231),
             ("fl", "Florida", 120762739), ("ga", "Georgia", 167294463), ("hi", "Hawaii", 10873477), ("id", "Idaho", 72786166),
             ("il", "Illinois", 151287100), ("in", "Indiana", 116302988), ("ia", "Iowa", 55837212), ("ks", "Kansas", 67554405),
@@ -1483,6 +1494,10 @@ final class GraphPackStore {
         if maxLat >= 44.5, minLat <= 48.2, maxLon >= -69.3, minLon <= -63.8 { ids.append("nb") }
         if maxLat >= 45.8, minLat <= 47.2, maxLon >= -64.6, minLon <= -61.9 { ids.append("pe") }
         if maxLat >= 46.5, minLat <= 60.5, maxLon >= -67.9, minLon <= -52.5 { ids.append("nl") }
+        if maxLat >= 46.5, minLat <= 52.0, maxLon >= -59.0, minLon <= -52.5 { ids.append("nl-island") }
+        if maxLat >= 51.2, minLat <= 60.5, maxLon >= -67.9, minLon <= -55.5 { ids.append("nl-lab") }
+        if maxLat >= 44.9, minLat <= 49.0, maxLon >= -79.8, minLon <= -57.0 { ids.append("qc-s") }
+        if maxLat >= 49.0, minLat <= 62.7, maxLon >= -79.8, minLon <= -57.0 { ids.append("qc-n") }
         if maxLat >= 44.9, minLat <= 62.7, maxLon >= -79.8, minLon <= -57.0 { ids.append("qc") }
         if maxLat >= 41.6, minLat <= 46.0, maxLon >= -95.2, minLon <= -74.3 { ids.append("on-s") }
         if maxLat >= 46.0, minLat <= 56.9, maxLon >= -95.2, minLon <= -74.3 { ids.append("on-n") }
@@ -1515,17 +1530,31 @@ final class GraphPackStore {
         return ordered
     }
 
-    /// Collapse legacy QC quadrant / ON subregion ids to one province pack family.
+    /// Collapse QC / ON / CA / NL subregion ids to one province/state family.
     /// Lockstep: `scripts/pack-fabric/routing/regional/select.js` `provinceFamily`.
     nonisolated static func provinceFamily(_ regionId: String) -> String {
         let id = regionId.lowercased()
         if id == "qc" || id.hasPrefix("qc-") { return "qc" }
         if id == "on" || id.hasPrefix("on-") { return "on" }
+        if id == "ca" || id.hasPrefix("ca-") { return "ca" }
+        if id == "nl" || id.hasPrefix("nl-") { return "nl" }
         return id
     }
 
     static func ontarioHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.latitude >= 46.0 ? "on-n" : "on-s"
+    }
+
+    static func quebecHalf(for coordinate: CLLocationCoordinate2D) -> String {
+        coordinate.latitude >= 49.0 ? "qc-n" : "qc-s"
+    }
+
+    static func californiaHalf(for coordinate: CLLocationCoordinate2D) -> String {
+        coordinate.latitude >= 37.0 ? "ca-n" : "ca-s"
+    }
+
+    static func newfoundlandHalf(for coordinate: CLLocationCoordinate2D) -> String {
+        coordinate.longitude <= -56.8 ? "nl-lab" : "nl-island"
     }
 
     /// Distinct province/state families for endpoints (not internal shard ids).
@@ -1590,12 +1619,18 @@ final class GraphPackStore {
         }
 
         // QC↔US — 45th for NY/VT/NH; Maine's rectangle must not steal Beauce.
-        if hits.contains("qc"), hits.contains("ny") { return lat >= 45.01 ? "qc" : "ny" }
-        if hits.contains("qc"), hits.contains("vt") { return lat >= 45.01 ? "qc" : "vt" }
-        if hits.contains("qc"), hits.contains("nh") { return lat >= 45.01 ? "qc" : "nh" }
-        if hits.contains("qc"), hits.contains("me") {
-            if lon <= -70.55 { return "qc" }
-            if lat >= 47.35, lon <= -69.05 { return "qc" }
+        if hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }), hits.contains("ny") {
+            return lat >= 45.01 ? quebecHalf(for: coordinate) : "ny"
+        }
+        if hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }), hits.contains("vt") {
+            return lat >= 45.01 ? quebecHalf(for: coordinate) : "vt"
+        }
+        if hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }), hits.contains("nh") {
+            return lat >= 45.01 ? quebecHalf(for: coordinate) : "nh"
+        }
+        if hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }), hits.contains("me") {
+            if lon <= -70.55 { return quebecHalf(for: coordinate) }
+            if lat >= 47.35, lon <= -69.05 { return quebecHalf(for: coordinate) }
             return "me"
         }
 
@@ -1627,19 +1662,46 @@ final class GraphPackStore {
         }
 
         // ON vs Quebec — Ottawa River bank split (select.js parity).
-        if hits.contains(where: { $0 == "on" || $0.hasPrefix("on-") }), hits.contains("qc") {
-            if lon >= -74.5 { return "qc" }
-            if lat >= 45.9, lon >= -76.0 { return "qc" }
-            if isNorthOfOttawaRiver(lon: lon, lat: lat) { return "qc" }
+        if hits.contains(where: { $0 == "on" || $0.hasPrefix("on-") }),
+           hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }) {
+            if lon >= -74.5 { return quebecHalf(for: coordinate) }
+            if lat >= 45.9, lon >= -76.0 { return quebecHalf(for: coordinate) }
+            if isNorthOfOttawaRiver(lon: lon, lat: lat) { return quebecHalf(for: coordinate) }
             return ontarioHalf(for: coordinate)
         }
 
         // Within Ontario — prefer published South/North halves.
         if hits.contains("on-s") || hits.contains("on-n") || hits.contains("on") {
             let usOverlap = hits.contains(where: { usStateBounds[$0] != nil })
-            if !usOverlap, !hits.contains("qc"), !hits.contains("mb"), !hits.contains("mn") {
+            if !usOverlap,
+               !hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }),
+               !hits.contains("mb"), !hits.contains("mn") {
                 return ontarioHalf(for: coordinate)
             }
+        }
+
+        // Within Quebec — prefer published South/North halves.
+        if hits.contains("qc-s") || hits.contains("qc-n") || hits.contains("qc") {
+            let usOverlap = hits.contains(where: { usStateBounds[$0] != nil })
+            if !usOverlap,
+               !hits.contains(where: { $0 == "on" || $0.hasPrefix("on-") }),
+               !hits.contains("nb"),
+               !hits.contains(where: { $0 == "nl" || $0.hasPrefix("nl-") }) {
+                return quebecHalf(for: coordinate)
+            }
+        }
+
+        // Within NL — island vs Labrador.
+        if hits.contains("nl-island") || hits.contains("nl-lab") || hits.contains("nl") {
+            if !hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }), !hits.contains("ns") {
+                return newfoundlandHalf(for: coordinate)
+            }
+        }
+
+        // Within California — prefer published South/North halves.
+        if hits.contains("ca-s") || hits.contains("ca-n") || hits.contains("ca") {
+            let otherUs = hits.contains(where: { usStateBounds[$0] != nil && !$0.hasPrefix("ca") && $0 != "ca" })
+            if !otherUs { return californiaHalf(for: coordinate) }
         }
 
         // NS vs NB — Tantramar / Missaguash. Must run before NB↔QC: Quebec’s
@@ -1672,9 +1734,11 @@ final class GraphPackStore {
         }
 
         // NB vs Quebec river corridor (Dégelis / Témiscouata) only — not Maritimes.
-        if hits.contains("nb"), hits.contains("qc"), !hits.contains("ns"), !hits.contains("pe") {
-            if lon <= -68.45 { return "qc" }
-            if lat >= 47.7, lon <= -68.2 { return "qc" }
+        if hits.contains("nb"),
+           hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }),
+           !hits.contains("ns"), !hits.contains("pe") {
+            if lon <= -68.45 { return quebecHalf(for: coordinate) }
+            if lat >= 47.7, lon <= -68.2 { return quebecHalf(for: coordinate) }
             if lon <= -67.2, lat >= 47.0 { return "nb" }
         }
 
@@ -1721,7 +1785,12 @@ final class GraphPackStore {
         case "nb": return (-69.3, 44.5, -63.8, 48.2)
         case "pe": return (-64.6, 45.8, -61.9, 47.2)
         case "nl": return (-67.9, 46.5, -52.5, 60.5)
-        case "qc": return (-79.8, 44.9, -57.0, 62.7)
+        case "nl-island": return (-59.0, 46.5, -52.5, 52.0)
+        case "nl-lab": return (-67.9, 51.2, -55.5, 60.5)
+        case "qc", "qc-s", "qc-n":
+            if id == "qc-s" { return (-79.8, 44.9, -57.0, 49.0) }
+            if id == "qc-n" { return (-79.8, 49.0, -57.0, 62.7) }
+            return (-79.8, 44.9, -57.0, 62.7)
         case "on", "on-s", "on-n":
             if id == "on-s" { return (-95.2, 41.6, -74.3, 46.0) }
             if id == "on-n" { return (-95.2, 46.0, -74.3, 56.9) }
@@ -1743,6 +1812,10 @@ final class GraphPackStore {
         case "nb": return (-63.8 - -69.3) * (48.2 - 44.5)
         case "pe": return (-61.9 - -64.6) * (47.2 - 45.8)
         case "nl": return (-52.5 - -67.9) * (60.5 - 46.5)
+        case "nl-island": return (-52.5 - -59.0) * (52.0 - 46.5)
+        case "nl-lab": return (-55.5 - -67.9) * (60.5 - 51.2)
+        case "qc-s": return (-57.0 - -79.8) * (49.0 - 44.9)
+        case "qc-n": return (-57.0 - -79.8) * (62.7 - 49.0)
         case "qc": return (-57.0 - -79.8) * (62.7 - 44.9)
         case "on-s": return (-74.3 - -95.2) * (46.0 - 41.6)
         case "on-n": return (-74.3 - -95.2) * (56.9 - 46.0)
@@ -1766,6 +1839,8 @@ final class GraphPackStore {
         "ar": (-94.6, 33.0, -89.7, 36.5),
         "az": (-114.8, 31.3, -109.0, 37.0),
         "ca": (-124.4, 32.5, -114.1, 42.0),
+        "ca-s": (-124.4, 32.5, -114.1, 37.0),
+        "ca-n": (-124.4, 37.0, -114.1, 42.0),
         "co": (-109.1, 37.0, -102.0, 41.0),
         "ct": (-73.7, 41.0, -71.8, 42.1),
         "de": (-75.8, 38.5, -75.0, 39.8),

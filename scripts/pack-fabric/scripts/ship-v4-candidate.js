@@ -90,7 +90,7 @@ function readJSON(file) {
 
 function verifyLocalCandidate(options) {
   const release = readJSON(path.join(options.root, "release.json"));
-  const expectedIds = options.regions || Object.keys(OSM_REGION).sort();
+  const expectedIds = options.regions || require("../routing/registry/geofabrik").catalogRegionIds();
   const actualIds = (release.regions || []).map((row) => row.id).sort();
   const expectedStatus = options.regions ? "local-partial-candidate" : "local-candidate-sealed";
   if (release.releaseId !== options.candidate || release.status !== expectedStatus ||
