@@ -56,6 +56,71 @@ struct PackFirstRoutingTests {
         #expect(prompt.message.contains("without an internet connection"))
     }
 
+    @Test func ontarioPinFallsBackToMonolithicOnWhenHalvesAbsent() {
+        let toronto = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+        let coverage = FakePackCoverage(installed: [], published: ["on", "ns", "qc"])
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [toronto],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected download consent for legacy on, got \(decision)")
+            return
+        }
+        #expect(prompt.kind == .download)
+        #expect(prompt.regionIDs == ["on"])
+        #expect(prompt.regionTitles == ["Ontario"])
+    }
+
+    @Test func ontarioPinPrefersPublishedHalvesOverParent() {
+        let toronto = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+        let coverage = FakePackCoverage(installed: [], published: ["on-s", "on-n"])
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [toronto],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected download consent for on-s, got \(decision)")
+            return
+        }
+        #expect(prompt.regionIDs == ["on-s"])
+    }
+
+    @Test func pinOutsidePartialONCatalogIsUnavailableNotSilent() {
+        let coverage = FakePackCoverage(installed: [], published: ["on-s", "on-n"])
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [halifax.locationCoordinate],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .unavailable(let warning) = decision else {
+            Issue.record("expected unavailable for NS on ON-only catalog, got \(decision)")
+            return
+        }
+        #expect(warning.reason == .packUnavailable)
+        #expect(warning.regionIDs == ["ns"])
+    }
+
+    @Test func resolveCatalogRegionIdMapsHalfToParent() {
+        #expect(
+            GraphPackStore.resolveCatalogRegionId("on-s", published: ["on", "qc"]) == "on"
+        )
+        #expect(
+            GraphPackStore.resolveCatalogRegionId("on-n", published: ["on-s", "on-n"]) == "on-n"
+        )
+        #expect(
+            GraphPackStore.resolveCatalogRegionId("ns", published: ["on"]) == nil
+        )
+    }
+
     @Test func onlinePlanningWaitsForPackConsentThenResumesTheSamePins() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
@@ -431,6 +496,10 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
         published.contains(regionID.lowercased())
     }
 
+    func resolveCatalogRegionId(_ regionID: String) -> String? {
+        GraphPackStore.resolveCatalogRegionId(regionID, published: published)
+    }
+
     func packRevisionState(_ regionID: String) -> PackRevisionState {
         let id = regionID.lowercased()
         if stale.contains(id), installed.contains(id) { return .stale }
@@ -443,6 +512,9 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
         case "ns": return "Nova Scotia"
         case "nb": return "New Brunswick"
         case "pe": return "Prince Edward Island"
+        case "on": return "Ontario"
+        case "on-s": return "Ontario South"
+        case "on-n": return "Ontario North"
         default: return id.uppercased()
         }
     }

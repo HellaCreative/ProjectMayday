@@ -186,6 +186,7 @@ private final class GroupPlannerPackCoverage: PackCoverageInspecting, PackInstal
         "/fake/\(regionID)/graph.v2.bin"
     }
     func isRoutingPackPublished(_ regionID: String) -> Bool { true }
+    func resolveCatalogRegionId(_ regionID: String) -> String? { regionID.lowercased() }
     func packRevisionState(_ regionID: String) -> PackRevisionState { .current }
     func displayTitle(forRegionId id: String) -> String { id.uppercased() }
     func installVerifiedPacks(_ regionIDs: [String], replaceInstalled: Bool) async throws {}
