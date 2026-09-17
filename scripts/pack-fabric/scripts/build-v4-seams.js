@@ -14,11 +14,13 @@ const FABRIC = path.join(__dirname, "..");
 function parseArgs(argv) {
   const options = {
     root: path.join(FABRIC, "app", "data", "packs", "v4"),
-    output: path.join(FABRIC, "routing", "schema", "cross-pack-topology.v2.json")
+    output: path.join(FABRIC, "routing", "schema", "cross-pack-topology.v2.json"),
+    resume: false
   };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--root") options.root = path.resolve(argv[++i]);
     else if (argv[i] === "--output") options.output = path.resolve(argv[++i]);
+    else if (argv[i] === "--resume") options.resume = true;
     else if (argv[i] === "--regions") {
       options.regions = [...new Set((argv[++i] || "").split(","))].sort();
       if (options.regions.length < 2 || options.regions.some(id => !REGION_NEIGHBOURS[id])) {
@@ -28,6 +30,26 @@ function parseArgs(argv) {
     else throw new Error(`unknown argument ${argv[i]}`);
   }
   return options;
+}
+
+function checkpointPath(output) {
+  return `${output}.partial`;
+}
+
+function loadCheckpoint(output) {
+  const file = checkpointPath(output);
+  if (!fs.existsSync(file)) return null;
+  const doc = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (doc.schemaVersion !== "dirt-cross-pack-topology.v2") {
+    throw new Error(`checkpoint schema mismatch: ${file}`);
+  }
+  return doc;
+}
+
+function writeCheckpoint(output, doc) {
+  const file = checkpointPath(output);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(doc) + "\n");
 }
 
 function shaFile(file) {
@@ -150,25 +172,52 @@ function writeRegionSidecars(root, doc) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const doc = {
+  const regionIds = options.regions || Object.keys(REGION_NEIGHBOURS).filter((id) => id.length === 2).sort();
+  const pairs = uniquePairs(options.regions);
+  assertNeighborCoverage(regionIds, pairs);
+
+  let doc = {
     schemaVersion: "dirt-cross-pack-topology.v2",
     generatedAt: new Date().toISOString(),
     sourceEpoch: null,
     regions: {},
     pairs: []
   };
+  const done = new Set();
+  if (options.resume) {
+    const prior = loadCheckpoint(options.output);
+    if (prior) {
+      doc = prior;
+      for (const row of doc.pairs || []) {
+        done.add([row.left, row.right].sort().join("|"));
+      }
+      console.log(JSON.stringify({
+        resume: true,
+        checkpoint: checkpointPath(options.output),
+        completedPairs: done.size,
+        remainingPairs: pairs.length - done.size
+      }));
+    } else {
+      console.log(JSON.stringify({ resume: true, checkpoint: null, completedPairs: 0 }));
+    }
+  }
+  for (const id of regionIds) {
+    if (!doc.regions[id]) doc.regions[id] = { neighbors: {} };
+  }
+
   const cache = new Map();
   const get = (id) => {
     if (!cache.has(id)) cache.set(id, loadPack(options.root, id));
     return cache.get(id);
   };
-  const regionIds = options.regions || Object.keys(REGION_NEIGHBOURS).filter((id) => id.length === 2).sort();
-  const pairs = uniquePairs(options.regions);
-  assertNeighborCoverage(regionIds, pairs);
-  for (const id of regionIds) {
-    doc.regions[id] = { neighbors: {} };
-  }
+  let index = 0;
   for (const [leftId, rightId] of pairs) {
+    index += 1;
+    const key = [leftId, rightId].sort().join("|");
+    if (done.has(key)) {
+      console.log(`${leftId}/${rightId}: resume skip (${index}/${pairs.length})`);
+      continue;
+    }
     const left = get(leftId);
     const right = get(rightId);
     if (left.manifest.sourceEpoch !== right.manifest.sourceEpoch) {
@@ -186,17 +235,23 @@ function main() {
       publicRow(row, `${row.edge.osmWayId}:${row.edge.fromOsmNodeId}:${row.edge.toOsmNodeId}`, `${row.edge.osmWayId}:${row.edge.fromOsmNodeId}:${row.edge.toOsmNodeId}`)
     );
     doc.pairs.push({ left: leftId, right: rightId, proofs: proofs.length });
-    console.log(`${leftId}/${rightId}: ${proofs.length} legal seams`);
+    console.log(`${leftId}/${rightId}: ${proofs.length} legal seams (${index}/${pairs.length})`);
+    writeCheckpoint(options.output, doc);
     // Bound memory to the current pair; pack reads are deterministic and the
     // factory values safety over retaining continent-sized binary buffers.
     cache.delete(leftId);
     cache.delete(rightId);
+  }
+  if (doc.pairs.length !== pairs.length) {
+    throw new Error(`topology incomplete: ${doc.pairs.length}/${pairs.length} pairs`);
   }
   writeRegionSidecars(options.root, doc);
   fs.mkdirSync(path.dirname(options.output), { recursive: true });
   // National proof data exceeds the JS string limit when expanded with indentation.
   // Compact JSON preserves every field and connection without that expansion.
   fs.writeFileSync(options.output, JSON.stringify(doc) + "\n");
+  const partial = checkpointPath(options.output);
+  if (fs.existsSync(partial)) fs.unlinkSync(partial);
   console.log(JSON.stringify({ output: options.output, pairs: doc.pairs.length, sourceEpoch: doc.sourceEpoch }, null, 2));
 }
 

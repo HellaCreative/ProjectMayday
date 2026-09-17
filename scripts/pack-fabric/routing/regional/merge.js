@@ -170,7 +170,9 @@ const REGION_NEIGHBOURS = {
   "on-n": ["on-s", "mb", "qc", "qc-s", "qc-n", "mn", "mi", "on"],
   // Quebec South / North + legacy parent / older quadrant ids.
   qc: ["on-s", "on-n", "on", "nb", "nl", "nl-island", "nl-lab", "ny", "vt", "nh", "me", "qc-s", "qc-n"],
-  "qc-s": ["qc-n", "qc", "on-s", "on-n", "on", "nb", "ny", "vt", "nh", "me", "nl", "nl-island"],
+  // qc-s↔nl-island is a false neighbour: no legal road/ferry seam. Corridor is
+  // nl-island→ns and nl-island→nl-lab→qc-n (island↔qc-n proved 12 seams).
+  "qc-s": ["qc-n", "qc", "on-s", "on-n", "on", "nb", "ny", "vt", "nh", "me", "nl"],
   "qc-n": ["qc-s", "qc", "on", "on-n", "nl-lab", "nl-island", "nl"],
   "qc-west": ["on", "on-s", "qc", "qc-sl", "qc-north"],
   "qc-sl": ["nb", "nl", "qc", "qc-west", "qc-north"],
@@ -180,7 +182,7 @@ const REGION_NEIGHBOURS = {
   ns: ["nb", "pe", "nl", "nl-island"],
   pe: ["nb", "ns"],
   nl: ["qc", "qc-n", "qc-s", "ns", "nl-island", "nl-lab"],
-  "nl-island": ["nl-lab", "nl", "qc-s", "qc-n", "qc", "ns"],
+  "nl-island": ["nl-lab", "nl", "qc-n", "qc", "ns"],
   "nl-lab": ["nl-island", "nl", "qc-n", "qc"],
   yt: ["bc", "nt", "ak"],
   nt: ["yt", "bc", "ab"],

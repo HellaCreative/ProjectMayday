@@ -848,13 +848,15 @@ final class GraphPackStore {
         "on-s": ["on-n", "qc", "qc-s", "mi", "ny", "on"],
         "on-n": ["on-s", "mb", "qc", "qc-s", "qc-n", "mn", "mi", "on"],
         "qc": ["on-s", "on-n", "on", "nb", "nl", "nl-island", "nl-lab", "ny", "vt", "nh", "me", "qc-s", "qc-n"],
-        "qc-s": ["qc-n", "qc", "on-s", "on-n", "on", "nb", "ny", "vt", "nh", "me", "nl", "nl-island"],
+        // qc-s↔nl-island is a false neighbour: no legal road/ferry seam.
+        // Corridor remains nl-island→ns and nl-island→nl-lab→qc-n.
+        "qc-s": ["qc-n", "qc", "on-s", "on-n", "on", "nb", "ny", "vt", "nh", "me", "nl"],
         "qc-n": ["qc-s", "qc", "on", "on-n", "nl-lab", "nl-island", "nl"],
         "nb": ["qc", "qc-s", "ns", "pe", "me"],
         "ns": ["nb", "pe", "nl", "nl-island"],
         "pe": ["nb", "ns"],
         "nl": ["qc", "qc-n", "qc-s", "ns", "nl-island", "nl-lab"],
-        "nl-island": ["nl-lab", "nl", "qc-s", "qc-n", "qc", "ns"],
+        "nl-island": ["nl-lab", "nl", "qc-n", "qc", "ns"],
         "nl-lab": ["nl-island", "nl", "qc-n", "qc"],
         "yt": ["bc", "nt", "ak"],
         "nt": ["yt", "bc", "ab"],
