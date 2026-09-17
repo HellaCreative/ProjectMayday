@@ -75,15 +75,20 @@ function shortlist(rows, maxKeep) {
 }
 
 function writeSidecar(root, topology, regionId, neighborId, rows) {
+  const seamPath = path.join(root, regionId, "cross-pack-seams.v2.json");
+  const existing = fs.existsSync(seamPath) ? JSON.parse(fs.readFileSync(seamPath, "utf8")) : null;
+  const neighbors = {
+    ...((existing && existing.neighbors) || (topology.regions && topology.regions[regionId] && topology.regions[regionId].neighbors) || {}),
+    [neighborId]: rows
+  };
   const doc = {
     schemaVersion: "dirt-cross-pack-seams.v2",
     fabricReleaseId: topology.fabricReleaseId,
     sourceEpoch: topology.sourceEpoch,
     regionId,
-    neighbors: { [neighborId]: rows }
+    neighbors
   };
   const raw = `${JSON.stringify(doc, null, 2)}\n`;
-  const seamPath = path.join(root, regionId, "cross-pack-seams.v2.json");
   fs.writeFileSync(seamPath, raw);
   const sha256 = crypto.createHash("sha256").update(raw).digest("hex");
   const manifestPath = path.join(root, regionId, "pack-manifest.v2.json");

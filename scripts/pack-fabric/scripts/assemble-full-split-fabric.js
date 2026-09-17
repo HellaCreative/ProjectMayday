@@ -10,6 +10,9 @@
  *     --production fabric-v4-20260909-02 \
  *     --on-partial fabric-v4-20260917-01
  *
+ *   node scripts/pack-fabric/scripts/assemble-full-split-fabric.js \
+ *     --release fabric-v4-20260917-02 --seal-only
+ *
  * Same-length string restamp keeps RegionalGraph epoch/release lockstep without
  * rewriting graph section offsets. Newly built split packs must already share
  * the --epoch value (extend the ON partial source lock).
@@ -43,7 +46,8 @@ function parseArgs(argv) {
     production: "fabric-v4-20260909-02",
     onPartial: "fabric-v4-20260917-01",
     epoch: null,
-    root: null
+    root: null,
+    sealOnly: false
   };
   for (let i = 0; i < argv.length; i += 1) {
     const value = argv[i];
@@ -52,6 +56,7 @@ function parseArgs(argv) {
     else if (value === "--on-partial") opts.onPartial = argv[++i];
     else if (value === "--epoch") opts.epoch = argv[++i];
     else if (value === "--root") opts.root = path.resolve(argv[++i]);
+    else if (value === "--seal-only") opts.sealOnly = true;
     else die(`unknown argument ${value}`);
   }
   if (!opts.release || !/^fabric-v4-[0-9]{8}-[0-9]{2}$/.test(opts.release)) {
@@ -171,8 +176,12 @@ function main() {
 
   const packRoot = path.join(opts.root, "packs");
   const riderRoot = path.join(opts.root, "rider-services");
+  const topologyFile = path.join(opts.root, "cross-pack-topology.v2.json");
   fs.mkdirSync(packRoot, { recursive: true });
   fs.mkdirSync(riderRoot, { recursive: true });
+  if (opts.sealOnly && !fs.existsSync(topologyFile)) {
+    die("seal-only requires cross-pack-topology.v2.json from a finished seams run");
+  }
 
   const replacementsForProduction = [
     [productionRelease.releaseId, opts.release],
@@ -190,34 +199,40 @@ function main() {
     const destRider = path.join(riderRoot, id);
     const srcPack = path.join(source.root, "packs", id);
     const srcRider = path.join(source.root, "rider-services", id);
-    if (!fs.existsSync(srcPack)) die(`missing pack source ${srcPack}`);
-    if (!fs.existsSync(srcRider)) die(`missing rider-services source ${srcRider}`);
-
-    console.log(`[${index + 1}/${catalog.length}] assemble ${id} from ${source.kind}`);
-    if (path.resolve(srcPack) !== path.resolve(destPack)) {
-      copyTree(srcPack, destPack);
-    }
-    if (path.resolve(srcRider) !== path.resolve(destRider)) {
-      copyTree(srcRider, destRider);
-    }
-
-    if (source.kind === "production") {
-      restampFile(path.join(destPack, "graph.v4.bin"), replacementsForProduction);
-      for (const name of TEXT_REPLACE_FILES) {
-        restampFile(path.join(destPack, name), replacementsForProduction);
+    if (opts.sealOnly) {
+      if (!fs.existsSync(destPack) || !fs.existsSync(destRider)) {
+        die(`seal-only missing assembled ${id}`);
       }
-      restampFile(path.join(destRider, "rider-services.v1.json"), replacementsForProduction);
-    } else if (source.kind === "on-partial") {
-      restampFile(path.join(destPack, "graph.v4.bin"), replacementsForOn);
-      for (const name of TEXT_REPLACE_FILES) {
-        restampFile(path.join(destPack, name), replacementsForOn);
-      }
-      restampFile(path.join(destRider, "rider-services.v1.json"), replacementsForOn);
     } else {
-      // Newly built packs already carry the target release/epoch from the factory.
-      const manifest = readJSON(path.join(destPack, "pack-manifest.v2.json"));
-      if (manifest.fabricReleaseId !== opts.release || manifest.sourceEpoch !== epoch) {
-        die(`${id}: built pack identity mismatch (${manifest.fabricReleaseId}/${manifest.sourceEpoch})`);
+      if (!fs.existsSync(srcPack)) die(`missing pack source ${srcPack}`);
+      if (!fs.existsSync(srcRider)) die(`missing rider-services source ${srcRider}`);
+
+      console.log(`[${index + 1}/${catalog.length}] assemble ${id} from ${source.kind}`);
+      if (path.resolve(srcPack) !== path.resolve(destPack)) {
+        copyTree(srcPack, destPack);
+      }
+      if (path.resolve(srcRider) !== path.resolve(destRider)) {
+        copyTree(srcRider, destRider);
+      }
+
+      if (source.kind === "production") {
+        restampFile(path.join(destPack, "graph.v4.bin"), replacementsForProduction);
+        for (const name of TEXT_REPLACE_FILES) {
+          restampFile(path.join(destPack, name), replacementsForProduction);
+        }
+        restampFile(path.join(destRider, "rider-services.v1.json"), replacementsForProduction);
+      } else if (source.kind === "on-partial") {
+        restampFile(path.join(destPack, "graph.v4.bin"), replacementsForOn);
+        for (const name of TEXT_REPLACE_FILES) {
+          restampFile(path.join(destPack, name), replacementsForOn);
+        }
+        restampFile(path.join(destRider, "rider-services.v1.json"), replacementsForOn);
+      } else {
+        // Newly built packs already carry the target release/epoch from the factory.
+        const manifest = readJSON(path.join(destPack, "pack-manifest.v2.json"));
+        if (manifest.fabricReleaseId !== opts.release || manifest.sourceEpoch !== epoch) {
+          die(`${id}: built pack identity mismatch (${manifest.fabricReleaseId}/${manifest.sourceEpoch})`);
+        }
       }
     }
 
@@ -250,19 +265,20 @@ function main() {
   }
 
   // Full topology for the assembled catalog.
-  const topologyFile = path.join(opts.root, "cross-pack-topology.v2.json");
-  const seam = spawnSync(
-    process.execPath,
-    [
-      path.join(__dirname, "build-v4-seams.js"),
-      "--root", packRoot,
-      "--output", topologyFile,
-      "--regions",
-      catalog.join(",")
-    ],
-    { cwd: DIRT, stdio: "inherit" }
-  );
-  if (seam.status !== 0) die("build-v4-seams failed");
+  if (!opts.sealOnly) {
+    const seam = spawnSync(
+      process.execPath,
+      [
+        path.join(__dirname, "build-v4-seams.js"),
+        "--root", packRoot,
+        "--output", topologyFile,
+        "--regions",
+        catalog.join(",")
+      ],
+      { cwd: DIRT, stdio: "inherit" }
+    );
+    if (seam.status !== 0) die("build-v4-seams failed");
+  }
 
   const thinPairs = [
     ["on-s", "on-n"],
