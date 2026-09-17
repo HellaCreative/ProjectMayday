@@ -53,6 +53,12 @@ enum RegionPolygons {
         if hits.contains("ns"), hits.contains("nb") {
             return lon >= -64.27 ? "ns" : "nb"
         }
+        let onHalves = hits.filter { $0 == "on-s" || $0 == "on-n" }
+        if !onHalves.isEmpty {
+            if lat >= 46.0, onHalves.contains("on-n") { return "on-n" }
+            if lat < 46.0, onHalves.contains("on-s") { return "on-s" }
+            return onHalves[0]
+        }
         hits.sort { (bboxes[$0]?.area ?? .infinity) < (bboxes[$1]?.area ?? .infinity) }
         return hits[0]
     }

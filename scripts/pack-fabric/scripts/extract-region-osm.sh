@@ -13,7 +13,7 @@ if [ -z "$ID" ]; then
 fi
 
 eval "$(node -e "
-const { geofabrikSource } = require(process.env.FABRIC + '/routing/registry/geofabrik');
+const { geofabrikSource, geofabrikDownloadSlug } = require(process.env.FABRIC + '/routing/registry/geofabrik');
 const { clipGeojsonPath } = require(process.env.FABRIC + '/scripts/fetch-admin-polygon');
 const { bufferProjection } = require(process.env.FABRIC + '/routing/registry/timezones');
 const s = geofabrikSource(process.argv[1]);
@@ -22,7 +22,9 @@ if (!poly) {
   console.error('missing admin polygon for ' + s.id);
   process.exit(1);
 }
+const downloadSlug = geofabrikDownloadSlug(s.id);
 console.log('SLUG=' + JSON.stringify(s.slug));
+console.log('DOWNLOAD_SLUG=' + JSON.stringify(downloadSlug));
 console.log('COUNTRY=' + JSON.stringify(s.country));
 console.log('POLY=' + JSON.stringify(poly));
 console.log('BUFFER_EPSG=' + JSON.stringify(bufferProjection(s.id, s.country)));
@@ -30,8 +32,8 @@ console.log('BUFFER_EPSG=' + JSON.stringify(bufferProjection(s.id, s.country)));
 
 CACHE_ROOT="${OSM_PBF_CACHE:-${TMPDIR:-/tmp}/dirt-osm-poi-build/regions}"
 OUT_DIR="${OSM_LEGAL_ROOT:-$FABRIC/data-raw/osm-legal}/$SLUG"
-mkdir -p "$OUT_DIR" "$CACHE_ROOT/$SLUG"
-PBF="$CACHE_ROOT/$SLUG/source.osm.pbf"
+mkdir -p "$OUT_DIR" "$CACHE_ROOT/$DOWNLOAD_SLUG"
+PBF="$CACHE_ROOT/$DOWNLOAD_SLUG/source.osm.pbf"
 CLIPPED="$OUT_DIR/admin-halo.osm.pbf"
 BASE_URL="https://download.geofabrik.de/north-america/$COUNTRY"
 
@@ -55,7 +57,7 @@ EOF
   }
   echo "Using source-locked PBF $PBF"
 else
-  bash "$SCRIPT_DIR/ensure-current-osm-pbf.sh" "$BASE_URL" "$SLUG" "$PBF"
+  bash "$SCRIPT_DIR/ensure-current-osm-pbf.sh" "$BASE_URL" "$DOWNLOAD_SLUG" "$PBF"
 fi
 
 POLY_LAYER="$(basename "$POLY" .geojson)"
@@ -110,7 +112,7 @@ h = sha256_file(pbf)
 ts = subprocess.check_output(["osmium","fileinfo","-g","header.option.osmosis_replication_timestamp","$PBF"], text=True).strip()
 poly_path = pathlib.Path("$POLY")
 record = {
-  "sourceUrl": "https://download.geofabrik.de/north-america/$COUNTRY/$SLUG-latest.osm.pbf",
+  "sourceUrl": "https://download.geofabrik.de/north-america/$COUNTRY/$DOWNLOAD_SLUG-latest.osm.pbf",
   "sourceBytes": pbf.stat().st_size,
   "sourceSha256": h,
   "osmTimestamp": ts,

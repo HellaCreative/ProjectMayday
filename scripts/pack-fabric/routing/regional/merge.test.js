@@ -40,22 +40,31 @@ test("Maine chains to New Brunswick across the Calais–St. Stephen land border"
   assert.deepEqual(shortestRegionPath("me", "nb"), ["me", "nb"]);
 });
 
-test("the 63-region road-border registry is complete and symmetric", () => {
-  assert.deepEqual(Object.keys(REGION_NEIGHBOURS).filter((id) => id.length === 2).sort(), Object.keys(OSM_REGION).sort());
+test("the road-border registry covers every catalog region and stays symmetric", () => {
+  const { catalogRegionIds } = require("../registry/geofabrik");
+  const catalog = new Set(catalogRegionIds());
+  // Legacy parent `on` remains in OSM_REGION + neighbours for upgrade/fallback.
+  for (const id of catalog) {
+    assert.ok(REGION_NEIGHBOURS[id], `missing neighbours for catalog region ${id}`);
+  }
+  assert.ok(REGION_NEIGHBOURS.on, "legacy on neighbours retained");
+  assert.ok(REGION_NEIGHBOURS["on-s"] && REGION_NEIGHBOURS["on-n"]);
   for (const [id, neighbors] of Object.entries(REGION_NEIGHBOURS)) {
-    if (id.length !== 2) continue;
+    if (id.startsWith("qc-")) continue; // legacy emergency shards
     for (const neighbor of neighbors) {
+      if (neighbor.startsWith("qc-")) continue;
       assert.ok(REGION_NEIGHBOURS[neighbor], `${id} references unknown ${neighbor}`);
       assert.ok(REGION_NEIGHBOURS[neighbor].includes(id), `${id}<->${neighbor} is not symmetric`);
     }
   }
   assert.deepEqual(shortestRegionPath("bc", "wa"), ["bc", "wa"]);
   assert.deepEqual(shortestRegionPath("ns", "ny"), ["ns", "nb", "qc", "ny"]);
+  assert.deepEqual(shortestRegionPath("on-s", "on-n"), ["on-s", "on-n"]);
   assert.equal(shortestRegionPath("az", "co").length, 3, "Four Corners is not a road seam");
   assert.equal(shortestRegionPath("ut", "nm").length, 3, "Four Corners is not a road seam");
 });
 
-test("Swift and backend use the exact same 63-region adjacency", () => {
+test("Swift and backend keep two-letter adjacency lockstep (subregions are extra)", () => {
   const swift = fs.readFileSync(
     path.resolve(__dirname, "../../../../Dirt/Routing/OnDevice/GraphPackStore.swift"),
     "utf8"

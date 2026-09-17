@@ -3,6 +3,11 @@
 /**
  * Geofabrik extract identity per Dirt catalog region id.
  * The v3 pack stamp uses this map. Every live catalog id has a row.
+ *
+ * Subregions (on-s / on-n) share a parent Geofabrik extract via `sourceSlug`
+ * while using their own `slug` for legal/work directories and clip polygons.
+ * `legacy: true` keeps the parent id for source lookup without publishing it
+ * as a phone pack once subregions replace it.
  */
 const OSM_REGION = {
   ab: { slug: "alberta", country: "canada" },
@@ -13,7 +18,9 @@ const OSM_REGION = {
   ns: { slug: "nova-scotia", country: "canada" },
   nt: { slug: "northwest-territories", country: "canada" },
   nu: { slug: "nunavut", country: "canada" },
-  on: { slug: "ontario", country: "canada" },
+  on: { slug: "ontario", country: "canada", legacy: true },
+  "on-s": { slug: "ontario-south", country: "canada", sourceSlug: "ontario" },
+  "on-n": { slug: "ontario-north", country: "canada", sourceSlug: "ontario" },
   pe: { slug: "prince-edward-island", country: "canada" },
   qc: { slug: "quebec", country: "canada" },
   sk: { slug: "saskatchewan", country: "canada" },
@@ -81,13 +88,27 @@ function geofabrikSource(regionId) {
   return { id, ...source };
 }
 
+function geofabrikDownloadSlug(regionId) {
+  const source = geofabrikSource(regionId);
+  return source.sourceSlug || source.slug;
+}
+
 function geofabrikPbfUrl(regionId) {
   const source = geofabrikSource(regionId);
-  return `https://download.geofabrik.de/north-america/${source.country}/${source.slug}-latest.osm.pbf`;
+  const slug = geofabrikDownloadSlug(regionId);
+  return `https://download.geofabrik.de/north-america/${source.country}/${slug}-latest.osm.pbf`;
+}
+
+function catalogRegionIds() {
+  return Object.keys(OSM_REGION)
+    .filter((id) => !OSM_REGION[id].legacy)
+    .sort();
 }
 
 module.exports = {
   OSM_REGION,
+  catalogRegionIds,
   geofabrikSource,
+  geofabrikDownloadSlug,
   geofabrikPbfUrl
 };

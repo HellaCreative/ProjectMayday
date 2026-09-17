@@ -29,32 +29,35 @@ struct LayersSheet: View {
     private var layersList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DirtSpace.group) {
-                HStack(spacing: 8) {
-                    ForEach(MapStyleID.allCases) { style in
-                        let selected = selectedStyle == style
-                        Button { selectStyle(style) } label: {
-                            Text(style.title)
-                                .font(DirtType.rowTitle)
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                                .foregroundStyle(selected ? DirtTheme.onOrange : DirtTheme.ink)
-                                .background(
-                                    selected ? DirtTheme.orange : LayersGlass.groupingFill,
-                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .stroke(
-                                            selected ? DirtTheme.onOrange.opacity(0.25) : DirtTheme.hairline,
-                                            lineWidth: 1
-                                        )
-                                )
-                                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                    DirtSectionLabel(title: "Map styles")
+                    HStack(spacing: 8) {
+                        ForEach(MapStyleID.allCases) { style in
+                            let selected = selectedStyle == style
+                            Button { selectStyle(style) } label: {
+                                Text(style.title)
+                                    .font(DirtType.rowTitle)
+                                    .fontWeight(.bold)
+                                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                                    .foregroundStyle(selected ? DirtTheme.onOrange : DirtTheme.ink)
+                                    .background(
+                                        selected ? DirtTheme.orange : LayersGlass.groupingFill,
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(
+                                                selected ? DirtTheme.onOrange.opacity(0.25) : DirtTheme.hairline,
+                                                lineWidth: 1
+                                            )
+                                    )
+                                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .animation(DirtMotion.affordance, value: selected)
+                            .accessibilityLabel(style.title)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
                         }
-                        .buttonStyle(.plain)
-                        .animation(DirtMotion.affordance, value: selected)
-                        .accessibilityLabel(style.title)
-                        .accessibilityAddTraits(selected ? .isSelected : [])
                     }
                 }
 

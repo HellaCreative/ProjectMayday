@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v1"
+    static let generatedStyleRevision = "osmand-v2"
 
     static var selectedID: MapStyleID {
         get {
@@ -162,8 +162,8 @@ enum MapStyleCatalog {
 // MARK: - OsmAnd-aimed Shortbread paint + admin labels
 
 extension MapStyleCatalog {
-    /// Daytime OsmAnd-like palette (pale land, orange roads, green cover at street zoom).
-    /// Rich applies `×1.15` HSL saturation on top. Never paint pack-bound polygons.
+    /// Daytime OsmAnd-like palette (pale land, orange roads). Standard uses this
+    /// as-is — the light map. Never paint pack-bound polygons.
     private static let osmandBase: [String: String] = [
         "background": "#ebe8e0",
         "water-fill": "#7eb8d4",
@@ -189,6 +189,34 @@ extension MapStyleCatalog {
         "svc-casing": "#6e6a64"
     ]
 
+    /// Maps Rich palette (`69d3ca6`): deeper landcover and hotter roads.
+    /// OsmAnd later painted both chips from `osmandBase`, so Rich looked like
+    /// Standard. Rich-only; Standard stays on the pale OsmAnd land.
+    private static let richBase: [String: String] = [
+        "background": "#f3eadb",
+        "water-fill": "#91c8ef",
+        "water-line": "#5ba9df",
+        "forest": "#96ce74",
+        "orchard": "#a4d381",
+        "park": "#b2dc90",
+        "grass": "#b9df98",
+        "farmland": "#e7c98e",
+        "residential": "#edddca",
+        "retail": "#efbeb9",
+        "industrial": "#f2dda0",
+        "edu": "#e4d5f1",
+        "beach": "#f1df8d",
+        "mw-fill": "#e45e3d",
+        "pri-fill": "#ee8732",
+        "sec-fill": "#f0b54d",
+        "ter-fill": "#e8c45f",
+        "mw-casing": "#9f3528",
+        "pri-casing": "#ad5424",
+        "sec-casing": "#a47725",
+        "ter-casing": "#90772d",
+        "svc-casing": "#747067"
+    ]
+
     static func boostedSaturationHex(_ hex: String, factor: Double = 1.15) -> String {
         guard let base = rgb(from: hex) else { return hex }
         var color = hsl(from: base)
@@ -197,8 +225,10 @@ extension MapStyleCatalog {
     }
 
     private static func paintHex(_ key: String, rich: Bool) -> String {
-        let hex = osmandBase[key]!
-        return rich ? boostedSaturationHex(hex) : hex
+        if rich {
+            return boostedSaturationHex(richBase[key]!)
+        }
+        return osmandBase[key]!
     }
 
     private static func applyLandcover(id: String, rich: Bool, paint: inout [String: Any]) {

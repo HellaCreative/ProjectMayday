@@ -9,7 +9,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { spawnSync } = require("child_process");
-const { OSM_REGION, geofabrikPbfUrl } = require("../routing/registry/geofabrik");
+const { OSM_REGION, geofabrikPbfUrl, geofabrikDownloadSlug } = require("../routing/registry/geofabrik");
 
 const FABRIC = path.join(__dirname, "..");
 const CACHE_ROOT = process.env.OSM_PBF_CACHE || path.join(process.env.TMPDIR || "/tmp", "dirt-osm-poi-build/regions");
@@ -60,8 +60,8 @@ function save(file, document) {
 }
 
 async function identity(regionId) {
-  const source = OSM_REGION[regionId];
-  const pbf = path.join(CACHE_ROOT, source.slug, "source.osm.pbf");
+  const downloadSlug = geofabrikDownloadSlug(regionId);
+  const pbf = path.join(CACHE_ROOT, downloadSlug, "source.osm.pbf");
   const stat = fs.statSync(pbf);
   return {
     sourceUrl: geofabrikPbfUrl(regionId),
@@ -75,7 +75,7 @@ async function identity(regionId) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const output = path.resolve(options.output);
-  const ids = (options.regions.length ? options.regions : Object.keys(OSM_REGION)).sort();
+  const ids = (options.regions.length ? options.regions : Object.keys(OSM_REGION).filter((id) => !OSM_REGION[id].legacy)).sort();
   for (const id of ids) {
     if (!OSM_REGION[id]) throw new Error(`unknown region ${id}`);
   }
@@ -92,6 +92,7 @@ async function main() {
   for (let index = 0; index < ids.length; index += 1) {
     const id = ids[index];
     const source = OSM_REGION[id];
+    const downloadSlug = geofabrikDownloadSlug(id);
     if (doc.regions[id]) {
       const current = await identity(id).catch(() => null);
       if (current && current.sourceSha256 === doc.regions[id].sourceSha256) {
@@ -101,13 +102,13 @@ async function main() {
       throw new Error(`cached source changed after ${id} was locked`);
     }
     assertDiskSpace(id);
-    console.log(`[${index + 1}/${ids.length}] locking ${id} (${source.slug})`);
+    console.log(`[${index + 1}/${ids.length}] locking ${id} (download ${downloadSlug}, work ${source.slug})`);
     const result = spawnSync(
       "bash",
       [path.join(__dirname, "ensure-current-osm-pbf.sh"),
         `https://download.geofabrik.de/north-america/${source.country}`,
-        source.slug,
-        path.join(CACHE_ROOT, source.slug, "source.osm.pbf")],
+        downloadSlug,
+        path.join(CACHE_ROOT, downloadSlug, "source.osm.pbf")],
       {
         stdio: "inherit",
         env: {

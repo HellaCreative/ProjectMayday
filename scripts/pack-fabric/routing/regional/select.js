@@ -73,7 +73,11 @@ const REGION_BBOX = {
   // One province pack (OSM-only longhaul). Legacy qc-* quadrant ids still
   // map via provinceFamily / isQcRegion for emergency packs and old deploys.
   qc: [-79.8, 44.9, -57.0, 62.7],
+  // Ontario South / North — cut at 46.0°N (French River / Near North).
+  // Parent `on` bbox kept for legacy packs and provinceFamily fallback.
   on: [-95.2, 41.6, -74.3, 56.9],
+  "on-s": [-95.2, 41.6, -74.3, 46.0],
+  "on-n": [-95.2, 46.0, -74.3, 56.9],
   // East edge ~Ontario border (-95.15); do not cover Kenora (-94.5).
   mb: [-102.1, 48.9, -95.0, 60.1],
   sk: [-110.1, 48.9, -101.3, 60.1],
@@ -91,6 +95,11 @@ function isQcRegion(id) {
   return id === "qc" || String(id || "").startsWith("qc-");
 }
 
+function isOnRegion(id) {
+  const key = String(id || "").toLowerCase();
+  return key === "on" || key.startsWith("on-");
+}
+
 /**
  * Piecewise Ottawa River bank split for overlapping ON/QC bboxes.
  * South bank ≈ Ontario (Ottawa metro); north bank ≈ Québec (Gatineau / Aylmer).
@@ -103,11 +112,17 @@ function isNorthOfOttawaRiver(lon, lat) {
   return lat >= 45.38; // west toward Quyon
 }
 
-/** Collapse legacy QC quadrant ids to one province family. */
+/** Collapse QC quadrant / ON subregion ids to one province family. */
 function provinceFamily(regionId) {
   const id = String(regionId || "").toLowerCase();
   if (isQcRegion(id)) return "qc";
+  if (isOnRegion(id)) return "on";
   return id;
+}
+
+/** Prefer published ON subregions over the legacy monolithic pack id. */
+function ontarioHalfForPoint(lon, lat) {
+  return lat >= 46.0 ? "on-n" : "on-s";
 }
 
 function bboxArea(bbox) {
@@ -165,6 +180,7 @@ function primaryRegionForPoint(lon, lat) {
   if (maritime) return maritime;
 
   const ids = new Set(hits.map((h) => h.id));
+  const onHit = [...ids].find((id) => isOnRegion(id));
   // Resolve the international border before overlapping Canadian province
   // rectangles. Southern BC also falls inside AB's coarse bbox; if AB/BC wins
   // first, a Washington pin is misclassified as BC.
@@ -183,16 +199,16 @@ function primaryRegionForPoint(lon, lat) {
   }
 
   // ON vs MB — rectangular MB bbox must not steal Kenora / NW Ontario.
-  if (ids.has("on") && ids.has("mb")) {
-    return lon < -95.15 ? "mb" : "on";
+  if (onHit && ids.has("mb")) {
+    return lon < -95.15 ? "mb" : ontarioHalfForPoint(lon, lat);
   }
 
   // ON vs MN — MN's NE rectangle covers Thunder Bay / Pigeon River north shore
   // (Ontario). Real MN Arrowhead tops out ~48.0°N near Grand Portage; north of
   // that at Lake Superior longitudes is ON. Without this, smallest-bbox picks mn
   // and live snap fails (no MN edges; ON arterial sits ~40 m away).
-  if (ids.has("on") && ids.has("mn")) {
-    if (lat >= 48.05 && lon >= -91.5) return "on";
+  if (onHit && ids.has("mn")) {
+    if (lat >= 48.05 && lon >= -91.5) return ontarioHalfForPoint(lon, lat);
     return "mn";
   }
 
@@ -208,14 +224,22 @@ function primaryRegionForPoint(lon, lat) {
 
   // ON vs Quebec. Laurentians / Gatineau stay QC; Ottawa metro stays ON.
   const qcHit = [...ids].find((id) => isQcRegion(id));
-  if (ids.has("on") && qcHit) {
+  if (onHit && qcHit) {
     // Montreal side / east of Ottawa River mouth.
     if (lon >= -74.5) return "qc";
     // Laurentian / Tremblant plateau (north), but not upper Ottawa Valley ON towns.
     if (lat >= 45.9 && lon >= -76.0) return "qc";
     // Gatineau / Outaouais — north bank of Ottawa River only (not Parliament / Orleans).
     if (isNorthOfOttawaRiver(lon, lat)) return "qc";
-    return "on";
+    return ontarioHalfForPoint(lon, lat);
+  }
+
+  // Within Ontario — prefer published South/North halves over legacy `on`.
+  if (onHit && (ids.has("on-s") || ids.has("on-n") || ids.has("on"))) {
+    const usOverlap = [...ids].some((id) => US_STATE_IDS.has(id));
+    if (!usOverlap && !qcHit && !ids.has("mb") && !ids.has("mn")) {
+      return ontarioHalfForPoint(lon, lat);
+    }
   }
 
   // NS vs NB — Tantramar / Missaguash. Must run before NB↔QC: Quebec's
@@ -283,15 +307,15 @@ function primaryRegionForPoint(lon, lat) {
   }
 
   // ON↔US — Niagara / St. Lawrence / Detroit River (pack id, not a scenic funnel).
-  if (ids.has("on") && ids.has("ny")) {
+  if (onHit && ids.has("ny")) {
     if (lat < 43.9 && lon > -79.12) return "ny";
     if (lat < 44.3 && lon > -76.5) return "ny";
-    return "on";
+    return ontarioHalfForPoint(lon, lat);
   }
-  if (ids.has("on") && ids.has("mi")) {
-    if (lat < 42.55) return lon <= -83.045 ? "mi" : "on";
-    if (lat < 43.2) return lon <= -82.42 ? "mi" : "on";
-    return "on";
+  if (onHit && ids.has("mi")) {
+    if (lat < 42.55) return lon <= -83.045 ? "mi" : ontarioHalfForPoint(lon, lat);
+    if (lat < 43.2) return lon <= -82.42 ? "mi" : ontarioHalfForPoint(lon, lat);
+    return ontarioHalfForPoint(lon, lat);
   }
 
   // Overlapping US rectangles (WA/OR Columbia, CA/OR 42nd, Four Corners, …):
@@ -624,5 +648,7 @@ module.exports = {
   regionForLocation,
   provinceFamily,
   isQcRegion,
+  isOnRegion,
+  ontarioHalfForPoint,
   regionPackAvailable
 };

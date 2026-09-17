@@ -128,6 +128,11 @@ function polygonOwner(lon, lat) {
   if (hits.includes("ns") && hits.includes("nb")) {
     return lon >= -64.27 ? "ns" : "nb";
   }
+  // Ontario South/North share the cut edge; prefer the published half by latitude.
+  const onHalves = hits.filter((id) => id === "on-s" || id === "on-n");
+  if (onHalves.length) {
+    return lat >= 46.0 ? (onHalves.includes("on-n") ? "on-n" : onHalves[0]) : (onHalves.includes("on-s") ? "on-s" : onHalves[0]);
+  }
   hits.sort((a, b) => bboxArea(geometryBbox(regions[a])) - bboxArea(geometryBbox(regions[b])));
   return hits[0];
 }

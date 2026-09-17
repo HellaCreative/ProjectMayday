@@ -14,6 +14,8 @@ const OSM_ADMIN_RELATION = {
   nt: 391220,
   nu: 390840,
   on: 68841,
+  "on-s": 68841,
+  "on-n": 68841,
   pe: 391115,
   qc: 61549,
   sk: 391178,

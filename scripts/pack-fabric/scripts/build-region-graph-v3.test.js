@@ -23,7 +23,10 @@ test("Geofabrik stamp covers every catalog province and state", () => {
   assert.equal(geofabrikSource("ca").slug, "california");
   assert.equal(geofabrikSource("tx").country, "us");
   assert.equal(OSM_REGION.pe.slug, "prince-edward-island");
-  assert.equal(Object.keys(OSM_REGION).length, 63);
+  assert.equal(require("../routing/registry/geofabrik").catalogRegionIds().length, 64);
+  assert.equal(OSM_REGION.on.legacy, true);
+  assert.equal(OSM_REGION["on-s"].sourceSlug, "ontario");
+  assert.equal(OSM_REGION["on-n"].sourceSlug, "ontario");
   assert.throws(() => geofabrikSource("xx"), /no Geofabrik source/);
 });
 

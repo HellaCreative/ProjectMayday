@@ -21,7 +21,7 @@ function parseArgs(argv) {
     else if (argv[i] === "--output") options.output = path.resolve(argv[++i]);
     else if (argv[i] === "--regions") {
       options.regions = [...new Set((argv[++i] || "").split(","))].sort();
-      if (options.regions.length < 2 || options.regions.some(id => id.length !== 2 || !REGION_NEIGHBOURS[id])) {
+      if (options.regions.length < 2 || options.regions.some(id => !REGION_NEIGHBOURS[id])) {
         throw new Error("--regions requires at least two recognized region IDs");
       }
     }
@@ -56,7 +56,7 @@ function uniquePairs(regions = null) {
   const rows = [];
   const seen = new Set();
   for (const [left, neighbors] of Object.entries(REGION_NEIGHBOURS)) {
-    if (left.length !== 2 || (regions && !regions.includes(left))) continue;
+    if (regions && !regions.includes(left)) continue;
     for (const right of neighbors) {
       if (regions && !regions.includes(right)) continue;
       const pair = [left, right].sort();

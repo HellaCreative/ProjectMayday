@@ -27,7 +27,7 @@ function validateManifest(manifest) {
     const id = String(region && region.id || "").toLowerCase();
     const bounds = region && region.bounds;
     const file = region && region.file;
-    if (!/^[a-z]{2}$/.test(id) || ids.has(id)) throw new Error("invalid_rider_services_region");
+    if (!/^[a-z]{2}(-[a-z0-9]+)?$/.test(id) || ids.has(id)) throw new Error("invalid_rider_services_region");
     if (
       !Array.isArray(bounds) || bounds.length !== 4 || !bounds.every(Number.isFinite) ||
       bounds[0] < -180 || bounds[2] > 180 || bounds[1] < -90 || bounds[3] > 90 ||

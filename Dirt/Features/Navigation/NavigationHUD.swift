@@ -17,7 +17,7 @@ struct NavCueCard: View {
             Image(systemName: arrowSymbol)
                 .font(.system(size: cueIconSize, weight: .bold))
                 .foregroundStyle(nav.offRoute ? DirtTheme.danger : DirtTheme.orange)
-                .frame(width: 48, height: 48)
+                .frame(width: 44, height: 44)
                 .scaleEffect(cueBand == .now && !nav.offRoute ? 1.08 : 1)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -62,7 +62,7 @@ struct NavCueCard: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, cueBand == .now ? 12 : 10)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
         .background {
             ZStack {
                 Rectangle().fill(DirtTheme.sheetMaterial)
@@ -87,18 +87,18 @@ struct NavCueCard: View {
 
     private var cueIconSize: CGFloat {
         switch cueBand {
-        case .now: 42
-        case .near: 38
-        case .mid: 33
-        case .far, .none: 31
+        case .now: 36
+        case .near: 34
+        case .mid: 32
+        case .far, .none: 30
         }
     }
 
     private var cueDistanceSize: CGFloat {
         switch cueBand {
-        case .now: 20
-        case .near: 18
-        default: 17
+        case .now: 16
+        case .near: 15
+        default: 14
         }
     }
 
@@ -157,16 +157,15 @@ struct NavCueCard: View {
         return nav.currentCue
     }
 
-    /// Sized for the full-width card left by the relocated speed block; long idle copy
-    /// still steps down. Urgency band bumps size when the junction is imminent.
+    /// Callout size, not a headline. Longer turn copy steps down so two lines fit.
     private var cueTitleSize: CGFloat {
         let count = mainLabel.count
-        var base: CGFloat = 21
-        if count > 22 { base = 16 }
-        else if count > 14 { base = 18 }
+        var base: CGFloat = 19
+        if count > 24 { base = 16 }
+        else if count > 16 { base = 17 }
         switch cueBand {
-        case .now: return min(base + 3, 24)
-        case .near: return min(base + 2, 23)
+        case .now: return min(base + 1, 20)
+        case .near: return min(base + 1, 19)
         default: return base
         }
     }

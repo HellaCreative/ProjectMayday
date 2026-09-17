@@ -16,7 +16,7 @@ struct ProfileSheet: View {
     @State private var showLicences = false
     @State private var showDeleteAccountConfirmation = false
     @State private var showRideSettings = false
-    @State private var showLegalAccount = false
+    @State private var showLegal = false
     @State private var showEditName = false
     @State private var testerToolsOpen = false
     @State private var routeDebugBusy = false
@@ -40,7 +40,8 @@ struct ProfileSheet: View {
             ScrollView {
                 VStack(spacing: DirtSpace.group) {
                     VStack(spacing: DirtSpace.group) {
-                        heroCard
+                        membershipCard
+                        accountCard
 
                         VStack(spacing: DirtSpace.tight) {
                             Button { showRideSettings = true } label: {
@@ -49,11 +50,11 @@ struct ProfileSheet: View {
                             .buttonStyle(.plain)
                             .accessibilityHint("Opens keep-awake and ride contribution settings")
 
-                            Button { showLegalAccount = true } label: {
-                                navigationRow("Legal & account", systemImage: "doc.text.fill")
+                            Button { showLegal = true } label: {
+                                navigationRow("Legal", systemImage: "doc.text.fill")
                             }
                             .buttonStyle(.plain)
-                            .accessibilityHint("Opens legal links, restore, sign out, and delete account")
+                            .accessibilityHint("Opens licences, privacy, terms, and delete account")
                         }
 
                         if let notice {
@@ -99,8 +100,8 @@ struct ProfileSheet: View {
         .sheet(isPresented: $showRideSettings) {
             rideSettingsSheet
         }
-        .sheet(isPresented: $showLegalAccount) {
-            legalAccountSheet
+        .sheet(isPresented: $showLegal) {
+            legalSheet
         }
         .sheet(isPresented: $showEditName) {
             editNameSheet
@@ -119,6 +120,7 @@ struct ProfileSheet: View {
             .presentationBackground(DirtTheme.sheetMaterial)
         }
         .task { await subscription.refresh() }
+        .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
         .sheet(isPresented: $showRouteDebugShare) {
             if let url = routeDebugReportURL {
                 ProfileShareSheet(items: [url])
@@ -133,32 +135,90 @@ struct ProfileSheet: View {
 
     // MARK: - Primary
 
-    private var heroCard: some View {
+    private func profileCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
-            if supabase.isSignedIn {
-                signedInHero
-            } else {
-                signedOutHero
-            }
+            content()
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
     }
 
-    private var signedOutHero: some View {
+    private var membershipCard: some View {
+        profileCard {
+            HStack(alignment: .center, spacing: DirtSpace.inner) {
+                VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                    Text("DIRT Pro")
+                        .font(.system(.title3, design: .default, weight: .bold))
+                        .foregroundStyle(DirtTheme.ink)
+                    Text(subscription.isSubscribed ? "You're part of DIRT Pro." : "Ride with the crew.")
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: DirtSpace.inner)
+                membershipBadge
+            }
+
+            if subscription.isSubscribed {
+                Button {
+                    showManageSubscriptions = true
+                } label: {
+                    navigationRow("Manage subscription", systemImage: "creditcard.fill")
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    showPaywall = true
+                } label: {
+                    Text("View DIRT Pro")
+                }
+                .buttonStyle(DirtCTAStyle.brand())
+            }
+
+            Button {
+                Task { await restorePurchases() }
+            } label: {
+                navigationRow("Restore purchases", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            .disabled(subscription.storeOperationInFlight)
+        }
+    }
+
+    private var membershipBadge: some View {
+        Text(subscription.isSubscribed ? "Active" : "Not subscribed")
+            .font(DirtType.chip)
+            .fontWeight(.bold)
+            .foregroundStyle(subscription.isSubscribed ? Color.white : DirtTheme.muted)
+            .padding(.horizontal, DirtSpace.inner)
+            .padding(.vertical, DirtSpace.tight)
+            .background(subscription.isSubscribed ? DirtTheme.navGreen : DirtTheme.wash)
+            .clipShape(Capsule())
+            .accessibilityLabel(subscription.isSubscribed ? "DIRT Pro active" : "Not subscribed")
+    }
+
+    @ViewBuilder
+    private var accountCard: some View {
+        profileCard {
+            if supabase.isSignedIn {
+                signedInAccount
+            } else {
+                signedOutAccount
+            }
+        }
+    }
+
+    private var signedOutAccount: some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
-            Text("Signed out")
-                .font(.system(.subheadline, design: .default, weight: .bold))
-                .foregroundStyle(DirtTheme.muted)
-                .frame(maxWidth: .infinity)
+            Text("Account")
+                .font(.system(.title3, design: .default, weight: .bold))
+                .foregroundStyle(DirtTheme.ink)
 
             Text("Create and join groups, share your ride status with your crew, and keep your DIRT profile connected.")
                 .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
-                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
 
             AppleSignInButton { result in
                 handleSignIn(result)
@@ -168,70 +228,44 @@ struct ProfileSheet: View {
         }
     }
 
-    @ViewBuilder
-    private var signedInHero: some View {
-        if subscription.isSubscribed {
-            HStack {
-                Text("DIRT PRO")
-                    .font(DirtType.sectionLabel)
-                    .foregroundStyle(DirtTheme.muted)
-                Spacer()
-                Text("Active")
-                    .font(DirtType.chip)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, DirtSpace.inner)
-                    .padding(.vertical, DirtSpace.tight)
-                    .background(DirtTheme.navGreen)
-                    .clipShape(Capsule())
-            }
-            identityBlock
-        } else {
-            identityBlock
-            HStack {
-                Text("DIRT PRO")
-                    .font(DirtType.sectionLabel)
-                    .foregroundStyle(DirtTheme.muted)
-                Spacer()
-                Text("Not subscribed")
-                    .font(DirtType.chip)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DirtTheme.muted)
-                    .padding(.horizontal, DirtSpace.inner)
-                    .padding(.vertical, DirtSpace.tight)
-                    .background(DirtTheme.wash)
-                    .clipShape(Capsule())
-            }
-            Button {
-                showPaywall = true
-            } label: {
-                Text("View DIRT PRO")
-            }
-            .buttonStyle(DirtCTAStyle.brand())
-        }
-    }
+    private var signedInAccount: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            Text("Account")
+                .font(DirtType.sectionLabel)
+                .foregroundStyle(DirtTheme.muted)
 
-    private var identityBlock: some View {
-        VStack(alignment: .leading, spacing: DirtSpace.tight) {
-            Text(identityTitle)
-                .font(.system(.subheadline, design: .default, weight: .bold))
-                .foregroundStyle(DirtTheme.ink)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .center, spacing: DirtSpace.inner) {
+                Text(identityTitle)
+                    .font(.system(.title3, design: .default, weight: .bold))
+                    .foregroundStyle(DirtTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Button("Edit name") {
+                    displayName = supabase.displayName
+                    showEditName = true
+                }
+                .buttonStyle(.plain)
+                .font(DirtType.helper)
+                .fontWeight(.semibold)
+                .foregroundStyle(DirtTheme.action)
+                .frame(minHeight: DirtHit.min)
+                .contentShape(Rectangle())
+                .disabled(busy)
+                Spacer(minLength: 0)
+            }
+
             if let identityDetail {
                 Text(identityDetail)
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
             }
-            Button("Edit name") {
-                displayName = supabase.displayName
-                showEditName = true
+
+            Button {
+                Task { await signOut() }
+            } label: {
+                Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
             }
-            .buttonStyle(.plain)
-            .font(DirtType.helper)
-            .fontWeight(.semibold)
-            .foregroundStyle(DirtTheme.action)
-            .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
-            .contentShape(Rectangle())
+            .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
             .disabled(busy)
         }
     }
@@ -340,29 +374,17 @@ struct ProfileSheet: View {
 
     // MARK: - Tertiary
 
-    private var legalAccountSheet: some View {
+    private var legalSheet: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Legal & account", onClose: { showLegalAccount = false })
+            DirtSheetHeader(
+                title: "Legal",
+                titleFont: .system(.title2, design: .default, weight: .bold),
+                onClose: { showLegal = false }
+            )
+            .padding(.top, DirtSpace.row)
+
             ScrollView {
                 VStack(spacing: DirtSpace.group) {
-                    VStack(spacing: DirtSpace.tight) {
-                        if subscription.isSubscribed {
-                            Button {
-                                showManageSubscriptions = true
-                            } label: {
-                                navigationRow("Manage subscription", systemImage: "creditcard.fill")
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        Button {
-                            Task { await restorePurchases() }
-                        } label: {
-                            navigationRow("Restore purchases", systemImage: "arrow.clockwise")
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(subscription.storeOperationInFlight)
-                    }
-
                     VStack(spacing: DirtSpace.tight) {
                         Button { showLicences = true } label: {
                             linkRow("Licences & credits", systemImage: "doc.text.magnifyingglass")
@@ -389,33 +411,23 @@ struct ProfileSheet: View {
                     }
 
                     if supabase.isSignedIn {
-                        VStack(spacing: 0) {
-                            Button {
-                                Task { await signOut() }
-                            } label: {
-                                Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
-                            }
-                            .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
-
-                            Button(role: .destructive) {
-                                showDeleteAccountConfirmation = true
-                            } label: {
-                                Label("Delete account", systemImage: "person.crop.circle.badge.minus")
-                                    .font(DirtType.helper)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(DirtTheme.danger)
-                                    .frame(minHeight: DirtHit.min)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.top, DirtSpace.section)
-                            .accessibilityHint("Permanently deletes your DIRT account after confirmation")
+                        Button(role: .destructive) {
+                            showDeleteAccountConfirmation = true
+                        } label: {
+                            Label("Delete account", systemImage: "person.crop.circle.badge.minus")
+                                .font(DirtType.helper)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(DirtTheme.danger)
+                                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .disabled(busy)
+                        .accessibilityHint("Permanently deletes your DIRT account after confirmation")
                     }
                 }
                 .padding(.horizontal, DirtSpace.group)
-                .padding(.top, DirtSpace.tight)
+                .padding(.top, DirtSpace.row)
                 .padding(.bottom, DirtSpace.section)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
@@ -425,7 +437,6 @@ struct ProfileSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(DirtTheme.sheetMaterial)
-        .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
         .sheet(isPresented: $showLicences) {
             licencesSheet
         }
@@ -526,7 +537,6 @@ struct ProfileSheet: View {
         do {
             try await supabase.signOut()
             notice = nil
-            showLegalAccount = false
         } catch {
             notice = ProfileNotice(kind: .problem, text: "You could not sign out right now.")
             await app.groups.refreshGroups()
@@ -545,7 +555,7 @@ struct ProfileSheet: View {
                     kind: .info,
                     text: "Your DIRT account was deleted. To also revoke DIRT’s Sign in with Apple access, open Settings → your name → Sign-In & Security → Sign in with Apple."
                 )
-                showLegalAccount = false
+                showLegal = false
             } catch {
                 notice = ProfileNotice(kind: .problem, text: error.localizedDescription)
                 // A response can be lost after the server commits. Keep sharing

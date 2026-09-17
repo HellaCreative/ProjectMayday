@@ -306,6 +306,7 @@ struct RootView: View {
                 overlayInsetsGeneration: app.mapState.overlayInsetsGeneration,
                 layerPrefsGeneration: app.mapState.layerPrefsGeneration,
                 bcOSMOverlayGeneration: app.mapState.bcOSMOverlayGeneration,
+                styleURL: app.mapState.styleURL,
                 styleGeneration: app.mapState.styleGeneration
             )
             .ignoresSafeArea()
@@ -784,8 +785,10 @@ struct RootView: View {
     private func dockSheet(_ sheet: ActiveSheet, landscapeDockLeading: Bool?) -> some View {
         switch sheet {
         case .layers:
+            // Same top gap as Profile fully extended — sheet must not run under the DIRT logo.
             DockSheetPanel(
-                heightFraction: 1,
+                heightFraction: 0.92,
+                expandedHeightFraction: 0.92,
                 landscapeDockLeading: landscapeDockLeading,
                 material: .thinMaterial,
                 onDismiss: dismissDockSheet
@@ -1078,6 +1081,16 @@ struct RootView: View {
         let barBottom = DirtIsland.cutoutTop + DirtIsland.restingHeight
         let safeTop = Self.foregroundSafeAreaInsets.top
         return max(0, barBottom + MapControlStack.afterZoomGap - safeTop - portraitTopChromeInset)
+    }
+
+    /// In-ride cue needs more than minus→3D so the callout clearly sits under
+    /// the Island+DIRT wrapper, not tucked into it.
+    private var islandCueClearance: CGFloat {
+        guard hasDynamicIsland else { return 0 }
+        let barBottom = DirtIsland.cutoutTop + DirtIsland.restingHeight
+        let safeTop = Self.foregroundSafeAreaInsets.top
+        let gap = MapControlStack.afterZoomGap + DirtIsland.wordmarkBand
+        return max(0, barBottom + gap - safeTop - portraitTopChromeInset)
     }
 
     private var islandTickerHasContent: Bool {
@@ -1579,8 +1592,11 @@ struct RootView: View {
                         BrandChip(minHeight: 68)
                     }
                     NavCueCard()
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                // Stop at the inner edge of +/−/3D. Left matches ticker/logo (12pt).
+                .padding(.trailing, DirtHit.control + MapControlStack.itemSpacing)
+                .padding(.top, hasDynamicIsland ? islandCueClearance : 0)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 HStack(alignment: .top, spacing: 8) {
@@ -1887,12 +1903,14 @@ private struct MapLibreCanvas: View {
     var overlayInsetsGeneration: Int
     var layerPrefsGeneration: Int
     var bcOSMOverlayGeneration: Int
+    var styleURL: URL
     var styleGeneration: Int
 
     var body: some View {
         let _ = overlayInsetsGeneration
         let _ = layerPrefsGeneration
         let _ = bcOSMOverlayGeneration
+        let _ = styleURL
         let _ = styleGeneration
         MapLibreMapView(state: state, location: location)
     }
