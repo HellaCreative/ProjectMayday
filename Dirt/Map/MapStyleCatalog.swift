@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v2"
+    static let generatedStyleRevision = "osmand-v4"
 
     static var selectedID: MapStyleID {
         get {
@@ -85,9 +85,6 @@ enum MapStyleCatalog {
                 applyHighwayColors(id: id, rich: rich, paint: &paint)
                 applyHighwayWidths(id: id, paint: &paint)
             }
-            if id.contains("water_polygons_labels") || id.hasPrefix("label-waterway") {
-                paint["text-color"] = "#4f8fb0"
-            }
             layer["paint"] = paint
 
             if id == "boundaries-0" {
@@ -99,6 +96,8 @@ enum MapStyleCatalog {
                 continue
             }
             retunePlaceLabel(&layer)
+            retuneWaterLabel(&layer)
+            retuneStreetLabel(&layer)
             layers.append(layer)
         }
 
@@ -427,6 +426,88 @@ extension MapStyleCatalog {
         } else if id.contains("island") {
             layer["minzoom"] = 10
             layout["text-size"] = ["stops": [[10, 11], [13, 14]]]
+        }
+        layer["layout"] = layout
+        layer["paint"] = paint
+    }
+
+    /// Lake and water names must read on the water fill. Shortbread's stock
+    /// `#6699cc` on `#7eb8d4` vanishes; area gates also hid ordinary NS lakes
+    /// until z12+.
+    private static func retuneWaterLabel(_ layer: inout [String: Any]) {
+        let id = layer["id"] as? String ?? ""
+        let isLake = id.contains("water_polygons_labels-water-name")
+        let isWaterway = id.hasPrefix("label-waterway")
+        guard isLake || isWaterway else { return }
+        var layout = layer["layout"] as? [String: Any] ?? [:]
+        var paint = layer["paint"] as? [String: Any] ?? [:]
+        paint["text-color"] = "#163a52"
+        paint["text-halo-color"] = "#f8f4f0"
+        paint["text-halo-width"] = 2.6
+        paint["text-halo-blur"] = 0.2
+        layout["text-font"] = ["Noto Sans Regular"]
+        if isLake {
+            layout["text-size"] = ["stops": [[5, 11], [8, 13], [12, 15], [16, 18]]]
+            switch id {
+            case let value where value.hasSuffix("-8"):
+                layer["minzoom"] = 5
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 8_000_000)
+            case let value where value.hasSuffix("-9"):
+                layer["minzoom"] = 6
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 1_500_000)
+            case let value where value.hasSuffix("-10"):
+                layer["minzoom"] = 7
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 400_000)
+            case let value where value.hasSuffix("-11"):
+                layer["minzoom"] = 8
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 80_000)
+            case let value where value.hasSuffix("-12"):
+                layer["minzoom"] = 9
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 20_000)
+            case let value where value.hasSuffix("-13"):
+                layer["minzoom"] = 10
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 5_000)
+            case let value where value.hasSuffix("-14"):
+                layer["minzoom"] = 11
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 1_000)
+            default:
+                layer["minzoom"] = 11
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: nil)
+            }
+        } else if id.contains("-14") {
+            layer["minzoom"] = 12
+            layout["text-size"] = ["stops": [[12, 11], [16, 14]]]
+        } else {
+            layer["minzoom"] = 10
+            layout["text-size"] = ["stops": [[10, 11], [14, 14]]]
+        }
+        layer["layout"] = layout
+        layer["paint"] = paint
+    }
+
+    private static func relaxedWaterFilter(_ filter: Any?, minArea: Double?) -> Any {
+        let kind: [Any] = ["in", "kind", "water", "river", "reservoir", "dock", "basin", "canal", "lake"]
+        guard let minArea else { return ["all", kind] }
+        return ["all", kind, [">", "way_area", minArea]]
+    }
+
+    /// Street and path names while browsing the map and during navigation.
+    /// Stock Shortbread waits until z12 with 10 px type.
+    private static func retuneStreetLabel(_ layer: inout [String: Any]) {
+        let id = layer["id"] as? String ?? ""
+        guard id == "label-street-centre-12" || id == "label-path-bottom-12" else { return }
+        var layout = layer["layout"] as? [String: Any] ?? [:]
+        var paint = layer["paint"] as? [String: Any] ?? [:]
+        paint["text-color"] = "#1a1f24"
+        paint["text-halo-color"] = "#f8f4f0"
+        paint["text-halo-width"] = 2.4
+        layout["text-font"] = ["Noto Sans Regular"]
+        if id == "label-street-centre-12" {
+            layer["minzoom"] = 10
+            layout["text-size"] = ["stops": [[10, 11], [13, 13], [16, 15]]]
+        } else {
+            layer["minzoom"] = 11
+            layout["text-size"] = ["stops": [[11, 10], [14, 13], [16, 14]]]
         }
         layer["layout"] = layout
         layer["paint"] = paint

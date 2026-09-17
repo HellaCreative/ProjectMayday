@@ -173,6 +173,28 @@ struct MapLibreMapView: UIViewRepresentable {
                 symbol.draw(at: origin)
             }
         }
+
+        static func makeAttractionIcon(symbolName: String, color: UIColor) -> UIImage? {
+            let size = CGSize(width: 22, height: 22)
+            let config = UIImage.SymbolConfiguration(pointSize: 10, weight: .bold)
+            let symbol = UIImage(systemName: symbolName, withConfiguration: config)
+                ?? UIImage(systemName: "mappin", withConfiguration: config)
+            guard let symbol = symbol?.withTintColor(.white, renderingMode: .alwaysOriginal) else { return nil }
+            let renderer = UIGraphicsImageRenderer(size: size)
+            return renderer.image { _ in
+                color.setFill()
+                UIBezierPath(ovalIn: CGRect(x: 1, y: 1, width: 20, height: 20)).fill()
+                UIColor.white.setStroke()
+                let ring = UIBezierPath(ovalIn: CGRect(x: 1.5, y: 1.5, width: 19, height: 19))
+                ring.lineWidth = 1.5
+                ring.stroke()
+                let origin = CGPoint(
+                    x: (size.width - symbol.size.width) / 2,
+                    y: (size.height - symbol.size.height) / 2
+                )
+                symbol.draw(at: origin)
+            }
+        }
     }
 
     final class Coordinator: NSObject, MLNMapViewDelegate {
@@ -225,6 +247,7 @@ struct MapLibreMapView: UIViewRepresentable {
             addDebugGraphLayers(to: style)
             addRouteLayers(to: style)
             addPOILayers(to: style)
+            addAttractionLayers(to: style)
             styleLoaded = true
             appliedRouteGeneration = -1
             appliedFuelReplacementGeneration = -1
@@ -260,6 +283,10 @@ struct MapLibreMapView: UIViewRepresentable {
             let src = MLNShapeSource(identifier: "dirt-network", shape: nil, options: nil)
             style.addSource(src)
 
+            func addNet(_ layer: MLNStyleLayer) {
+                insertBelowBasemapLabels(layer, in: style)
+            }
+
             // Nearby network, not selected-route paint: access stays blue so it
             // cannot be read as route unknown-access purple.
             let access = MLNLineStyleLayer(identifier: "dirt-net-access", source: src)
@@ -267,7 +294,7 @@ struct MapLibreMapView: UIViewRepresentable {
             access.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.overlayAccess))
             access.lineWidth = NSExpression(forConstantValue: 2)
             access.lineOpacity = NSExpression(forConstantValue: 0.88)
-            style.addLayer(access)
+            addNet(access)
 
             // Nearby gravel stays cool gray so selected-route amber gravel still wins.
             let gravel = MLNLineStyleLayer(identifier: "dirt-net-gravel", source: src)
@@ -275,7 +302,7 @@ struct MapLibreMapView: UIViewRepresentable {
             gravel.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.overlayGravel))
             gravel.lineWidth = NSExpression(forConstantValue: 2)
             gravel.lineOpacity = NSExpression(forConstantValue: 0.88)
-            style.addLayer(gravel)
+            addNet(gravel)
 
             // Nearby dirt/track uses route-loose brown, not purple.
             let track = MLNLineStyleLayer(identifier: "dirt-net-track", source: src)
@@ -283,7 +310,7 @@ struct MapLibreMapView: UIViewRepresentable {
             track.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.overlayTrack))
             track.lineWidth = NSExpression(forConstantValue: 2)
             track.lineOpacity = NSExpression(forConstantValue: 0.88)
-            style.addLayer(track)
+            addNet(track)
 
             // restricted (red, dashed)
             let restricted = MLNLineStyleLayer(identifier: "dirt-net-restricted", source: src)
@@ -292,7 +319,7 @@ struct MapLibreMapView: UIViewRepresentable {
             restricted.lineWidth = NSExpression(forConstantValue: 2)
             restricted.lineOpacity = NSExpression(forConstantValue: 0.85)
             restricted.lineDashPattern = NSExpression(forConstantValue: [1.2, 1.4] as [NSNumber])
-            style.addLayer(restricted)
+            addNet(restricted)
 
             // bridge (teal)
             let bridge = MLNLineStyleLayer(identifier: "dirt-net-bridge", source: src)
@@ -300,7 +327,7 @@ struct MapLibreMapView: UIViewRepresentable {
             bridge.lineColor = NSExpression(forConstantValue: UIColor(red: 0.086, green: 0.529, blue: 0.373, alpha: 1))
             bridge.lineWidth = NSExpression(forConstantValue: 2.5)
             bridge.lineOpacity = NSExpression(forConstantValue: 0.92)
-            style.addLayer(bridge)
+            addNet(bridge)
 
             // tunnel (brown, dashed)
             let tunnel = MLNLineStyleLayer(identifier: "dirt-net-tunnel", source: src)
@@ -309,9 +336,30 @@ struct MapLibreMapView: UIViewRepresentable {
             tunnel.lineWidth = NSExpression(forConstantValue: 2.5)
             tunnel.lineOpacity = NSExpression(forConstantValue: 0.92)
             tunnel.lineDashPattern = NSExpression(forConstantValue: [0.8, 0.8] as [NSNumber])
-            style.addLayer(tunnel)
+            addNet(tunnel)
             // Network surface classes always paint when features are loaded.
             // Map visibility toggles were removed; zoom / DIRT-logo control load.
+        }
+
+        /// Place, water, street, and shield labels stay above DIRT-logo tendrils
+        /// and selected-route paint. `style.layers` is bottom → top, so the first
+        /// matching label is the bottom of that stack.
+        private func insertBelowBasemapLabels(_ layer: MLNStyleLayer, in style: MLNStyle) {
+            if let anchor = style.layers.first(where: { Self.isBasemapLabelLayer($0.identifier) }) {
+                style.insertLayer(layer, below: anchor)
+            } else {
+                style.addLayer(layer)
+            }
+        }
+
+        private static func isBasemapLabelLayer(_ id: String) -> Bool {
+            id.hasPrefix("water_polygons_labels-")
+                || id.hasPrefix("label-waterway")
+                || id.hasPrefix("label-path")
+                || id.hasPrefix("label-street")
+                || id.hasPrefix("label-shield")
+                || id.hasPrefix("place_labels-")
+                || id.hasPrefix("streets_polygons_labels-")
         }
 
         private func addDebugGraphLayers(to style: MLNStyle) {
@@ -344,7 +392,7 @@ struct MapLibreMapView: UIViewRepresentable {
             glow.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.overlayTrack))
             glow.lineWidth = NSExpression(forConstantValue: 5.2)
             glow.lineOpacity = NSExpression(forConstantValue: 0.42)
-            style.addLayer(glow)
+            insertBelowBasemapLabels(glow, in: style)
 
             let attr = PackDebugPaint.attributeKey(for: mode)
             for item in PackDebugPaint.legend(for: mode) {
@@ -367,7 +415,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 if item.dashed {
                     layer.lineDashPattern = NSExpression(forConstantValue: [1.2, 1.2] as [NSNumber])
                 }
-                style.addLayer(layer)
+                insertBelowBasemapLabels(layer, in: style)
             }
         }
 
@@ -476,26 +524,77 @@ struct MapLibreMapView: UIViewRepresentable {
                       let image = POILayer.makeIcon(category: cat, color: color) else { continue }
                 style.setImage(image, forName: name)
             }
+            for kind in ["beach", "waterfall", "viewpoint", "landmark"] {
+                let name = "dirt-attraction-icon-\(kind)"
+                guard style.image(forName: name) == nil,
+                      let image = POILayer.makeAttractionIcon(
+                        symbolName: MapAttraction.systemSymbolName(for: kind),
+                        color: MapAttraction.color
+                      ) else { continue }
+                style.setImage(image, forName: name)
+            }
+        }
+
+        /// OSM Shortbread `pois` / `land` — not Rider Services. Camps and fuel stay on `/api/poi`.
+        private func addAttractionLayers(to style: MLNStyle) {
+            guard style.layer(withIdentifier: MapAttraction.layerIDs[0]) == nil,
+                  let source = style.source(withIdentifier: "someoneelse")
+            else { return }
+
+            let kinds: [(id: String, predicate: NSPredicate, sourceLayer: String)] = [
+                (
+                    "beach",
+                    NSPredicate(format: "natural == 'beach' OR leisure == 'beach' OR kind == 'beach'"),
+                    "pois"
+                ),
+                (
+                    "waterfall",
+                    NSPredicate(format: "natural == 'waterfall' OR waterway == 'waterfall' OR kind == 'waterfall'"),
+                    "pois"
+                ),
+                (
+                    "viewpoint",
+                    NSPredicate(format: "tourism == 'viewpoint' OR kind == 'viewpoint'"),
+                    "pois"
+                ),
+                (
+                    "landmark",
+                    NSPredicate(
+                        format: "tourism == 'attraction' OR man_made == 'lighthouse' OR kind == 'attraction' OR historic IN %@",
+                        ["monument", "memorial", "castle", "ruins", "archaeological_site", "battlefield", "fort"]
+                    ),
+                    "pois"
+                ),
+                (
+                    "beach-land",
+                    NSPredicate(format: "kind == 'beach'"),
+                    "land"
+                )
+            ]
+            for spec in kinds {
+                let iconKind = spec.id.hasPrefix("beach") ? "beach" : spec.id
+                let layer = MLNSymbolStyleLayer(
+                    identifier: "dirt-attraction-\(spec.id)",
+                    source: source
+                )
+                layer.sourceLayerIdentifier = spec.sourceLayer
+                layer.predicate = spec.predicate
+                layer.iconImageName = NSExpression(forConstantValue: "dirt-attraction-icon-\(iconKind)")
+                layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+                layer.iconIgnoresPlacement = NSExpression(forConstantValue: false)
+                layer.iconAnchor = NSExpression(forConstantValue: "center")
+                layer.minimumZoomLevel = Float(MapAttraction.minZoom)
+                style.addLayer(layer)
+            }
+            applyPOILayerVisibility(to: style)
         }
 
         // MARK: - Route layers
 
-        /// Keep selected-route paint above the road geometry but below the
-        /// basemap's trail and street names. Both bundled map styles share
-        /// these label identifiers; the fallback preserves route visibility if
-        /// a future style does not.
+        /// Keep selected-route paint above the road geometry but below place,
+        /// water, street, and shield labels — same stack as DIRT-logo tendrils.
         private func addRouteLayer(_ layer: MLNStyleLayer, to style: MLNStyle) {
-            let labelAnchorIDs = [
-                "label-path-bottom-12",
-                "label-street-centre-12"
-            ]
-            if let labelAnchor = labelAnchorIDs.lazy.compactMap({
-                style.layer(withIdentifier: $0)
-            }).first {
-                style.insertLayer(layer, below: labelAnchor)
-            } else {
-                style.addLayer(layer)
-            }
+            insertBelowBasemapLabels(layer, in: style)
         }
 
         private func addRouteLayers(to style: MLNStyle) {
@@ -659,6 +758,12 @@ struct MapLibreMapView: UIViewRepresentable {
             }
             style.layer(withIdentifier: POILayer.fuelClusterCircleID)?.isVisible = prefs.showFuel
             style.layer(withIdentifier: POILayer.fuelClusterCountID)?.isVisible = prefs.showFuel
+            for id in MapAttraction.layerIDs {
+                style.layer(withIdentifier: id)?.isVisible = prefs.showAttractions
+            }
+            for id in MapAttraction.builtinLayerIDs {
+                style.layer(withIdentifier: id)?.isVisible = !prefs.showAttractions
+            }
             applyFuelReplacementEmphasis(to: style)
         }
 
@@ -1685,15 +1790,41 @@ struct MapLibreMapView: UIViewRepresentable {
                 width: hitRadius * 2,
                 height: hitRadius * 2
             )
-            let poiLayerIDs = Set(POILayer.individualLayerIDs)
+            let poiLayerIDs = Set(POILayer.individualLayerIDs + MapAttraction.layerIDs)
             let poiHits = mapView.visibleFeatures(in: box, styleLayerIdentifiers: poiLayerIDs)
-            guard let hit = poiHits.first as? MLNPointFeature else { return nil }
+            guard let hit = poiHits.first else { return nil }
             let attrs = hit.attributes
+            let existingCategory = attrs["category"] as? String
+            let isPackedPOI = existingCategory == "fuel"
+                || existingCategory == "campground"
+                || existingCategory == "lodging"
+                || existingCategory == "liquor"
+            if !isPackedPOI, let kind = MapAttraction.kind(from: attrs) {
+                let name = (attrs["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                let coordinate: CLLocationCoordinate2D = {
+                    if let point = hit as? MLNPointFeature { return point.coordinate }
+                    return mapView.convert(point, toCoordinateFrom: mapView)
+                }()
+                return POIFeature(
+                    id: "osm-attraction:\(coordinate.latitude),\(coordinate.longitude)",
+                    category: "attraction",
+                    latitude: coordinate.latitude,
+                    longitude: coordinate.longitude,
+                    name: name,
+                    address: nil,
+                    brand: nil,
+                    openingHours: nil,
+                    phone: nil,
+                    website: nil,
+                    kind: kind
+                )
+            }
+            guard let pointHit = hit as? MLNPointFeature else { return nil }
             return POIFeature(
                 id:           (attrs["poi_id"]  as? String) ?? "",
                 category:     (attrs["category"] as? String) ?? "",
-                latitude:     hit.coordinate.latitude,
-                longitude:    hit.coordinate.longitude,
+                latitude:     pointHit.coordinate.latitude,
+                longitude:    pointHit.coordinate.longitude,
                 name:         (attrs["name"]    as? String).flatMap { $0.isEmpty ? nil : $0 },
                 address:      (attrs["address"] as? String).flatMap { $0.isEmpty ? nil : $0 },
                 brand:        (attrs["brand"]   as? String).flatMap { $0.isEmpty ? nil : $0 },
