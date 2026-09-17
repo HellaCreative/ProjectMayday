@@ -306,6 +306,7 @@ struct RootView: View {
                 overlayInsetsGeneration: app.mapState.overlayInsetsGeneration,
                 layerPrefsGeneration: app.mapState.layerPrefsGeneration,
                 bcOSMOverlayGeneration: app.mapState.bcOSMOverlayGeneration,
+                styleURL: app.mapState.styleURL,
                 styleGeneration: app.mapState.styleGeneration
             )
             .ignoresSafeArea()
@@ -1887,12 +1888,14 @@ private struct MapLibreCanvas: View {
     var overlayInsetsGeneration: Int
     var layerPrefsGeneration: Int
     var bcOSMOverlayGeneration: Int
+    var styleURL: URL
     var styleGeneration: Int
 
     var body: some View {
         let _ = overlayInsetsGeneration
         let _ = layerPrefsGeneration
         let _ = bcOSMOverlayGeneration
+        let _ = styleURL
         let _ = styleGeneration
         MapLibreMapView(state: state, location: location)
     }
