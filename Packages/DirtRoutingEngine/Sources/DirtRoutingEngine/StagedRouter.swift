@@ -30,27 +30,90 @@ public enum StagedRouter {
         var cursor = request.start
         for (index, window) in windows.enumerated() {
             try budget.check()
-            let hopEnd: Coordinate
-            if index + 1 < windows.count, let next = windows[index + 1].last, let shared = window.last {
-                hopEnd = try handover(from: shared, into: next, toward: request.end, repository: repository)
+            let isFinal = index + 1 >= windows.count
+            let candidates: [Coordinate]
+            if !isFinal, let next = windows[index + 1].last, let shared = window.last {
+                // Interior of the shared pack first: nearest-to-dest border seams are
+                // often stubs that only connect after the next pack joins (QC→ON,
+                // and NB→ME toward southern Maine). An on-road pin inside B keeps
+                // the current window legal, then the next window opens B+C.
+                var pins: [Coordinate] = []
+                if let interior = try? roadInteriorTarget(in: shared, from: cursor, toward: request.end,
+                                                          repository: repository, budget: budget) {
+                    pins.append(interior)
+                }
+                // Diversified known-yes seams, biased toward the current ride so
+                // far-side stub clusters do not monopolise the first retries.
+                for seam in try handoverCandidates(from: shared, into: next, toward: request.end,
+                                                   from: cursor, repository: repository).prefix(6) {
+                    if pins.contains(where: { $0.distance(to: seam) < 2_500 }) { continue }
+                    pins.append(seam)
+                }
+                candidates = pins
             } else {
-                hopEnd = request.end
-            }
-            var hop = request.with(start: cursor, end: hopEnd)
-            let span = cursor.distance(to: hopEnd)
-            hop.options.compassMaxRemaining = max(450_000, span * 2.5)
-            if let previous = parts.last {
-                hop.options.precedingMeters = parts.reduce(0) { $0 + $1.distanceMeters }
-                hop.options.precedingDirtMeters = parts.reduce(0) { $0 + knownDirtMeters($1) }
-                hop.options.arrivalEdgeID = previous.segments.last?.edgeID
+                candidates = [request.end]
             }
             let started = ContinuousClock.now
-            let part = try routeWindow(window, request: hop, repository: repository, budget: budget)
-            hop.options.counter?.recordStage("stage\(index):\(window.joined(separator: ","))", since: started)
+            let part = try routeHop(window: window, from: cursor, ends: candidates, request: request,
+                                    preceding: parts, repository: repository, budget: budget,
+                                    intermediate: !isFinal)
+            request.options.counter?.recordStage("stage\(index):\(window.joined(separator: ","))", since: started)
             parts.append(part)
             cursor = part.end.coordinate
         }
         return stitch(parts, windows: windows)
+    }
+
+    /// One staged window. The pack join/index is built once; candidate handovers
+    /// reuse it. Intermediate hops fall back to a Clean connectivity search when
+    /// the rider style cannot legally reach a border or interior pin.
+    static func routeHop(window: [String], from cursor: Coordinate, ends: [Coordinate],
+                         request: RoutingRequest, preceding: [ComputedRoute],
+                         repository: PackRepository, budget: ComputationBudget,
+                         intermediate: Bool) throws -> ComputedRoute {
+        let packs = try window.map { try repository.open($0, requireSeams: window.count > 1, budget: budget) }
+        guard let first = packs.first else { throw RoutingFailure.missingPacks(window) }
+        let graph: any RoadGraph = packs.count == 1 ? first.graph : try RegionalGraph(packs: packs, budget: budget)
+        let indexed = try IndexedGraph(graph, budget: budget)
+        let engine = RoutingEngine(pack: indexed)
+        var lastFailure: RoutingFailure = .noPath
+        let targets = ends.isEmpty ? [request.end] : Array(ends.prefix(8))
+        for hopEnd in targets {
+            try budget.check()
+            let hop = decorated(request, from: cursor, to: hopEnd, preceding: preceding)
+            do {
+                return try engine.route(hop, budget: budget)
+            } catch let error as RoutingFailure where error == .noPath || error == .noMatch {
+                lastFailure = error
+            }
+        }
+        if intermediate, request.profile.style != .cleanest {
+            for hopEnd in targets {
+                try budget.check()
+                var bridge = decorated(request, from: cursor, to: hopEnd, preceding: preceding)
+                bridge.profile = ProfilePolicy(style: .cleanest)
+                bridge.access = AccessPolicy(allowUnknown: request.access.allowUnknown)
+                do {
+                    return try engine.route(bridge, budget: budget)
+                } catch let error as RoutingFailure where error == .noPath || error == .noMatch {
+                    lastFailure = error
+                }
+            }
+        }
+        throw lastFailure
+    }
+
+    static func decorated(_ request: RoutingRequest, from cursor: Coordinate, to hopEnd: Coordinate,
+                          preceding: [ComputedRoute]) -> RoutingRequest {
+        var hop = request.with(start: cursor, end: hopEnd)
+        let span = cursor.distance(to: hopEnd)
+        hop.options.compassMaxRemaining = max(450_000, span * 2.5)
+        if let previous = preceding.last {
+            hop.options.precedingMeters = preceding.reduce(0) { $0 + $1.distanceMeters }
+            hop.options.precedingDirtMeters = preceding.reduce(0) { $0 + knownDirtMeters($1) }
+            hop.options.arrivalEdgeID = previous.segments.last?.edgeID
+        }
+        return hop
     }
 
     static func neighborMap(_ regions: [String], repository: PackRepository) throws -> [String:Set<String>] {
@@ -92,18 +155,82 @@ public enum StagedRouter {
 
     static func handover(from shared: String, into next: String, toward dest: Coordinate,
                          repository: PackRepository) throws -> Coordinate {
-        let anchors = try repository.loadSeams(shared).neighbors[next]
-            ?? repository.loadSeams(next).neighbors[shared]
-            ?? []
-        let points = anchors.compactMap { row -> Coordinate? in
-            guard row.coordinate.count == 2 else { return nil }
-            let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
-            return point.isValid ? point : nil
-        }
-        guard let best = points.min(by: { $0.distance(to: dest) < $1.distance(to: dest) }) else {
+        guard let best = try handoverCandidates(from: shared, into: next, toward: dest,
+                                                from: dest, repository: repository).first else {
             throw RoutingFailure.noPath
         }
         return best
+    }
+
+    /// Border pins for the next hop.
+    /// Prefer seams whose pack edge is known-yes access (code 0): nearest-to-dest
+    /// alone can land on unknown-only tracks that Clean cannot match and Dirt cannot
+    /// legally leave, which produced `noPath` on NS→ON while Gaspé still worked.
+    /// Among known-yes (then other) pins, rank by destination distance plus a pull
+    /// toward `cursor` so deep next-pack stub clusters (NB→ME toward Owls Head)
+    /// lose to the nearer shared-side corridor, then spread geographically.
+    static func handoverCandidates(from shared: String, into next: String, toward dest: Coordinate,
+                                   from cursor: Coordinate, repository: PackRepository) throws -> [Coordinate] {
+        let anchors = try repository.loadSeams(shared).neighbors[next]
+            ?? repository.loadSeams(next).neighbors[shared]
+            ?? []
+        var seen = Set<String>()
+        var yes: [(Coordinate, Double)] = []
+        var other: [(Coordinate, Double)] = []
+        for row in anchors {
+            guard row.coordinate.count == 2 else { continue }
+            let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
+            guard point.isValid else { continue }
+            let key = String(format: "%.5f,%.5f", point.latitude, point.longitude)
+            guard seen.insert(key).inserted else { continue }
+            // Dest pull + cursor pull: stubs deep in the next pack are near dest but
+            // far from the ride so far; shared-side corridor seams score better.
+            let score = point.distance(to: dest) + 0.55 * point.distance(to: cursor)
+            let knownYes = row.edge.accessForward == 0 || row.edge.accessReverse == 0
+            if knownYes { yes.append((point, score)) } else { other.append((point, score)) }
+        }
+        yes.sort { $0.1 < $1.1 }
+        other.sort { $0.1 < $1.1 }
+        let ordered = diversify(yes.map(\.0)) + diversify(other.map(\.0))
+        if ordered.isEmpty { throw RoutingFailure.noPath }
+        return ordered
+    }
+
+    /// Keep ranked order, but skip pins that sit within `minSeparation` of an
+    /// already-chosen pin so one stub cluster cannot monopolise retries.
+    static func diversify(_ points: [Coordinate], minSeparation: Double = 8_000) -> [Coordinate] {
+        var picked: [Coordinate] = []
+        for point in points {
+            if picked.contains(where: { $0.distance(to: point) < minSeparation }) { continue }
+            picked.append(point)
+        }
+        return picked
+    }
+
+    /// On-road pin inside `region`, toward `dest` from `cursor`.
+    /// Samples real graph nodes so the matcher has something to snap to (raw
+    /// geodesic fractions often land in water or empty forest).
+    static func roadInteriorTarget(in region: String, from cursor: Coordinate, toward dest: Coordinate,
+                                   repository: PackRepository, budget: ComputationBudget) throws -> Coordinate {
+        let installed = try repository.open(region, requireSeams: false, budget: budget)
+        let pack = installed.graph
+        let box = sampledBox(pack)
+        let step = max(1, pack.nodeCount / 6_000)
+        var best: (Coordinate, Double)?
+        for node in stride(from: 0, to: pack.nodeCount, by: step) {
+            try budget.check()
+            let point = pack.coordinate(node: node)
+            guard point.isValid, box.contains(point) else { continue }
+            let progressed = cursor.distance(to: point)
+            let remaining = point.distance(to: dest)
+            guard progressed > 80_000, remaining > 40_000 else { continue }
+            let off = abs(point.crossTrack(from: cursor, to: dest))
+            guard off < 120_000 else { continue }
+            let score = remaining + off * 1.5
+            if best == nil || score < best!.1 { best = (point, score) }
+        }
+        guard let best else { throw RoutingFailure.noPath }
+        return best.0
     }
 
     static func routeWindow(_ regions: [String], request: RoutingRequest, repository: PackRepository,
