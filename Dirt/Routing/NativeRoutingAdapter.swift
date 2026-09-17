@@ -123,6 +123,7 @@ actor NativeRoutingSession {
     private var cachedGraph: IndexedGraph?
     private var cachedFuel: [DirtRoutingEngine.FuelStation] = []
     private let compassStore = RoadCompassStore()
+    private let preparedGraphs = PreparedGraphStore()
     /// Returns the prepared graph and, when this call built it, how long opening packs,
     /// joining regions, indexing and decoding fuel took.
     private func prepare(_ directories: [String:URL],budget: ComputationBudget) throws -> (graph: IndexedGraph, detail: String?) {
@@ -136,10 +137,15 @@ actor NativeRoutingSession {
         let repository = try PackRepository(installedDirectories: directories)
         let installed = try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
         let openedMs = elapsedMs(from: started)
-        guard let first = installed.first else { throw RoutingFailure.missingPacks(regions) }
-        let graph: any RoadGraph = installed.count == 1 ? first.graph : try RegionalGraph(packs: installed,budget: budget)
+        guard installed.first != nil else { throw RoutingFailure.missingPacks(regions) }
         let joinedMs = elapsedMs(from: started)
-        let indexed = try IndexedGraph(graph,budget: budget)
+        let indexed: IndexedGraph
+        if regions.count == 1 {
+            indexed = try preparedGraphs.indexed(regions, repository: repository, budget: budget)
+        } else {
+            let graph: any RoadGraph = try RegionalGraph(packs: installed, budget: budget)
+            indexed = try IndexedGraph(graph, budget: budget)
+        }
         let indexedMs = elapsedMs(from: started)
         var fuel: [String:DirtRoutingEngine.FuelStation] = [:]
         for item in installed {
@@ -188,10 +194,11 @@ actor NativeRoutingSession {
             let result: ComputedRoute
             if StagedRouter.shouldStage(regionCount: directories.count, start: request.start, end: request.end) {
                 let repository = try PackRepository(installedDirectories: directories)
-                prepared = elapsedMs(from: started)
+                prepared = 0
                 prepareDetail = "staged:\(directories.keys.sorted().joined(separator: ","))"
                 result = try StagedRouter.route(request, repository: repository,
-                                                regions: Array(directories.keys), budget: budget)
+                                                regions: Array(directories.keys), budget: budget,
+                                                prepared: preparedGraphs)
             } else {
                 let preparation = try prepare(directories,budget: budget)
                 prepared = elapsedMs(from: started); prepareDetail = preparation.detail

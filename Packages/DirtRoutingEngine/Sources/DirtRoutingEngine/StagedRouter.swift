@@ -27,7 +27,8 @@ public enum StagedRouter {
     }
 
     public static func route(_ request: RoutingRequest, repository: PackRepository,
-                             regions: [String], budget: ComputationBudget) throws -> ComputedRoute {
+                             regions: [String], budget: ComputationBudget,
+                             prepared: PreparedGraphStore = PreparedGraphStore()) throws -> ComputedRoute {
         let unique = Array(Set(regions)).sorted()
         let startRegion = try containingRegion(request.start, regions: unique, repository: repository, budget: budget)
         let endRegion = try containingRegion(request.end, regions: unique, repository: repository, budget: budget)
@@ -35,7 +36,8 @@ public enum StagedRouter {
         let chain = try RegionConnectivity(neighbors: neighbors).chain(from: startRegion, to: endRegion)
         let windows = overlappingWindows(chain)
         guard windows.count >= 2 else {
-            return try routeWindow(windows.first ?? unique, request: request, repository: repository, budget: budget)
+            return try routeWindow(windows.first ?? unique, request: request, repository: repository,
+                                   budget: budget, prepared: prepared)
         }
         var parts: [ComputedRoute] = []
         var cursor = request.start
@@ -46,11 +48,27 @@ public enum StagedRouter {
             let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
                                               toward: request.end, repository: repository)
             guard !pins.isEmpty else { throw RoutingFailure.noPath }
-            let firstGraph = try openWindow(windows[0], repository: repository, budget: budget)
-            let secondGraph = try openWindow(windows[1], repository: repository, budget: budget)
+            let prepareStarted = ContinuousClock.now
+            let graphs = try prepared.indexedWindows(windows, repository: repository, budget: budget)
+            request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
+            let firstGraph = graphs[0]
+            let secondGraph = graphs[1]
             var lastError: Error = RoutingFailure.noPath
             for (attempt, hopEnd) in pins.enumerated() {
                 try budget.check()
+                // Cheap Cleanest preflight avoids 20s Balanced burns on overlap stubs
+                // that connect in one half only (phone/host London→TB hotspot).
+                if request.profile.style != .cleanest {
+                    let preflightStarted = ContinuousClock.now
+                    let live = (try? cleanestPair(from: cursor, via: hopEnd, to: request.end,
+                                                  first: firstGraph, second: secondGraph,
+                                                  request: request, budget: budget)) == true
+                    request.options.counter?.recordStage("seamPreflight", since: preflightStarted)
+                    guard live else {
+                        lastError = RoutingFailure.noPath
+                        continue
+                    }
+                }
                 do {
                     var hop0 = request.with(start: cursor, end: hopEnd)
                     hop0.options.compassMaxRemaining = max(450_000, cursor.distance(to: hopEnd) * 2.5)
@@ -94,7 +112,7 @@ public enum StagedRouter {
             }
             guard !candidates.isEmpty else { throw RoutingFailure.noPath }
             // Open the stage graph once; stub seams must not re-decode a 100MB pack.
-            let indexed = try openWindow(window, repository: repository, budget: budget)
+            let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
             var lastError: Error = RoutingFailure.noPath
             var advanced = false
             for (attempt, hopEnd) in candidates.enumerated() {
@@ -248,17 +266,46 @@ public enum StagedRouter {
     }
 
     static func openWindow(_ regions: [String], repository: PackRepository,
-                           budget: ComputationBudget) throws -> IndexedGraph {
-        let packs = try regions.map { try repository.open($0, requireSeams: regions.count > 1, budget: budget) }
-        guard let first = packs.first else { throw RoutingFailure.missingPacks(regions) }
-        let graph: any RoadGraph = packs.count == 1 ? first.graph : try RegionalGraph(packs: packs, budget: budget)
-        return try IndexedGraph(graph, budget: budget)
+                           budget: ComputationBudget,
+                           prepared: PreparedGraphStore = PreparedGraphStore()) throws -> IndexedGraph {
+        try prepared.indexed(regions, repository: repository, budget: budget)
     }
 
     static func routeWindow(_ regions: [String], request: RoutingRequest, repository: PackRepository,
-                            budget: ComputationBudget) throws -> ComputedRoute {
-        let indexed = try openWindow(regions, repository: repository, budget: budget)
+                            budget: ComputationBudget,
+                            prepared: PreparedGraphStore = PreparedGraphStore()) throws -> ComputedRoute {
+        let indexed = try openWindow(regions, repository: repository, budget: budget, prepared: prepared)
         return try RoutingEngine(pack: indexed).route(request, budget: budget)
+    }
+
+    /// Fast paved-only pair through both halves. Overlap stubs that Balanced would
+    /// burn ~20s on usually fail Cleanest in under a second.
+    static func cleanestPair(from origin: Coordinate, via hop: Coordinate, to destination: Coordinate,
+                             first: IndexedGraph, second: IndexedGraph,
+                             request: RoutingRequest, budget: ComputationBudget) throws -> Bool {
+        var hop0 = request.with(start: origin, end: hop)
+        hop0.profile = ProfilePolicy(style: .cleanest)
+        hop0.access = AccessPolicy(allowUnknown: false)
+        hop0.options.compassMaxRemaining = max(450_000, origin.distance(to: hop) * 2.5)
+        hop0.options.counter = nil
+        let part0: ComputedRoute
+        do {
+            part0 = try RoutingEngine(pack: first).route(hop0, budget: budget)
+        } catch {
+            return false
+        }
+        var hop1 = request.with(start: part0.end.coordinate, end: destination)
+        hop1.profile = ProfilePolicy(style: .cleanest)
+        hop1.access = AccessPolicy(allowUnknown: false)
+        hop1.options.compassMaxRemaining = max(450_000, part0.end.coordinate.distance(to: destination) * 2.5)
+        hop1.options.arrivalEdgeID = part0.segments.last?.edgeID
+        hop1.options.counter = nil
+        do {
+            _ = try RoutingEngine(pack: second).route(hop1, budget: budget)
+            return true
+        } catch {
+            return false
+        }
     }
 
     static func knownDirtMeters(_ route: ComputedRoute) -> Double {

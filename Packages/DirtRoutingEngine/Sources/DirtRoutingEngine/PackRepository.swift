@@ -58,10 +58,26 @@ public struct InstalledRoutingPack: Sendable {
     public let seamsData: Data?
 }
 
+final class VerifiedPackReceipts: @unchecked Sendable {
+    private let lock = NSLock()
+    private var receipts: Set<String> = []
+    func contains(_ receipt: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return receipts.contains(receipt)
+    }
+    func insert(_ receipt: String) {
+        lock.lock(); defer { lock.unlock() }
+        receipts.insert(receipt)
+    }
+}
+
 /// Explicit local inputs. The acquisition UI supplies directories after installation;
 /// missing data is returned as data demand, never translated into a server request.
 public struct PackRepository: Sendable {
     private let directories: [String:URL]
+    /// Manifest sha256 receipts already fully validated in this process.
+    private static let verified = VerifiedPackReceipts()
+
     public init(installedDirectories: [String:URL]) throws {
         guard installedDirectories.values.allSatisfy(\.isFileURL) else { throw RoutingFailure.invalidPack("local directories required") }
         directories = installedDirectories
@@ -78,7 +94,9 @@ public struct PackRepository: Sendable {
         catch { throw RoutingFailure.invalidPack("manifest unreadable: \(region)") }
         try manifest.validate(requireSeams: requireSeams)
         guard manifest.regionId == region else { throw RoutingFailure.invalidPack("wrong region") }
-        func verified(_ artifact: PackManifest.Artifact) throws -> BinaryFile {
+        let receipt = "\(region)|\(manifest.graph.sha256)|\(manifest.geometry.sha256)|\(manifest.fuel.sha256)"
+        let alreadyVerified = Self.verified.contains(receipt)
+        func verifiedArtifact(_ artifact: PackManifest.Artifact) throws -> BinaryFile {
             try budget.check()
             let file = try BinaryFile(url: root.appendingPathComponent(artifact.name))
             guard file.data.count == artifact.bytes, file.sha256 == artifact.sha256 else {
@@ -87,12 +105,15 @@ public struct PackRepository: Sendable {
             try budget.check()
             return file
         }
-        let graphBytes = try verified(manifest.graph), geometryBytes = try verified(manifest.geometry)
-        let graph = try GraphPack(graph: graphBytes,geometry: geometryBytes,budget: budget)
+        let graphBytes = try verifiedArtifact(manifest.graph), geometryBytes = try verifiedArtifact(manifest.geometry)
+        // SOT §8.8: hash/validate once per install identity; re-open trusts the receipt.
+        let graph = try GraphPack(graph: graphBytes, geometry: geometryBytes, budget: budget,
+                                  structuralValidation: !alreadyVerified)
         guard graph.metadata.regionId == region else { throw RoutingFailure.invalidPack("graph region mismatch") }
         guard graph.sourceEpoch == manifest.sourceEpoch else { throw RoutingFailure.invalidPack("graph source epoch mismatch") }
-        let fuel = try verified(manifest.fuel).data
-        let seams = try manifest.seams.map { try verified($0).data }
+        let fuel = try verifiedArtifact(manifest.fuel).data
+        let seams = try manifest.seams.map { try verifiedArtifact($0).data }
+        Self.verified.insert(receipt)
         return .init(manifest: manifest,graph: graph,fuelData: fuel,seamsData: seams)
     }
     func loadSeams(_ region: String) throws -> SeamDocument {

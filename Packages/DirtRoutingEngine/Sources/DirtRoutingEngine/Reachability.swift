@@ -52,6 +52,26 @@ final class ArcIndexCache: @unchecked Sendable {
     }
 }
 
+/// Lazy weak-component tables: only the allowUnknown mode a request needs is built.
+final class WeakComponentCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var strict: [Int]?
+    private var allow: [Int]?
+    func ids(allowUnknown: Bool, build: () -> [Int]) -> [Int] {
+        lock.lock(); defer { lock.unlock() }
+        if allowUnknown {
+            if let allow { return allow }
+            let built = build()
+            allow = built
+            return built
+        }
+        if let strict { return strict }
+        let built = build()
+        strict = built
+        return built
+    }
+}
+
 /// Answers whether a start match could possibly connect to an end match before a search
 /// floods the network to prove it. It follows every directed road and coincident-node
 /// transfer and enforces only the search's rule that a road is never taken straight back

@@ -4,6 +4,8 @@ import CryptoKit
 /// Retains mapped bytes, not a decoded copy of each regional graph array.
 final class BinaryFile: @unchecked Sendable {
     let data: Data
+    private var cachedSHA256: String?
+    private var cachedDigest: Data?
     init(url: URL) throws {
         guard url.isFileURL else { throw RoutingFailure.invalidPack("local file required") }
         data = try Data(contentsOf: url, options: .alwaysMapped)
@@ -27,7 +29,20 @@ final class BinaryFile: @unchecked Sendable {
         do { return try JSONDecoder().decode(type, from: data.subdata(in: start..<end)) }
         catch { throw RoutingFailure.invalidPack("invalid JSON section: \(error)") }
     }
-    var sha256: String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    /// Raw digest; hex form is derived from the same cached bytes.
+    func sha256Digest() -> Data {
+        if let cachedDigest { return cachedDigest }
+        let digest = Data(SHA256.hash(data: data))
+        cachedDigest = digest
+        cachedSHA256 = digest.map { String(format: "%02x", $0) }.joined()
+        return digest
+    }
+    /// Hash once per mapped file; open used to recompute SHA256 several times.
+    var sha256: String {
+        if let cachedSHA256 { return cachedSHA256 }
+        _ = sha256Digest()
+        return cachedSHA256!
+    }
 }
 
 struct MappedColumn<T: FixedWidthInteger>: Sendable {
