@@ -303,6 +303,7 @@ struct RootView: View {
             let _ = app.mapState.overlayInsetsGeneration
             let _ = app.mapState.layerPrefsGeneration
             let _ = app.mapState.bcOSMOverlayGeneration
+            let _ = app.mapState.styleGeneration
             MapLibreMapView(state: app.mapState, location: app.location)
                 .ignoresSafeArea()
 

@@ -31,20 +31,28 @@ struct LayersSheet: View {
             VStack(alignment: .leading, spacing: DirtSpace.group) {
                 HStack(spacing: 8) {
                     ForEach(MapStyleID.allCases) { style in
+                        let selected = selectedStyle == style
                         Button { selectStyle(style) } label: {
-                            Text(style == .shortbread ? "Standard" : "Rich")
+                            Text(style.title)
                                 .font(DirtType.rowTitle)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .foregroundStyle(selectedStyle == style ? DirtTheme.action : DirtTheme.ink)
+                                .fontWeight(.bold)
+                                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                                .foregroundStyle(selected ? DirtTheme.onOrange : DirtTheme.ink)
                                 .background(
-                                    LayersGlass.groupingFill,
+                                    selected ? DirtTheme.orange : LayersGlass.groupingFill,
                                     in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                                        .stroke(
+                                            selected ? DirtTheme.onOrange.opacity(0.25) : DirtTheme.hairline,
+                                            lineWidth: 1
+                                        )
                                 )
-                        }.buttonStyle(.plain)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(style.title)
+                        .accessibilityAddTraits(selected ? .isSelected : [])
                     }
                 }
 
