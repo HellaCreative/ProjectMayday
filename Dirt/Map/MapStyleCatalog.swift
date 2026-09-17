@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v4"
+    static let generatedStyleRevision = "osmand-v5"
 
     static var selectedID: MapStyleID {
         get {
@@ -431,9 +431,11 @@ extension MapStyleCatalog {
         layer["paint"] = paint
     }
 
-    /// Lake and water names must read on the water fill. Shortbread's stock
-    /// `#6699cc` on `#7eb8d4` vanishes; area gates also hid ordinary NS lakes
-    /// until z12+.
+    /// Lake names must read in sun on saturated green/blue land — Play of
+    /// `osmand-v4` left Kejimkujik as a cream halo. Same paint on Standard and Rich.
+    static let lakeLabelBlue = "#0033cc"
+    static let lakeLabelHalo = "#ffffff"
+
     private static func retuneWaterLabel(_ layer: inout [String: Any]) {
         let id = layer["id"] as? String ?? ""
         let isLake = id.contains("water_polygons_labels-water-name")
@@ -441,13 +443,14 @@ extension MapStyleCatalog {
         guard isLake || isWaterway else { return }
         var layout = layer["layout"] as? [String: Any] ?? [:]
         var paint = layer["paint"] as? [String: Any] ?? [:]
-        paint["text-color"] = "#163a52"
-        paint["text-halo-color"] = "#f8f4f0"
-        paint["text-halo-width"] = 2.6
-        paint["text-halo-blur"] = 0.2
-        layout["text-font"] = ["Noto Sans Regular"]
+        paint["text-color"] = Self.lakeLabelBlue
+        paint["text-halo-color"] = Self.lakeLabelHalo
+        paint["text-halo-width"] = isLake ? 3.2 : 2.6
+        paint["text-halo-blur"] = 0
+        paint["text-opacity"] = 1
+        layout["text-font"] = ["Noto Sans Bold"]
         if isLake {
-            layout["text-size"] = ["stops": [[5, 11], [8, 13], [12, 15], [16, 18]]]
+            layout["text-size"] = ["stops": [[5, 14], [8, 17], [11, 20], [14, 24], [17, 28]]]
             switch id {
             case let value where value.hasSuffix("-8"):
                 layer["minzoom"] = 5
@@ -476,10 +479,10 @@ extension MapStyleCatalog {
             }
         } else if id.contains("-14") {
             layer["minzoom"] = 12
-            layout["text-size"] = ["stops": [[12, 11], [16, 14]]]
+            layout["text-size"] = ["stops": [[12, 13], [16, 18]]]
         } else {
             layer["minzoom"] = 10
-            layout["text-size"] = ["stops": [[10, 11], [14, 14]]]
+            layout["text-size"] = ["stops": [[10, 13], [14, 17]]]
         }
         layer["layout"] = layout
         layer["paint"] = paint
