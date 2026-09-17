@@ -15,6 +15,7 @@ struct LayersSheet: View {
     @AppStorage("dirt.layers.lodging") private var showLodging = false
     @AppStorage("dirt.layers.liquor") private var showLiquor = false
     @AppStorage("dirt.layers.attractions") private var showAttractions = true
+    @AppStorage("dirt.layers.water-names") private var showWaterNames = true
 
     private var selectedStyle: MapStyleID {
         MapStyleID(rawValue: styleIDRaw) ?? .shortbreadRich
@@ -76,6 +77,7 @@ struct LayersSheet: View {
         .onChange(of: showLodging)     { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLiquor)      { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showAttractions) { _, _ in app.mapState.bumpLayerPrefs() }
+        .onChange(of: showWaterNames)  { _, _ in app.mapState.bumpLayerPrefs() }
     }
 
     private var riderServicesCard: some View {
@@ -89,6 +91,9 @@ struct LayersSheet: View {
                     .frame(minHeight: DirtHit.control)
                 Divider()
                 serviceToggle("Attractions", icon: "binoculars.fill", color: RiderServiceDot.attraction, isOn: $showAttractions)
+                    .frame(minHeight: DirtHit.control)
+                Divider()
+                serviceToggle("Lake names", icon: "drop.fill", color: RiderServiceDot.water, isOn: $showWaterNames)
                     .frame(minHeight: DirtHit.control)
                 Divider()
                 serviceToggle("Lodging", icon: "bed.double.fill", color: RiderServiceDot.lodging, isOn: $showLodging)
@@ -198,6 +203,7 @@ private enum RiderServiceDot {
     static let lodging = Color(dirtHex: 0x8A5A2B)
     static let liquor = Color(dirtHex: 0x8E44C9)
     static let attraction = Color(dirtHex: 0x0E7C7B)
+    static let water = Color(dirtHex: 0x0033CC)
 }
 
 /// Opaque islands on Layers’ thin glass. Local to this sheet — not a DirtTheme token change.

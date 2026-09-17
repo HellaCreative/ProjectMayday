@@ -52,6 +52,7 @@ struct LayerPrefsSnapshot {
     let showLodging: Bool
     let showLiquor: Bool
     let showAttractions: Bool
+    let showWaterNames: Bool
 
     init() {
         let ud = UserDefaults.standard
@@ -60,6 +61,7 @@ struct LayerPrefsSnapshot {
         showLodging     = ud.bool(forKey: "dirt.layers.lodging")
         showLiquor      = ud.bool(forKey: "dirt.layers.liquor")
         showAttractions = (ud.object(forKey: "dirt.layers.attractions") as? Bool) ?? true
+        showWaterNames  = (ud.object(forKey: "dirt.layers.water-names") as? Bool) ?? true
     }
 
     var anyPOIEnabled: Bool { showFuel || showCampgrounds || showLodging || showLiquor }
