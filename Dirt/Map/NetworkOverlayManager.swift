@@ -101,16 +101,17 @@ final class NetworkOverlayManager {
     private func performRefresh() async {
         let zoom = mapState.mapZoom
         let center = mapState.mapCenter
+        // Logo-on GRAPH tendrils are `RoutingGraphDebugManager` in every
+        // channel (Access legend + dirt tracks, local through province).
+        // This corridor stays a close-zoom convenience when the logo is off.
+        if mapState.showRoutingGraphDebug {
+            mapState.updateNetworkFeatures([])
+            return
+        }
         let routeCache = cachedRouteAnchors(matching: mapState.routeGeneration)
         let hasRoute = routeCache != nil
         let detailZoom = zoom >= NetC.detailMinZoom
-        // Built routes no longer force the corridor at overview zoom — that
-        // was the leftover hitch on NS→ON scans. Release DIRT-logo toggle
-        // (`showRoutingGraphDebug` when the debug HUD is compiled out) is
-        // the rider's explicit nearby-surfaces request.
-        let logoWantsNearby = !BuildChannel.debugRoutingGraphOverlay && mapState.showRoutingGraphDebug
-        let wantCorridor = detailZoom || logoWantsNearby
-        if !wantCorridor {
+        if !detailZoom {
             mapState.updateNetworkFeatures([])
             return
         }
@@ -148,7 +149,8 @@ final class NetworkOverlayManager {
                 maxLon: maxLon,
                 maxLat: maxLat,
                 province: provinceCode,
-                cap: maxFeatures * 3
+                cap: maxFeatures * 3,
+                preferTendrils: true
             )
         }.value
 
@@ -416,18 +418,102 @@ final class NetworkOverlayManager {
 }
 
 nonisolated enum PackNetworkOverlay {
-    /// Overlay paint keys. Loose/technical dirt must be `track` so
-    /// `dirt-net-track` actually draws it (a prior `dirt` tag ate the cap and
-    /// never matched a layer).
-    static func overlaySurfaceClass(_ family: SurfaceFamily) -> String {
-        family == .loose ? "track" : family.rawValue
+    /// Overlay paint keys. Loose/technical dirt and `highway=track|path` must
+    /// be `track` so `dirt-net-track` and the GRAPH tendrils actually draw.
+    /// A prior `dirt` tag ate the cap and never matched a layer; unknown
+    /// surface on a track road also used to vanish.
+    static func overlaySurfaceClass(_ family: SurfaceFamily, roadClass: String = "") -> String {
+        if family == .loose { return "track" }
+        let road = roadClass.lowercased()
+        if road == "track" || road == "path" { return "track" }
+        if family == .gravel { return "gravel" }
+        return family.rawValue
     }
 
-    static func features(from pack: GraphPack,minLon: Double,minLat: Double,maxLon: Double,maxLat: Double,
-                         province: String,cap: Int) -> [NetworkLineFeature] {
-        var result: [NetworkLineFeature] = []
+    /// GRAPH legend access keys from legal-topology codes (SOT §10 /
+    /// AccessPolicy). Paint-only — PathSearch still reads the raw code.
+    static func overlayAccessClass(_ code: UInt8, leaf: String = "") -> String {
+        let token = leaf.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch code {
+        case 0:
+            return token == "permissive" ? "motorized_permissive" : "motorized_verified"
+        case 1:
+            return "motorized_unknown"
+        case 3, 4:
+            return "motorized_restricted"
+        default:
+            return "motorized_excluded"
+        }
+    }
+
+    /// Coerce live / legacy access strings onto GRAPH legend keys.
+    static func overlayAccessName(_ raw: String) -> String {
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "motorized_verified", "verified":
+            return "motorized_verified"
+        case "motorized_permissive", "permissive":
+            return "motorized_permissive"
+        case "motorized_unknown", "unknown":
+            return "motorized_unknown"
+        case "motorized_restricted", "restricted", "destination", "customers",
+             "motorized_destination", "motorized_endpoint":
+            return "motorized_restricted"
+        case "motorized_excluded", "excluded", "motorized_prohibited", "prohibited",
+             "motorized_denied", "denied", "motorized_impassable":
+            return "motorized_excluded"
+        default:
+            return raw
+        }
+    }
+
+    static func isTendrilSurface(_ family: SurfaceFamily, roadClass: String) -> Bool {
+        if family == .loose || family == .gravel { return true }
+        let road = roadClass.lowercased()
+        return road == "track" || road == "path"
+    }
+
+    static func features(
+        from pack: GraphPack,
+        minLon: Double,
+        minLat: Double,
+        maxLon: Double,
+        maxLat: Double,
+        province: String,
+        cap: Int,
+        preferTendrils: Bool = false
+    ) -> [NetworkLineFeature] {
+        let lonSpan = max(maxLon - minLon, 0.0001)
+        let latSpan = max(maxLat - minLat, 0.0001)
+        let cols = 12
+        let rows = 8
+        let perCell = max(16, cap / (cols * rows) + 8)
+        var buckets = Array(repeating: [NetworkLineFeature](), count: cols * rows)
+        let endpointPad = 0.08
+
+        func cellIndex(lon: Double, lat: Double) -> Int {
+            let x = min(cols - 1, max(0, Int(((lon - minLon) / lonSpan) * Double(cols))))
+            let y = min(rows - 1, max(0, Int(((lat - minLat) / latSpan) * Double(rows))))
+            return y * cols + x
+        }
+
         for edge in 0..<pack.edgeCount {
             if Task.isCancelled { break }
+            let road = pack.roadClass(edge)
+            let engineSurface = ProfilePolicy.family(pack.surfaceLeaf(edge))
+            let family = SurfaceFamily(rawValue: engineSurface.rawValue) ?? .unknown
+            let tendril = isTendrilSurface(family, roadClass: road)
+            if preferTendrils, !tendril { continue }
+
+            let from = pack.coordinate(node: pack.endpoint(edge, from: true))
+            let to = pack.coordinate(node: pack.endpoint(edge, from: false))
+            let west0 = min(from.longitude, to.longitude)
+            let east0 = max(from.longitude, to.longitude)
+            let south0 = min(from.latitude, to.latitude)
+            let north0 = max(from.latitude, to.latitude)
+            guard east0 >= minLon - endpointPad, west0 <= maxLon + endpointPad,
+                  north0 >= minLat - endpointPad, south0 <= maxLat + endpointPad
+            else { continue }
+
             let line = pack.polyline(edge)
             guard line.count >= 2 else { continue }
             var west = line[0].longitude, east = line[0].longitude
@@ -439,18 +525,40 @@ nonisolated enum PackNetworkOverlay {
                 north = max(north, point.latitude)
             }
             guard east >= minLon, west <= maxLon, north >= minLat, south <= maxLat else { continue }
-            let engineSurface = ProfilePolicy.family(pack.surfaceLeaf(edge))
-            let family = SurfaceFamily(rawValue: engineSurface.rawValue) ?? .unknown
-            result.append(NetworkLineFeature(edgeId: pack.edgeID(edge),
-                coordinates: line.map { .init(lat: $0.latitude,lon: $0.longitude) },
-                surfaceClass: overlaySurfaceClass(family),
-                accessClass: NativeRoutingAdapter.accessName(pack.accessCode(edge,forward: true)),
-                structureType: pack.structure(edge),province: province,roadClass: pack.roadClass(edge),
-                surfaceLeaf: pack.surfaceLeaf(edge),surfaceFamily: family.rawValue,
-                roadClassLeaf: pack.roadClass(edge),roadTier: ProfilePolicy.tier(pack.roadClass(edge)),
-                accessLeaf: pack.accessLeaf(edge),atvDesignated: pack.atvDesignated(edge)))
-            if result.count >= cap { break }
+
+            let mid = line[line.count / 2]
+            let bucket = cellIndex(lon: mid.longitude, lat: mid.latitude)
+            if buckets[bucket].count >= perCell { continue }
+
+            let accessLeaf = pack.accessLeaf(edge)
+            buckets[bucket].append(NetworkLineFeature(
+                edgeId: pack.edgeID(edge),
+                coordinates: line.map { .init(lat: $0.latitude, lon: $0.longitude) },
+                surfaceClass: overlaySurfaceClass(family, roadClass: road),
+                accessClass: overlayAccessClass(pack.accessCode(edge, forward: true), leaf: accessLeaf),
+                structureType: pack.structure(edge),
+                province: province,
+                roadClass: road,
+                surfaceLeaf: pack.surfaceLeaf(edge),
+                surfaceFamily: family.rawValue,
+                roadClassLeaf: road,
+                roadTier: ProfilePolicy.tier(road),
+                accessLeaf: accessLeaf,
+                atvDesignated: pack.atvDesignated(edge)
+            ))
         }
-        return result
+
+        var sampled: [NetworkLineFeature] = []
+        sampled.reserveCapacity(min(cap, buckets.reduce(0) { $0 + $1.count }))
+        var depth = 0
+        let deepest = buckets.map(\.count).max() ?? 0
+        while sampled.count < cap, depth < deepest {
+            for bucket in buckets where depth < bucket.count {
+                sampled.append(bucket[depth])
+                if sampled.count >= cap { break }
+            }
+            depth += 1
+        }
+        return sampled
     }
 }

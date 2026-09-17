@@ -332,7 +332,20 @@ struct MapLibreMapView: UIViewRepresentable {
                     style.removeLayer(layer)
                 }
             }
+            if let glow = style.layer(withIdentifier: "dirt-debug-track-glow") {
+                style.removeLayer(glow)
+            }
             guard let src = style.source(withIdentifier: "dirt-debug-graph") else { return }
+
+            // Dirt/track casing under access colors so tendrils read as tracks,
+            // not as a second paved street network.
+            let glow = MLNLineStyleLayer(identifier: "dirt-debug-track-glow", source: src)
+            glow.predicate = NSPredicate(format: "surfaceClass == 'track'")
+            glow.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.overlayTrack))
+            glow.lineWidth = NSExpression(forConstantValue: 5.2)
+            glow.lineOpacity = NSExpression(forConstantValue: 0.42)
+            style.addLayer(glow)
+
             let attr = PackDebugPaint.attributeKey(for: mode)
             for item in PackDebugPaint.legend(for: mode) {
                 let id = "dirt-debug-\(mode.rawValue)-\(item.key)"
@@ -343,8 +356,14 @@ struct MapLibreMapView: UIViewRepresentable {
                     layer.predicate = NSPredicate(format: "%K == %@", attr, item.key)
                 }
                 layer.lineColor = NSExpression(forConstantValue: item.color)
-                layer.lineWidth = NSExpression(forConstantValue: mode == .access && item.key == "atv" ? 3.2 : 2.4)
-                layer.lineOpacity = NSExpression(forConstantValue: 0.92)
+                let tendrilWidth: Double = mode == .access && item.key == "atv" ? 3.6 : 2.8
+                layer.lineWidth = NSExpression(mglJSONObject: [
+                    "case",
+                    ["==", ["get", "surfaceClass"], "track"], tendrilWidth + 0.8,
+                    ["==", ["get", "surfaceClass"], "gravel"], tendrilWidth + 0.2,
+                    tendrilWidth
+                ] as [Any])
+                layer.lineOpacity = NSExpression(forConstantValue: 0.94)
                 if item.dashed {
                     layer.lineDashPattern = NSExpression(forConstantValue: [1.2, 1.2] as [NSNumber])
                 }

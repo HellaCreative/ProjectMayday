@@ -1033,7 +1033,9 @@ struct RootView: View {
     private func toggleRoutingGraphDebug() {
         withAnimation(.easeInOut(duration: 0.22)) {
             app.mapState.showRoutingGraphDebug.toggle()
-            if !app.mapState.showRoutingGraphDebug {
+            if app.mapState.showRoutingGraphDebug {
+                app.mapState.debugGraphPaintMode = .access
+            } else {
                 app.mapState.debugGraphHit = nil
                 routingGraphDebugPanelExpanded = false
             }

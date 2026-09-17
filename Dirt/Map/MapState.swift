@@ -225,10 +225,11 @@ final class MapState {
     /// When false, Layers omits `motorized_unknown` (purple Access the router will not use).
     private(set) var networkAllowUnknown = false
 
-    /// DEBUG: heavy graph HUD. Release DIRT-logo uses the lighter corridor overlay.
+    /// Logo-on GRAPH tendrils. HUD is DEBUG-only; paint runs in every channel.
     var showRoutingGraphDebug = false
-    /// Phase E3: which leaf dimension colors the debug graph (Access / Surface / Road class).
-    var debugGraphPaintMode: DebugGraphPaintMode = .surfaceFamily
+    /// GRAPH legend + tendrils default to Access so the logo overlay matches
+    /// permissive / verified / unknown / restricted.
+    var debugGraphPaintMode: DebugGraphPaintMode = .access
     var debugGraphFeatures: [NetworkLineFeature] = []
     private(set) var debugGraphDataGeneration = 0
     var debugGraphStatus: String?
