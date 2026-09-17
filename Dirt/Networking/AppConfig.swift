@@ -132,14 +132,15 @@ enum AppConfig {
     }
 
     #if DIRT_DEVELOPMENT
-    /// Complete DEV-only V4 fabric. Production keeps its approved catalog and files.
+    /// DEV-only V4 candidate. Production keeps its approved catalog and files.
+    /// Partial ON South/North candidate for London→Thunder Bay phone Play.
     nonisolated static let v4ConnectionRevision = v4CandidateReleaseId
     nonisolated static var v4ConnectionBaseURL: URL {
         v4CandidateBaseURL
     }
-    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260909-02"
+    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260917-01"
     nonisolated static var v4CandidateBaseURL: URL {
-        v4ProductionBaseURL
+        packCDNBaseURL.appendingPathComponent("v4/candidates/\(v4CandidateReleaseId)")
     }
     #endif
 
