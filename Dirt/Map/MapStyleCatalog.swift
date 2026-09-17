@@ -26,7 +26,15 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v2"
+    static let generatedStyleRevision = "osmand-v6"
+    /// Natural Earth 50m admin-1 (lakes), US+CA interior borders. Not pack bounds.
+    static let admin1OverviewSourceID = "dirt-admin1-overview"
+    static let admin1OverviewLayerID = "dirt-bound-state-overview"
+    /// Play of osmand-v5: lakes were this size. Cities/towns take it; lakes are half.
+    static let placeHeadlineSizeStops: [[Any]] = [[5, 14], [8, 17], [11, 20], [14, 24]]
+    static let lakeLabelSizeStops: [[Any]] = [[5, 7], [8, 9], [11, 10], [14, 12], [17, 14]]
+
+    private final class BundleToken {}
 
     static var selectedID: MapStyleID {
         get {
@@ -75,7 +83,7 @@ enum MapStyleCatalog {
         else { return nil }
 
         var layers: [[String: Any]] = []
-        layers.reserveCapacity(incoming.count + 4)
+        layers.reserveCapacity(incoming.count + 5)
         for var layer in incoming {
             let id = (layer["id"] as? String ?? "").lowercased()
             var paint = layer["paint"] as? [String: Any] ?? [:]
@@ -84,9 +92,6 @@ enum MapStyleCatalog {
             if paint["line-color"] != nil, id.contains("highway") {
                 applyHighwayColors(id: id, rich: rich, paint: &paint)
                 applyHighwayWidths(id: id, paint: &paint)
-            }
-            if id.contains("water_polygons_labels") || id.hasPrefix("label-waterway") {
-                paint["text-color"] = "#4f8fb0"
             }
             layer["paint"] = paint
 
@@ -99,6 +104,8 @@ enum MapStyleCatalog {
                 continue
             }
             retunePlaceLabel(&layer)
+            retuneWaterLabel(&layer)
+            retuneStreetLabel(&layer)
             layers.append(layer)
         }
 
@@ -109,6 +116,12 @@ enum MapStyleCatalog {
                 else { continue }
                 source["tiles"] = [tileSource.tileTemplate]
                 sources[key] = source
+            }
+            if let admin1 = admin1OverviewGeoJSONObject() {
+                sources[admin1OverviewSourceID] = [
+                    "type": "geojson",
+                    "data": admin1
+                ]
             }
             root["sources"] = sources
         }
@@ -305,7 +318,9 @@ extension MapStyleCatalog {
         }
     }
 
-    /// Real OSM Shortbread admin lines only. Country geometry exists from z0; state from z7.
+    /// Country lines from Shortbread z0. State/province lines: Natural Earth
+    /// admin-1 through z7 (Shortbread has no admin_level=4 geometry below z7),
+    /// then tile lines from z7. Never RegionPolygons pack bounds.
     private static func dirtBoundaryLineLayers(from base: [String: Any]) -> [[String: Any]] {
         func line(id: String, admin: Int, minZoom: Double, dashed: Bool, color: String, widths: [[Any]]) -> [String: Any] {
             var layer = base
@@ -328,7 +343,24 @@ extension MapStyleCatalog {
             layer["paint"] = paint
             return layer
         }
-        return [
+        var layers: [[String: Any]] = []
+        if admin1OverviewGeoJSONObject() != nil {
+            var overview = base
+            overview["id"] = admin1OverviewLayerID
+            overview["source"] = admin1OverviewSourceID
+            overview.removeValue(forKey: "source-layer")
+            overview["minzoom"] = 0
+            overview["maxzoom"] = 7
+            overview.removeValue(forKey: "filter")
+            var paint = overview["paint"] as? [String: Any] ?? [:]
+            paint["line-color"] = "#9a74b8"
+            paint["line-opacity"] = 0.9
+            paint["line-width"] = ["stops": [[2, 0.7], [5, 1.0], [7, 1.2]]]
+            paint["line-dasharray"] = [4, 3]
+            overview["paint"] = paint
+            layers.append(overview)
+        }
+        layers.append(
             line(
                 id: "dirt-bound-country",
                 admin: 2,
@@ -336,7 +368,9 @@ extension MapStyleCatalog {
                 dashed: false,
                 color: "#7b4fa0",
                 widths: [[2, 0.9], [6, 1.5], [10, 2.1]]
-            ),
+            )
+        )
+        layers.append(
             line(
                 id: "dirt-bound-state",
                 admin: 4,
@@ -345,7 +379,35 @@ extension MapStyleCatalog {
                 color: "#9a74b8",
                 widths: [[7, 0.7], [10, 1.3]]
             )
-        ]
+        )
+        return layers
+    }
+
+    static func admin1OverviewResourceURL() -> URL? {
+        bundledJSONURL(resource: "ne-admin1-na", extensions: ["json", "geojson"])
+    }
+
+    static func admin1OverviewGeoJSONObject() -> Any? {
+        guard let url = admin1OverviewResourceURL(),
+              let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data)
+        else { return nil }
+        return object
+    }
+
+    private static func bundledJSONURL(
+        resource: String,
+        extensions: [String] = ["json"]
+    ) -> URL? {
+        let bundles = [Bundle.main, Bundle(for: BundleToken.self)]
+        for bundle in bundles {
+            for ext in extensions {
+                if let url = bundle.url(forResource: resource, withExtension: ext) {
+                    return url
+                }
+            }
+        }
+        return nil
     }
 
     private static func dirtBoundaryLabelLayers(from base: [String: Any]) -> [[String: Any]] {
@@ -411,13 +473,16 @@ extension MapStyleCatalog {
         paint["text-halo-width"] = 1.6
         if id.contains("capital") {
             layer["minzoom"] = 3
-            layout["text-size"] = ["stops": [[3, 13], [8, 16], [12, 22]]]
+            layout["text-font"] = ["Noto Sans Bold"]
+            layout["text-size"] = ["stops": [[3, 15], [8, 18], [12, 24]]]
         } else if id.hasSuffix("-city") || id == "place_labels-city" {
             layer["minzoom"] = 5
-            layout["text-size"] = ["stops": [[5, 12], [8, 15], [12, 20]]]
+            layout["text-font"] = ["Noto Sans Bold"]
+            layout["text-size"] = ["stops": Self.placeHeadlineSizeStops]
         } else if id.contains("town") {
             layer["minzoom"] = 7
-            layout["text-size"] = ["stops": [[7, 12], [12, 16]]]
+            layout["text-font"] = ["Noto Sans Bold"]
+            layout["text-size"] = ["stops": Self.placeHeadlineSizeStops]
         } else if id.contains("village") {
             layer["minzoom"] = 10
             layout["text-size"] = ["stops": [[10, 11], [13, 14]]]
@@ -427,6 +492,91 @@ extension MapStyleCatalog {
         } else if id.contains("island") {
             layer["minzoom"] = 10
             layout["text-size"] = ["stops": [[10, 11], [13, 14]]]
+        }
+        layer["layout"] = layout
+        layer["paint"] = paint
+    }
+
+    /// Lake names must read in sun on saturated green/blue land — Play of
+    /// `osmand-v4` left Kejimkujik as a cream halo. Same paint on Standard and Rich.
+    static let lakeLabelBlue = "#0033cc"
+    static let lakeLabelHalo = "#ffffff"
+
+    private static func retuneWaterLabel(_ layer: inout [String: Any]) {
+        let id = layer["id"] as? String ?? ""
+        let isLake = id.contains("water_polygons_labels-water-name")
+        let isWaterway = id.hasPrefix("label-waterway")
+        guard isLake || isWaterway else { return }
+        var layout = layer["layout"] as? [String: Any] ?? [:]
+        var paint = layer["paint"] as? [String: Any] ?? [:]
+        paint["text-color"] = Self.lakeLabelBlue
+        paint["text-halo-color"] = Self.lakeLabelHalo
+        paint["text-halo-width"] = isLake ? 2.2 : 1.8
+        paint["text-halo-blur"] = 0
+        paint["text-opacity"] = 1
+        layout["text-font"] = ["Noto Sans Bold"]
+        if isLake {
+            layout["text-size"] = ["stops": Self.lakeLabelSizeStops]
+            switch id {
+            case let value where value.hasSuffix("-8"):
+                layer["minzoom"] = 5
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 8_000_000)
+            case let value where value.hasSuffix("-9"):
+                layer["minzoom"] = 6
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 1_500_000)
+            case let value where value.hasSuffix("-10"):
+                layer["minzoom"] = 7
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 400_000)
+            case let value where value.hasSuffix("-11"):
+                layer["minzoom"] = 8
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 80_000)
+            case let value where value.hasSuffix("-12"):
+                layer["minzoom"] = 9
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 20_000)
+            case let value where value.hasSuffix("-13"):
+                layer["minzoom"] = 10
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 5_000)
+            case let value where value.hasSuffix("-14"):
+                layer["minzoom"] = 11
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: 1_000)
+            default:
+                layer["minzoom"] = 11
+                layer["filter"] = relaxedWaterFilter(layer["filter"], minArea: nil)
+            }
+        } else if id.contains("-14") {
+            layer["minzoom"] = 12
+            layout["text-size"] = ["stops": [[12, 7], [16, 9]]]
+        } else {
+            layer["minzoom"] = 10
+            layout["text-size"] = ["stops": [[10, 7], [14, 9]]]
+        }
+        layer["layout"] = layout
+        layer["paint"] = paint
+    }
+
+    private static func relaxedWaterFilter(_ filter: Any?, minArea: Double?) -> Any {
+        let kind: [Any] = ["in", "kind", "water", "river", "reservoir", "dock", "basin", "canal", "lake"]
+        guard let minArea else { return ["all", kind] }
+        return ["all", kind, [">", "way_area", minArea]]
+    }
+
+    /// Street and path names while browsing the map and during navigation.
+    /// Stock Shortbread waits until z12 with 10 px type.
+    private static func retuneStreetLabel(_ layer: inout [String: Any]) {
+        let id = layer["id"] as? String ?? ""
+        guard id == "label-street-centre-12" || id == "label-path-bottom-12" else { return }
+        var layout = layer["layout"] as? [String: Any] ?? [:]
+        var paint = layer["paint"] as? [String: Any] ?? [:]
+        paint["text-color"] = "#1a1f24"
+        paint["text-halo-color"] = "#f8f4f0"
+        paint["text-halo-width"] = 2.4
+        layout["text-font"] = ["Noto Sans Regular"]
+        if id == "label-street-centre-12" {
+            layer["minzoom"] = 10
+            layout["text-size"] = ["stops": [[10, 11], [13, 13], [16, 15]]]
+        } else {
+            layer["minzoom"] = 11
+            layout["text-size"] = ["stops": [[11, 10], [14, 13], [16, 14]]]
         }
         layer["layout"] = layout
         layer["paint"] = paint

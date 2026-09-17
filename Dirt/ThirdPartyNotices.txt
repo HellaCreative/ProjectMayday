@@ -8,6 +8,11 @@ https://www.openstreetmap.org/copyright
 https://opendatacommons.org/licenses/odbl/1-0/
 https://download.geofabrik.de/
 
+Overview US state and Canadian province borders below Shortbread zoom 7 use
+Natural Earth 50m Admin 1 – States, Provinces (with lakes). Public domain.
+https://www.naturalearthdata.com/
+https://github.com/nvkelso/natural-earth-vector
+
 Standard and Rich cartography use a modified SVWD03 style and its sprite
 artwork from Andy Townsend / SomeoneElseOSM. DIRT modified style colours,
 visibility and resource delivery. Upstream source revision:

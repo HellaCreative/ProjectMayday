@@ -95,6 +95,9 @@ enum PackAcquisitionDecision: Equatable, Sendable {
 @MainActor
 protocol PackCoverageInspecting: RoutingInstalledPackRegistry {
     func isRoutingPackPublished(_ regionID: String) -> Bool
+    /// Maps a geographic primary (e.g. `on-s`) onto a catalog id that is actually
+    /// published (`on-s`, or legacy parent `on` when halves are absent).
+    func resolveCatalogRegionId(_ regionID: String) -> String?
     func packRevisionState(_ regionID: String) -> PackRevisionState
     func displayTitle(forRegionId: String) -> String
 }
@@ -128,10 +131,10 @@ enum PackAcquisitionEvaluator {
         declinedUpdates: Set<String>,
         protectInstalledRevisions: Bool
     ) -> PackAcquisitionDecision {
-        let needed = requiredRegionIDs(for: coordinates)
+        let geographic = requiredRegionIDs(for: coordinates)
         let titles = { (ids: [String]) in ids.map { registry.displayTitle(forRegionId: $0) } }
 
-        if needed.isEmpty {
+        if geographic.isEmpty {
             return .unavailable(PackRoutingWarning(
                 regionIDs: [],
                 regionTitles: ["this pin"],
@@ -139,7 +142,24 @@ enum PackAcquisitionEvaluator {
             ))
         }
 
-        let unpublished = needed.filter { !registry.isRoutingPackPublished($0) }
+        var needed: [String] = []
+        var unpublished: [String] = []
+        for id in geographic {
+            if let resolved = registry.resolveCatalogRegionId(id) {
+                if !needed.contains(resolved) { needed.append(resolved) }
+            } else {
+                unpublished.append(id)
+            }
+        }
+
+        if !unpublished.isEmpty {
+            return .unavailable(PackRoutingWarning(
+                regionIDs: unpublished,
+                regionTitles: titles(unpublished),
+                reason: .packUnavailable
+            ))
+        }
+
         let missingApproved = needed.filter {
             registry.isRoutingPackPublished($0)
                 && registry.packRevisionState($0) == .missing
@@ -155,14 +175,6 @@ enum PackAcquisitionEvaluator {
                 kind: .download,
                 regionIDs: pendingDownload,
                 regionTitles: titles(pendingDownload)
-            ))
-        }
-
-        if !unpublished.isEmpty {
-            return .unavailable(PackRoutingWarning(
-                regionIDs: unpublished,
-                regionTitles: titles(unpublished),
-                reason: .packUnavailable
             ))
         }
 

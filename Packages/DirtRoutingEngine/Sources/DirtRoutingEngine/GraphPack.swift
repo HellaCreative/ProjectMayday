@@ -83,7 +83,8 @@ public final class GraphPack: Sendable {
     public convenience init(graphURL: URL, geometryURL: URL, budget: ComputationBudget = .init(seconds: 60)) throws {
         try self.init(graph: BinaryFile(url: graphURL), geometry: BinaryFile(url: geometryURL), budget: budget)
     }
-    init(graph: BinaryFile, geometry: BinaryFile, budget: ComputationBudget) throws {
+    init(graph: BinaryFile, geometry: BinaryFile, budget: ComputationBudget,
+         structuralValidation: Bool = true) throws {
         try budget.check()
         try graph.range(0, 140)
         guard try graph.read(0, as: UInt32.self) == 0x34545244,
@@ -120,11 +121,13 @@ public final class GraphPack: Sendable {
         enums = try graph.json(offset(56),offset(60),as: PackEnums.self)
         metadata = try graph.json(offset(60),offset(72),as: PackMetadata.self)
         sourceEpoch = try graph.json(offset(128),offset(132),as: PackMetadata.self).sourceEpoch
+        // BinaryFile memoizes SHA256; reuse the same digest for identity and fields.
         graphSHA256 = graph.sha256
+        let geometryDigest = geometry.sha256Digest()
         geometrySHA256 = geometry.sha256
         let identityAt = try offset(136)
         try graph.range(identityAt,32)
-        guard Data(SHA256.hash(data: geometry.data)) == graph.data.subdata(in: identityAt..<(identityAt+32)) else {
+        guard geometryDigest == graph.data.subdata(in: identityAt..<(identityAt+32)) else {
             throw RoutingFailure.invalidPack("graph/geometry identity mismatch")
         }
         try budget.check()
@@ -142,37 +145,43 @@ public final class GraphPack: Sendable {
         idOffsets = try derivedIDs ? nil : column(48,e+1,Int32.self)
         idBlobOffset = try offset(52)
         guard nodeOffsets[0] == 0, nodeOffsets[n] == arcs else { throw RoutingFailure.invalidPack("adjacency bounds") }
-        for i in 0..<n {
-            if i & 4095 == 0 { try budget.check() }
-            guard nodeOffsets[i] >= 0, nodeOffsets[i] <= nodeOffsets[i+1], nodeOffsets[i+1] <= arcs else {
-                throw RoutingFailure.invalidPack("adjacency order")
-            }
-            let point = Coordinate(longitude: Double(Float(bitPattern: coordinates[i*2])), latitude: Double(Float(bitPattern: coordinates[i*2+1])))
-            guard point.isValid else { throw RoutingFailure.invalidPack("coordinate") }
-            for a in Int(nodeOffsets[i])..<Int(nodeOffsets[i+1]) {
-                let ei = Int(arcEdges[a]), target = Int(targets[a])
-                guard ei >= 0, ei < e, target >= 0, target < n else { throw RoutingFailure.invalidPack("arc index") }
-                guard (edgeFrom[ei] == i && edgeTo[ei] == target) || (edgeTo[ei] == i && edgeFrom[ei] == target) else {
-                    throw RoutingFailure.invalidPack("arc endpoints")
+        if structuralValidation {
+            for i in 0..<n {
+                if i & 4095 == 0 { try budget.check() }
+                guard nodeOffsets[i] >= 0, nodeOffsets[i] <= nodeOffsets[i+1], nodeOffsets[i+1] <= arcs else {
+                    throw RoutingFailure.invalidPack("adjacency order")
+                }
+                let point = Coordinate(longitude: Double(Float(bitPattern: coordinates[i*2])), latitude: Double(Float(bitPattern: coordinates[i*2+1])))
+                guard point.isValid else { throw RoutingFailure.invalidPack("coordinate") }
+                for a in Int(nodeOffsets[i])..<Int(nodeOffsets[i+1]) {
+                    let ei = Int(arcEdges[a]), target = Int(targets[a])
+                    guard ei >= 0, ei < e, target >= 0, target < n else { throw RoutingFailure.invalidPack("arc index") }
+                    guard (edgeFrom[ei] == i && edgeTo[ei] == target) || (edgeTo[ei] == i && edgeFrom[ei] == target) else {
+                        throw RoutingFailure.invalidPack("arc endpoints")
+                    }
                 }
             }
-        }
-        guard geometryOffsets[0] == 0, geometryOffsets[e] == coordinateCount else { throw RoutingFailure.invalidPack("geometry bounds") }
-        for i in 0..<e {
-            if i & 4095 == 0 { try budget.check() }
-            guard edgeFrom[i] >= 0, edgeFrom[i] < n, edgeTo[i] >= 0, edgeTo[i] < n,
-                  access[i*2] <= 5, access[i*2+1] <= 5,
-                  Int(surfaces[i]) < enums.surfaceLeafNames.count, Int(roads[i]) < enums.roadClassLeafNames.count,
-                  Int(structures[i]) < enums.structureLeafNames.count,
-                  Int(accessLeaves[i]) < enums.accessLeafNames.count,
-                  geometryOffsets[i] >= 0, geometryOffsets[i] <= geometryOffsets[i+1],
-                  geometryOffsets[i+1] <= coordinateCount, geometryOffsets[i] % 2 == 0 else {
-                throw RoutingFailure.invalidPack("edge facts")
-            }
-            if let ids = idOffsets {
-                guard ids[i] >= 0, ids[i] <= ids[i+1], idBlobOffset + Int(ids[i+1]) <= (try offset(56)) else {
-                    throw RoutingFailure.invalidPack("edge identity bounds")
+            guard geometryOffsets[0] == 0, geometryOffsets[e] == coordinateCount else { throw RoutingFailure.invalidPack("geometry bounds") }
+            for i in 0..<e {
+                if i & 4095 == 0 { try budget.check() }
+                guard edgeFrom[i] >= 0, edgeFrom[i] < n, edgeTo[i] >= 0, edgeTo[i] < n,
+                      access[i*2] <= 5, access[i*2+1] <= 5,
+                      Int(surfaces[i]) < enums.surfaceLeafNames.count, Int(roads[i]) < enums.roadClassLeafNames.count,
+                      Int(structures[i]) < enums.structureLeafNames.count,
+                      Int(accessLeaves[i]) < enums.accessLeafNames.count,
+                      geometryOffsets[i] >= 0, geometryOffsets[i] <= geometryOffsets[i+1],
+                      geometryOffsets[i+1] <= coordinateCount, geometryOffsets[i] % 2 == 0 else {
+                    throw RoutingFailure.invalidPack("edge facts")
                 }
+                if let ids = idOffsets {
+                    guard ids[i] >= 0, ids[i] <= ids[i+1], idBlobOffset + Int(ids[i+1]) <= (try offset(56)) else {
+                        throw RoutingFailure.invalidPack("edge identity bounds")
+                    }
+                }
+            }
+        } else {
+            guard geometryOffsets[0] == 0, geometryOffsets[e] == coordinateCount else {
+                throw RoutingFailure.invalidPack("geometry bounds")
             }
         }
         let barrierAt = try offset(116), barrierEnd = try offset(120)

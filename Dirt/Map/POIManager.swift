@@ -1,12 +1,13 @@
 import CoreLocation
 import Foundation
 import Observation
+import UIKit
 
 // MARK: - POI feature model (shared with MapLibreMapView and RootView)
 
 struct POIFeature: Sendable {
     let id: String
-    let category: String  // "fuel" | "campground" | "lodging" | "liquor"
+    let category: String  // "fuel" | "campground" | "lodging" | "liquor" | "attraction"
     let latitude: Double
     let longitude: Double
     let name: String?
@@ -15,6 +16,34 @@ struct POIFeature: Sendable {
     let openingHours: String?
     let phone: String?
     let website: String?
+    /// OSM attraction subclass: beach, waterfall, viewpoint, landmark.
+    let kind: String?
+
+    init(
+        id: String,
+        category: String,
+        latitude: Double,
+        longitude: Double,
+        name: String?,
+        address: String?,
+        brand: String?,
+        openingHours: String?,
+        phone: String?,
+        website: String?,
+        kind: String? = nil
+    ) {
+        self.id = id
+        self.category = category
+        self.latitude = latitude
+        self.longitude = longitude
+        self.name = name
+        self.address = address
+        self.brand = brand
+        self.openingHours = openingHours
+        self.phone = phone
+        self.website = website
+        self.kind = kind
+    }
 
     /// Human-readable category label.
     var categoryLabel: String {
@@ -23,12 +52,77 @@ struct POIFeature: Sendable {
         case "campground": return "Campground"
         case "lodging":    return "Lodging"
         case "liquor":     return "Liquor store"
+        case "attraction":
+            if let kindTitle = MapAttraction.title(for: kind) {
+                return "Attraction · \(kindTitle)"
+            }
+            return "Attraction"
         default:           return category
         }
     }
 
     /// Display name for routing (prefers explicit name, falls back to category label).
     var displayName: String { name ?? categoryLabel }
+}
+
+enum MapAttraction {
+    static let layerIDs = [
+        "dirt-attraction-beach",
+        "dirt-attraction-beach-land",
+        "dirt-attraction-waterfall",
+        "dirt-attraction-viewpoint",
+        "dirt-attraction-landmark"
+    ]
+    static let builtinLayerIDs = [
+        "pois-tourism-lightbrown-imagename-15",
+        "pois-historic-brown-imagename-15",
+        "pois-historic-brown-imagename-16"
+    ]
+    static let color = UIColor(red: 0.055, green: 0.486, blue: 0.482, alpha: 1)
+    static let minZoom: Double = 9
+
+    static func title(for kind: String?) -> String? {
+        switch kind {
+        case "beach": return "Beach"
+        case "waterfall": return "Waterfall"
+        case "viewpoint": return "Viewpoint"
+        case "landmark": return "Landmark"
+        default: return nil
+        }
+    }
+
+    static func kind(from attrs: [AnyHashable: Any]) -> String? {
+        func token(_ key: String) -> String {
+            (attrs[key] as? String ?? "").lowercased()
+        }
+        let natural = token("natural")
+        let leisure = token("leisure")
+        let tourism = token("tourism")
+        let historic = token("historic")
+        let waterway = token("waterway")
+        let manMade = token("man_made")
+        let kind = token("kind")
+        if natural == "beach" || leisure == "beach" || kind == "beach" { return "beach" }
+        if natural == "waterfall" || waterway == "waterfall" || kind == "waterfall" { return "waterfall" }
+        if tourism == "viewpoint" || kind == "viewpoint" { return "viewpoint" }
+        if tourism == "attraction"
+            || ["monument", "memorial", "castle", "ruins", "archaeological_site", "battlefield", "fort"]
+                .contains(historic)
+            || manMade == "lighthouse"
+            || kind == "attraction" {
+            return "landmark"
+        }
+        return nil
+    }
+
+    static func systemSymbolName(for kind: String) -> String {
+        switch kind {
+        case "beach": return "beach.umbrella.fill"
+        case "waterfall": return "drop.fill"
+        case "viewpoint": return "binoculars.fill"
+        default: return "building.columns.fill"
+        }
+    }
 }
 
 /// Collapse OSM duplicates (e.g. many unnamed `camp_site` nodes in one park)
@@ -73,7 +167,8 @@ enum POIDeduper {
             brand: primary.brand ?? secondary.brand,
             openingHours: primary.openingHours ?? secondary.openingHours,
             phone: primary.phone ?? secondary.phone,
-            website: primary.website ?? secondary.website
+            website: primary.website ?? secondary.website,
+            kind: primary.kind ?? secondary.kind
         )
     }
 
@@ -592,7 +687,8 @@ final class POIManager {
             brand: tags["brand"] ?? tags["operator"],
             openingHours: tags["opening_hours"],
             phone: tags["phone"] ?? tags["contact:phone"],
-            website: tags["website"] ?? tags["contact:website"]
+            website: tags["website"] ?? tags["contact:website"],
+            kind: nil
         )
     }
 

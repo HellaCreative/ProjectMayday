@@ -21,19 +21,20 @@ struct DirtTests {
         #expect(AppConfig.liveFuelURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel")
         #expect(AppConfig.liveFuelChainURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel-chain")
         #expect(AppConfig.livePOIURL.absoluteString == "https://pack-fabric.vercel.app/api/poi")
-        #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260917-01")
+        #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260909-02")
         #expect(AppConfig.packManifestURL.absoluteString ==
-            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
-            "fabric-v4-20260917-01/manifest.json")
+            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/" +
+            "fabric-v4-20260909-02/manifest.json")
         #expect(AppConfig.riderServicesManifestURL.absoluteString ==
-            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
-            "fabric-v4-20260917-01/rider-services/manifest.json")
+            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/releases/" +
+            "fabric-v4-20260909-02/rider-services/manifest.json")
         for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json"] {
-            #expect(AppConfig.packFileURL(version: AppConfig.v4ConnectionRevision, regionId: "on-s", fileName: name)
-                == AppConfig.v4CandidateBaseURL.appendingPathComponent("on-s").appendingPathComponent(name))
+            #expect(AppConfig.packFileURL(version: AppConfig.v4ConnectionRevision, regionId: "qc", fileName: name)
+                == AppConfig.v4CandidateBaseURL.appendingPathComponent("qc").appendingPathComponent(name))
         }
-        #expect(AppConfig.packFileURL(version: AppConfig.v4ConnectionRevision, regionId: "on-n", fileName: "cross-pack-seams.v2.json")
-            == AppConfig.v4ConnectionBaseURL.appendingPathComponent("on-n/cross-pack-seams.v2.json"))
+        #expect(AppConfig.packFileURL(version: AppConfig.v4ConnectionRevision, regionId: "on", fileName: "cross-pack-seams.v2.json")
+            == AppConfig.v4ConnectionBaseURL.appendingPathComponent("on/cross-pack-seams.v2.json"))
+        #expect(AppConfig.v4CandidateBaseURL == AppConfig.v4ProductionBaseURL)
         #expect(AppConfig.validatesSupabaseIsolation(url: AppConfig.supabaseURL))
         #expect(AppConfig.validatesRoutingIsolation(url: AppConfig.baseURL))
         #expect(!AppConfig.validatesSupabaseIsolation(
@@ -210,6 +211,7 @@ struct DirtTests {
         })
         #expect(byID["dirt-bound-country"] != nil)
         #expect(byID["dirt-bound-state"] != nil)
+        #expect(byID["dirt-bound-state-overview"] != nil)
         #expect(byID["dirt-bound-label-country"] != nil)
         #expect(byID["dirt-bound-label-state"] != nil)
         #expect(byID["boundaries-0"] == nil)
@@ -218,14 +220,111 @@ struct DirtTests {
         #expect(countryPaint["line-color"] as? String == "#7b4fa0")
         let statePaint = try #require(byID["dirt-bound-state"]?["paint"] as? [String: Any])
         #expect(statePaint["line-color"] as? String == "#9a74b8")
+        let overviewPaint = try #require(byID["dirt-bound-state-overview"]?["paint"] as? [String: Any])
+        #expect(overviewPaint["line-color"] as? String == "#9a74b8")
+        #expect(overviewPaint["line-dasharray"] != nil)
+        #expect(byID["dirt-bound-state-overview"]?["source"] as? String == "dirt-admin1-overview")
+        #expect(byID["dirt-bound-state-overview"]?["source-layer"] == nil)
         #expect(intZoom(byID["dirt-bound-country"]?["minzoom"]) == 0)
         #expect(intZoom(byID["dirt-bound-state"]?["minzoom"]) == 7)
+        #expect(intZoom(byID["dirt-bound-state-overview"]?["minzoom"]) == 0)
+        #expect(intZoom(byID["dirt-bound-state-overview"]?["maxzoom"]) == 7)
         let town = byID.first(where: { $0.key.contains("town") })?.value
         #expect(intZoom(town?["minzoom"]) <= 7)
         if let island = byID.first(where: { $0.key.contains("island") })?.value {
             #expect(intZoom(island["minzoom"]) <= 14)
         }
         #expect(intZoom(byID["dirt-bound-label-country"]?["maxzoom"]) <= 6)
+        let sources = try #require(root["sources"] as? [String: Any])
+        let admin1 = try #require(sources["dirt-admin1-overview"] as? [String: Any])
+        #expect(admin1["type"] as? String == "geojson")
+        let collection = try #require(admin1["data"] as? [String: Any])
+        #expect(collection["type"] as? String == "FeatureCollection")
+        let features = try #require(collection["features"] as? [[String: Any]])
+        #expect(features.count >= 40)
+        #expect(features.allSatisfy { feature in
+            let geom = feature["geometry"] as? [String: Any]
+            let type = geom?["type"] as? String
+            return type == "LineString" || type == "MultiLineString"
+        })
+        #expect(features.allSatisfy { feature in
+            let props = feature["properties"] as? [String: Any] ?? [:]
+            return props["packId"] == nil && props["regionId"] == nil
+        })
+    }
+
+    @Test func bundledAdmin1OverviewIsRealPoliticalLinesNotPackBounds() throws {
+        let url = try #require(MapStyleCatalog.admin1OverviewResourceURL())
+        let raw = try Data(contentsOf: url)
+        let root = try #require(JSONSerialization.jsonObject(with: raw) as? [String: Any])
+        #expect(root["name"] as? String == "dirt-admin1-na-overview")
+        let features = try #require(root["features"] as? [[String: Any]])
+        #expect(features.count >= 40)
+        var minLon = 180.0, maxLon = -180.0, minLat = 90.0, maxLat = -90.0
+        for feature in features {
+            let geom = try #require(feature["geometry"] as? [String: Any])
+            #expect(geom["type"] as? String == "LineString")
+            let coords = try #require(geom["coordinates"] as? [Any])
+            #expect(coords.count >= 2)
+            for point in coords {
+                let pair = try #require(point as? [Any])
+                #expect(pair.count == 2)
+                let lon = (pair[0] as? NSNumber)?.doubleValue ?? pair[0] as? Double
+                let lat = (pair[1] as? NSNumber)?.doubleValue ?? pair[1] as? Double
+                let x = try #require(lon)
+                let y = try #require(lat)
+                minLon = min(minLon, x)
+                maxLon = max(maxLon, x)
+                minLat = min(minLat, y)
+                maxLat = max(maxLat, y)
+            }
+        }
+        #expect(minLon < -130)
+        #expect(maxLon > -70)
+        #expect(minLat < 32)
+        #expect(maxLat > 70)
+        #expect(root["regions"] == nil)
+    }
+
+    @Test func generatedStyleShowsWaterAndStreetNames() throws {
+        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v6")
+        for style in [MapStyleID.shortbread, .shortbreadRich] {
+            let styleURL = MapStyleCatalog.styleURL(for: style)
+            let data = try Data(contentsOf: styleURL)
+            let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let layers = try #require(root["layers"] as? [[String: Any]])
+            let byID = Dictionary(uniqueKeysWithValues: layers.compactMap { layer -> (String, [String: Any])? in
+                guard let id = layer["id"] as? String else { return nil }
+                return (id, layer)
+            })
+            let lake = try #require(byID["water_polygons_labels-water-name-8"])
+            #expect(intZoom(lake["minzoom"]) <= 5)
+            let lakePaint = try #require(lake["paint"] as? [String: Any])
+            #expect(lakePaint["text-color"] as? String == MapStyleCatalog.lakeLabelBlue)
+            #expect(lakePaint["text-halo-color"] as? String == MapStyleCatalog.lakeLabelHalo)
+            #expect(lakePaint["text-color"] as? String != "#163a52")
+            #expect(lakePaint["text-color"] as? String != "#4f8fb0")
+            #expect(lakePaint["text-halo-color"] as? String != "#f8f4f0")
+            let lakeLayout = try #require(lake["layout"] as? [String: Any])
+            #expect(lakeLayout["text-font"] as? [String] == ["Noto Sans Bold"])
+            #expect(firstTextSize(lake) <= 8)
+            if let city = byID["place_labels-city"] {
+                #expect(firstTextSize(city) >= 14)
+                let cityLayout = try #require(city["layout"] as? [String: Any])
+                #expect(cityLayout["text-font"] as? [String] == ["Noto Sans Bold"])
+            }
+            if let town = byID.first(where: { $0.key.contains("town") })?.value {
+                #expect(firstTextSize(town) >= 14)
+            }
+            let river = try #require(byID["label-waterway-bottom-12"])
+            #expect(intZoom(river["minzoom"]) <= 10)
+            let street = try #require(byID["label-street-centre-12"])
+            #expect(intZoom(street["minzoom"]) <= 10)
+            let streetPaint = try #require(street["paint"] as? [String: Any])
+            #expect(streetPaint["text-color"] as? String == "#1a1f24")
+            #expect(byID["dirt-bound-country"] != nil)
+            #expect(byID["dirt-bound-state"] != nil)
+        }
     }
 
     @Test func richSaturationHelperUsesOnePointOneFiveBoost() {
@@ -266,6 +365,15 @@ struct DirtTests {
         if let value = raw as? Double { return Int(value.rounded()) }
         if let value = raw as? NSNumber { return value.intValue }
         return .max
+    }
+
+    private func firstTextSize(_ layer: [String: Any]?) -> Int {
+        let layout = layer?["layout"] as? [String: Any]
+        guard let size = layout?["text-size"] as? [String: Any],
+              let stops = size["stops"] as? [[Any]],
+              let first = stops.first, first.count >= 2
+        else { return .max }
+        return intZoom(first[1])
     }
 
     private func testShortbreadManifest(
@@ -1011,8 +1119,57 @@ struct POIActionPolicyTests {
     @Test func actionsRespectPlannerModeAndFuelIntent() {
         #expect(POIActionPolicy.primaryTitle(mode: .plan, category: "fuel") == "Add as fuel waypoint")
         #expect(POIActionPolicy.primaryTitle(mode: .plan, category: "campground") == "Add as waypoint")
+        #expect(POIActionPolicy.primaryTitle(mode: .plan, category: "attraction") == "Add as waypoint")
         #expect(POIActionPolicy.primaryTitle(mode: .fromHere, category: "fuel") == "Navigate to fuel station")
         #expect(POIActionPolicy.primaryTitle(mode: .fromHere, category: "lodging") == "Navigate here")
+        #expect(POIActionPolicy.primaryTitle(mode: .fromHere, category: "attraction") == "Navigate here")
+    }
+}
+
+struct MapAttractionTests {
+    @Test func kindReadsShortbreadPOITags() {
+        #expect(MapAttraction.kind(from: ["natural": "beach"]) == "beach")
+        #expect(MapAttraction.kind(from: ["kind": "beach"]) == "beach")
+        #expect(MapAttraction.kind(from: ["waterway": "waterfall"]) == "waterfall")
+        #expect(MapAttraction.kind(from: ["tourism": "viewpoint"]) == "viewpoint")
+        #expect(MapAttraction.kind(from: ["historic": "monument"]) == "landmark")
+        #expect(MapAttraction.kind(from: ["man_made": "lighthouse"]) == "landmark")
+        #expect(MapAttraction.kind(from: ["tourism": "hotel"]) == nil)
+    }
+
+    @Test func tapLabelNamesTheAttractionKind() {
+        let unnamed = POIFeature(
+            id: "osm-attraction:1",
+            category: "attraction",
+            latitude: 44.65,
+            longitude: -63.57,
+            name: nil,
+            address: nil,
+            brand: nil,
+            openingHours: nil,
+            phone: nil,
+            website: nil,
+            kind: "waterfall"
+        )
+        #expect(unnamed.categoryLabel == "Attraction · Waterfall")
+        #expect(unnamed.displayName == "Attraction · Waterfall")
+        let named = POIFeature(
+            id: "osm-attraction:2",
+            category: "attraction",
+            latitude: 44.65,
+            longitude: -63.57,
+            name: "Peggy's Cove",
+            address: nil,
+            brand: nil,
+            openingHours: nil,
+            phone: nil,
+            website: nil,
+            kind: "landmark"
+        )
+        #expect(named.categoryLabel == "Attraction · Landmark")
+        #expect(named.displayName == "Peggy's Cove")
+        #expect(MapAttraction.title(for: "beach") == "Beach")
+        #expect(MapAttraction.layerIDs.contains("dirt-attraction-viewpoint"))
     }
 }
 

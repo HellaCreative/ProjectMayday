@@ -149,7 +149,11 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ### Basemap labels and borders
 
-`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v1`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines from the tile schema. Country borders (`admin_level=2`) from z0; province/state borders (`admin_level=4`) from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v6`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from z0. Province/state: Natural Earth 50m admin-1 (US+CA, lakes-clipped, OsmAnd purple dashed) from z0–7, then Shortbread `admin_level=4` from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
+
+City and town names use the former lake headline size (Bold). Lake and waterway names stay intense `#0033cc` Bold at **half** that size, white halo. Street and path names (`label-street-centre-12`, `label-path-bottom-12`) start at z10/z11 in near-black. Selected-route paint is unchanged (dirt browny-orange, pavement black, gravel grey, unknown purple). Attractions stay as Played.
+
+Layers → Rider services: Fuel, Campgrounds, then **Attractions** (default on), then lodging/liquor. Attractions are OSM Shortbread marks, not `/api/poi`.
 
 ### Rider Services POIs
 
@@ -164,6 +168,7 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 | **Colors** | fuel `#FF8000` (`DirtTheme.orange`; same as planner F-pins), campground #2f9e44, lodging #8a5a2b, liquor #8e44c9 |
 | **Tap** | Coordinator `handleTap` → `queryRenderedFeatures` on poi layers → `mapState.onPOITap` → `mapState.selectedPOI` → `RootView confirmationDialog` |
 | **Routing** | "Route to this" → `planner.routeToCoordinate`; "Add as waypoint" → `planner.addPlanWaypoint` |
+| **Attractions** | OSM Shortbread `pois` / `land` on source `someoneelse` (beach, waterfall, viewpoint, landmark). Not `/api/poi`. Layers toggle `dirt.layers.attractions` (default on). Tap shows `Attraction · {kind}` plus the OSM name. Camps and fuel stay on the packed Rider Services path. |
 
 ### Province network overlays
 
@@ -184,12 +189,15 @@ DIRT-logo GRAPH: `RoutingGraphDebugManager` paints dirt/track tendrils colored b
 
 ### Layer insertion order
 
+Network, DIRT-logo tendrils, and selected-route paint insert **below** the first Shortbread label layer (water, streets, shields, places). Route colors do not change.
+
 ```
 dirt-net-access / gravel / track / restricted / bridge / tunnel   ← nearby network
 dirt-debug-track-glow + dirt-debug-{mode}-{key}                  ← DIRT-logo tendrils
-dirt-route-{bucket}-line                                           ← selected route
-dirt-poi-{category}                                                ← above route
-street-name labels                                                 ← above route (style)
+dirt-route-{bucket}-line                                           ← selected route (paint unchanged)
+water / street / shield / place labels                             ← above tendrils and route
+dirt-poi-{category}                                                ← Rider Services camps/fuel
+dirt-attraction-{kind}                                             ← OSM tile marks (tap for kind)
 ```
 
 ---
