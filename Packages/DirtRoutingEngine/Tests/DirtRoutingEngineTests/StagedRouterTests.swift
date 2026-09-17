@@ -5,14 +5,19 @@ import Testing
 struct StagedRouterTests {
     private var portersLake: Coordinate { .init(longitude: -63.34024797349485, latitude: 44.764804567541226) }
     private var gaspe: Coordinate { .init(longitude: -64.273363, latitude: 48.922934) }
-    private var yarmouth: Coordinate { .init(longitude: -66.09856, latitude: 43.84097) }
+    private var dartmouth: Coordinate { .init(longitude: -63.57, latitude: 44.67) }
 
-    @Test func threePackLongTripStagesAndTwoPackNeverDoes() {
+    @Test func longTwoPackAndThreePackStageWithCorrectWindows() {
         #expect(StagedRouter.shouldStage(regionCount: 3, start: portersLake, end: gaspe))
-        #expect(!StagedRouter.shouldStage(regionCount: 2, start: portersLake, end: gaspe))
-        #expect(!StagedRouter.shouldStage(regionCount: 3, start: portersLake, end: yarmouth))
+        #expect(StagedRouter.shouldStage(regionCount: 2, start: portersLake, end: gaspe))
+        #expect(!StagedRouter.shouldStage(regionCount: 3, start: portersLake, end: dartmouth))
+        #expect(!StagedRouter.shouldStage(regionCount: 2, start: portersLake, end: dartmouth))
+        let sudbury = Coordinate(longitude: -81.0, latitude: 46.49)
+        let parrySound = Coordinate(longitude: -80.035, latitude: 45.347)
+        #expect(StagedRouter.shouldStage(regionCount: 2, start: parrySound, end: sudbury))
         #expect(StagedRouter.overlappingWindows(["ns", "nb", "qc"]) == [["ns", "nb"], ["nb", "qc"]])
-        #expect(StagedRouter.overlappingWindows(["ns", "nb"]) == [["ns", "nb"]])
+        #expect(StagedRouter.overlappingWindows(["on-s", "on-n"]) == [["on-s"], ["on-n"]])
+        #expect(StagedRouter.overlappingWindows(["ns", "nb"]) == [["ns"], ["nb"]])
     }
 
     @Test func compassCapDoesNotChangeAnUncappedTableOnATinyGraph() throws {

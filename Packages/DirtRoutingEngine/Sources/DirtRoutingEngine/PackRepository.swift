@@ -23,10 +23,21 @@ public struct PackManifest: Decodable, Sendable {
     public let geometry: Artifact
     public let fuel: Artifact
     public let seams: Artifact?
+    /// Province/state ids are two lowercase letters; subregions append `-<token>` (e.g. `on-s`).
+    public static func isValidRegionId(_ id: String) -> Bool {
+        let parts = id.split(separator: "-", omittingEmptySubsequences: false)
+        guard let head = parts.first, head.count == 2,
+              head.allSatisfy({ $0.isASCII && $0.isLowercase }) else { return false }
+        if parts.count == 1 { return true }
+        guard parts.count == 2 else { return false }
+        let tail = parts[1]
+        return !tail.isEmpty && tail.allSatisfy({ $0.isASCII && ($0.isLowercase || $0.isNumber) })
+    }
+
     public func validate(requireSeams: Bool = false) throws {
         guard schema == "pack-manifest.v2", capabilities.contains("legal-topology.v1"),
               !fabricReleaseId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              regionId.count == 2, regionId.allSatisfy({ $0.isASCII && $0.isLowercase }),
+              Self.isValidRegionId(regionId),
               !sourceEpoch.isEmpty, timezone.contains("/"), TimeZone(identifier: timezone) != nil else {
             throw RoutingFailure.invalidPack("manifest contract")
         }

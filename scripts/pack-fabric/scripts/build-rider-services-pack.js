@@ -96,7 +96,7 @@ function buildPack(text, options = {}) {
   const regionId = String(options.regionId || "").toLowerCase();
   const generatedAt = options.generatedAt || new Date().toISOString();
   const sourceUpdatedAt = options.sourceUpdatedAt || null;
-  if (!/^[a-z]{2}$/.test(regionId)) throw new Error("A two-letter region id is required");
+  if (!/^[a-z]{2}(-[a-z0-9]+)?$/.test(regionId)) throw new Error("A region id is required");
   const byIdentity = new Map();
   const counts = { campground: 0, lodging: 0, liquor: 0 };
   let droppedClosed = 0;
@@ -152,7 +152,7 @@ function main() {
   const inputPath = process.argv[2];
   const outputPath = process.argv[3];
   const regionId = String(process.env.RIDER_SERVICES_REGION_ID || "").toLowerCase();
-  if (!inputPath || !outputPath || !/^[a-z]{2}$/.test(regionId)) {
+  if (!inputPath || !outputPath || !/^[a-z]{2}(-[a-z0-9]+)?$/.test(regionId)) {
     throw new Error(
       "Usage: RIDER_SERVICES_REGION_ID=ns build-rider-services-pack.js <services.geojsonseq> <rider-services.v1.json>"
     );

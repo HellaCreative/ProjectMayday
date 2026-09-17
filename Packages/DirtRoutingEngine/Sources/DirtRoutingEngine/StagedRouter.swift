@@ -1,17 +1,26 @@
 import Foundation
 
-/// Internal stages for a rider-to-rider leg that spans three or more packs.
-/// Each window prepares and compasses only two neighbouring packs, then the
-/// segments are stitched into one itinerary with no extra waypoints.
+/// Internal stages for a rider-to-rider leg that spans two or more packs.
+/// Three-plus packs use overlapping two-pack windows so border seams stay
+/// searchable. Exactly two packs on a long geodesic stage as single-pack hops
+/// with a seam handover — needed so Ontario South/North (and later QC/CA
+/// halves) clear the label budget instead of joining both halves into one graph.
 public enum StagedRouter {
     public static let longGeodesicMeters = 400_000.0
+    /// Two-pack corridors (subregion halves) stage earlier than multi-province.
+    public static let twoPackGeodesicMeters = 100_000.0
 
     public static func shouldStage(regionCount: Int, start: Coordinate, end: Coordinate) -> Bool {
-        regionCount >= 3 && start.distance(to: end) > longGeodesicMeters
+        let span = start.distance(to: end)
+        if regionCount >= 3 { return span > longGeodesicMeters }
+        if regionCount == 2 { return span > twoPackGeodesicMeters }
+        return false
     }
 
     public static func overlappingWindows(_ chain: [String]) -> [[String]] {
         guard chain.count >= 2 else { return chain.isEmpty ? [] : [chain] }
+        // Two-pack long corridors: sequential single-pack stages + seam pin.
+        if chain.count == 2 { return [[chain[0]], [chain[1]]] }
         return (0..<(chain.count - 1)).map { [chain[$0], chain[$0 + 1]] }
     }
 
@@ -32,7 +41,7 @@ public enum StagedRouter {
             try budget.check()
             let hopEnd: Coordinate
             if index + 1 < windows.count, let next = windows[index + 1].last, let shared = window.last {
-                hopEnd = try handover(from: shared, into: next, toward: request.end, repository: repository)
+                hopEnd = try handover(from: shared, into: next, from: cursor, toward: request.end, repository: repository)
             } else {
                 hopEnd = request.end
             }
@@ -90,7 +99,7 @@ public enum StagedRouter {
         return .init(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon, name: nil)
     }
 
-    static func handover(from shared: String, into next: String, toward dest: Coordinate,
+    static func handover(from shared: String, into next: String, from origin: Coordinate, toward dest: Coordinate,
                          repository: PackRepository) throws -> Coordinate {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
@@ -100,7 +109,23 @@ public enum StagedRouter {
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
             return point.isValid ? point : nil
         }
-        guard let best = points.min(by: { $0.distance(to: dest) < $1.distance(to: dest) }) else {
+        // Prefer seams on the origin→dest corridor, not merely nearest the
+        // destination (that pulled ON-S/ON-N onto eastern cut stubs for
+        // London→Thunder Bay while the highway corridor sits west).
+        func corridorScore(_ point: Coordinate) -> Double {
+            let via = origin.distance(to: point) + point.distance(to: dest)
+            let direct = max(1, origin.distance(to: dest))
+            let detour = via / direct
+            let spread = points
+                .map { $0.distance(to: point) }
+                .sorted()
+            let nearestNeighbor = spread.dropFirst().first ?? 0
+            // Soft preference for ≥8 km spacing so one stub cluster cannot
+            // monopolise the top ranks.
+            let spacingBonus = min(1, nearestNeighbor / 8_000)
+            return detour - 0.05 * spacingBonus
+        }
+        guard let best = points.min(by: { corridorScore($0) < corridorScore($1) }) else {
             throw RoutingFailure.noPath
         }
         return best

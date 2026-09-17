@@ -2,7 +2,7 @@
 "use strict";
 
 const fs = require("fs");
-const { OSM_REGION } = require("../routing/registry/geofabrik");
+const { OSM_REGION, catalogRegionIds } = require("../routing/registry/geofabrik");
 const { osmAdminRelation } = require("../routing/registry/osm-admin");
 const { clipGeojsonPath, fetchAdminPolygon } = require("./fetch-admin-polygon");
 
@@ -25,10 +25,13 @@ function validateGeometry(file, id) {
 async function main() {
   const ids = process.argv.slice(2).length
     ? process.argv.slice(2).map((id) => String(id).toLowerCase())
-    : Object.keys(OSM_REGION).sort();
+    : catalogRegionIds().filter((id) => !OSM_REGION[id].sourceSlug);
   for (let index = 0; index < ids.length; index += 1) {
     const id = ids[index];
-    if (!OSM_REGION[id]) throw new Error(`unknown region ${id}`);
+    if (!OSM_REGION[id] && id !== "on") throw new Error(`unknown region ${id}`);
+    if (OSM_REGION[id] && OSM_REGION[id].sourceSlug) {
+      throw new Error(`${id} is a subregion; run split-subregion-polygons.js instead of Nominatim fetch`);
+    }
     let file = clipGeojsonPath(id);
     if (!file) {
       console.log(`[${index + 1}/${ids.length}] fetching ${id} R${osmAdminRelation(id)}`);

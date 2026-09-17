@@ -7,6 +7,7 @@ const REGION_TIMEZONE = {
   ab: "America/Edmonton", bc: "America/Vancouver", mb: "America/Winnipeg",
   nb: "America/Moncton", nl: "America/St_Johns", ns: "America/Halifax",
   nt: "America/Yellowknife", nu: "America/Iqaluit", on: "America/Toronto",
+  "on-s": "America/Toronto", "on-n": "America/Toronto",
   pe: "America/Halifax", qc: "America/Toronto", sk: "America/Regina",
   yt: "America/Whitehorse",
   ak: "America/Anchorage", al: "America/Chicago", ar: "America/Chicago",

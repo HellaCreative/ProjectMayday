@@ -40,7 +40,8 @@ function validatePackManifestV2(manifest, { requireSeams = false } = {}) {
   if (!String(manifest.fabricReleaseId || "").trim()) {
     throw new Error("pack-manifest.v2 missing fabricReleaseId");
   }
-  if (!/^[a-z]{2}$/.test(String(manifest.regionId || ""))) {
+  // Province/state ids are two letters; subregions append -<token> (on-s, on-n).
+  if (!/^[a-z]{2}(-[a-z0-9]+)?$/.test(String(manifest.regionId || ""))) {
     throw new Error("pack-manifest.v2 invalid regionId");
   }
   if (!String(manifest.sourceEpoch || "").trim()) throw new Error("pack-manifest.v2 missing sourceEpoch");

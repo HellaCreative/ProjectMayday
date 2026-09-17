@@ -11,14 +11,14 @@ const path = require("path");
 const crypto = require("crypto");
 const os = require("os");
 const { spawnSync } = require("child_process");
-const { OSM_REGION } = require("../routing/registry/geofabrik");
+const { OSM_REGION, catalogRegionIds } = require("../routing/registry/geofabrik");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 const { validateGeometry } = require("./prepare-v4-polygons");
 const { clipGeojsonPath } = require("./fetch-admin-polygon");
 
 const FABRIC = path.join(__dirname, "..");
 const DIRT = path.resolve(FABRIC, "../..");
-const ALL_REGIONS = Object.keys(OSM_REGION).sort();
+const ALL_REGIONS = catalogRegionIds();
 const GIB = 1024 ** 3;
 
 function shaFile(file) {

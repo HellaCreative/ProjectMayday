@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 REGION_ID="${1:-}"
 MODE="${2:-rider-only}"
-if ! [[ "$REGION_ID" =~ ^[a-z]{2}$ ]]; then
+if ! [[ "$REGION_ID" =~ ^[a-z]{2}(-[a-z0-9]+)?$ ]]; then
   echo "Usage: extract-region-service-data.sh <region-id> [rider-only|with-fuel]" >&2
   exit 1
 fi
@@ -15,12 +15,12 @@ if [ "$MODE" != "rider-only" ] && [ "$MODE" != "with-fuel" ]; then
   exit 1
 fi
 
-read -r SLUG COUNTRY URL <<EOF
-$(node -e 'const g=require(process.argv[1]); const s=g.geofabrikSource(process.argv[2]); process.stdout.write(s.slug+" "+s.country+" "+g.geofabrikPbfUrl(s.id));' "$ROOT/scripts/pack-fabric/routing/registry/geofabrik.js" "$REGION_ID")
+read -r SLUG DOWNLOAD_SLUG COUNTRY URL <<EOF
+$(node -e 'const g=require(process.argv[1]); const s=g.geofabrikSource(process.argv[2]); process.stdout.write(s.slug+" "+g.geofabrikDownloadSlug(s.id)+" "+s.country+" "+g.geofabrikPbfUrl(s.id));' "$ROOT/scripts/pack-fabric/routing/registry/geofabrik.js" "$REGION_ID")
 EOF
 
 CACHE_ROOT="${OSM_PBF_CACHE:-${TMPDIR:-/tmp}/dirt-osm-poi-build/regions}"
-CACHED_PBF="$CACHE_ROOT/$SLUG/source.osm.pbf"
+CACHED_PBF="$CACHE_ROOT/$DOWNLOAD_SLUG/source.osm.pbf"
 RIDER_OUT="${RIDER_SERVICES_V1_OUT:-$ROOT/scripts/pack-fabric/app/data/rider-services/v1/$REGION_ID/rider-services.v1.json}"
 FUEL_OUT="${FUEL_V1_OUT:-$ROOT/scripts/pack-fabric/app/data/packs/v1/$REGION_ID/fuel.v1.json}"
 WORK_DIR=""
