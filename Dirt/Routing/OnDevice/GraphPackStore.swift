@@ -338,8 +338,38 @@ final class GraphPackStore {
 
     /// Packs needed for this corridor that are not installed yet (and are published).
     func missingPublishedRegions(for coordinates: [CLLocationCoordinate2D]) -> [String] {
-        let needed = Self.regionIds(containingAny: coordinates)
-        return needed.filter { publishedIds.contains($0) && !isInstalled($0) }
+        requiredCatalogRoutingRegions(for: coordinates)
+            .filter { !isInstalled($0) }
+    }
+
+    /// Geographic primaries/paths remapped onto ids present in the loaded catalog.
+    /// Prefer published halves (`on-s`/`on-n`); fall back to legacy parent (`on`).
+    func requiredCatalogRoutingRegions(for points: [CLLocationCoordinate2D]) -> [String] {
+        var ordered: [String] = []
+        for id in Self.requiredRoutingRegions(for: points) {
+            guard let resolved = resolveCatalogRegionId(id), !ordered.contains(resolved) else { continue }
+            ordered.append(resolved)
+        }
+        return ordered
+    }
+
+    /// Maps a geographic region id onto a catalog id that is actually published.
+    func resolveCatalogRegionId(_ regionID: String) -> String? {
+        Self.resolveCatalogRegionId(regionID, published: publishedIds)
+    }
+
+    /// Prefer an exact published id; otherwise the province/state parent when that
+    /// parent is the only published catalog entry (monolithic `on` while code
+    /// prefers `on-s`/`on-n`).
+    nonisolated static func resolveCatalogRegionId(
+        _ regionID: String,
+        published: Set<String>
+    ) -> String? {
+        let id = regionID.lowercased()
+        if published.contains(id) { return id }
+        let family = provinceFamily(id)
+        if family != id, published.contains(family) { return family }
+        return nil
     }
 
     /// Decoded pack for an installed region (active pack if it matches).
@@ -631,18 +661,36 @@ final class GraphPackStore {
             await self.refreshCatalogIfStale()
             guard !Task.isCancelled else { return }
 
-            let needed = self.navigationRegionRequirementCache.regionIds(for: [coordinate]) { route in
+            let geographic = self.navigationRegionRequirementCache.regionIds(for: [coordinate]) { route in
                 let primaryRegions = Self.regionIds(containingAny: route)
                 return primaryRegions.isEmpty ? Self.regionIds(covering: route) : primaryRegions
             }
+            var needed: [String] = []
+            var unpublished: [String] = []
+            for id in geographic {
+                if let resolved = self.resolveCatalogRegionId(id) {
+                    if !needed.contains(resolved) { needed.append(resolved) }
+                } else {
+                    unpublished.append(id)
+                }
+            }
             guard !needed.isEmpty else {
-                self.phase = .skipped("No offline routing region covers this route")
+                let names = (unpublished.isEmpty ? geographic : unpublished)
+                    .map { self.displayTitle(forRegionId: $0) }.joined(separator: ", ")
+                self.phase = .skipped(
+                    geographic.isEmpty
+                        ? "No offline routing region covers this route"
+                        : "No offline routing pack is published yet for \(names)"
+                )
                 self.progress = 1
-                RoutingDebugLog.shared.event("navigation routing pack prep skipped reason=no-region")
+                RoutingDebugLog.shared.event(
+                    geographic.isEmpty
+                        ? "navigation routing pack prep skipped reason=no-region"
+                        : "navigation routing pack prep skipped reason=unpublished regions=\(geographic.joined(separator: ","))"
+                )
                 return
             }
             let published = needed.filter { self.publishedIds.contains($0) }
-            let unpublished = needed.filter { !self.publishedIds.contains($0) }
             guard !published.isEmpty else {
                 let names = needed.map { self.displayTitle(forRegionId: $0) }.joined(separator: ", ")
                 self.phase = .skipped("No offline routing pack is published yet for \(names)")
@@ -700,8 +748,10 @@ final class GraphPackStore {
     /// newly entered published region downloads quietly, one region at a time.
     /// Repeated GPS fixes in the same region are a no-op.
     func prepareCurrentNavigationRegionIfNeeded(at coordinate: CLLocationCoordinate2D) {
+        guard let geographic = Self.primaryRegionId(containing: coordinate) else { return }
+        let catalogID = resolveCatalogRegionId(geographic) ?? geographic
         guard let id = NavigationRoutingPackScope.regionTransition(
-            currentRegionID: Self.primaryRegionId(containing: coordinate),
+            currentRegionID: catalogID,
             lastPreparedRegionID: lastAutoDownloadRegionId
         ) else { return }
 
@@ -897,6 +947,7 @@ final class GraphPackStore {
             .init(id: "nb", title: "New Brunswick", subtitle: "Maritime connector", approxBytes: 38_000_000, install: .unavailable, country: .canada),
             .init(id: "pe", title: "Prince Edward Island", subtitle: "Island rides", approxBytes: 3_000_000, install: .unavailable, country: .canada),
             .init(id: "qc", title: "Québec", subtitle: "Large province · download on Wi‑Fi", approxBytes: 97_000_000, install: .unavailable, country: .canada),
+            .init(id: "on", title: "Ontario", subtitle: "Full province · legacy catalog", approxBytes: 165_000_000, install: .unavailable, country: .canada),
             .init(id: "on-s", title: "Ontario South", subtitle: "Windsor–Ottawa · denser half", approxBytes: 95_000_000, install: .unavailable, country: .canada),
             .init(id: "on-n", title: "Ontario North", subtitle: "Sudbury–Thunder Bay · shield", approxBytes: 70_000_000, install: .unavailable, country: .canada),
             .init(id: "mb", title: "Manitoba", subtitle: "Prairie / shield", approxBytes: 19_000_000, install: .unavailable, country: .canada),
@@ -1466,7 +1517,7 @@ final class GraphPackStore {
 
     /// Collapse legacy QC quadrant / ON subregion ids to one province pack family.
     /// Lockstep: `scripts/pack-fabric/routing/regional/select.js` `provinceFamily`.
-    static func provinceFamily(_ regionId: String) -> String {
+    nonisolated static func provinceFamily(_ regionId: String) -> String {
         let id = regionId.lowercased()
         if id == "qc" || id.hasPrefix("qc-") { return "qc" }
         if id == "on" || id.hasPrefix("on-") { return "on" }
@@ -1783,7 +1834,7 @@ final class GraphPackStore {
         guard !points.isEmpty, points.allSatisfy({ Self.primaryRegionId(containing: $0) != nil }) else {
             throw RoutingFailure.invalidRequest("No routing region covers a rider point")
         }
-        let regions = Self.requiredRoutingRegions(for: points)
+        let regions = requiredCatalogRoutingRegions(for: points)
         var directories: [String:URL] = [:], missing: [String] = []
         for id in regions {
             if hasCompleteNativePack(id), let graph = findGraphFileURL(regionId: id) {
