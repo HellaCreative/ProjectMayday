@@ -228,6 +228,38 @@ struct DirtTests {
         #expect(intZoom(byID["dirt-bound-label-country"]?["maxzoom"]) <= 6)
     }
 
+    @Test func generatedStyleShowsWaterAndStreetNames() throws {
+        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v5")
+        for style in [MapStyleID.shortbread, .shortbreadRich] {
+            let styleURL = MapStyleCatalog.styleURL(for: style)
+            let data = try Data(contentsOf: styleURL)
+            let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let layers = try #require(root["layers"] as? [[String: Any]])
+            let byID = Dictionary(uniqueKeysWithValues: layers.compactMap { layer -> (String, [String: Any])? in
+                guard let id = layer["id"] as? String else { return nil }
+                return (id, layer)
+            })
+            let lake = try #require(byID["water_polygons_labels-water-name-8"])
+            #expect(intZoom(lake["minzoom"]) <= 5)
+            let lakePaint = try #require(lake["paint"] as? [String: Any])
+            #expect(lakePaint["text-color"] as? String == MapStyleCatalog.lakeLabelBlue)
+            #expect(lakePaint["text-halo-color"] as? String == MapStyleCatalog.lakeLabelHalo)
+            #expect(lakePaint["text-color"] as? String != "#163a52")
+            #expect(lakePaint["text-color"] as? String != "#4f8fb0")
+            #expect(lakePaint["text-halo-color"] as? String != "#f8f4f0")
+            let lakeLayout = try #require(lake["layout"] as? [String: Any])
+            #expect(lakeLayout["text-font"] as? [String] == ["Noto Sans Bold"])
+            let river = try #require(byID["label-waterway-bottom-12"])
+            #expect(intZoom(river["minzoom"]) <= 10)
+            let street = try #require(byID["label-street-centre-12"])
+            #expect(intZoom(street["minzoom"]) <= 10)
+            let streetPaint = try #require(street["paint"] as? [String: Any])
+            #expect(streetPaint["text-color"] as? String == "#1a1f24")
+            #expect(byID["dirt-bound-country"] != nil)
+            #expect(byID["dirt-bound-state"] != nil)
+        }
+    }
+
     @Test func richSaturationHelperUsesOnePointOneFiveBoost() {
         let boosted = MapStyleCatalog.boostedSaturationHex("#96ce74")
         #expect(boosted.hasPrefix("#"))
@@ -1011,8 +1043,57 @@ struct POIActionPolicyTests {
     @Test func actionsRespectPlannerModeAndFuelIntent() {
         #expect(POIActionPolicy.primaryTitle(mode: .plan, category: "fuel") == "Add as fuel waypoint")
         #expect(POIActionPolicy.primaryTitle(mode: .plan, category: "campground") == "Add as waypoint")
+        #expect(POIActionPolicy.primaryTitle(mode: .plan, category: "attraction") == "Add as waypoint")
         #expect(POIActionPolicy.primaryTitle(mode: .fromHere, category: "fuel") == "Navigate to fuel station")
         #expect(POIActionPolicy.primaryTitle(mode: .fromHere, category: "lodging") == "Navigate here")
+        #expect(POIActionPolicy.primaryTitle(mode: .fromHere, category: "attraction") == "Navigate here")
+    }
+}
+
+struct MapAttractionTests {
+    @Test func kindReadsShortbreadPOITags() {
+        #expect(MapAttraction.kind(from: ["natural": "beach"]) == "beach")
+        #expect(MapAttraction.kind(from: ["kind": "beach"]) == "beach")
+        #expect(MapAttraction.kind(from: ["waterway": "waterfall"]) == "waterfall")
+        #expect(MapAttraction.kind(from: ["tourism": "viewpoint"]) == "viewpoint")
+        #expect(MapAttraction.kind(from: ["historic": "monument"]) == "landmark")
+        #expect(MapAttraction.kind(from: ["man_made": "lighthouse"]) == "landmark")
+        #expect(MapAttraction.kind(from: ["tourism": "hotel"]) == nil)
+    }
+
+    @Test func tapLabelNamesTheAttractionKind() {
+        let unnamed = POIFeature(
+            id: "osm-attraction:1",
+            category: "attraction",
+            latitude: 44.65,
+            longitude: -63.57,
+            name: nil,
+            address: nil,
+            brand: nil,
+            openingHours: nil,
+            phone: nil,
+            website: nil,
+            kind: "waterfall"
+        )
+        #expect(unnamed.categoryLabel == "Attraction · Waterfall")
+        #expect(unnamed.displayName == "Attraction · Waterfall")
+        let named = POIFeature(
+            id: "osm-attraction:2",
+            category: "attraction",
+            latitude: 44.65,
+            longitude: -63.57,
+            name: "Peggy's Cove",
+            address: nil,
+            brand: nil,
+            openingHours: nil,
+            phone: nil,
+            website: nil,
+            kind: "landmark"
+        )
+        #expect(named.categoryLabel == "Attraction · Landmark")
+        #expect(named.displayName == "Peggy's Cove")
+        #expect(MapAttraction.title(for: "beach") == "Beach")
+        #expect(MapAttraction.layerIDs.contains("dirt-attraction-viewpoint"))
     }
 }
 
