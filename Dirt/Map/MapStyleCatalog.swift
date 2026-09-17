@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v8"
+    static let generatedStyleRevision = "osmand-v9"
     /// Natural Earth 50m admin-1 (lakes), US+CA interior borders. Not pack bounds.
     static let admin1OverviewSourceID = "dirt-admin1-overview"
     static let admin1OverviewLayerID = "dirt-bound-state-overview"
@@ -104,7 +104,7 @@ enum MapStyleCatalog {
                 continue
             }
             retunePlaceLabel(&layer)
-            retuneWaterLabel(&layer)
+            retuneWaterLabel(&layer, rich: rich)
             retuneStreetLabel(&layer)
             layers.append(layer)
         }
@@ -235,6 +235,18 @@ extension MapStyleCatalog {
         var color = hsl(from: base)
         color.s = min(1, color.s * factor)
         return hexString(from: rgb(from: color))
+    }
+
+    /// Halfway to black from a hex (`factor` 0.5 = 50% darker). Used so lake
+    /// names derive from the painted water fill instead of a third blue.
+    static func darkenedHex(_ hex: String, factor: Double = 0.5) -> String {
+        guard let base = rgb(from: hex) else { return hex }
+        return hexString(from: (base.r * factor, base.g * factor, base.b * factor))
+    }
+
+    /// Lake/water names: one color, 50% darker than this style's water fill.
+    static func lakeLabelColor(rich: Bool) -> String {
+        darkenedHex(paintHex("water-fill", rich: rich))
     }
 
     private static func paintHex(_ key: String, rich: Bool) -> String {
@@ -497,12 +509,11 @@ extension MapStyleCatalog {
         layer["paint"] = paint
     }
 
-    /// Lake names must read in sun on saturated green/blue land. Play of
-    /// osmand-v6 called the white outline too busy; osmand-v7 then vanished
-    /// because MapLibre SDF skips glyphs when halo width is 0. Same-color
-    /// halo = intense blue only, no white ring. City/town stay on
-    /// `retunePlaceLabel`.
-    static let lakeLabelBlue = "#0033cc"
+    /// Lake names sit on the same water fill they name. Play of `#0033cc`
+    /// plus a thicker halo read as two blues. Color is 50% darker than this
+    /// style's water hex; halo is the same color and as thin as MapLibre SDF
+    /// will still rasterize. City/town stay on `retunePlaceLabel`.
+    static let lakeLabelHaloWidth = 0.2
 
     static func isWaterNameLayer(_ id: String) -> Bool {
         id.contains("water_polygons_labels-water-name") || id.hasPrefix("label-waterway")
@@ -515,22 +526,25 @@ extension MapStyleCatalog {
             + ["label-waterway-bottom-12", "label-waterway-bottom-14"]
     }
 
-    private static func retuneWaterLabel(_ layer: inout [String: Any]) {
+    private static func retuneWaterLabel(_ layer: inout [String: Any], rich: Bool) {
         let id = layer["id"] as? String ?? ""
         guard isWaterNameLayer(id) else { return }
         let isLake = id.contains("water_polygons_labels-water-name")
+        let color = lakeLabelColor(rich: rich)
         var layout = layer["layout"] as? [String: Any] ?? [:]
         var paint = layer["paint"] as? [String: Any] ?? [:]
-        paint["text-color"] = Self.lakeLabelBlue
+        paint["text-color"] = color
         paint["text-opacity"] = 1
-        // Same blue as fill — MapLibre needs a halo to rasterize SDF text,
-        // but it must not read as a white outline.
-        paint["text-halo-color"] = Self.lakeLabelBlue
-        paint["text-halo-width"] = 0.8
+        // MapLibre SDF skips glyphs when halo width is 0. Same-color hairline
+        // so it does not read as a white or second-blue outline.
+        paint["text-halo-color"] = color
+        paint["text-halo-width"] = lakeLabelHaloWidth
         paint["text-halo-blur"] = 0
         paint.removeValue(forKey: "text-halo-opacity")
         layout["visibility"] = "visible"
         layout["text-font"] = ["Noto Sans Bold"]
+        layout.removeValue(forKey: "text-justify")
+        layout.removeValue(forKey: "icon-image")
         if isLake {
             layout["text-size"] = ["stops": Self.lakeLabelSizeStops]
             switch id {

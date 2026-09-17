@@ -149,9 +149,9 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ### Basemap labels and borders
 
-`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v8`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from z0. Province/state: Natural Earth 50m admin-1 (US+CA, lakes-clipped, OsmAnd purple dashed) from z0–7, then Shortbread `admin_level=4` from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v9`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from z0. Province/state: Natural Earth 50m admin-1 (US+CA, lakes-clipped, OsmAnd purple dashed) from z0–7, then Shortbread `admin_level=4` from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
 
-City and town names use the former lake headline size (Bold) with the cream halo. Lake and waterway names stay intense `#0033cc` Bold at **half** that size. MapLibre SDF needs a halo to rasterize glyphs, so lakes use a **same-color** blue halo (not white). Street and path names (`label-street-centre-12`, `label-path-bottom-12`) start at z10/z11 in near-black. Selected-route paint is unchanged (dirt browny-orange, pavement black, gravel grey, unknown purple). Attractions stay as Played.
+City and town names use the former lake headline size (Bold) with the cream halo. Lake and waterway names are **one** color: 50% darker than that style's water fill (`#7eb8d4` → `#3f5c6a` on Standard), Bold at half the city size. MapLibre SDF needs a halo to rasterize glyphs, so lakes use a **same-color** 0.2 px halo — not white, not a second blue. Street and path names (`label-street-centre-12`, `label-path-bottom-12`) start at z10/z11 in near-black. Selected-route paint is unchanged (dirt browny-orange, pavement black, gravel grey, unknown purple). Ferry crossings paint `#005A70` dashed when the pack times the edge (`GraphPack.structure` infers `ferry` from `crossingSeconds` when the leaf is empty).
 
 Layers → Rider services: Fuel, Campgrounds, Attractions (default on), **Lake names** (default on), then lodging/liquor. Lake names toggle `dirt.layers.water-names` looks up live MapLibre layers by id (`water_polygons_labels-water-name-*`, `label-waterway-*`). Generated style keeps `visibility: visible`; the switch hides them at runtime. Attractions are OSM Shortbread marks, not `/api/poi`.
 
@@ -168,7 +168,7 @@ Layers → Rider services: Fuel, Campgrounds, Attractions (default on), **Lake n
 | **Colors** | fuel `#FF8000` (`DirtTheme.orange`; same as planner F-pins), campground #2f9e44, lodging #8a5a2b, liquor #8e44c9 |
 | **Tap** | Coordinator `handleTap` → `queryRenderedFeatures` on poi layers → `mapState.onPOITap` → `mapState.selectedPOI` → `RootView confirmationDialog` |
 | **Routing** | "Route to this" → `planner.routeToCoordinate`; "Add as waypoint" → `planner.addPlanWaypoint` |
-| **Attractions** | OSM Shortbread `pois` / `land` on source `someoneelse` (beach, waterfall, viewpoint, landmark). Not `/api/poi`. Layers toggle `dirt.layers.attractions` (default on). Tap shows `Attraction · {kind}` plus the OSM name. Camps and fuel stay on the packed Rider Services path. |
+| **Attractions** | OSM Shortbread `pois` / `land` on source `someoneelse` (beach, waterfall, rock formation, sculpture, museum, viewpoint, and similar tourism/historic). Binoculars icon. Not `/api/poi`. Layers toggle `dirt.layers.attractions` (default on). Tap shows `Attraction · {kind}` plus the OSM name. Camps and fuel stay on the packed Rider Services path. |
 
 ### Province network overlays
 
