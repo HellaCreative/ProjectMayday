@@ -515,9 +515,9 @@ final class RoutePlannerModel {
     private let packAcquisition: PackAcquisitionCoordinator
     private weak var poiManager: POIManager?
     /// Wired by AppEnvironment — restore Music volume after End Navigation.
-    /// Fires after nav teardown. Argument is a contribute candidate when enough
-    /// network edges were ridden (caller shows opt-in UI).
-    @ObservationIgnored var onNavigationEnded: ((RideContributionCandidate?) -> Void)?
+    /// Fires after nav teardown. Save the GPS ride and/or silently contribute
+    /// classified pack edges — never as one combined action.
+    @ObservationIgnored var onNavigationEnded: ((NavigationEndPayload) -> Void)?
 
     init(
         routing: RoutingClient,
@@ -2764,6 +2764,33 @@ final class RoutePlannerModel {
         toast = "Route saved"
     }
 
+    /// Always inserts a new library record from the GPS ride. Never writes over
+    /// the planned route the rider started from.
+    func saveRiddenRoute(
+        named name: String,
+        coordinates: [RouteCoordinate],
+        distanceMeters: Double,
+        context: ModelContext
+    ) {
+        guard coordinates.count >= 2 else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved = trimmed.isEmpty
+            ? RiddenRouteSaveCandidate.suggestedName()
+            : trimmed
+        let route = SavedRoute(
+            name: resolved,
+            profile: profile,
+            coordinates: coordinates,
+            distanceMeters: distanceMeters,
+            dirtPercent: 0,
+            pavedPercent: 0,
+            riddenSavedAt: Date()
+        )
+        context.insert(route)
+        try? context.save()
+        toast = "Saved “\(route.name)”"
+    }
+
     private func fetchSavedRoute(id: UUID, context: ModelContext) -> SavedRoute? {
         var descriptor = FetchDescriptor<SavedRoute>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
@@ -3627,6 +3654,17 @@ final class RoutePlannerModel {
         }
         activeGroupTracking = nil
         dismissGroupNavigationNotice()
+        let track = navigation.riddenTrack
+        let riddenMeters = GeoMath.lineMeters(track)
+        let riddenSave: RiddenRouteSaveCandidate? =
+            track.count >= 2 && riddenMeters >= 25
+            ? RiddenRouteSaveCandidate(
+                coordinates: track,
+                distanceMeters: riddenMeters,
+                profile: profile,
+                suggestedName: RiddenRouteSaveCandidate.suggestedName(startedAt: navigation.startedAt)
+            )
+            : nil
         let cleaned = RideEdgeSequence.sanitize(navigation.riddenEdgeIds)
         let candidate: RideContributionCandidate? =
             cleaned.count >= 3
@@ -3643,7 +3681,7 @@ final class RoutePlannerModel {
         offline.disengageOfflineBasemap()
         graphPacks.protectInstalledRevisions = false
         graphPacks.cancelQuietDownloads()
-        onNavigationEnded?(candidate)
+        onNavigationEnded?(NavigationEndPayload(contribution: candidate, riddenSave: riddenSave))
     }
 
     // MARK: - Incident recovery support

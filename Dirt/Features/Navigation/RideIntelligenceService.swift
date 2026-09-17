@@ -74,6 +74,8 @@ final class RideIntelligenceService {
 
     // MARK: - Track contributions
 
+    /// Uploads classified pack edge ids only. Callers must never pass GPS crumbs.
+
     func contributeTrack(
         edgeIds: [String],
         distanceMeters: Double?,
@@ -122,8 +124,9 @@ final class RideIntelligenceService {
 enum TrackContributePrefs {
     static let enabledKey = "dirt.contributeTracks.enabled.v1"
     static let askedKey = "dirt.contributeTracks.asked.v1"
+    static let completedNavKey = "dirt.contributeTracks.completedNav.v1"
 
-    /// When true, end-of-ride may offer / auto-ask to upload edge sequences.
+    /// Profile toggle. When true, End Ride silently uploads classified pack edge ids.
     static var isEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: enabledKey) }
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
@@ -134,9 +137,23 @@ enum TrackContributePrefs {
         set { UserDefaults.standard.set(newValue, forKey: askedKey) }
     }
 
+    static var completedNavigationCount: Int {
+        get { UserDefaults.standard.integer(forKey: completedNavKey) }
+        set { UserDefaults.standard.set(newValue, forKey: completedNavKey) }
+    }
+
+    /// Count every completed nav. Nudge only when Contribute is off, about every third.
+    @discardableResult
+    static func recordCompletedNavigation() -> Bool {
+        completedNavigationCount += 1
+        guard !isEnabled else { return false }
+        return completedNavigationCount % 3 == 0
+    }
+
     /// Tester replay: restore default-off contribute so first-run can ask again.
     static func reset() {
         UserDefaults.standard.removeObject(forKey: enabledKey)
         UserDefaults.standard.removeObject(forKey: askedKey)
+        UserDefaults.standard.removeObject(forKey: completedNavKey)
     }
 }

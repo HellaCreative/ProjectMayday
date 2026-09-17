@@ -41,6 +41,9 @@ final class NavigationSession {
     private var edgeSpans: [RideEdgeSequence.Span] = []
     /// Ordered unique edge ids entered this session (survives mid-ride recalculate).
     private(set) var riddenEdgeIds: [String] = []
+    /// GPS crumbs for this session, including off-route deviations. Survives
+    /// Continue / Turn around / fuel-via recalculates; reset only on a new ride.
+    private(set) var riddenTrack: [RouteCoordinate] = []
     private var cumulative: [Double] = []
     private(set) var totalMeters: Double = 0
     private(set) var remainingMeters: Double = 0
@@ -181,6 +184,7 @@ final class NavigationSession {
         edgeSpans = RideEdgeSequence.spans(from: networkSegments)
         if !continuing {
             riddenEdgeIds = []
+            riddenTrack = []
             startedAt = Date()
             lastRerouteRequest = nil
         }
@@ -252,6 +256,7 @@ final class NavigationSession {
 
     func update(with location: CLLocation) {
         guard phase == .active, coordinates.count > 1 else { return }
+        appendRiddenTrack(location)
         if location.speed >= 0 {
             let measured = location.speed
             lastSpeedMPS = lastSpeedMPS > 0
@@ -407,6 +412,7 @@ final class NavigationSession {
         surfaceRuns = []
         edgeSpans = []
         riddenEdgeIds = []
+        riddenTrack = []
         cumulative = []
         stageEndMeters = []
         stages = []
@@ -432,6 +438,19 @@ final class NavigationSession {
         lastAltitudeMeters = nil
         startedAt = nil
         lastSpeedMPS = 0
+    }
+
+    /// Record the rider's GPS line even while off-route. The planned polyline
+    /// is not the save geometry after End.
+    private func appendRiddenTrack(_ location: CLLocation) {
+        guard location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 80 else { return }
+        let point = RouteCoordinate(
+            longitude: location.coordinate.longitude,
+            latitude: location.coordinate.latitude
+        )
+        if let last = riddenTrack.last, GeoMath.meters(last, point) < 12 { return }
+        guard riddenTrack.count < 15_000 else { return }
+        riddenTrack.append(point)
     }
 
     /// Match only the locally reachable portion of an established route.

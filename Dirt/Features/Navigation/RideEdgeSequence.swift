@@ -8,6 +8,55 @@ struct RideContributionCandidate: Equatable, Sendable, Identifiable {
     let startedAt: Date?
 }
 
+/// GPS line captured during navigation — what the rider actually rode.
+struct RiddenRouteSaveCandidate: Equatable, Sendable, Identifiable {
+    let id: UUID
+    let coordinates: [RouteCoordinate]
+    let distanceMeters: Double
+    let profile: RouteProfile
+    let suggestedName: String
+
+    init(
+        id: UUID = UUID(),
+        coordinates: [RouteCoordinate],
+        distanceMeters: Double,
+        profile: RouteProfile,
+        suggestedName: String
+    ) {
+        self.id = id
+        self.coordinates = coordinates
+        self.distanceMeters = distanceMeters
+        self.profile = profile
+        self.suggestedName = suggestedName
+    }
+
+    static func suggestedName(startedAt: Date? = nil, now: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.setLocalizedDateFormatFromTemplate("dMMM")
+        return "Ride · \(formatter.string(from: startedAt ?? now))"
+    }
+}
+
+/// Teardown payload after End this ride. Save and contribute stay independent.
+struct NavigationEndPayload: Equatable, Sendable {
+    let contribution: RideContributionCandidate?
+    let riddenSave: RiddenRouteSaveCandidate?
+}
+
+/// Post-ride UI: save the GPS ride, then maybe a Profile contribute nudge.
+enum PostRidePrompt: Identifiable, Equatable {
+    case save(RiddenRouteSaveCandidate)
+    case contributeNudge
+
+    var id: String {
+        switch self {
+        case let .save(candidate): "save-\(candidate.id.uuidString)"
+        case .contributeNudge: "contribute-nudge"
+        }
+    }
+}
+
 /// Pure helpers: ordered network edge sequences from a completed ride.
 /// Stitch IDs are never contributed — they are synthetic connectors, not fabric.
 enum RideEdgeSequence {

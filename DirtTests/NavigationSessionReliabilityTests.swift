@@ -317,6 +317,34 @@ struct NavigationSessionReliabilityTests {
         #expect(session.phase == .active)
     }
 
+    @Test @MainActor func riddenTrackKeepsOffRoutePointsAndSurvivesContinue() {
+        let session = NavigationSession()
+        session.activate(coordinates: Self.straightRoute(), maneuvers: [])
+        session.update(with: Self.location(latitude: 45.0000, longitude: -63.0000, speed: 12))
+        session.update(with: Self.location(latitude: 45.0000, longitude: -62.9970, speed: 12))
+        let onRouteCount = session.riddenTrack.count
+        #expect(onRouteCount >= 2)
+
+        sendOffRouteStrikes(to: session, startingAt: Date(timeIntervalSince1970: 4_000))
+        #expect(session.riddenTrack.contains {
+            abs($0.latitude - 45.0100) < 0.0001 && abs($0.longitude - -63.0000) < 0.0001
+        })
+
+        let beforeContinue = session.riddenTrack.count
+        session.activate(
+            coordinates: [
+                RouteCoordinate(longitude: -63.0000, latitude: 45.0100),
+                RouteCoordinate(longitude: -62.9800, latitude: 45.0100)
+            ],
+            maneuvers: []
+        )
+        #expect(session.phase == .active)
+        #expect(session.riddenTrack.count == beforeContinue)
+
+        session.end()
+        #expect(session.riddenTrack.isEmpty)
+    }
+
     @Test func failedPrepCanBeConsumedForExplicitLiveMapsRide() {
         #expect(OfflineTileManager.canConsumePrepForRide(.ready(cached: 10, total: 10)))
         #expect(OfflineTileManager.canConsumePrepForRide(.failed("offline unavailable")))

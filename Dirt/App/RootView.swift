@@ -450,16 +450,20 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: app.incidents.isPresented)
         .sheet(item: Binding(
-            get: { app.pendingTrackContribution },
-            set: { app.pendingTrackContribution = $0 }
-        )) { candidate in
-            ContributeTrackSheet(candidate: candidate) {
-                app.pendingTrackContribution = nil
+            get: { app.postRidePrompt },
+            set: { newValue in
+                if newValue == nil {
+                    app.dismissPostRidePrompt()
+                } else {
+                    app.postRidePrompt = newValue
+                }
             }
-            .environment(app)
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(DirtTheme.sheetMaterial)
+        )) { prompt in
+            postRideSheet(prompt)
+                .environment(app)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(DirtTheme.sheetMaterial)
         }
         .sheet(isPresented: softPaywallPresented) {
             softPaywallSheet
@@ -483,6 +487,26 @@ struct RootView: View {
             titleVisibility: .visible
         ) {
             poiDialogButtons
+        }
+    }
+
+    @ViewBuilder
+    private func postRideSheet(_ prompt: PostRidePrompt) -> some View {
+        switch prompt {
+        case let .save(candidate):
+            SaveRiddenRouteSheet(candidate: candidate) {
+                app.dismissPostRidePrompt()
+            }
+        case .contributeNudge:
+            ContributeNudgeSheet(
+                onOpenProfile: {
+                    app.openProfileFromContributeNudge()
+                    withAnimation(reduceMotion ? nil : DirtMotion.sheet) {
+                        activeSheet = .profile
+                    }
+                },
+                onDismiss: { app.dismissPostRidePrompt() }
+            )
         }
     }
 

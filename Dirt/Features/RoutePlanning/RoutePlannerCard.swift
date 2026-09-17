@@ -634,8 +634,7 @@ struct RoutePlannerCard: View {
         if planner.stages.isEmpty {
             VStack(spacing: 8) {
                 helperBoxLabel(
-                    Text("Long-press").fontWeight(.bold)
-                        + Text(" the map for point 1, then again for point 2 to build your first leg.")
+                    Text("\(Text("Long-press").fontWeight(.bold)) the map for point 1, then again for point 2 to build your first leg.")
                 )
                 GPXImportButton(continueAsPlan: true)
             }
@@ -692,14 +691,7 @@ struct RoutePlannerCard: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity)
 
-            (
-                Text(String(format: "%.1f km", planner.totalMeters / 1000))
-                    .foregroundStyle(DirtTheme.ink)
-                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                + Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix)
-                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                + Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix)
-            )
+            Text("\(Text(String(format: "%.1f km", planner.totalMeters / 1000)).foregroundStyle(DirtTheme.ink))\(Text("  ·  ").foregroundStyle(DirtTheme.muted))\(Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix))\(Text("  ·  ").foregroundStyle(DirtTheme.muted))\(Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix))")
             .font(DirtType.metricInline)
             .fontWeight(.bold)
             .multilineTextAlignment(.center)
@@ -1766,16 +1758,30 @@ struct SavedRoutesList: View {
                         ForEach(routes) { route in
                             HStack(spacing: 10) {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(route.name)
-                                        .font(.dirtUI(13, weight: .bold))
-                                        .foregroundStyle(DirtTheme.ink)
+                                    HStack(spacing: 6) {
+                                        Text(route.name)
+                                            .font(.dirtUI(13, weight: .bold))
+                                            .foregroundStyle(DirtTheme.ink)
+                                            .lineLimit(1)
+                                        if route.isRidden {
+                                            Text("Ridden")
+                                                .font(DirtType.chip)
+                                                .foregroundStyle(DirtTheme.onOrange)
+                                                .padding(.horizontal, 7)
+                                                .padding(.vertical, 3)
+                                                .background(DirtTheme.orange, in: Capsule())
+                                                .accessibilityLabel("Ridden route")
+                                        }
+                                    }
                                     HStack(spacing: 8) {
                                         Text(String(format: "%.1f km", route.distanceMeters / 1000))
                                             .font(.dirtMono(11, weight: .semibold))
                                             .foregroundStyle(DirtTheme.muted)
-                                        Text("\(route.dirtPercent)% dirt")
-                                            .font(.dirtMono(11, weight: .semibold))
-                                            .foregroundStyle(DirtTheme.dirtMix)
+                                        if !route.isRidden {
+                                            Text("\(route.dirtPercent)% dirt")
+                                                .font(.dirtMono(11, weight: .semibold))
+                                                .foregroundStyle(DirtTheme.dirtMix)
+                                        }
                                         Text(route.profile.title)
                                             .font(.dirtUI(11, weight: .semibold))
                                             .foregroundStyle(DirtTheme.muted)
