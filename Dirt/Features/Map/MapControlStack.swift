@@ -20,6 +20,9 @@ struct MapControlStack: View {
     /// Group browsing owns its own map actions. North reset is the only shared
     /// map control in that context.
     var groupOnly = false
+    /// Saved tab owns the routing sheet. Hide 3D and rider-status the same way
+    /// Groups does; restore when the rider leaves Saved.
+    var savedOnly = false
     /// Figma landscape-primary: controls run across the bottom of the open map.
     var horizontal: Bool = false
 
@@ -108,13 +111,13 @@ struct MapControlStack: View {
 
         } else {
             // Primary map: view mode and rider status remain available before
-            // navigation. Cues are ride-only. Groups owns sharing, so hide 3D
-            // and the map share chip while that sheet is open.
-            if !groupOnly {
+            // navigation. Cues are ride-only. Groups owns sharing, and Saved
+            // hides the same 3D / status chips while that tab is selected.
+            if !hidesMapFunctionChrome {
                 viewModeButton
             }
             compassButton
-            if !groupOnly {
+            if !hidesMapFunctionChrome {
                 riderStatusButton
             }
             if app.mapState.hasDisplayedRoute,
@@ -134,6 +137,8 @@ struct MapControlStack: View {
         }
     }
 
+    private var hidesMapFunctionChrome: Bool { groupOnly || savedOnly }
+
     // MARK: - Buttons
 
     private func zoomButton(increase: Bool) -> some View {
@@ -143,10 +148,16 @@ struct MapControlStack: View {
         } label: {
             Image(systemName: increase ? "plus" : "minus")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.black)
-                .frame(width: 50, height: 50)
-                .background(.white, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(white: 0.6), lineWidth: 1))
+                .foregroundStyle(DirtTheme.ink)
+                .frame(width: DirtHit.control, height: DirtHit.control)
+                .background(
+                    DirtTheme.sheetMaterial,
+                    in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
         .accessibilityLabel(increase ? "Zoom in" : "Zoom out")

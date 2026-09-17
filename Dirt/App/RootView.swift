@@ -1414,6 +1414,7 @@ struct RootView: View {
         MapControlStack(
             compact: compact,
             groupOnly: activeSheet == .group,
+            savedOnly: routeCardOpen && app.planner.mode == .saved && !app.planner.showingLoop,
             horizontal: true
         )
     }
@@ -1580,7 +1581,8 @@ struct RootView: View {
                 routeCardOpen: routeCardOpen,
                 phase: app.navigation.phase
             ),
-            groupOnly: activeSheet == .group
+            groupOnly: activeSheet == .group,
+            savedOnly: routeCardOpen && app.planner.mode == .saved && !app.planner.showingLoop
         )
     }
 
