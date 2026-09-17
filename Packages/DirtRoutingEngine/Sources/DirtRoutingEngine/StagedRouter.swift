@@ -54,20 +54,22 @@ public enum StagedRouter {
             let firstGraph = graphs[0]
             let secondGraph = graphs[1]
             var lastError: Error = RoutingFailure.noPath
+            var reach0: EndpointReachability?
+            var reach1: EndpointReachability?
             for (attempt, hopEnd) in pins.enumerated() {
                 try budget.check()
-                // Cheap Cleanest preflight avoids 20s Balanced burns on overlap stubs
-                // that connect in one half only (phone/host London→TB hotspot).
-                if request.profile.style != .cleanest {
-                    let preflightStarted = ContinuousClock.now
-                    let live = (try? cleanestPair(from: cursor, via: hopEnd, to: request.end,
-                                                  first: firstGraph, second: secondGraph,
-                                                  request: request, budget: budget)) == true
-                    request.options.counter?.recordStage("seamPreflight", since: preflightStarted)
-                    guard live else {
-                        lastError = RoutingFailure.noPath
-                        continue
-                    }
+                // Directed reachability on both halves — overlap stubs that Balanced
+                // would burn ~20s on fail here in well under a second after the first
+                // arc-index build. Do not use Cleanest preflight: those hops are long.
+                let filterStarted = ContinuousClock.now
+                let live = try seamPinLooksLive(hopEnd, origin: cursor, destination: request.end,
+                                                first: firstGraph, second: secondGraph,
+                                                request: request, budget: budget,
+                                                reach0: &reach0, reach1: &reach1)
+                request.options.counter?.recordStage("seamFilter", since: filterStarted)
+                guard live else {
+                    lastError = RoutingFailure.noPath
+                    continue
                 }
                 do {
                     var hop0 = request.with(start: cursor, end: hopEnd)
@@ -278,34 +280,36 @@ public enum StagedRouter {
         return try RoutingEngine(pack: indexed).route(request, budget: budget)
     }
 
-    /// Fast paved-only pair through both halves. Overlap stubs that Balanced would
-    /// burn ~20s on usually fail Cleanest in under a second.
-    static func cleanestPair(from origin: Coordinate, via hop: Coordinate, to destination: Coordinate,
-                             first: IndexedGraph, second: IndexedGraph,
-                             request: RoutingRequest, budget: ComputationBudget) throws -> Bool {
-        var hop0 = request.with(start: origin, end: hop)
-        hop0.profile = ProfilePolicy(style: .cleanest)
-        hop0.access = AccessPolicy(allowUnknown: false)
-        hop0.options.compassMaxRemaining = max(450_000, origin.distance(to: hop) * 2.5)
-        hop0.options.counter = nil
-        let part0: ComputedRoute
-        do {
-            part0 = try RoutingEngine(pack: first).route(hop0, budget: budget)
-        } catch {
+    /// Directed connectivity on both halves before a full Balanced/Dirt search.
+    /// Never rules out a pin the search could still connect.
+    static func seamPinLooksLive(_ hop: Coordinate, origin: Coordinate, destination: Coordinate,
+                                 first: IndexedGraph, second: IndexedGraph,
+                                 request: RoutingRequest, budget: ComputationBudget,
+                                 reach0: inout EndpointReachability?,
+                                 reach1: inout EndpointReachability?) throws -> Bool {
+        try hopLooksLive(hop, origin: origin, graph: first, request: request, budget: budget, reach: &reach0)
+            && hopLooksLive(destination, origin: hop, graph: second, request: request, budget: budget, reach: &reach1)
+    }
+
+    static func hopLooksLive(_ hop: Coordinate, origin: Coordinate, graph: IndexedGraph,
+                             request: RoutingRequest, budget: ComputationBudget,
+                             reach: inout EndpointReachability?) throws -> Bool {
+        let matcher = RoadMatcher(pack: graph)
+        let radius = min(2000, max(80, request.matchRadiusMeters))
+        let intent = origin.bearing(to: hop) * 180 / .pi
+        let starts = try matcher.matches(at: origin, radius: radius, start: true,
+                                         policy: request.access, intent: intent, budget: budget)
+        let ends = try matcher.matches(at: hop, radius: radius, start: false,
+                                       policy: request.access, intent: intent + 180, budget: budget)
+        guard let start = starts.first, let end = ends.first else { return false }
+        let components = WeakComponents.ids(in: graph, allowUnknown: request.access.allowUnknown)
+        if WeakComponents.of(match: start, pack: graph, ids: components)
+            != WeakComponents.of(match: end, pack: graph, ids: components) {
             return false
         }
-        var hop1 = request.with(start: part0.end.coordinate, end: destination)
-        hop1.profile = ProfilePolicy(style: .cleanest)
-        hop1.access = AccessPolicy(allowUnknown: false)
-        hop1.options.compassMaxRemaining = max(450_000, part0.end.coordinate.distance(to: destination) * 2.5)
-        hop1.options.arrivalEdgeID = part0.segments.last?.edgeID
-        hop1.options.counter = nil
-        do {
-            _ = try RoutingEngine(pack: second).route(hop1, budget: budget)
-            return true
-        } catch {
-            return false
-        }
+        let checker = try reach ?? EndpointReachability(graph: graph, budget: budget)
+        reach = checker
+        return try checker.mayConnect(start: start, end: end, budget: budget)
     }
 
     static func knownDirtMeters(_ route: ComputedRoute) -> Double {
