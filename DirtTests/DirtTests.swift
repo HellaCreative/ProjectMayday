@@ -210,6 +210,7 @@ struct DirtTests {
         })
         #expect(byID["dirt-bound-country"] != nil)
         #expect(byID["dirt-bound-state"] != nil)
+        #expect(byID["dirt-bound-state-overview"] != nil)
         #expect(byID["dirt-bound-label-country"] != nil)
         #expect(byID["dirt-bound-label-state"] != nil)
         #expect(byID["boundaries-0"] == nil)
@@ -218,18 +219,74 @@ struct DirtTests {
         #expect(countryPaint["line-color"] as? String == "#7b4fa0")
         let statePaint = try #require(byID["dirt-bound-state"]?["paint"] as? [String: Any])
         #expect(statePaint["line-color"] as? String == "#9a74b8")
+        let overviewPaint = try #require(byID["dirt-bound-state-overview"]?["paint"] as? [String: Any])
+        #expect(overviewPaint["line-color"] as? String == "#9a74b8")
+        #expect(overviewPaint["line-dasharray"] != nil)
+        #expect(byID["dirt-bound-state-overview"]?["source"] as? String == "dirt-admin1-overview")
+        #expect(byID["dirt-bound-state-overview"]?["source-layer"] == nil)
         #expect(intZoom(byID["dirt-bound-country"]?["minzoom"]) == 0)
         #expect(intZoom(byID["dirt-bound-state"]?["minzoom"]) == 7)
+        #expect(intZoom(byID["dirt-bound-state-overview"]?["minzoom"]) == 0)
+        #expect(intZoom(byID["dirt-bound-state-overview"]?["maxzoom"]) == 7)
         let town = byID.first(where: { $0.key.contains("town") })?.value
         #expect(intZoom(town?["minzoom"]) <= 7)
         if let island = byID.first(where: { $0.key.contains("island") })?.value {
             #expect(intZoom(island["minzoom"]) <= 14)
         }
         #expect(intZoom(byID["dirt-bound-label-country"]?["maxzoom"]) <= 6)
+        let sources = try #require(root["sources"] as? [String: Any])
+        let admin1 = try #require(sources["dirt-admin1-overview"] as? [String: Any])
+        #expect(admin1["type"] as? String == "geojson")
+        let collection = try #require(admin1["data"] as? [String: Any])
+        #expect(collection["type"] as? String == "FeatureCollection")
+        let features = try #require(collection["features"] as? [[String: Any]])
+        #expect(features.count >= 40)
+        #expect(features.allSatisfy { feature in
+            let geom = feature["geometry"] as? [String: Any]
+            let type = geom?["type"] as? String
+            return type == "LineString" || type == "MultiLineString"
+        })
+        #expect(features.allSatisfy { feature in
+            let props = feature["properties"] as? [String: Any] ?? [:]
+            return props["packId"] == nil && props["regionId"] == nil
+        })
+    }
+
+    @Test func bundledAdmin1OverviewIsRealPoliticalLinesNotPackBounds() throws {
+        let url = try #require(MapStyleCatalog.admin1OverviewResourceURL())
+        let raw = try Data(contentsOf: url)
+        let root = try #require(JSONSerialization.jsonObject(with: raw) as? [String: Any])
+        #expect(root["name"] as? String == "dirt-admin1-na-overview")
+        let features = try #require(root["features"] as? [[String: Any]])
+        #expect(features.count >= 40)
+        var minLon = 180.0, maxLon = -180.0, minLat = 90.0, maxLat = -90.0
+        for feature in features {
+            let geom = try #require(feature["geometry"] as? [String: Any])
+            #expect(geom["type"] as? String == "LineString")
+            let coords = try #require(geom["coordinates"] as? [Any])
+            #expect(coords.count >= 2)
+            for point in coords {
+                let pair = try #require(point as? [Any])
+                #expect(pair.count == 2)
+                let lon = (pair[0] as? NSNumber)?.doubleValue ?? pair[0] as? Double
+                let lat = (pair[1] as? NSNumber)?.doubleValue ?? pair[1] as? Double
+                let x = try #require(lon)
+                let y = try #require(lat)
+                minLon = min(minLon, x)
+                maxLon = max(maxLon, x)
+                minLat = min(minLat, y)
+                maxLat = max(maxLat, y)
+            }
+        }
+        #expect(minLon < -130)
+        #expect(maxLon > -70)
+        #expect(minLat < 32)
+        #expect(maxLat > 70)
+        #expect(root["regions"] == nil)
     }
 
     @Test func generatedStyleShowsWaterAndStreetNames() throws {
-        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v5")
+        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v6")
         for style in [MapStyleID.shortbread, .shortbreadRich] {
             let styleURL = MapStyleCatalog.styleURL(for: style)
             let data = try Data(contentsOf: styleURL)
@@ -249,6 +306,15 @@ struct DirtTests {
             #expect(lakePaint["text-halo-color"] as? String != "#f8f4f0")
             let lakeLayout = try #require(lake["layout"] as? [String: Any])
             #expect(lakeLayout["text-font"] as? [String] == ["Noto Sans Bold"])
+            #expect(firstTextSize(lake) <= 8)
+            if let city = byID["place_labels-city"] {
+                #expect(firstTextSize(city) >= 14)
+                let cityLayout = try #require(city["layout"] as? [String: Any])
+                #expect(cityLayout["text-font"] as? [String] == ["Noto Sans Bold"])
+            }
+            if let town = byID.first(where: { $0.key.contains("town") })?.value {
+                #expect(firstTextSize(town) >= 14)
+            }
             let river = try #require(byID["label-waterway-bottom-12"])
             #expect(intZoom(river["minzoom"]) <= 10)
             let street = try #require(byID["label-street-centre-12"])
@@ -298,6 +364,15 @@ struct DirtTests {
         if let value = raw as? Double { return Int(value.rounded()) }
         if let value = raw as? NSNumber { return value.intValue }
         return .max
+    }
+
+    private func firstTextSize(_ layer: [String: Any]?) -> Int {
+        let layout = layer?["layout"] as? [String: Any]
+        guard let size = layout?["text-size"] as? [String: Any],
+              let stops = size["stops"] as? [[Any]],
+              let first = stops.first, first.count >= 2
+        else { return .max }
+        return intZoom(first[1])
     }
 
     private func testShortbreadManifest(

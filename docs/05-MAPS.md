@@ -149,9 +149,9 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 ### Basemap labels and borders
 
-`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v5`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines from the tile schema. Country borders (`admin_level=2`) from z0; province/state borders (`admin_level=4`) from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
+`MapStyleCatalog.generatedShortbreadStyleURL` (revision `osmand-v6`) restyles OSM Shortbread toward OsmAnd: pale land, orange motorways, green cover from z7, highway shields, and **real** admin lines. Country borders (`admin_level=2`) from z0. Province/state: Natural Earth 50m admin-1 (US+CA, lakes-clipped, OsmAnd purple dashed) from z0–7, then Shortbread `admin_level=4` from z7. Do **not** paint `RegionPolygons` pack bounds. Country names stay at overview and fade after z6; province names are quieter gray. Rich is the same structure with ×1.15 saturation.
 
-Lake and waterway names are **Noto Sans Bold** in intense `#0033cc` with a white halo — Standard and Rich share that paint. Cream-on-green (`#163a52` / `#f8f4f0`) failed accessibility at Kejimkujik. Large lakes start at z5 with relaxed `way_area` gates. Street and path names (`label-street-centre-12`, `label-path-bottom-12`) start at z10/z11 in near-black so they stay visible while browsing and during navigation. Selected-route paint is unchanged (dirt browny-orange, pavement black, gravel grey, unknown purple).
+City and town names use the former lake headline size (Bold). Lake and waterway names stay intense `#0033cc` Bold at **half** that size, white halo. Street and path names (`label-street-centre-12`, `label-path-bottom-12`) start at z10/z11 in near-black. Selected-route paint is unchanged (dirt browny-orange, pavement black, gravel grey, unknown purple). Attractions stay as Played.
 
 Layers → Rider services: Fuel, Campgrounds, then **Attractions** (default on), then lodging/liquor. Attractions are OSM Shortbread marks, not `/api/poi`.
 
