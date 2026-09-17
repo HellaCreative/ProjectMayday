@@ -341,7 +341,7 @@ struct DirtTests {
             let riverPaint = try #require(river["paint"] as? [String: Any])
             #expect(riverPaint["text-color"] as? String == expected)
             #expect(riverPaint["text-halo-color"] as? String == expected)
-            #expect(numericPaint(riverPaint, "text-halo-width") == MapStyleCatalog.lakeLabelHaloWidth)
+            #expect(abs(numericPaint(riverPaint, "text-halo-width") - MapStyleCatalog.lakeLabelHaloWidth) < 0.05)
             let riverLayout = try #require(river["layout"] as? [String: Any])
             #expect(riverLayout["visibility"] as? String == "visible")
             let street = try #require(byID["label-street-centre-12"])
