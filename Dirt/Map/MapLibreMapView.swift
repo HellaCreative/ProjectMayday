@@ -143,8 +143,19 @@ struct MapLibreMapView: UIViewRepresentable {
                 .maximumZoomLevelForClustering: clusterMaxZoom
             ]
         }
+        static func packedAttractionCircleID(_ kind: MapAttractionKind) -> String {
+            "dirt-poi-attraction-\(kind.rawValue)"
+        }
+        static func packedAttractionSymbolID(_ kind: MapAttractionKind) -> String {
+            "dirt-poi-attraction-\(kind.rawValue)-icon"
+        }
+        static var packedAttractionLayerIDs: [String] {
+            MapAttractionKind.allCases.flatMap {
+                [packedAttractionCircleID($0), packedAttractionSymbolID($0)]
+            }
+        }
         static var individualLayerIDs: [String] {
-            categories.flatMap { [layerID($0.id), symbolID($0.id)] }
+            categories.flatMap { [layerID($0.id), symbolID($0.id)] } + packedAttractionLayerIDs
         }
         static var allLayerIDs: [String] {
             individualLayerIDs + [fuelClusterCircleID, fuelClusterCountID]
@@ -517,6 +528,49 @@ struct MapLibreMapView: UIViewRepresentable {
                 symbol.minimumZoomLevel = Float(POILayer.iconMinZoom)
                 style.addLayer(symbol)
             }
+            for kind in MapAttractionKind.allCases {
+                let circle = MLNCircleStyleLayer(
+                    identifier: POILayer.packedAttractionCircleID(kind),
+                    source: generalSource
+                )
+                circle.predicate = NSPredicate(
+                    format: "category == %@ AND kind == %@",
+                    "attraction",
+                    kind.rawValue
+                )
+                circle.circleColor = NSExpression(forConstantValue: kind.uiColor)
+                circle.circleRadius = NSExpression(mglJSONObject: [
+                    "interpolate", ["linear"], ["zoom"],
+                    6.5, 3.5,
+                    8.5, 5.5,
+                    11.0, 9.0,
+                    13.0, 11.0
+                ] as [Any])
+                circle.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+                circle.circleStrokeWidth = NSExpression(mglJSONObject: [
+                    "interpolate", ["linear"], ["zoom"],
+                    6.5, 1.0,
+                    11.0, 2.0
+                ] as [Any])
+                circle.minimumZoomLevel = Float(POILayer.dotMinZoom)
+                style.addLayer(circle)
+
+                let symbol = MLNSymbolStyleLayer(
+                    identifier: POILayer.packedAttractionSymbolID(kind),
+                    source: generalSource
+                )
+                symbol.predicate = NSPredicate(
+                    format: "category == %@ AND kind == %@",
+                    "attraction",
+                    kind.rawValue
+                )
+                symbol.iconImageName = NSExpression(forConstantValue: kind.iconName)
+                symbol.iconAllowsOverlap = NSExpression(forConstantValue: true)
+                symbol.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+                symbol.iconAnchor = NSExpression(forConstantValue: "center")
+                symbol.minimumZoomLevel = Float(POILayer.iconMinZoom)
+                style.addLayer(symbol)
+            }
             applyPOILayerVisibility(to: style)
         }
 
@@ -527,48 +581,35 @@ struct MapLibreMapView: UIViewRepresentable {
                       let image = POILayer.makeIcon(category: cat, color: color) else { continue }
                 style.setImage(image, forName: name)
             }
-            let name = MapAttraction.iconName
-            guard style.image(forName: name) == nil,
-                  let image = POILayer.makeAttractionIcon(
-                    symbolName: MapAttraction.systemSymbolName,
-                    color: MapAttraction.color
-                  ) else { return }
-            style.setImage(image, forName: name)
+            for kind in MapAttractionKind.allCases {
+                let name = kind.iconName
+                guard style.image(forName: name) == nil,
+                      let image = POILayer.makeAttractionIcon(
+                        symbolName: kind.systemSymbolName,
+                        color: kind.uiColor
+                      ) else { continue }
+                style.setImage(image, forName: name)
+            }
         }
 
-        /// OSM Shortbread `pois` — not Rider Services and not landcover beaches.
+        /// OSM Shortbread `pois` / beach land — not Rider Services.
         private func addAttractionLayers(to style: MLNStyle) {
             guard style.layer(withIdentifier: MapAttraction.layerIDs[0]) == nil,
                   let source = style.source(withIdentifier: "someoneelse")
             else { return }
 
-            let layers: [(id: String, predicate: NSPredicate, sourceLayer: String)] = [
-                (
-                    "pois",
-                    NSPredicate(
-                        format: "tourism IN %@ OR historic IN %@ OR man_made IN %@ OR amenity IN %@ OR natural IN %@ OR waterway == 'waterfall' OR leisure == 'beach'",
-                        MapAttraction.tourismKinds,
-                        MapAttraction.historicKinds,
-                        MapAttraction.manMadeKinds,
-                        MapAttraction.amenityKinds,
-                        MapAttraction.naturalKinds
-                    ),
-                    "pois"
-                )
-            ]
-            for spec in layers {
-                let layer = MLNSymbolStyleLayer(
-                    identifier: "dirt-attraction-\(spec.id)",
-                    source: source
-                )
-                layer.sourceLayerIdentifier = spec.sourceLayer
-                layer.predicate = spec.predicate
-                layer.iconImageName = NSExpression(forConstantValue: MapAttraction.iconName)
-                layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
-                layer.iconIgnoresPlacement = NSExpression(forConstantValue: false)
-                layer.iconAnchor = NSExpression(forConstantValue: "center")
-                layer.minimumZoomLevel = Float(MapAttraction.minZoom)
-                style.addLayer(layer)
+            for kind in MapAttractionKind.allCases {
+                for spec in kind.specs {
+                    let layer = MLNSymbolStyleLayer(identifier: spec.id, source: source)
+                    layer.sourceLayerIdentifier = spec.sourceLayer
+                    layer.predicate = spec.predicate
+                    layer.iconImageName = NSExpression(forConstantValue: kind.iconName)
+                    layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+                    layer.iconIgnoresPlacement = NSExpression(forConstantValue: false)
+                    layer.iconAnchor = NSExpression(forConstantValue: "center")
+                    layer.minimumZoomLevel = Float(spec.minZoom)
+                    style.addLayer(layer)
+                }
             }
             applyPOILayerVisibility(to: style)
         }
@@ -712,6 +753,7 @@ struct MapLibreMapView: UIViewRepresentable {
                     f.coordinate = CLLocationCoordinate2D(latitude: poi.latitude, longitude: poi.longitude)
                     f.attributes = [
                         "category": poi.category,
+                        "kind":     poi.kind       ?? "",
                         "poi_id":   poi.id,
                         "name":     poi.name         ?? "",
                         "address":  poi.address       ?? "",
@@ -729,9 +771,7 @@ struct MapLibreMapView: UIViewRepresentable {
                     MLNShapeCollectionFeature(shapes: generalShapes)
             }
 
-            if prefsChanged {
-                applyPOILayerVisibility(to: style)
-            }
+            applyPOILayerVisibility(to: style)
         }
 
         private func applyPOILayerVisibility(to style: MLNStyle) {
@@ -743,11 +783,19 @@ struct MapLibreMapView: UIViewRepresentable {
             }
             style.layer(withIdentifier: POILayer.fuelClusterCircleID)?.isVisible = prefs.showFuel
             style.layer(withIdentifier: POILayer.fuelClusterCountID)?.isVisible = prefs.showFuel
-            for id in MapAttraction.layerIDs {
-                style.layer(withIdentifier: id)?.isVisible = prefs.showAttractions
+            let packedAttractions = state.packedAttractionsAvailable
+            for kind in MapAttractionKind.allCases {
+                let visible = prefs.showsAttraction(kind)
+                style.layer(withIdentifier: POILayer.packedAttractionCircleID(kind))?.isVisible =
+                    visible && packedAttractions
+                style.layer(withIdentifier: POILayer.packedAttractionSymbolID(kind))?.isVisible =
+                    visible && packedAttractions
+                for id in kind.layerIDs {
+                    style.layer(withIdentifier: id)?.isVisible = visible && !packedAttractions
+                }
             }
             for id in MapAttraction.builtinLayerIDs {
-                style.layer(withIdentifier: id)?.isVisible = !prefs.showAttractions
+                style.layer(withIdentifier: id)?.isVisible = !prefs.showsAttraction(.viewpoint)
             }
             applyWaterNameVisibility(to: style, visible: prefs.showWaterNames)
             applyFuelReplacementEmphasis(to: style)
@@ -1797,6 +1845,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 || existingCategory == "campground"
                 || existingCategory == "lodging"
                 || existingCategory == "liquor"
+                || existingCategory == "attraction"
             if !isPackedPOI, let kind = MapAttraction.kind(from: attrs) {
                 let name = (attrs["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                 let coordinate: CLLocationCoordinate2D = {
@@ -1828,7 +1877,8 @@ struct MapLibreMapView: UIViewRepresentable {
                 brand:        (attrs["brand"]   as? String).flatMap { $0.isEmpty ? nil : $0 },
                 openingHours: nil,
                 phone:        (attrs["phone"]   as? String).flatMap { $0.isEmpty ? nil : $0 },
-                website:      (attrs["website"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                website:      (attrs["website"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                kind:         (attrs["kind"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             )
         }
 
@@ -1860,6 +1910,7 @@ struct MapLibreMapView: UIViewRepresentable {
                     || category == "campground"
                     || category == "lodging"
                     || category == "liquor"
+                    || category == "attraction"
             }
             if let packed = hits.first(where: isPacked) { return packed }
             let attractions: [(MLNFeature, String)] = hits.compactMap { hit in

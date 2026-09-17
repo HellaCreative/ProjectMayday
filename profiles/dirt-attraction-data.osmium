@@ -1,0 +1,10 @@
+# DIRT pack-build input. The app never runs this against OSM at runtime.
+# Matches the Layers Attraction switches: viewpoint, attraction, cave,
+# waterfall, lighthouse, beach.
+
+nwr/tourism=viewpoint,attraction
+nwr/natural=cave_entrance,waterfall,beach
+nwr/waterway=waterfall
+nwr/man_made=lighthouse
+nwr/leisure=beach
+nwr/amenity=cave_entrance

@@ -1,0 +1,633 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DIRT — Search</title>
+<style>
+:root{
+  --orange:#ff8000;--ink:#202820;--muted:#596359;--line:#d9dfd5;
+  --glass:rgba(250,252,250,.92);--glass-strong:rgba(250,252,250,.96);
+  --nav-bg:#202820;--control-bg:#16181c;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:#202521;background:#eef0eb;
+}
+*{box-sizing:border-box;margin:0}body{margin:0}
+button{font:inherit;cursor:pointer;border:0;background:none;min-height:44px}
+button:focus-visible{outline:3px solid var(--orange);outline-offset:3px}
+input:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+::selection{background:#ffb565;color:#171b19}
+
+/* --- Studio --- */
+.studio{max-width:1120px;margin:auto;padding:36px 28px;display:grid;grid-template-columns:minmax(230px,340px) minmax(340px,430px);gap:70px;justify-content:center;align-items:start}
+.brief{position:sticky;top:28px}
+.brief h1{font-size:42px;letter-spacing:-.04em;margin:0 0 14px;line-height:1.05}
+.brief h1 span{color:var(--orange)}
+.brief>p{line-height:1.6;color:#5b655b;font-size:14px;margin:6px 0}
+.step-guide{margin:22px 0 0;padding:16px;background:#fff;border-radius:12px;font-size:13px;line-height:1.65;color:#596359}
+.step-guide strong{color:var(--ink);font-weight:650;font-size:14px}
+.step-guide ol{padding-left:18px;margin:10px 0 0}
+.step-guide li{margin:5px 0}
+.step-guide li b{color:var(--ink)}
+.brief .message{font-size:13px;line-height:1.5;color:#596359;min-height:20px;margin-top:16px}
+.gallery-link{display:inline-block;margin-top:10px;font-size:13px;color:var(--orange)}
+.design-note{margin:20px 0 0;padding:14px;background:rgba(255,128,0,.06);border:1px solid rgba(255,128,0,.15);border-radius:10px;font-size:12px;line-height:1.55;color:#7a6540}
+.design-note strong{color:#6b4a00}
+
+/* --- Phone --- */
+.phone{position:relative;height:820px;width:100%;max-width:430px;border-radius:34px;overflow:hidden;box-shadow:0 14px 35px #26322424;isolation:isolate;background:#91b3a0 url('map-reference.png') center -280px/auto 1600px;display:flex;flex-direction:column;justify-content:flex-end}
+.status{position:absolute;top:0;left:0;right:0;height:32px;padding:10px 24px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;z-index:30;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.25)}
+.wordmark{position:absolute;top:47px;left:18px;font-weight:900;font-size:16px;font-style:italic;background:var(--nav-bg);color:white;min-height:48px;padding:0 12px;display:flex;align-items:center;border-radius:10px;z-index:15}
+.wordmark em{font-style:italic;color:var(--orange)}
+.badge{font-size:8px;font-style:normal;margin-left:6px;color:#16181c;background:var(--orange);border-radius:9px;padding:3px 5px}
+
+/* Icons */
+.icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.map-symbol{display:block;width:32px;height:32px;background:currentColor;mask:var(--symbol) center/contain no-repeat;-webkit-mask:var(--symbol) center/contain no-repeat}
+
+/* --- Map controls (right) --- */
+.map-controls{position:absolute;right:12px;z-index:14;display:flex;flex-direction:column;gap:10px;align-items:flex-end;bottom:calc(var(--sheet-h,220px) + 82px);transition:bottom 400ms cubic-bezier(.2,.8,.2,1)}
+.map-btn{width:50px;height:50px;min-height:50px;padding:7px;background:var(--control-bg);color:white;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:12px;transition:transform 100ms ease}
+.map-btn:active{transform:scale(.93)}
+.zoom-group{display:flex;flex-direction:column;gap:10px}
+.zoom-group .map-btn{background:#fff;color:#17191d;border:1.5px solid #17191d}
+.map-btn.rider-status{background:var(--orange);color:white}
+.map-controls-pair{display:flex;gap:10px}
+
+/* --- Map preferences (left) — fuel, settings, SEARCH --- */
+.map-prefs{position:absolute;left:12px;z-index:16;display:flex;gap:10px;align-items:flex-end;bottom:calc(var(--sheet-h,220px) + 82px);transition:bottom 400ms cubic-bezier(.2,.8,.2,1)}
+.map-prefs .map-btn{position:relative}
+.map-prefs small{font-size:9px}
+
+/* --- Search trigger (binoculars, in left row) --- */
+.search-trigger{
+  width:50px;height:50px;min-height:50px;
+  background:var(--control-bg);color:white;
+  border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:visible;
+  transition:transform 280ms cubic-bezier(.34,1.56,.64,1),
+             background 200ms ease,
+             box-shadow 280ms ease;
+}
+.search-trigger .icon{width:26px;height:26px;stroke-width:1.8;transition:transform 200ms ease}
+.search-trigger:hover{
+  background:var(--orange);color:#16181c;
+  box-shadow:0 4px 18px rgba(255,128,0,.35);
+  transform:scale(1.08);
+}
+.search-trigger:hover .icon{transform:scale(1.05)}
+.search-trigger:active{transform:scale(.92)!important}
+.search-trigger.open{
+  background:var(--orange);color:#16181c;
+  transform:scale(0);opacity:0;
+  pointer-events:none;
+}
+
+/* Subtle pulse hint on idle — draws the eye once */
+@keyframes searchHint{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,128,0,0)}
+  50%{box-shadow:0 0 0 6px rgba(255,128,0,.18)}
+}
+.search-trigger.hint{animation:searchHint 2s ease-in-out 1}
+
+/* --- Sheet --- */
+.sheet{position:relative;background:var(--glass);backdrop-filter:blur(20px) saturate(135%);-webkit-backdrop-filter:blur(20px) saturate(135%);border-radius:22px 22px 0 0;box-shadow:0 -8px 28px rgba(22,35,29,.16),inset 0 1px 0 rgba(255,255,255,.8);z-index:10;flex:0 1 auto;max-height:min(60%,calc(100% - 492px));display:flex;flex-direction:column;margin-bottom:72px;transition:max-height 400ms cubic-bezier(.2,.8,.2,1),opacity 300ms ease}
+.handle{width:32px;height:4px;border-radius:4px;background:#aab3a7;margin:10px auto 10px;flex:none}
+.sheetheader{padding:0 20px 10px}
+.sheetheader h3{font-size:23px;letter-spacing:-.035em}
+.sheetheader p{font-size:12px;color:var(--muted);margin-top:4px}
+.content{padding:0 22px 8px;overflow:auto;flex:0 1 auto;min-height:0;scrollbar-color:#899580 transparent;scrollbar-width:thin}
+.tabs{display:flex;gap:3px;padding:4px;background:rgba(239,244,242,.58);border-radius:10px;margin-bottom:8px;position:sticky;top:0;z-index:3;flex-shrink:0}
+.tabs button{background:none;flex:1;font-size:11px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:5px;padding:7px 2px;min-height:44px;border-radius:7px}
+.tabs .selected{color:var(--orange);background:#fafbf7}
+.quiet{font-size:14px;color:var(--muted);line-height:1.5;margin:4px 0 16px}
+.field{padding:10px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px}
+.rowaction{display:flex;align-items:center;justify-content:space-between;width:100%;color:var(--orange);background:transparent;text-align:left;border-top:1px solid var(--line);padding:14px 0;font-size:14px}
+.primary{border:0;background:var(--orange);color:#1c221d;border-radius:10px;width:100%;font-weight:700;padding:14px;margin-top:14px}
+
+/* --- Bottom nav --- */
+.primary-nav{position:absolute;left:0;right:0;bottom:0;z-index:20;height:72px;padding:8px 10px 12px;background:var(--nav-bg);display:flex;align-items:center;justify-content:space-between}
+.primary-nav button{color:#fff;flex:1;display:flex;flex-direction:column;gap:4px;align-items:center;font-size:10px;height:52px;padding:7px 8px 6px;border-radius:12px;position:relative;z-index:1}
+.primary-nav button .icon{width:20px;height:20px;flex-shrink:0}
+.nav-selection{position:absolute;background:var(--orange);border-radius:12px;pointer-events:none;z-index:0}
+
+/* ===========================================
+   SEARCH OVERLAY — frosted panel, full flow
+   =========================================== */
+.search-overlay{
+  position:absolute;inset:0;z-index:50;
+  pointer-events:none;opacity:0;
+  transition:opacity 180ms ease;
+}
+.search-overlay.open{opacity:1;pointer-events:auto}
+
+.search-scrim{
+  position:absolute;inset:0;
+  background:rgba(22,35,29,.3);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;transition:opacity 300ms ease;
+}
+.search-overlay.open .search-scrim{opacity:1}
+
+.search-panel{
+  position:absolute;
+  top:100px;left:14px;right:14px;
+  background:var(--glass-strong);
+  backdrop-filter:blur(28px) saturate(150%);
+  -webkit-backdrop-filter:blur(28px) saturate(150%);
+  border-radius:20px;
+  box-shadow:0 20px 56px rgba(22,35,29,.24),0 2px 8px rgba(22,35,29,.06),inset 0 1px 0 rgba(255,255,255,.7);
+  overflow:hidden;
+  transform:scale(.88) translateY(-24px);
+  opacity:0;
+  transition:transform 400ms cubic-bezier(.32,1.28,.64,1),
+             opacity 220ms ease;
+}
+.search-overlay.open .search-panel{
+  transform:scale(1) translateY(0);opacity:1;
+}
+
+/* Search bar */
+.search-bar{
+  display:flex;align-items:center;gap:10px;
+  padding:6px 10px 6px 18px;
+  border-bottom:1px solid var(--line);
+}
+.search-bar .bino-icon{
+  width:22px;height:22px;flex:none;
+  stroke:var(--orange);fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;
+  opacity:.7;
+}
+.search-bar input{
+  flex:1;border:0;background:transparent;
+  font-size:17px;letter-spacing:-.01em;color:var(--ink);
+  padding:14px 0;min-height:52px;
+  caret-color:var(--orange);
+}
+.search-bar input::placeholder{color:#a8b2a4}
+.search-bar input:focus{outline:none}
+.search-cancel{
+  color:var(--orange);font-size:14px;font-weight:600;
+  padding:8px 12px;min-height:44px;border-radius:8px;
+  transition:background 140ms ease;
+}
+.search-cancel:hover{background:rgba(255,128,0,.08)}
+
+/* Results list */
+.search-results{max-height:340px;overflow:auto;scrollbar-width:thin;scrollbar-color:#b0bba6 transparent}
+.search-results:empty{display:none}
+.search-result{
+  display:flex;align-items:center;gap:14px;
+  padding:13px 18px;
+  border-bottom:1px solid rgba(217,223,213,.4);
+  cursor:pointer;text-align:left;width:100%;min-height:62px;
+  transition:background 100ms ease;
+}
+.search-result:last-child{border-bottom:0}
+.search-result:hover,.search-result:focus-visible{background:rgba(228,237,230,.55)}
+.search-result:active{background:rgba(228,237,230,.85)}
+.result-icon{
+  width:38px;height:38px;flex:none;
+  background:#e6ece0;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+}
+.result-icon .icon{width:18px;height:18px;stroke:var(--muted)}
+.result-info{flex:1;min-width:0}
+.result-info strong{display:block;font-size:15px;font-weight:600;color:var(--ink)}
+.result-info small{display:block;font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.result-distance{font-size:12px;color:var(--muted);white-space:nowrap;flex:none;font-variant-numeric:tabular-nums}
+
+/* Staggered cascade */
+.search-result{opacity:0;transform:translateY(10px)}
+.search-result.entering{animation:resultSlide 260ms cubic-bezier(.22,.68,.36,1) forwards}
+@keyframes resultSlide{to{opacity:1;transform:translateY(0)}}
+
+/* Empty state */
+.search-empty{padding:36px 18px;text-align:center;color:#a5afa0;font-size:14px;line-height:1.5}
+.search-empty .bino{width:36px;height:36px;stroke:#c2cabb;margin:0 auto 12px;display:block;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+
+/* =====================
+   PIN DROP + CONFIRM
+   ===================== */
+.map-pin{
+  position:absolute;z-index:25;pointer-events:none;
+  opacity:0;transform:translateX(-50%) translateY(-100%) scale(0);
+  transform-origin:bottom center;
+}
+.map-pin.dropping{opacity:1;animation:pinDrop 650ms cubic-bezier(.18,1.1,.32,1) forwards}
+@keyframes pinDrop{
+  0%  {transform:translateX(-50%) translateY(-220%) scale(.2);opacity:0}
+  35% {opacity:1}
+  65% {transform:translateX(-50%) translateY(-100%) scale(1.12)}
+  80% {transform:translateX(-50%) translateY(-100%) scale(.95)}
+  92% {transform:translateX(-50%) translateY(-100%) scale(1.03)}
+  100%{transform:translateX(-50%) translateY(-100%) scale(1)}
+}
+.pin-body{width:38px;height:50px;position:relative;filter:drop-shadow(0 4px 10px rgba(22,35,29,.35))}
+.pin-body svg{width:100%;height:100%}
+.pin-pulse{
+  position:absolute;bottom:-5px;left:50%;
+  width:18px;height:7px;background:rgba(255,128,0,.3);
+  border-radius:50%;transform:translateX(-50%);
+  animation:pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse{
+  0%,100%{transform:translateX(-50%) scale(1);opacity:.45}
+  50%{transform:translateX(-50%) scale(2);opacity:.1}
+}
+
+/* Pin vanish */
+.map-pin.lifting{animation:pinLift 350ms cubic-bezier(.6,0,1,.6) forwards}
+@keyframes pinLift{
+  0%{transform:translateX(-50%) translateY(-100%) scale(1);opacity:1}
+  100%{transform:translateX(-50%) translateY(-200%) scale(.3);opacity:0}
+}
+
+/* Confirmation card */
+.confirm-card{
+  position:absolute;z-index:26;
+  background:var(--glass-strong);
+  backdrop-filter:blur(22px) saturate(145%);
+  -webkit-backdrop-filter:blur(22px) saturate(145%);
+  border-radius:16px;
+  box-shadow:0 14px 40px rgba(22,35,29,.22),0 2px 6px rgba(22,35,29,.06),inset 0 .5px 0 rgba(255,255,255,.6);
+  padding:16px 16px 14px;width:264px;
+  opacity:0;transform:translateX(-50%) scale(.82) translateY(10px);
+  pointer-events:none;
+  transition:transform 380ms cubic-bezier(.32,1.32,.64,1),opacity 220ms ease;
+}
+.confirm-card.visible{opacity:1;transform:translateX(-50%) scale(1) translateY(0);pointer-events:auto}
+.confirm-card.dismissing{
+  opacity:0;transform:translateX(-50%) scale(.9) translateY(6px);
+  transition:transform 200ms ease,opacity 160ms ease;pointer-events:none;
+}
+.confirm-name{font-size:16px;font-weight:700;letter-spacing:-.02em;margin-bottom:2px}
+.confirm-address{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.4}
+.confirm-actions{display:flex;gap:8px}
+.confirm-actions button{
+  flex:1;padding:12px 8px;border-radius:10px;
+  font-size:13px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  transition:transform 100ms ease;
+}
+.confirm-actions button:active{transform:scale(.95)}
+.confirm-actions button .icon{width:16px;height:16px}
+.btn-route{background:var(--orange);color:#16181c}
+.btn-waypoint{background:var(--nav-bg);color:white}
+.confirm-dismiss{
+  position:absolute;top:8px;right:8px;
+  width:30px;height:30px;min-height:30px;
+  border-radius:50%;background:rgba(0,0,0,.05);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);transition:background 120ms ease;
+}
+.confirm-dismiss:hover{background:rgba(0,0,0,.1)}
+.confirm-dismiss .icon{width:14px;height:14px;stroke-width:2.2}
+
+/* Map zoom */
+.phone.zooming{animation:zoomIn 800ms cubic-bezier(.4,0,.2,1) forwards}
+@keyframes zoomIn{
+  0%{background-position:center -280px;background-size:auto 1600px}
+  100%{background-position:center -180px;background-size:auto 2200px}
+}
+.phone.zoomed{background-position:center -180px;background-size:auto 2200px}
+.phone.resetting{animation:zoomOut 500ms cubic-bezier(.4,0,.2,1) forwards}
+@keyframes zoomOut{
+  0%{background-position:center -180px;background-size:auto 2200px}
+  100%{background-position:center -280px;background-size:auto 1600px}
+}
+
+/* Route-built states */
+.leg-row{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line)}
+.leg-focus{border:0;background:transparent;color:var(--orange);font-weight:650;width:44px;min-width:44px;height:44px;border-radius:8px}
+.leg-button{display:flex;justify-content:space-between;align-items:center;border:0;background:none;text-align:left;width:100%;padding:8px 0;min-height:48px;color:var(--ink);gap:12px}
+.leg-button strong{font-size:14px;font-weight:600}
+.leg-button small{display:block;font-size:11px;margin-top:3px;color:var(--muted)}
+.leg-button .name{flex:1}
+.route-stats{display:flex;align-items:center;gap:18px;padding:10px 0 2px}
+.route-stats span{display:flex;flex-direction:column;gap:3px}
+.route-stats strong{font-size:19px;font-variant-numeric:tabular-nums}
+.route-stats small{font-size:10px;color:var(--muted)}
+.mix-bar{height:6px;border-radius:3px;background:linear-gradient(to right,var(--orange) 42%,var(--ink) 42%);flex:1}
+.route-actions{display:flex;gap:8px;margin-top:10px}
+.route-actions button{border:0;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:5px;flex:1;font-size:12px;font-weight:650;padding:10px 6px}
+.route-actions button .icon{width:16px;height:16px}
+.route-actions .save{background:var(--nav-bg);color:white}
+.route-actions .export{background:#616872;color:white}
+.route-actions .start{background:#147a56;color:white;flex:1.25}
+.clear{color:var(--muted);justify-content:center;margin-top:8px;padding:7px;min-height:44px;font-size:13px}
+
+/* Responsive */
+@media(max-width:800px){
+  .studio{grid-template-columns:minmax(0,430px);gap:24px;padding:24px 18px}
+  .brief{position:static}.brief h1{font-size:32px}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:0s!important;transition-duration:0s!important}
+  .search-result{opacity:1;transform:none}
+}
+</style>
+
+<body>
+<main class="studio">
+  <aside class="brief">
+    <h1>Search<span>.</span></h1>
+    <p>Binoculars next to fuel and ride settings. Three controls in a row, just above the sheet — a quiet, consistent place that becomes the focused search experience when you need it.</p>
+
+    <div class="step-guide">
+      <strong>Try the flow</strong>
+      <ol>
+        <li>Tap the <b>binoculars</b> button (bottom-left, dark row)</li>
+        <li>Type anything — results cascade in</li>
+        <li>Tap a result — watch the pin drop</li>
+        <li>Choose <b>Route here</b> or <b>Waypoint</b></li>
+        <li>Dismiss to reset — binoculars return</li>
+      </ol>
+    </div>
+
+    <div class="design-note">
+      <strong>Why this placement works.</strong><br>
+      Fuel range and ride settings are the "how I ride" controls. Search is "where I'm going" — same row, same language, same reach. The binoculars sit dark and quiet until you need them, then bloom into the focused search overlay. One icon, one tap, one job.
+    </div>
+
+    <p class="message" id="feedback" aria-live="polite"></p>
+    <a class="gallery-link" href="open-terrain.html">← Back to Open Terrain</a>
+  </aside>
+
+  <section>
+    <div class="phone" id="phone"></div>
+    <p style="max-width:430px;font-size:12px;line-height:1.5;color:#596359;margin-top:14px">
+      Interactive HTML design preview. Sample locations and distances are illustrative — not live data.
+    </p>
+  </section>
+</main>
+
+<script>
+const SVG=(d,cls='icon')=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+const BINO_PATH='M3 18V8a3 3 0 0 1 6 0v10M15 18V8a3 3 0 0 1 6 0v10M6 11a4 4 0 0 1 6 0M12 11a4 4 0 0 1 6 0';
+const PATHS={
+  search:'M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM21 21l-4.35-4.35',
+  bino:BINO_PATH,
+  scope:'M12 2v4m0 12v4M2 12h4m12 0h4M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0M14 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0',
+  route:'m12 3 7 18-7-4-7 4Z',
+  waypoint:'M6 5a2 2 0 1 0 0 .1M18 19a2 2 0 1 0 0 .1M6 7v5h12v5',
+  plus:'M12 4v16M4 12h16',
+  minus:'M5 12h14',
+  close:'M18 6 6 18M6 6l12 12',
+  layers:'m12 3 10 6-10 6L2 9Zm-10 11 10 6 10-6',
+  profile:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0',
+  groups:'M3 20v-2a5 5 0 0 1 10 0v2M16 4a4 4 0 0 1 0 8m1 3a5 5 0 0 1 4 5M12 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  from:'m12 3 7 18-7-4-7 4Z',
+  loop:'M20 7a9 9 0 0 0-15-2L2 8m0-5v5h5M4 17a9 9 0 0 0 15 2l3-3m0 5v-5h-5',
+  saved:'M6 3h12v18l-6-4-6 4Z',
+  building:'M3 21h18M5 21V7l8-4v18M13 21V3l6 3v15M9 9v.01M9 12v.01M9 15v.01M9 18v.01',
+  mountain:'m3 20 5-12 4 6 3-4 6 10',
+  fuel:'M5 4h8v7H5Zm0 7v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-8m2-3 3-3m0 0v4m2 3a2 2 0 1 1-4 0v-4',
+  tree:'M12 22V8M9 3l3 5 3-5M7 8l5 6 5-6M5 14l7 4 7-4',
+};
+const mapSym=n=>`<span class="map-symbol" style="--symbol:url('map-icons/${n}.png')" aria-hidden="true"></span>`;
+
+const RESULTS=[
+  {name:"Peggy's Cove",detail:'Peggy\'s Cove, NS B3Z 3S2',dist:'42 km',icon:'mountain'},
+  {name:'Petro-Canada',detail:'118 Prospect Rd, Goodwood, NS',dist:'8 km',icon:'fuel'},
+  {name:'Kejimkujik National Park',detail:'3005 Kejimkujik Main Pkwy, NS',dist:'158 km',icon:'tree'},
+  {name:'The Coastal',detail:'4 Purcells Cove Rd, Halifax, NS',dist:'3 km',icon:'building'},
+  {name:"Peggy's Cove Lighthouse",detail:'178 Peggy\'s Point Rd, NS B3Z 3S2',dist:'43 km',icon:'mountain'},
+];
+
+let searchOpen=false, routeBuilt=false, selected=null;
+const phone=document.getElementById('phone');
+
+function render(){
+  const sheetH=220;
+  phone.innerHTML=`
+    <div class="status"><span>14:24</span><span>Concept</span></div>
+    <div class="wordmark">DIRT<em>.</em><b class="badge">DEV</b></div>
+
+    <!-- Right controls -->
+    <div class="map-controls" style="--sheet-h:${sheetH}px">
+      <div class="zoom-group">
+        <button class="map-btn" aria-label="Zoom in">${SVG(PATHS.plus)}</button>
+        <button class="map-btn" aria-label="Zoom out">${SVG(PATHS.minus)}</button>
+      </div>
+      <button class="map-btn">3D</button>
+      <button class="map-btn" aria-label="Compass">${mapSym('safari')}</button>
+      <button class="map-btn rider-status" aria-label="Rider status">${mapSym('person.crop.circle')}</button>
+      <div class="map-controls-pair">
+        <button class="map-btn" aria-label="Recenter">${mapSym('dot.scope')}</button>
+      </div>
+    </div>
+
+    <!-- Left controls — fuel, settings, SEARCH -->
+    <div class="map-prefs" style="--sheet-h:${sheetH}px">
+      <button class="map-btn" aria-label="Fuel range, 250 kilometres">${mapSym('fuelpump.fill')}<small>250</small></button>
+      <button class="map-btn" aria-label="Ride settings">${mapSym('slider.horizontal.3')}</button>
+      <button class="search-trigger${searchOpen?' open':''}" id="searchBtn" aria-label="Search for a location">${SVG(BINO_PATH)}</button>
+    </div>
+
+    <!-- Sheet -->
+    <div class="sheet" id="sheet">
+      <div class="handle"></div>
+      <div class="sheetheader">
+        <h3>${routeBuilt?'Your next ride':'From here'}</h3>
+        <p>${routeBuilt?'Route ready':'Your current location is the start'}</p>
+      </div>
+      <div class="content">
+        <div class="tabs">
+          ${['from','loop','plan','saved'].map((t,i)=>
+            `<button class="${i===0?'selected':''}">${SVG(PATHS[t==='plan'?'waypoint':t])}${t==='from'?'From here':t==='plan'?'Plan':t[0].toUpperCase()+t.slice(1)}</button>`
+          ).join('')}
+        </div>
+        ${routeBuilt?routeContent():`
+          <h4 style="font-size:18px;font-weight:650;margin:8px 0">Where to?</h4>
+          <p class="quiet">Long-press the map — or tap the binoculars — to choose your destination.</p>
+        `}
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="primary-nav">
+      <span class="nav-selection" id="navSel"></span>
+      ${['layers','profile','groups','plan'].map(n=>
+        `<button class="${n==='plan'?'active':''}" data-nav="${n}">
+          ${SVG(PATHS[n==='plan'?'waypoint':n])}${n==='plan'?'Route':n[0].toUpperCase()+n.slice(1)}
+        </button>`
+      ).join('')}
+    </nav>
+
+    <!-- Search overlay -->
+    <div class="search-overlay${searchOpen?' open':''}" id="overlay">
+      <div class="search-scrim" data-action="close"></div>
+      <div class="search-panel">
+        <div class="search-bar">
+          <svg class="bino-icon" viewBox="0 0 24 24"><path d="${BINO_PATH}"/></svg>
+          <input type="text" id="searchInput" placeholder="Where are you headed?" autocomplete="off" spellcheck="false">
+          <button class="search-cancel" data-action="close">Cancel</button>
+        </div>
+        <div class="search-results" id="results"></div>
+        <div class="search-empty" id="empty">
+          <svg class="bino" viewBox="0 0 24 24"><path d="${BINO_PATH}"/></svg>
+          <div>Search for a place, address,<br>or point of interest</div>
+        </div>
+      </div>
+    </div>`;
+
+  posNav();
+  if(searchOpen) requestAnimationFrame(()=>document.getElementById('searchInput')?.focus());
+
+  // Pulse hint after first render
+  if(!searchOpen && !routeBuilt && !selected){
+    setTimeout(()=>{
+      const btn=document.getElementById('searchBtn');
+      if(btn && !btn.classList.contains('open')) btn.classList.add('hint');
+    },800);
+  }
+}
+
+function routeContent(){
+  const r=selected||RESULTS[0];
+  const dist=r?.dist||'42 km';
+  const km=parseInt(dist)||42;
+  const leg1=Math.round(km*.55), leg2=km-leg1;
+  return `
+    <div class="leg-row">
+      <button class="leg-focus">1</button>
+      <button class="leg-button"><span class="name"><strong>Start → ${r?.name||'Destination'}</strong><small>${leg1} km · Balanced</small></span>${SVG(PATHS.route)}</button>
+    </div>
+    ${km>30?`<div class="leg-row">
+      <button class="leg-focus">2</button>
+      <button class="leg-button"><span class="name"><strong>${r?.name||'Destination'} → Fuel</strong><small>${leg2} km · Balanced</small></span>${SVG(PATHS.route)}</button>
+    </div>`:''}
+    <div class="route-stats">
+      <span><strong>${km}</strong><small>km</small></span>
+      <span><strong>42%</strong><small>Dirt</small></span>
+      <span><strong>58%</strong><small>Paved</small></span>
+      <div class="mix-bar"></div>
+    </div>
+    <div class="route-actions">
+      <button class="save">${SVG(PATHS.saved)}Save</button>
+      <button class="export">${SVG(PATHS.waypoint)}Export</button>
+      <button class="start">${SVG(PATHS.from)}Start ride</button>
+    </div>
+    <button class="rowaction clear" data-action="clear-route">Clear route</button>`;
+}
+
+function posNav(){
+  const nav=phone.querySelector('.primary-nav');
+  const active=nav?.querySelector('.active');
+  const sel=document.getElementById('navSel');
+  if(!nav||!active||!sel)return;
+  const b=active.getBoundingClientRect(), n=nav.getBoundingClientRect();
+  sel.style.cssText=`left:${b.left-n.left}px;top:${b.top-n.top}px;width:${b.width}px;height:${b.height}px`;
+}
+
+function openSearch(){searchOpen=true;render();say('Search opened — type to find a place.')}
+function closeSearch(){searchOpen=false;render()}
+
+function showResults(q){
+  const box=document.getElementById('results'), empty=document.getElementById('empty');
+  if(!box||!empty)return;
+  if(!q){box.innerHTML='';empty.style.display='';return}
+  empty.style.display='none';
+  const hits=RESULTS.filter(r=>r.name.toLowerCase().includes(q.toLowerCase())||r.detail.toLowerCase().includes(q.toLowerCase()));
+  const list=hits.length?hits:q.length>=2?RESULTS:[];
+  if(!list.length){box.innerHTML='';empty.style.display='';return}
+  box.innerHTML=list.map((r,i)=>`
+    <button class="search-result" data-idx="${RESULTS.indexOf(r)}">
+      <div class="result-icon">${SVG(PATHS[r.icon]||PATHS.scope)}</div>
+      <div class="result-info"><strong>${r.name}</strong><small>${r.detail}</small></div>
+      <span class="result-distance">${r.dist}</span>
+    </button>`).join('');
+  // Stagger animations
+  box.querySelectorAll('.search-result').forEach((el,i)=>{
+    setTimeout(()=>el.classList.add('entering'),30+i*50);
+  });
+}
+
+function pickResult(idx){
+  selected=RESULTS[idx]||RESULTS[0];
+  searchOpen=false;
+  routeBuilt=false;
+  render();
+
+  phone.classList.remove('zoomed','resetting');
+  phone.classList.add('zooming');
+
+  // Pin drops after zoom starts
+  setTimeout(()=>{
+    const pin=document.createElement('div');
+    pin.className='map-pin dropping';pin.id='activePin';
+    pin.style.cssText='left:52%;top:36%';
+    pin.innerHTML=`<div class="pin-body"><svg viewBox="0 0 38 50"><path d="M19 2C11.3 2 5 8 5 15.2 5 25.5 19 48 19 48s14-22.5 14-32.8C33 8 26.7 2 19 2Z" fill="var(--orange)" stroke="#c05800" stroke-width=".8"/><circle cx="19" cy="14.5" r="6.5" fill="white"/></svg></div><div class="pin-pulse"></div>`;
+    phone.appendChild(pin);
+  },280);
+
+  // Confirm card after pin lands
+  setTimeout(()=>{
+    const card=document.createElement('div');
+    card.className='confirm-card';card.id='confirmCard';
+    card.style.cssText='left:52%;top:calc(36% + 18px)';
+    card.innerHTML=`
+      <button class="confirm-dismiss" data-action="dismiss" aria-label="Dismiss">${SVG(PATHS.close)}</button>
+      <div class="confirm-name">${selected.name}</div>
+      <div class="confirm-address">${selected.detail} · ${selected.dist}</div>
+      <div class="confirm-actions">
+        <button class="btn-route" data-action="route-here">${SVG(PATHS.route)}Route here</button>
+        <button class="btn-waypoint" data-action="add-waypoint">${SVG(PATHS.plus)}Waypoint</button>
+      </div>`;
+    phone.appendChild(card);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>card.classList.add('visible')));
+  },850);
+
+  phone.addEventListener('animationend',function h(e){
+    if(e.animationName==='zoomIn'){phone.classList.remove('zooming');phone.classList.add('zoomed');phone.removeEventListener('animationend',h)}
+  });
+  say(`📍 ${selected.name} — pin dropped. Route here or add as waypoint.`);
+}
+
+function dismiss(){
+  const pin=document.getElementById('activePin');
+  const card=document.getElementById('confirmCard');
+  if(card){card.classList.remove('visible');card.classList.add('dismissing')}
+  if(pin){pin.classList.remove('dropping');pin.classList.add('lifting')}
+  phone.classList.remove('zoomed');phone.classList.add('resetting');
+  setTimeout(()=>{
+    pin?.remove();card?.remove();
+    phone.classList.remove('resetting');
+    selected=null;routeBuilt=false;render();
+    say('Pin cleared. Search again or tap the map.');
+  },400);
+}
+
+function buildRoute(){
+  const pin=document.getElementById('activePin');
+  const card=document.getElementById('confirmCard');
+  if(card){card.classList.remove('visible');card.classList.add('dismissing')}
+  setTimeout(()=>{
+    pin?.remove();card?.remove();
+    phone.classList.remove('zoomed');phone.classList.add('resetting');
+  },200);
+  setTimeout(()=>{
+    phone.classList.remove('resetting');
+    routeBuilt=true;render();
+  },600);
+}
+
+function say(s){document.getElementById('feedback').textContent=s}
+
+// Events
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button')||e.target.closest('[data-action]');
+  if(!b)return;
+  const a=b.dataset.action||'';
+  if(b.id==='searchBtn'){openSearch();return}
+  if(a==='close'){closeSearch();return}
+  if(b.dataset.idx!==undefined){pickResult(+b.dataset.idx);return}
+  if(a==='dismiss'){dismiss();return}
+  if(a==='route-here'){say(`🛣️ Routing to ${selected?.name||'destination'}…`);buildRoute();return}
+  if(a==='add-waypoint'){say(`📌 ${selected?.name||'Location'} added as waypoint.`);buildRoute();return}
+  if(a==='clear-route'){routeBuilt=false;selected=null;render();say('Route cleared.');return}
+});
+document.addEventListener('input',e=>{if(e.target.id==='searchInput')showResults(e.target.value)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&searchOpen)closeSearch()});
+
+render();
+</script>
+</body></html>

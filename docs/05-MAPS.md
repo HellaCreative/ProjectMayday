@@ -153,7 +153,7 @@ major must use a new cache namespace instead of reinterpreting old bytes.
 
 City and town names use the former lake headline size (Bold) with the cream halo. Lake and waterway names are **one** color: 20% darker than that style's water fill (`#7eb8d4` → `#6593aa` on Standard), Bold at half the city size. MapLibre SDF needs a halo to rasterize glyphs, so lakes use a **same-color** 0.2 px halo — not white, not a second blue. Street and path names (`label-street-centre-12`, `label-path-bottom-12`) start at z10/z11 in near-black. Selected-route paint is unchanged (dirt browny-orange, pavement black, gravel grey, unknown purple). Ferry crossings paint a thin `#005A70` dotted line when the pack times the edge (`GraphPack.structure` infers `ferry` from `crossingSeconds` when the leaf is empty). The planner shows a ferry notice immediately above KM / DIRT / PAVED / mix.
 
-Layers → Rider services: Fuel, Campgrounds, Attractions (default on), **Lake names** (default on), then lodging/liquor. Lake names toggle `dirt.layers.water-names` looks up live MapLibre layers by id (`water_polygons_labels-water-name-*`, `label-waterway-*`). Generated style keeps `visibility: visible`; the switch hides them at runtime. Attractions are OSM Shortbread marks, not `/api/poi`.
+Layers → Rider services and Attraction are collapsible (default closed; header shows what is on). Open to reach Fuel, Campgrounds, Lodging, Liquor, Lake names, then Viewpoint through Beaches. Same toggle rows. Lake names toggle `dirt.layers.water-names`. Attraction kinds use `dirt.layers.attraction.{kind}`. Beaches default off.
 
 ### Rider Services POIs
 
@@ -168,7 +168,7 @@ Layers → Rider services: Fuel, Campgrounds, Attractions (default on), **Lake n
 | **Colors** | fuel `#FF8000` (`DirtTheme.orange`; same as planner F-pins), campground #2f9e44, lodging #8a5a2b, liquor #8e44c9 |
 | **Tap** | Coordinator `handleTap` → `queryRenderedFeatures` on poi layers → `mapState.onPOITap` → `mapState.selectedPOI` → `RootView confirmationDialog` |
 | **Routing** | "Route to this" → `planner.routeToCoordinate`; "Add as waypoint" → `planner.addPlanWaypoint` |
-| **Attractions** | OSM Shortbread `pois` on source `someoneelse` (viewpoint, artwork/sculpture, historic, lighthouse, and similar tourism tags; waterfalls/caves/museums when those OSM tags exist on the POI layer). Not landcover beaches. Binoculars icon from about z13–14. Not `/api/poi`. Layers toggle `dirt.layers.attractions` (default on). Tap shows `Attraction · {kind}` plus the OSM name. Camps and fuel stay on the packed Rider Services path. |
+| **Attractions** | Packed `attractions.v1` sidecar (not graph.v4, not Rider Services). Dots from OSM at pack-build time: viewpoint, attraction, cave, waterfall, lighthouse, beach. Visible from z6.5 when a region pack exists. Shortbread attraction layers are fallback only. Tap sheet is `Name · Type`. |
 
 ### Province network overlays
 
@@ -205,8 +205,9 @@ dirt-attraction-{kind}                                             ← OSM tile 
 ## Starting a new agent on this area
 
 1. Read `MapLibreMapView.swift`, `MapState.swift`, `POIManager.swift`, `NetworkOverlayManager.swift`, `GeoJSON+Utils.swift`.
-2. Overlays paint the installed graph pack. Non-fuel POIs come through DIRT's
-   `/api/poi`; the phone never depends on one public Overpass host. Preserve the
-   last successful non-fuel viewport paint during a temporary upstream outage.
+2. Overlays paint the installed graph pack. Non-fuel Rider Services come through DIRT's
+   `/api/poi`. Attractions use `attractions.v1` (`extract-region-attraction-data.sh` /
+   `extract-all-attraction-data.sh`); remaining catalog regions extract from Geofabrik
+   when their PBF is cached or downloaded. Graph packs stay unchanged.
 3. **Invariants:** Start-Nav-only tile prefetch; keep-through-reroute; never clear tiles on End alone; selected-route paint stays on the per-surface palette; bundled style. Do not flash NS at launch.
 4. BC OSM mbtiles experiment is retired (class is a no-op). Network lens prefs are not read.

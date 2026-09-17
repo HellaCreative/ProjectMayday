@@ -5,7 +5,7 @@ import UIKit
 
 // MARK: - POI feature model (shared with MapLibreMapView and RootView)
 
-struct POIFeature: Sendable {
+nonisolated struct POIFeature: Sendable {
     let id: String
     let category: String  // "fuel" | "campground" | "lodging" | "liquor" | "attraction"
     let latitude: Double
@@ -16,7 +16,7 @@ struct POIFeature: Sendable {
     let openingHours: String?
     let phone: String?
     let website: String?
-    /// OSM attraction subclass: beach, waterfall, museum, sculpture, rock, …
+    /// OSM attraction subclass: viewpoint, attraction, cave, waterfall, lighthouse, beach.
     let kind: String?
 
     init(
@@ -53,107 +53,207 @@ struct POIFeature: Sendable {
         case "lodging":    return "Lodging"
         case "liquor":     return "Liquor store"
         case "attraction":
-            if let kindTitle = MapAttraction.title(for: kind) {
-                return "Attraction · \(kindTitle)"
-            }
-            return "Attraction"
+            return MapAttraction.title(for: kind) ?? "Attraction"
         default:           return category
         }
     }
 
     /// Display name for routing (prefers explicit name, falls back to category label).
     var displayName: String { name ?? categoryLabel }
+
+    /// Tap sheet: named marks are `Name · Type`; unnamed marks are just the type.
+    var popupTitle: String {
+        if category == "attraction" {
+            let type = categoryLabel
+            if let name, !name.isEmpty { return "\(name) · \(type)" }
+            return type
+        }
+        var parts = [displayName]
+        if let brand, !brand.isEmpty, brand != displayName {
+            parts.append(brand)
+        }
+        if let address, !address.isEmpty {
+            parts.append(address)
+        }
+        if name == nil || name?.isEmpty == true {
+            return categoryLabel
+        }
+        if displayName.caseInsensitiveCompare(categoryLabel) != .orderedSame {
+            parts.append(categoryLabel)
+        }
+        return parts.joined(separator: " · ")
+    }
 }
 
-enum MapAttraction {
-    /// Point POIs only. Shortbread `land` `kind=beach` polygons cover whole
-    /// coasts and stole every tap as "Beach".
-    static let layerIDs = [
-        "dirt-attraction-pois"
-    ]
-    static let builtinLayerIDs = [
-        "pois-tourism-lightbrown-imagename-15",
-        "pois-historic-brown-imagename-15",
-        "pois-historic-brown-imagename-16"
-    ]
-    static let color = UIColor(red: 0.055, green: 0.486, blue: 0.482, alpha: 1)
-    /// Shortbread `pois` exist from z14; start a notch earlier so binoculars
-    /// appear as the rider zooms toward a mark.
-    static let minZoom: Double = 13
-    static let iconName = "dirt-attraction-icon"
-    static let systemSymbolName = "binoculars.fill"
+enum MapAttractionKind: String, CaseIterable, Sendable {
+    case viewpoint
+    case attraction
+    case cave
+    case waterfall
+    case lighthouse
+    case beach
 
-    static let tourismKinds = [
-        "viewpoint", "attraction", "museum", "gallery", "artwork",
-        "theme_park", "zoo", "aquarium"
-    ]
-    static let historicKinds = [
-        "monument", "memorial", "castle", "ruins",
-        "archaeological_site", "battlefield", "fort",
-        "wayside_cross", "wayside_shrine"
-    ]
-    static let naturalKinds = [
-        "beach", "waterfall", "rock", "stone", "cave_entrance", "peak", "cliff"
-    ]
-    static let manMadeKinds = [
-        "lighthouse", "obelisk", "tower", "watermill", "windmill"
-    ]
-    static let amenityKinds = [
-        "arts_centre", "theatre", "cinema"
-    ]
-
-    static func title(for kind: String?) -> String? {
-        switch kind {
-        case "beach": return "Beach"
-        case "waterfall": return "Waterfall"
-        case "viewpoint": return "Viewpoint"
-        case "cave": return "Cave"
-        case "museum": return "Museum"
-        case "sculpture": return "Sculpture"
-        case "rock": return "Rock formation"
-        case "landmark": return "Landmark"
-        default: return nil
+    var title: String {
+        switch self {
+        case .viewpoint: return "Viewpoint"
+        case .attraction: return "Attraction"
+        case .cave: return "Cave"
+        case .waterfall: return "Waterfall"
+        case .lighthouse: return "Lighthouse"
+        case .beach: return "Beach"
         }
     }
 
-    static func kind(from attrs: [AnyHashable: Any]) -> String? {
+    var preferenceKey: String { "dirt.layers.attraction.\(rawValue)" }
+
+    /// Beaches are coastal landcover and flood NS; other kinds default on.
+    var defaultOn: Bool { self != .beach }
+
+    var systemSymbolName: String {
+        switch self {
+        case .viewpoint: return "binoculars.fill"
+        case .attraction: return "star.fill"
+        case .cave: return "triangle.fill"
+        case .waterfall: return "drop.fill"
+        case .lighthouse: return "lighthouse.fill"
+        case .beach: return "beach.umbrella.fill"
+        }
+    }
+
+    var uiColor: UIColor {
+        switch self {
+        case .viewpoint: return UIColor(red: 0.055, green: 0.486, blue: 0.482, alpha: 1)
+        case .attraction: return UIColor(red: 0.769, green: 0.361, blue: 0.149, alpha: 1)
+        case .cave: return UIColor(red: 0.361, green: 0.290, blue: 0.227, alpha: 1)
+        case .waterfall: return UIColor(red: 0.169, green: 0.482, blue: 0.710, alpha: 1)
+        case .lighthouse: return UIColor(red: 0.788, green: 0.635, blue: 0.153, alpha: 1)
+        case .beach: return UIColor(red: 0.831, green: 0.627, blue: 0.090, alpha: 1)
+        }
+    }
+
+    var iconName: String { "dirt-attraction-icon-\(rawValue)" }
+
+    var layerIDs: [String] {
+        switch self {
+        case .beach: return ["dirt-attraction-beach", "dirt-attraction-beach-land"]
+        default: return ["dirt-attraction-\(rawValue)"]
+        }
+    }
+
+    var specs: [(id: String, predicate: NSPredicate, sourceLayer: String, minZoom: Double)] {
+        switch self {
+        case .viewpoint:
+            return [(
+                layerIDs[0],
+                Self.equals("tourism", "viewpoint")
+                    .or(Self.equals("kind", "viewpoint"))
+                    .or(Self.equals("kind", "viewing_point")),
+                "pois",
+                13
+            )]
+        case .attraction:
+            return [(
+                layerIDs[0],
+                Self.equals("tourism", "attraction").or(Self.equals("kind", "attraction")),
+                "pois",
+                13
+            )]
+        case .cave:
+            return [(
+                layerIDs[0],
+                Self.equals("natural", "cave_entrance")
+                    .or(Self.equals("kind", "cave"))
+                    .or(Self.equals("kind", "cave_entrance")),
+                "pois",
+                13
+            )]
+        case .waterfall:
+            return [(
+                layerIDs[0],
+                Self.equals("natural", "waterfall")
+                    .or(Self.equals("waterway", "waterfall"))
+                    .or(Self.equals("kind", "waterfall")),
+                "pois",
+                13
+            )]
+        case .lighthouse:
+            return [(
+                layerIDs[0],
+                Self.equals("man_made", "lighthouse").or(Self.equals("kind", "lighthouse")),
+                "pois",
+                13
+            )]
+        case .beach:
+            return [
+                (
+                    "dirt-attraction-beach",
+                    Self.equals("natural", "beach")
+                        .or(Self.equals("leisure", "beach")),
+                    "pois",
+                    13
+                ),
+                (
+                    "dirt-attraction-beach-land",
+                    Self.equals("kind", "beach"),
+                    "land",
+                    10
+                )
+            ]
+        }
+    }
+
+    private static func equals(_ key: String, _ value: String) -> NSPredicate {
+        NSPredicate(format: "%K == %@", key, value)
+    }
+}
+
+private extension NSPredicate {
+    func or(_ other: NSPredicate) -> NSPredicate {
+        NSCompoundPredicate(orPredicateWithSubpredicates: [self, other])
+    }
+}
+
+enum MapAttraction {
+    static let layerIDs = MapAttractionKind.allCases.flatMap(\.layerIDs)
+    static let builtinLayerIDs = [
+        "pois-tourism-lightbrown-imagename-15"
+    ]
+
+    nonisolated static func title(for kind: String?) -> String? {
+        MapAttractionKind(rawValue: kind ?? "")?.title
+    }
+
+    nonisolated static func kind(from attrs: [AnyHashable: Any]) -> String? {
         func token(_ key: String) -> String {
             (attrs[key] as? String ?? "").lowercased()
         }
         let natural = token("natural")
         let leisure = token("leisure")
         let tourism = token("tourism")
-        let historic = token("historic")
         let waterway = token("waterway")
         let manMade = token("man_made")
-        let amenity = token("amenity")
         let kind = token("kind")
+        if token("dirt:kind").isEmpty == false,
+           let packed = MapAttractionKind(rawValue: token("dirt:kind")) {
+            return packed.rawValue
+        }
         if tourism == "viewpoint" || kind == "viewpoint" || kind == "viewing_point" {
-            return "viewpoint"
+            return MapAttractionKind.viewpoint.rawValue
         }
         if natural == "waterfall" || waterway == "waterfall" || kind == "waterfall" {
-            return "waterfall"
+            return MapAttractionKind.waterfall.rawValue
         }
         if natural == "cave_entrance" || kind == "cave" || kind == "cave_entrance" {
-            return "cave"
+            return MapAttractionKind.cave.rawValue
         }
-        if tourism == "museum" || tourism == "gallery"
-            || kind == "museum" || kind == "gallery" || amenity == "arts_centre" {
-            return "museum"
+        if manMade == "lighthouse" || kind == "lighthouse" {
+            return MapAttractionKind.lighthouse.rawValue
         }
-        if tourism == "artwork" || kind == "artwork" || kind == "sculpture" {
-            return "sculpture"
+        if tourism == "attraction" || kind == "attraction" {
+            return MapAttractionKind.attraction.rawValue
         }
-        if ["rock", "stone", "peak", "cliff"].contains(natural)
-            || ["rock", "stone", "peak"].contains(kind) {
-            return "rock"
-        }
-        if natural == "beach" || leisure == "beach" || kind == "beach" { return "beach" }
-        if tourismKinds.contains(tourism)
-            || historicKinds.contains(historic)
-            || manMadeKinds.contains(manMade)
-            || amenityKinds.contains(amenity) {
-            return "landmark"
+        if natural == "beach" || leisure == "beach" || kind == "beach" {
+            return MapAttractionKind.beach.rawValue
         }
         return nil
     }
@@ -167,6 +267,7 @@ enum POIDeduper {
         for feature in features {
             if let index = kept.firstIndex(where: {
                 $0.category == feature.category
+                    && $0.kind == feature.kind
                     && distanceMeters($0, feature) <= radiusMeters(for: feature.category)
             }) {
                 kept[index] = merge(kept[index], feature)
@@ -183,6 +284,7 @@ enum POIDeduper {
         case "lodging": return 120
         case "fuel": return 55
         case "liquor": return 80
+        case "attraction": return 40
         default: return 100
         }
     }
@@ -357,6 +459,9 @@ final class POIManager {
     private let graphPacks: GraphPackStore
     private let network: NetworkPathMonitor
     private let riderServicesStore = RiderServicesStore()
+    private let attractionsStore = AttractionsStore()
+    private var attractionViewportCache = RiderServiceViewportCache()
+    private var lastAttractionPaint: [POIFeature] = []
     private var debounceTask: Task<Void, Never>?
     private var refreshInProgress = false
     private var refreshPending = false
@@ -510,7 +615,7 @@ final class POIManager {
         let prefs = LayerPrefsSnapshot()
 
         guard zoom >= POIC.minZoom, prefs.anyPOIEnabled else {
-            mapState.updatePOIFeatures([])
+            mapState.updatePOIFeatures([], packedAttractionsAvailable: false)
             return
         }
         guard let viewport = mapState.visibleCoordinateBounds else { return }
@@ -649,10 +754,65 @@ final class POIManager {
             }
             features.append(contentsOf: riderServicePaint)
         }
+        var packedAttractionsAvailable = false
+        if prefs.anyAttractionEnabled {
+            var requestFailed = false
+            if !attractionViewportCache.covers(queryBounds) {
+                do {
+                    let raw: [RiderServiceElement]
+                    do {
+                        try await attractionsStore.refreshCache(in: queryBounds)
+                    } catch {
+                        RoutingDebugLog.shared.event(
+                            "attractions cache refresh unavailable msg=\(error.localizedDescription)"
+                        )
+                    }
+                    guard let cached = await attractionsStore.cachedElements(in: queryBounds) else {
+                        throw _POIServiceError.offlineCacheUnavailable
+                    }
+                    raw = cached
+                    packedAttractionsAvailable = true
+                    let loaded = raw.compactMap {
+                        feature(from: $0, prefs: nil, fuelOnly: false)
+                    }
+                    attractionViewportCache.merge(loaded, coverage: queryBounds)
+                    RoutingDebugLog.shared.event(
+                        "attractions viewport loaded=\(loaded.count) cached=\(attractionViewportCache.count) " +
+                            "source=attractions.v1 bounds=visible+20pct"
+                    )
+                } catch is CancellationError {
+                    return
+                } catch {
+                    requestFailed = true
+                    RoutingDebugLog.shared.event(
+                        "attractions viewport unavailable preserved=\(attractionViewportCache.count) " +
+                            "msg=\(error.localizedDescription)"
+                    )
+                }
+            } else {
+                packedAttractionsAvailable = true
+                RoutingDebugLog.shared.event(
+                    "attractions viewport cache hit cached=\(attractionViewportCache.count)"
+                )
+            }
+            let attractionPaint = (requestFailed
+                ? lastAttractionPaint
+                : attractionViewportCache.features(in: queryBounds)).filter { feature in
+                    guard let kind = MapAttractionKind(rawValue: feature.kind ?? "") else { return false }
+                    return prefs.showsAttraction(kind)
+                }
+            if !requestFailed {
+                lastAttractionPaint = attractionPaint
+            }
+            if requestFailed, !lastAttractionPaint.isEmpty {
+                packedAttractionsAvailable = true
+            }
+            features.append(contentsOf: attractionPaint)
+        }
         let stable = POIDeduper.collapseNearby(features).sorted {
             $0.category == $1.category ? $0.id < $1.id : $0.category < $1.category
         }
-        mapState.updatePOIFeatures(stable)
+        mapState.updatePOIFeatures(stable, packedAttractionsAvailable: packedAttractionsAvailable)
     }
 
     private func fetchRiderServices(bbox: _BBox) async throws -> [RiderServiceElement] {
@@ -722,11 +882,15 @@ final class POIManager {
             openingHours: tags["opening_hours"],
             phone: tags["phone"] ?? tags["contact:phone"],
             website: tags["website"] ?? tags["contact:website"],
-            kind: nil
+            kind: MapAttraction.kind(from: tags)
         )
     }
 
     private func category(for tags: [String: String]) -> String? {
+        if tags["dirt:category"] == "attraction",
+           MapAttraction.kind(from: tags) != nil {
+            return "attraction"
+        }
         if let packed = tags["dirt:category"],
            ["campground", "lodging", "liquor"].contains(packed) {
             return packed

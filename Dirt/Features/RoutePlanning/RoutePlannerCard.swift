@@ -228,9 +228,21 @@ struct RoutePlannerCard: View {
             let fixedChromeHeight = 14 + min(planningTabHeight, 76) + 10 + 10
             let maxPlanningHeight = max(1, maxPanelHeight - fixedChromeHeight)
             let measuredPlanningHeight = max(1, portraitPlanningContentHeight)
-            // Saved is a two-screen library: lock portrait to half the viewable
-            // area so list and detail have room. Other tabs still hug.
-            let savedPanelHeight = geo.size.height * 0.50
+            // Saved hides 3D and rider-status, so the trailing stack is +/−,
+            // compass, and recenter. Raise the sheet until that plus sits just
+            // under the DIRT wordmark (same 6pt gap as the logo inset).
+            let savedStackHeight =
+                DirtHit.control * 4
+                + MapControlStack.itemSpacing * 3
+                + MapControlStack.zoomClusterGap
+            let savedPanelHeight = max(
+                160,
+                geo.size.height
+                    - savedStackHeight
+                    - DockSheetMotion.portraitRouteControlsGap
+                    - DirtIsland.wordmarkBand
+                    - 6
+            )
             let planningHeight = isSavedTab
                 ? max(1, savedPanelHeight - fixedChromeHeight)
                 : min(measuredPlanningHeight, maxPlanningHeight)

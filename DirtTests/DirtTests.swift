@@ -1184,22 +1184,23 @@ struct POIActionPolicyTests {
 
 struct MapAttractionTests {
     @Test func kindReadsShortbreadPOITags() {
-        #expect(MapAttraction.kind(from: ["natural": "beach"]) == "beach")
-        #expect(MapAttraction.kind(from: ["kind": "beach"]) == "beach")
-        #expect(MapAttraction.kind(from: ["waterway": "waterfall"]) == "waterfall")
         #expect(MapAttraction.kind(from: ["tourism": "viewpoint"]) == "viewpoint")
         #expect(MapAttraction.kind(from: ["kind": "viewing_point"]) == "viewpoint")
-        #expect(MapAttraction.kind(from: ["historic": "monument"]) == "landmark")
-        #expect(MapAttraction.kind(from: ["man_made": "lighthouse"]) == "landmark")
-        #expect(MapAttraction.kind(from: ["tourism": "museum"]) == "museum")
-        #expect(MapAttraction.kind(from: ["tourism": "artwork"]) == "sculpture")
-        #expect(MapAttraction.kind(from: ["natural": "rock"]) == "rock")
+        #expect(MapAttraction.kind(from: ["tourism": "attraction"]) == "attraction")
+        #expect(MapAttraction.kind(from: ["man_made": "lighthouse"]) == "lighthouse")
+        #expect(MapAttraction.kind(from: ["waterway": "waterfall"]) == "waterfall")
         #expect(MapAttraction.kind(from: ["natural": "cave_entrance"]) == "cave")
+        #expect(MapAttraction.kind(from: ["natural": "beach"]) == "beach")
+        #expect(MapAttraction.kind(from: ["kind": "beach"]) == "beach")
         #expect(MapAttraction.kind(from: ["tourism": "hotel"]) == nil)
-        #expect(MapAttraction.systemSymbolName == "binoculars.fill")
+        #expect(MapAttraction.kind(from: ["historic": "monument"]) == nil)
+        #expect(MapAttraction.kind(from: ["dirt:kind": "cave"]) == "cave")
+        #expect(MapAttractionKind.viewpoint.systemSymbolName == "binoculars.fill")
+        #expect(MapAttractionKind.lighthouse.systemSymbolName == "lighthouse.fill")
+        #expect(MapAttractionKind.beach.defaultOn == false)
     }
 
-    @Test func tapLabelNamesTheAttractionKind() {
+    @Test func tapSheetUsesNameThenType() {
         let unnamed = POIFeature(
             id: "osm-attraction:1",
             category: "attraction",
@@ -1213,8 +1214,9 @@ struct MapAttractionTests {
             website: nil,
             kind: "waterfall"
         )
-        #expect(unnamed.categoryLabel == "Attraction · Waterfall")
-        #expect(unnamed.displayName == "Attraction · Waterfall")
+        #expect(unnamed.categoryLabel == "Waterfall")
+        #expect(unnamed.displayName == "Waterfall")
+        #expect(unnamed.popupTitle == "Waterfall")
         let named = POIFeature(
             id: "osm-attraction:2",
             category: "attraction",
@@ -1226,20 +1228,37 @@ struct MapAttractionTests {
             openingHours: nil,
             phone: nil,
             website: nil,
-            kind: "landmark"
+            kind: "lighthouse"
         )
-        #expect(named.categoryLabel == "Attraction · Landmark")
+        #expect(named.categoryLabel == "Lighthouse")
         #expect(named.displayName == "Peggy's Cove")
-        #expect(MapAttraction.title(for: "beach") == "Beach")
-        #expect(MapAttraction.title(for: "museum") == "Museum")
-        #expect(MapAttraction.title(for: "sculpture") == "Sculpture")
-        #expect(MapAttraction.title(for: "rock") == "Rock formation")
-        #expect(MapAttraction.title(for: "cave") == "Cave")
+        #expect(named.popupTitle == "Peggy's Cove · Lighthouse")
         #expect(MapAttraction.title(for: "viewpoint") == "Viewpoint")
-        #expect(MapAttraction.title(for: "waterfall") == "Waterfall")
-        #expect(MapAttraction.layerIDs.contains("dirt-attraction-pois"))
-        #expect(!MapAttraction.layerIDs.contains("dirt-attraction-land"))
-        #expect(!MapAttraction.layerIDs.contains("dirt-attraction-beach"))
+        #expect(MapAttraction.title(for: "attraction") == "Attraction")
+        #expect(MapAttraction.title(for: "cave") == "Cave")
+        #expect(MapAttraction.title(for: "beach") == "Beach")
+        #expect(MapAttraction.layerIDs.contains("dirt-attraction-viewpoint"))
+        #expect(MapAttraction.layerIDs.contains("dirt-attraction-beach-land"))
+        #expect(!MapAttraction.layerIDs.contains("dirt-attraction-pois"))
+    }
+
+    @Test func packedNSCatalogCoversHalifaxAtFuelZoom() async throws {
+        #expect(AttractionsStore.bundledManifestURL() != nil)
+        let store = AttractionsStore()
+        let bounds = MapViewportBounds(
+            minLongitude: -64.0,
+            minLatitude: 44.45,
+            maxLongitude: -63.2,
+            maxLatitude: 45.05
+        )
+        try await store.refreshCache(in: bounds)
+        let elements = await store.cachedElements(in: bounds)
+        #expect(elements != nil)
+        #expect((elements?.count ?? 0) > 20)
+        let kinds = Set(elements?.compactMap { $0.tags?["dirt:kind"] } ?? [])
+        #expect(kinds.contains("viewpoint"))
+        #expect(kinds.contains("lighthouse"))
+        #expect(kinds.contains("beach"))
     }
 }
 

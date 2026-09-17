@@ -217,6 +217,9 @@ final class MapState {
 
     /// Current POI features published by POIManager (filtered, viewport-clipped).
     var poiFeatures: [POIFeature] = []
+    /// True when the viewport is covered by attractions.v1, so Shortbread
+    /// attraction layers stay off and packed dots own the switches.
+    private(set) var packedAttractionsAvailable = false
     /// Bumped by updatePOIFeatures(_:) to signal the coordinator to refresh the source.
     private(set) var poiDataGeneration = 0
 
@@ -258,8 +261,11 @@ final class MapState {
         layerPrefsGeneration += 1
     }
 
-    func updatePOIFeatures(_ features: [POIFeature]) {
+    func updatePOIFeatures(_ features: [POIFeature], packedAttractionsAvailable: Bool? = nil) {
         poiFeatures = features
+        if let packedAttractionsAvailable {
+            self.packedAttractionsAvailable = packedAttractionsAvailable
+        }
         poiDataGeneration += 1
     }
 
@@ -302,6 +308,12 @@ final class MapState {
 
     /// Detail follow zoom while navigating (MapLibre zoom; −2 from prior 16.5).
     static let navigationDetailZoom: Double = 14.5
+
+    /// Approximate MKCoordinateRegion span for a given MapLibre zoom level.
+    /// Used to bias location search results to the visible map area.
+    static func spanForZoom(_ zoom: Double) -> Double {
+        360.0 / pow(2.0, zoom)
+    }
     /// Extra top content inset while course-up navigating so the puck sits lower
     /// on screen and more of the road ahead is visible.
     static let navigationFollowTopInsetFraction: CGFloat = 0.30

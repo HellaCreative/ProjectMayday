@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Map overlays and basemap — hosted in `DockSheetPanel`.
 /// Toggle changes bump `app.mapState.layerPrefsGeneration` so the MapLibre
@@ -14,8 +15,15 @@ struct LayersSheet: View {
     @AppStorage("dirt.layers.camp") private var showCampgrounds = false
     @AppStorage("dirt.layers.lodging") private var showLodging = false
     @AppStorage("dirt.layers.liquor") private var showLiquor = false
-    @AppStorage("dirt.layers.attractions") private var showAttractions = true
     @AppStorage("dirt.layers.water-names") private var showWaterNames = true
+    @AppStorage("dirt.layers.attraction.viewpoint") private var showViewpoints = true
+    @AppStorage("dirt.layers.attraction.attraction") private var showGenericAttractions = true
+    @AppStorage("dirt.layers.attraction.cave") private var showCaves = true
+    @AppStorage("dirt.layers.attraction.waterfall") private var showWaterfalls = true
+    @AppStorage("dirt.layers.attraction.lighthouse") private var showLighthouses = true
+    @AppStorage("dirt.layers.attraction.beach") private var showBeaches = false
+    @AppStorage("dirt.layers.section.rider-services") private var riderServicesExpanded = false
+    @AppStorage("dirt.layers.section.attractions") private var attractionsExpanded = false
 
     private var selectedStyle: MapStyleID {
         MapStyleID(rawValue: styleIDRaw) ?? .shortbreadRich
@@ -76,34 +84,56 @@ struct LayersSheet: View {
         .onChange(of: showCampgrounds) { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLodging)     { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLiquor)      { _, _ in app.mapState.bumpLayerPrefs() }
-        .onChange(of: showAttractions) { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showWaterNames)  { _, _ in app.mapState.bumpLayerPrefs() }
+        .onChange(of: showViewpoints)  { _, _ in app.mapState.bumpLayerPrefs() }
+        .onChange(of: showGenericAttractions) { _, _ in app.mapState.bumpLayerPrefs() }
+        .onChange(of: showCaves)       { _, _ in app.mapState.bumpLayerPrefs() }
+        .onChange(of: showWaterfalls)  { _, _ in app.mapState.bumpLayerPrefs() }
+        .onChange(of: showLighthouses) { _, _ in app.mapState.bumpLayerPrefs() }
+        .onChange(of: showBeaches)     { _, _ in app.mapState.bumpLayerPrefs() }
     }
 
     private var riderServicesCard: some View {
-        VStack(alignment: .leading, spacing: DirtSpace.inner) {
-            DirtSectionLabel(title: "Rider services")
-            VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: DirtSpace.group) {
+            collapsibleLayerGroup(
+                title: "Rider services",
+                expanded: $riderServicesExpanded,
+                summary: riderServicesSummary
+            ) {
                 serviceToggle("Fuel", icon: "fuelpump.fill", color: RiderServiceDot.fuel, isOn: $showFuel)
                     .frame(minHeight: DirtHit.control)
                 Divider()
                 serviceToggle("Campgrounds", icon: "tent.fill", color: RiderServiceDot.camp, isOn: $showCampgrounds)
                     .frame(minHeight: DirtHit.control)
                 Divider()
-                serviceToggle("Attractions", icon: "binoculars.fill", color: RiderServiceDot.attraction, isOn: $showAttractions)
-                    .frame(minHeight: DirtHit.control)
-                Divider()
-                serviceToggle("Lake names", icon: "drop.fill", color: RiderServiceDot.water, isOn: $showWaterNames)
-                    .frame(minHeight: DirtHit.control)
-                    .accessibilityIdentifier("layer-toggle-lake-names")
-                Divider()
                 serviceToggle("Lodging", icon: "bed.double.fill", color: RiderServiceDot.lodging, isOn: $showLodging)
                     .frame(minHeight: DirtHit.control)
                 Divider()
                 serviceToggle("Liquor", icon: "wineglass.fill", color: RiderServiceDot.liquor, isOn: $showLiquor)
                     .frame(minHeight: DirtHit.control)
+                Divider()
+                serviceToggle("Lake names", icon: "drop.fill", color: RiderServiceDot.water, isOn: $showWaterNames)
+                    .frame(minHeight: DirtHit.control)
+                    .accessibilityIdentifier("layer-toggle-lake-names")
             }
-            .tint(DirtTheme.orange)
+
+            collapsibleLayerGroup(
+                title: "Attraction",
+                expanded: $attractionsExpanded,
+                summary: attractionsSummary
+            ) {
+                attractionToggle(.viewpoint, isOn: $showViewpoints)
+                Divider()
+                attractionToggle(.attraction, isOn: $showGenericAttractions)
+                Divider()
+                attractionToggle(.cave, isOn: $showCaves)
+                Divider()
+                attractionToggle(.waterfall, isOn: $showWaterfalls)
+                Divider()
+                attractionToggle(.lighthouse, isOn: $showLighthouses)
+                Divider()
+                attractionToggle(.beach, isOn: $showBeaches)
+            }
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -175,6 +205,95 @@ struct LayersSheet: View {
         }
     }
 
+    private var riderServicesSummary: String {
+        layerSummary([
+            ("Fuel", showFuel),
+            ("Campgrounds", showCampgrounds),
+            ("Lodging", showLodging),
+            ("Liquor", showLiquor),
+            ("Lake names", showWaterNames)
+        ])
+    }
+
+    private var attractionsSummary: String {
+        layerSummary(MapAttractionKind.allCases.map { kind in
+            (kind.title, attractionSwitch(kind))
+        })
+    }
+
+    private func attractionSwitch(_ kind: MapAttractionKind) -> Bool {
+        switch kind {
+        case .viewpoint: return showViewpoints
+        case .attraction: return showGenericAttractions
+        case .cave: return showCaves
+        case .waterfall: return showWaterfalls
+        case .lighthouse: return showLighthouses
+        case .beach: return showBeaches
+        }
+    }
+
+    private func layerSummary(_ rows: [(String, Bool)]) -> String {
+        let on = rows.compactMap { $0.1 ? $0.0 : nil }
+        if on.isEmpty { return "All off" }
+        if on.count == rows.count { return "All on" }
+        return on.joined(separator: " · ")
+    }
+
+    private func collapsibleLayerGroup<Content: View>(
+        title: String,
+        expanded: Binding<Bool>,
+        summary: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            Button {
+                DirtMotion.selection()
+                withAnimation(DirtMotion.affordance) { expanded.wrappedValue.toggle() }
+            } label: {
+                HStack(spacing: DirtSpace.inner) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(DirtType.sectionLabel)
+                            .foregroundStyle(DirtTheme.muted)
+                        if !expanded.wrappedValue {
+                            Text(summary)
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.muted)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(DirtTheme.muted)
+                        .rotationEffect(.degrees(expanded.wrappedValue ? 180 : 0))
+                }
+                .frame(minHeight: DirtHit.min)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue(expanded.wrappedValue ? "Expanded" : summary)
+            .accessibilityHint(expanded.wrappedValue ? "Collapse switches" : "Show switches")
+
+            if expanded.wrappedValue {
+                VStack(spacing: 0, content: content)
+                    .tint(DirtTheme.orange)
+            }
+        }
+    }
+
+    private func attractionToggle(_ kind: MapAttractionKind, isOn: Binding<Bool>) -> some View {
+        serviceToggle(
+            kind.title,
+            icon: kind.systemSymbolName,
+            color: Color(uiColor: kind.uiColor),
+            isOn: isOn
+        )
+        .frame(minHeight: DirtHit.control)
+        .accessibilityIdentifier("layer-toggle-attraction-\(kind.rawValue)")
+    }
+
     private func serviceToggle(_ title: String, icon: String, color: Color, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             HStack(spacing: DirtSpace.inner) {
@@ -203,7 +322,6 @@ private enum RiderServiceDot {
     static let camp = Color(dirtHex: 0x2F9E44)
     static let lodging = Color(dirtHex: 0x8A5A2B)
     static let liquor = Color(dirtHex: 0x8E44C9)
-    static let attraction = Color(dirtHex: 0x0E7C7B)
     static let water = Color(dirtHex: 0x0033CC)
 }
 

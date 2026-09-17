@@ -1,5 +1,6 @@
 import AuthenticationServices
 import CoreLocation
+import MapKit
 import SwiftUI
 
 enum DockTab: String, CaseIterable, Identifiable {
@@ -103,6 +104,7 @@ struct RootView: View {
     @State private var showRouteConfetti = false
     @State private var fuelControlsOpen = false
     @State private var ridePreferencesOpen = false
+    @State private var locationSearch = LocationSearchModel()
     @State private var mapFuelRangeKm = FuelRangePrefs.kilometers
     @State private var mapFuelReservePercent = FuelRangePrefs.reservePercent
     @State private var mapFuelNotificationsEnabled = FuelRangePrefs.notificationsEnabled
@@ -144,21 +146,7 @@ struct RootView: View {
 
     /// Confirmation-dialog title for a tapped POI (kept out of `body` for the type checker).
     private var poiDialogTitle: String {
-        guard let poi = app.mapState.selectedPOI else { return "" }
-        var parts = [poi.displayName]
-        if let brand = poi.brand, !brand.isEmpty, brand != poi.displayName {
-            parts.append(brand)
-        }
-        if let address = poi.address, !address.isEmpty {
-            parts.append(address)
-        }
-        // Always show category so a blank OSM name still reads clearly.
-        if poi.name == nil || poi.name?.isEmpty == true {
-            parts = [poi.categoryLabel]
-        } else if poi.displayName.caseInsensitiveCompare(poi.categoryLabel) != .orderedSame {
-            parts.append(poi.categoryLabel)
-        }
-        return parts.joined(separator: " · ")
+        app.mapState.selectedPOI?.popupTitle ?? ""
     }
 
     /// StoreKit entitlement, or pre-release / Debug tester unlock (no fake receipt).
@@ -285,13 +273,6 @@ struct RootView: View {
                     Text("Ends the current ride and routes to \(name).")
                 }
             }
-            .sheet(isPresented: $ridePreferencesOpen) {
-                RidePreferencesSheet(initial: app.planner.displayedRidePreferences) {
-                    app.planner.applyRidePreferences($0)
-                }
-                .presentationDetents([.height(420)])
-                .presentationBackground(DirtTheme.sheetMaterial)
-            }
             .background { rootLifecycleHooks }
     }
 
@@ -319,6 +300,7 @@ struct RootView: View {
                 portraitChrome
             }
         }
+        .ignoresSafeArea(.keyboard)
         .animation(.easeOut(duration: 0.2), value: navActive)
         .animation(.easeInOut(duration: 0.2), value: useLandscapeNavChrome)
         .animation(.easeInOut(duration: 0.2), value: useLandscapePrimaryChrome)
@@ -333,6 +315,10 @@ struct RootView: View {
         // The tour follows what the rider does: opening the planner, getting a line,
         // and reaching for the crew or account tools each move it along.
         .onChange(of: routeCardOpen) { _, open in
+            if !open {
+                fuelControlsOpen = false
+                ridePreferencesOpen = false
+            }
             guard open, coachStep == .openRoute else { return }
             coachStep = .dropPin
         }
@@ -406,15 +392,29 @@ struct RootView: View {
             .transition(.move(edge: .top).combined(with: .opacity))
         }
         .overlay(alignment: .top) {
-            if fuelControlsOpen, routeCardOpen, !navActive, activeSheet == nil {
-                fuelControlPanel
+            if routeCardOpen, !navActive, activeSheet == nil {
+                if fuelControlsOpen {
+                    fuelControlPanel
+                        .padding(.top, isLandscape ? 12 : 72)
+                        .padding(.horizontal, 12)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(20)
+                } else if ridePreferencesOpen {
+                    RidePreferencesSheet(
+                        initial: app.planner.displayedRidePreferences,
+                        onApply: { app.planner.applyRidePreferences($0) },
+                        onClose: { ridePreferencesOpen = false }
+                    )
                     .padding(.top, isLandscape ? 12 : 72)
                     .padding(.horizontal, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .zIndex(20)
+                }
             }
         }
         .animation(.easeInOut(duration: 0.18), value: fuelControlsOpen)
+        .animation(.easeInOut(duration: 0.18), value: ridePreferencesOpen)
+        .modifier(searchOverlayModifier)
         .animation(.easeInOut(duration: 0.22), value: app.groups.peerAlerts.map(\.id))
         .overlay {
             if showRouteConfetti {
@@ -717,6 +717,7 @@ struct RootView: View {
                     if routeCardOpen, app.planner.mode != .saved {
                         fuelRangeButton
                         ridePreferencesButton
+                        searchButton
                     }
                     Spacer(minLength: 0)
                     mapControlStack
@@ -743,6 +744,7 @@ struct RootView: View {
                 islandBrandBar
             }
         }
+        .ignoresSafeArea(.keyboard)
         .ignoresSafeArea(edges: navActive ? .bottom : [])
         .animation(.easeInOut(duration: 0.2), value: app.mapState.followUser)
         .onPreferenceChange(PlannerSheetHeightKey.self) { height in
@@ -969,6 +971,7 @@ struct RootView: View {
             if app.planner.mode != .saved {
                 fuelRangeButton
                 ridePreferencesButton
+                searchButton
             }
             Spacer(minLength: 8)
             if app.planner.canFocusEntirePlannedRoute {
@@ -1126,18 +1129,59 @@ struct RootView: View {
 
     private var ridePreferencesButton: some View {
         Button {
-            fuelControlsOpen = false
-            ridePreferencesOpen = true
+            withAnimation(.easeInOut(duration: 0.18)) {
+                fuelControlsOpen = false
+                ridePreferencesOpen.toggle()
+            }
         } label: {
             Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 48, height: 48)
-                .background(DirtTheme.chrome, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(ridePreferencesOpen ? DirtTheme.onOrange : .white)
+                .frame(width: 50, height: 50)
+                .background(
+                    ridePreferencesOpen ? DirtTheme.orange : DirtTheme.chrome,
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Ride settings")
-        .accessibilityHint("Adjust wander, cities and highways")
+        .accessibilityLabel("Your ride")
+        .accessibilityHint("Opens wander, cities and highway controls")
+        .accessibilityAddTraits(ridePreferencesOpen ? .isSelected : [])
+    }
+
+    // MARK: - Location search
+
+    private var searchOverlayModifier: LocationSearchOverlay {
+        LocationSearchOverlay(
+            search: locationSearch,
+            app: app,
+            activeSheet: $activeSheet,
+            routeCardOpen: $routeCardOpen
+        )
+    }
+
+    private var searchButton: some View {
+        Button {
+            fuelControlsOpen = false
+            locationSearch.isPresented = true
+        } label: {
+            Image(systemName: "binoculars.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 50, height: 50)
+                .background(DirtTheme.chrome, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+                )
+        }
+        .buttonStyle(DirtPressStyle())
+        .accessibilityLabel("Search for a location")
+        .accessibilityHint("Find a place or address to route to")
     }
 
     /// One Equatable key for both signals the fuel prompts key off, so a single
@@ -1251,6 +1295,7 @@ struct RootView: View {
             mapFuelReservePercent = FuelRangePrefs.reservePercent
             mapFuelNotificationsEnabled = FuelRangePrefs.notificationsEnabled
             withAnimation(.easeInOut(duration: 0.18)) {
+                ridePreferencesOpen = false
                 fuelControlsOpen.toggle()
             }
         } label: {

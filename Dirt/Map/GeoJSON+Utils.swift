@@ -51,8 +51,8 @@ struct LayerPrefsSnapshot {
     let showCampgrounds: Bool
     let showLodging: Bool
     let showLiquor: Bool
-    let showAttractions: Bool
     let showWaterNames: Bool
+    private let attractionVisibility: [MapAttractionKind: Bool]
 
     init() {
         let ud = UserDefaults.standard
@@ -60,8 +60,17 @@ struct LayerPrefsSnapshot {
         showCampgrounds = ud.bool(forKey: "dirt.layers.camp")
         showLodging     = ud.bool(forKey: "dirt.layers.lodging")
         showLiquor      = ud.bool(forKey: "dirt.layers.liquor")
-        showAttractions = Self.boolPref(ud, "dirt.layers.attractions", default: true)
         showWaterNames  = Self.boolPref(ud, "dirt.layers.water-names", default: true)
+        let legacyAttractions = Self.boolPref(ud, "dirt.layers.attractions", default: true)
+        var kinds: [MapAttractionKind: Bool] = [:]
+        for kind in MapAttractionKind.allCases {
+            kinds[kind] = Self.boolPref(
+                ud,
+                kind.preferenceKey,
+                default: kind.defaultOn && legacyAttractions
+            )
+        }
+        attractionVisibility = kinds
     }
 
     /// `@AppStorage` Bool can land as Bool or NSNumber. `as? Bool` misses 0/1.
@@ -71,7 +80,17 @@ struct LayerPrefsSnapshot {
         return fallback
     }
 
-    var anyPOIEnabled: Bool { showFuel || showCampgrounds || showLodging || showLiquor }
+    var anyPOIEnabled: Bool {
+        showFuel || showCampgrounds || showLodging || showLiquor || anyAttractionEnabled
+    }
+
+    var anyAttractionEnabled: Bool {
+        attractionVisibility.values.contains(true)
+    }
+
+    func showsAttraction(_ kind: MapAttractionKind) -> Bool {
+        attractionVisibility[kind] ?? kind.defaultOn
+    }
 
     func isPOIEnabled(category: String) -> Bool {
         switch category {
@@ -79,7 +98,7 @@ struct LayerPrefsSnapshot {
         case "campground": return showCampgrounds
         case "lodging":    return showLodging
         case "liquor":     return showLiquor
-        case "attraction": return showAttractions
+        case "attraction": return anyAttractionEnabled
         default:           return false
         }
     }
