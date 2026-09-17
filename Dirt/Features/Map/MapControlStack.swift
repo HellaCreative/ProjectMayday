@@ -9,6 +9,12 @@ import UIKit
 /// (Layers stay on the dock — not during navigation.)
 /// Portrait = vertical trailing stack; landscape primary = horizontal bottom strip.
 struct MapControlStack: View {
+    /// Space between stacked map controls. Minus also adds `zoomClusterGap`,
+    /// so the visible minus→3D gap is `afterZoomGap`.
+    static let itemSpacing: CGFloat = 10
+    static let zoomClusterGap: CGFloat = 10
+    static var afterZoomGap: CGFloat { itemSpacing + zoomClusterGap }
+
     @Environment(AppEnvironment.self) private var app
     var compact: Bool = false
     /// Group browsing owns its own map actions. North reset is the only shared
@@ -51,11 +57,11 @@ struct MapControlStack: View {
     var body: some View {
         Group {
             if horizontal {
-                HStack(spacing: 10) {
+                HStack(spacing: Self.itemSpacing) {
                     controlButtons
                 }
             } else {
-                VStack(alignment: .trailing, spacing: 10) {
+                VStack(alignment: .trailing, spacing: Self.itemSpacing) {
                     controlButtons
                 }
             }
@@ -88,7 +94,7 @@ struct MapControlStack: View {
         Group {
             zoomButton(increase: true)
             zoomButton(increase: false)
-                .padding(horizontal ? .trailing : .bottom, 10)
+                .padding(horizontal ? .trailing : .bottom, Self.zoomClusterGap)
         }
         if app.navigation.phase == .active {
             if showsNavigationOverviewButton {
@@ -117,7 +123,7 @@ struct MapControlStack: View {
                     fitPlannedRouteButton
                     recenterButton
                 } else {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Self.itemSpacing) {
                         fitPlannedRouteButton
                         recenterButton
                     }

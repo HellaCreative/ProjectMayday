@@ -1061,6 +1061,24 @@ struct RootView: View {
         )
     }
 
+    /// Portrait top chrome sits in the safe area with this inset. Island overlay
+    /// ignores the top inset, so ticker clearance subtracts it.
+    private var portraitTopChromeInset: CGFloat { 6 }
+
+    /// Push the progress ticker below the Island wrapper by the same gap as
+    /// minus→3D on the map control stack. Does not move the wrapper.
+    private var islandTickerClearance: CGFloat {
+        guard hasDynamicIsland else { return 0 }
+        let barBottom = DirtIsland.cutoutTop + DirtIsland.restingHeight
+        let safeTop = Self.foregroundSafeAreaInsets.top
+        return max(0, barBottom + MapControlStack.afterZoomGap - safeTop - portraitTopChromeInset)
+    }
+
+    private var islandTickerHasContent: Bool {
+        app.planner.activeRouteProgressMessage != nil
+            || (BuildChannel.debugRoutingGraphOverlay && app.mapState.showRoutingGraphDebug)
+    }
+
     @ViewBuilder
     private var idleBrandStack: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1083,6 +1101,7 @@ struct RootView: View {
                     )
             }
         }
+        .padding(.top, hasDynamicIsland && islandTickerHasContent ? islandTickerClearance : 0)
         .frame(maxWidth: 300, alignment: .leading)
     }
 
@@ -1565,7 +1584,7 @@ struct RootView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.top, 6)
+        .padding(.top, portraitTopChromeInset)
     }
 
     private var routingGraphDebugHUD: some View {
