@@ -1083,6 +1083,16 @@ struct RootView: View {
         return max(0, barBottom + MapControlStack.afterZoomGap - safeTop - portraitTopChromeInset)
     }
 
+    /// In-ride cue needs more than minus→3D so the callout clearly sits under
+    /// the Island+DIRT wrapper, not tucked into it.
+    private var islandCueClearance: CGFloat {
+        guard hasDynamicIsland else { return 0 }
+        let barBottom = DirtIsland.cutoutTop + DirtIsland.restingHeight
+        let safeTop = Self.foregroundSafeAreaInsets.top
+        let gap = MapControlStack.afterZoomGap + DirtIsland.wordmarkBand
+        return max(0, barBottom + gap - safeTop - portraitTopChromeInset)
+    }
+
     private var islandTickerHasContent: Bool {
         app.planner.activeRouteProgressMessage != nil
             || (BuildChannel.debugRoutingGraphOverlay && app.mapState.showRoutingGraphDebug)
@@ -1586,7 +1596,7 @@ struct RootView: View {
                 }
                 // Stop at the inner edge of +/−/3D. Left matches ticker/logo (12pt).
                 .padding(.trailing, DirtHit.control + MapControlStack.itemSpacing)
-                .padding(.top, hasDynamicIsland ? islandTickerClearance : 0)
+                .padding(.top, hasDynamicIsland ? islandCueClearance : 0)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 HStack(alignment: .top, spacing: 8) {

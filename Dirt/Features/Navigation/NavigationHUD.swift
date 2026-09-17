@@ -17,7 +17,7 @@ struct NavCueCard: View {
             Image(systemName: arrowSymbol)
                 .font(.system(size: cueIconSize, weight: .bold))
                 .foregroundStyle(nav.offRoute ? DirtTheme.danger : DirtTheme.orange)
-                .frame(width: 56, height: 56)
+                .frame(width: 44, height: 44)
                 .scaleEffect(cueBand == .now && !nav.offRoute ? 1.08 : 1)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -60,9 +60,9 @@ struct NavCueCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .layoutPriority(1)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, cueBand == .now ? 14 : 12)
-        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, cueBand == .now ? 12 : 10)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
         .background {
             ZStack {
                 Rectangle().fill(DirtTheme.sheetMaterial)
@@ -87,18 +87,18 @@ struct NavCueCard: View {
 
     private var cueIconSize: CGFloat {
         switch cueBand {
-        case .now: 46
-        case .near: 42
-        case .mid: 38
-        case .far, .none: 36
+        case .now: 36
+        case .near: 34
+        case .mid: 32
+        case .far, .none: 30
         }
     }
 
     private var cueDistanceSize: CGFloat {
         switch cueBand {
-        case .now: 20
-        case .near: 18
-        default: 17
+        case .now: 16
+        case .near: 15
+        default: 14
         }
     }
 
@@ -157,15 +157,15 @@ struct NavCueCard: View {
         return nav.currentCue
     }
 
-    /// Idle “Follow the route” stays large. Longer turn copy steps down slightly.
+    /// Callout size, not a headline. Longer turn copy steps down so two lines fit.
     private var cueTitleSize: CGFloat {
         let count = mainLabel.count
-        var base: CGFloat = 24
-        if count > 28 { base = 18 }
-        else if count > 20 { base = 21 }
+        var base: CGFloat = 19
+        if count > 24 { base = 16 }
+        else if count > 16 { base = 17 }
         switch cueBand {
-        case .now: return min(base + 2, 26)
-        case .near: return min(base + 1, 25)
+        case .now: return min(base + 1, 20)
+        case .near: return min(base + 1, 19)
         default: return base
         }
     }
