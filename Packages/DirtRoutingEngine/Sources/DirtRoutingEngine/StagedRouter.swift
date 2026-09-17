@@ -9,6 +9,8 @@ public enum StagedRouter {
     public static let longGeodesicMeters = 400_000.0
     /// Two-pack corridors (subregion halves) stage earlier than multi-province.
     public static let twoPackGeodesicMeters = 100_000.0
+    /// How many diversified corridor pins to try before giving up a hop.
+    public static let handoverCandidateLimit = 12
 
     public static func shouldStage(regionCount: Int, start: Coordinate, end: Coordinate) -> Bool {
         let span = start.distance(to: end)
@@ -37,27 +39,100 @@ public enum StagedRouter {
         }
         var parts: [ComputedRoute] = []
         var cursor = request.start
+        // Two-pack: try each handover pin as a full stage0+stage1 pair so a
+        // pin that is live in the origin half but a stub in the dest half
+        // cannot commit the corridor.
+        if windows.count == 2, let originPack = windows[0].last, let destPack = windows[1].last {
+            let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
+                                              toward: request.end, repository: repository)
+            guard !pins.isEmpty else { throw RoutingFailure.noPath }
+            let firstGraph = try openWindow(windows[0], repository: repository, budget: budget)
+            let secondGraph = try openWindow(windows[1], repository: repository, budget: budget)
+            var lastError: Error = RoutingFailure.noPath
+            for (attempt, hopEnd) in pins.enumerated() {
+                try budget.check()
+                do {
+                    var hop0 = request.with(start: cursor, end: hopEnd)
+                    hop0.options.compassMaxRemaining = max(450_000, cursor.distance(to: hopEnd) * 2.5)
+                    let started0 = ContinuousClock.now
+                    let part0 = try RoutingEngine(pack: firstGraph).route(hop0, budget: budget)
+                    hop0.options.counter?.recordStage("stage0:\(windows[0].joined(separator: ","))", since: started0)
+                    if attempt > 0 {
+                        hop0.options.counter?.recordStage("handoverRetry:\(attempt)", since: started0)
+                    }
+                    var hop1 = request.with(start: part0.end.coordinate, end: request.end)
+                    hop1.options.compassMaxRemaining = max(450_000, part0.end.coordinate.distance(to: request.end) * 2.5)
+                    hop1.options.precedingMeters = part0.distanceMeters
+                    hop1.options.precedingDirtMeters = knownDirtMeters(part0)
+                    hop1.options.arrivalEdgeID = part0.segments.last?.edgeID
+                    hop1.options.counter = request.options.counter
+                    let started1 = ContinuousClock.now
+                    let part1 = try RoutingEngine(pack: secondGraph).route(hop1, budget: budget)
+                    hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
+                    return stitch([part0, part1], windows: windows)
+                } catch RoutingFailure.noPath {
+                    lastError = RoutingFailure.noPath
+                    continue
+                } catch RoutingFailure.noMatch {
+                    lastError = RoutingFailure.noMatch
+                    continue
+                } catch let RoutingFailure.resourceLimit(kind) where kind == "labels" {
+                    lastError = RoutingFailure.resourceLimit(kind)
+                    continue
+                }
+            }
+            throw lastError
+        }
         for (index, window) in windows.enumerated() {
             try budget.check()
-            let hopEnd: Coordinate
+            let candidates: [Coordinate]
             if index + 1 < windows.count, let next = windows[index + 1].last, let shared = window.last {
-                hopEnd = try handover(from: shared, into: next, from: cursor, toward: request.end, repository: repository)
+                candidates = try handoverCandidates(from: shared, into: next, from: cursor,
+                                                    toward: request.end, repository: repository)
             } else {
-                hopEnd = request.end
+                candidates = [request.end]
             }
-            var hop = request.with(start: cursor, end: hopEnd)
-            let span = cursor.distance(to: hopEnd)
-            hop.options.compassMaxRemaining = max(450_000, span * 2.5)
-            if let previous = parts.last {
-                hop.options.precedingMeters = parts.reduce(0) { $0 + $1.distanceMeters }
-                hop.options.precedingDirtMeters = parts.reduce(0) { $0 + knownDirtMeters($1) }
-                hop.options.arrivalEdgeID = previous.segments.last?.edgeID
+            guard !candidates.isEmpty else { throw RoutingFailure.noPath }
+            // Open the stage graph once; stub seams must not re-decode a 100MB pack.
+            let indexed = try openWindow(window, repository: repository, budget: budget)
+            var lastError: Error = RoutingFailure.noPath
+            var advanced = false
+            for (attempt, hopEnd) in candidates.enumerated() {
+                try budget.check()
+                var hop = request.with(start: cursor, end: hopEnd)
+                let span = cursor.distance(to: hopEnd)
+                hop.options.compassMaxRemaining = max(450_000, span * 2.5)
+                if let previous = parts.last {
+                    hop.options.precedingMeters = parts.reduce(0) { $0 + $1.distanceMeters }
+                    hop.options.precedingDirtMeters = parts.reduce(0) { $0 + knownDirtMeters($1) }
+                    hop.options.arrivalEdgeID = previous.segments.last?.edgeID
+                }
+                let started = ContinuousClock.now
+                do {
+                    let part = try RoutingEngine(pack: indexed).route(hop, budget: budget)
+                    hop.options.counter?.recordStage(
+                        "stage\(index):\(window.joined(separator: ","))", since: started)
+                    if attempt > 0 {
+                        hop.options.counter?.recordStage("handoverRetry:\(attempt)", since: started)
+                    }
+                    parts.append(part)
+                    cursor = part.end.coordinate
+                    advanced = true
+                    break
+                } catch RoutingFailure.noPath {
+                    lastError = RoutingFailure.noPath
+                    continue
+                } catch RoutingFailure.noMatch {
+                    lastError = RoutingFailure.noMatch
+                    continue
+                } catch let RoutingFailure.resourceLimit(kind) where kind == "labels" {
+                    // Overlap stubs can look perfect on detour while thrashing
+                    // the label budget — keep walking the diversified list.
+                    lastError = RoutingFailure.resourceLimit(kind)
+                    continue
+                }
             }
-            let started = ContinuousClock.now
-            let part = try routeWindow(window, request: hop, repository: repository, budget: budget)
-            hop.options.counter?.recordStage("stage\(index):\(window.joined(separator: ","))", since: started)
-            parts.append(part)
-            cursor = part.end.coordinate
+            if !advanced { throw lastError }
         }
         return stitch(parts, windows: windows)
     }
@@ -101,6 +176,14 @@ public enum StagedRouter {
 
     static func handover(from shared: String, into next: String, from origin: Coordinate, toward dest: Coordinate,
                          repository: PackRepository) throws -> Coordinate {
+        let candidates = try handoverCandidates(from: shared, into: next, from: origin,
+                                                toward: dest, repository: repository)
+        guard let best = candidates.first else { throw RoutingFailure.noPath }
+        return best
+    }
+
+    static func handoverCandidates(from shared: String, into next: String, from origin: Coordinate,
+                                   toward dest: Coordinate, repository: PackRepository) throws -> [Coordinate] {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
@@ -109,34 +192,72 @@ public enum StagedRouter {
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
             return point.isValid ? point : nil
         }
-        // Prefer seams on the origin→dest corridor, not merely nearest the
-        // destination (that pulled ON-S/ON-N onto eastern cut stubs for
-        // London→Thunder Bay while the highway corridor sits west).
-        func corridorScore(_ point: Coordinate) -> Double {
+        return pickHandoverCandidates(from: points, origin: origin, toward: dest,
+                                      limit: handoverCandidateLimit)
+    }
+
+    /// Corridor-ranked, longitude-diversified seam pins. Must stay O(n):
+    /// subregion pairs can retain tens of thousands of legal proofs, and an
+    /// all-pairs spacing scan on that set blows the wall clock before search.
+    /// Geographic "best" alone is not enough — overlap stubs can look perfect
+    /// on detour while remaining unreachable in one half, so callers try
+    /// several diversified pins.
+    static func pickHandoverCandidates(from points: [Coordinate], origin: Coordinate,
+                                       toward dest: Coordinate, limit: Int) -> [Coordinate] {
+        guard !points.isEmpty, limit > 0 else { return [] }
+        let direct = max(1, origin.distance(to: dest))
+        let ranked = points.map { point -> (score: Double, point: Coordinate) in
             let via = origin.distance(to: point) + point.distance(to: dest)
-            let direct = max(1, origin.distance(to: dest))
-            let detour = via / direct
-            let spread = points
-                .map { $0.distance(to: point) }
-                .sorted()
-            let nearestNeighbor = spread.dropFirst().first ?? 0
-            // Soft preference for ≥8 km spacing so one stub cluster cannot
-            // monopolise the top ranks.
-            let spacingBonus = min(1, nearestNeighbor / 8_000)
-            return detour - 0.05 * spacingBonus
+            return (via / direct, point)
+        }.sorted { $0.score < $1.score }
+
+        // Keep the best pin per ~0.4° longitude cell so western stubs cannot
+        // crowd out the connected Hwy 69 / French River band.
+        var byCell: [Int:(score: Double, point: Coordinate)] = [:]
+        for row in ranked {
+            let cell = Int((row.point.longitude * 2.5).rounded(.towardZero))
+            if byCell[cell] == nil { byCell[cell] = row }
         }
-        guard let best = points.min(by: { corridorScore($0) < corridorScore($1) }) else {
-            throw RoutingFailure.noPath
+        let diversified = byCell.values.sorted { $0.score < $1.score }.map(\.point)
+        var spaced: [Coordinate] = []
+        for point in diversified {
+            if spaced.contains(where: { $0.distance(to: point) < 8_000 }) { continue }
+            spaced.append(point)
+            if spaced.count >= max(limit * 2, limit) { break }
         }
-        return best
+        // Geodesic-best cells on a huge north cut are often overlap stubs;
+        // connected highway pins sit farther east. Interleave front and mid
+        // only on long corridors so short cross-half rides keep nearest pins.
+        var ordered: [Coordinate] = spaced
+        if origin.distance(to: dest) > 500_000, spaced.count > 3 {
+            let mid = spaced.count / 2
+            var interleaved: [Coordinate] = []
+            var lo = 0, hi = mid
+            while interleaved.count < spaced.count {
+                if lo < mid { interleaved.append(spaced[lo]); lo += 1 }
+                if hi < spaced.count { interleaved.append(spaced[hi]); hi += 1 }
+            }
+            ordered = interleaved
+        }
+        if ordered.isEmpty, let first = ranked.first?.point { ordered = [first] }
+        return Array(ordered.prefix(limit))
+    }
+
+    static func pickHandover(from points: [Coordinate], origin: Coordinate, toward dest: Coordinate) -> Coordinate? {
+        pickHandoverCandidates(from: points, origin: origin, toward: dest, limit: 1).first
+    }
+
+    static func openWindow(_ regions: [String], repository: PackRepository,
+                           budget: ComputationBudget) throws -> IndexedGraph {
+        let packs = try regions.map { try repository.open($0, requireSeams: regions.count > 1, budget: budget) }
+        guard let first = packs.first else { throw RoutingFailure.missingPacks(regions) }
+        let graph: any RoadGraph = packs.count == 1 ? first.graph : try RegionalGraph(packs: packs, budget: budget)
+        return try IndexedGraph(graph, budget: budget)
     }
 
     static func routeWindow(_ regions: [String], request: RoutingRequest, repository: PackRepository,
                             budget: ComputationBudget) throws -> ComputedRoute {
-        let packs = try regions.map { try repository.open($0, requireSeams: regions.count > 1, budget: budget) }
-        guard let first = packs.first else { throw RoutingFailure.missingPacks(regions) }
-        let graph: any RoadGraph = packs.count == 1 ? first.graph : try RegionalGraph(packs: packs, budget: budget)
-        let indexed = try IndexedGraph(graph, budget: budget)
+        let indexed = try openWindow(regions, repository: repository, budget: budget)
         return try RoutingEngine(pack: indexed).route(request, budget: budget)
     }
 
