@@ -8,8 +8,7 @@ public struct IndexedGraph: RoadGraph {
     private let cells: [Cell:[Int]]
     private let longEdges: [Int]
     private let siblings: [Int:[Int]]
-    private let weakStrict: [Int]
-    private let weakAllow: [Int]
+    private let weakCache = WeakComponentCache()
     private let outgoingArcs: [[RoadArc]]
     let predecessors: [[(Int, Double)]]
     private let arcIndexCache = ArcIndexCache()
@@ -72,8 +71,6 @@ public struct IndexedGraph: RoadGraph {
         }
         self.outgoingArcs = outgoingArcs
         self.predecessors = predecessors
-        weakStrict = WeakComponents.compute(in: graph, allowUnknown: false)
-        weakAllow = WeakComponents.compute(in: graph, allowUnknown: true)
         try budget.check()
     }
     public func candidates(near point: Coordinate,radius: Double) -> [Int] {
@@ -114,7 +111,11 @@ public struct IndexedGraph: RoadGraph {
     public func osmWayID(_ edge: Int) -> Int64 { graph.osmWayID(edge) }
     public func osmNodeID(_ node: Int) -> Int64 { graph.osmNodeID(node) }
     public func coincidentSiblings(_ node: Int) -> [Int] { siblings[node] ?? [] }
-    func weakComponentIDs(allowUnknown: Bool) -> [Int] { allowUnknown ? weakAllow : weakStrict }
+    func weakComponentIDs(allowUnknown: Bool) -> [Int] {
+        weakCache.ids(allowUnknown: allowUnknown) {
+            WeakComponents.compute(in: graph, allowUnknown: allowUnknown)
+        }
+    }
     /// Flat arc lists for reachability checks, built on first use.
     func arcIndex(budget: ComputationBudget) throws -> ArcIndex {
         try arcIndexCache.value { try ArcIndex(nodeCount: nodeCount, budget: budget) { outgoing($0) } }

@@ -27,7 +27,8 @@ public enum StagedRouter {
     }
 
     public static func route(_ request: RoutingRequest, repository: PackRepository,
-                             regions: [String], budget: ComputationBudget) throws -> ComputedRoute {
+                             regions: [String], budget: ComputationBudget,
+                             prepared: PreparedGraphStore = PreparedGraphStore()) throws -> ComputedRoute {
         let unique = Array(Set(regions)).sorted()
         let startRegion = try containingRegion(request.start, regions: unique, repository: repository, budget: budget)
         let endRegion = try containingRegion(request.end, regions: unique, repository: repository, budget: budget)
@@ -35,7 +36,8 @@ public enum StagedRouter {
         let chain = try RegionConnectivity(neighbors: neighbors).chain(from: startRegion, to: endRegion)
         let windows = overlappingWindows(chain)
         guard windows.count >= 2 else {
-            return try routeWindow(windows.first ?? unique, request: request, repository: repository, budget: budget)
+            return try routeWindow(windows.first ?? unique, request: request, repository: repository,
+                                   budget: budget, prepared: prepared)
         }
         var parts: [ComputedRoute] = []
         var cursor = request.start
@@ -46,11 +48,29 @@ public enum StagedRouter {
             let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
                                               toward: request.end, repository: repository)
             guard !pins.isEmpty else { throw RoutingFailure.noPath }
-            let firstGraph = try openWindow(windows[0], repository: repository, budget: budget)
-            let secondGraph = try openWindow(windows[1], repository: repository, budget: budget)
+            let prepareStarted = ContinuousClock.now
+            let graphs = try prepared.indexedWindows(windows, repository: repository, budget: budget)
+            request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
+            let firstGraph = graphs[0]
+            let secondGraph = graphs[1]
             var lastError: Error = RoutingFailure.noPath
+            var reach0: EndpointReachability?
+            var reach1: EndpointReachability?
             for (attempt, hopEnd) in pins.enumerated() {
                 try budget.check()
+                // Directed reachability on both halves — overlap stubs that Balanced
+                // would burn ~20s on fail here in well under a second after the first
+                // arc-index build. Do not use Cleanest preflight: those hops are long.
+                let filterStarted = ContinuousClock.now
+                let live = try seamPinLooksLive(hopEnd, origin: cursor, destination: request.end,
+                                                first: firstGraph, second: secondGraph,
+                                                request: request, budget: budget,
+                                                reach0: &reach0, reach1: &reach1)
+                request.options.counter?.recordStage("seamFilter", since: filterStarted)
+                guard live else {
+                    lastError = RoutingFailure.noPath
+                    continue
+                }
                 do {
                     var hop0 = request.with(start: cursor, end: hopEnd)
                     hop0.options.compassMaxRemaining = max(450_000, cursor.distance(to: hopEnd) * 2.5)
@@ -83,6 +103,11 @@ public enum StagedRouter {
             }
             throw lastError
         }
+        // Multi-pack (NS→NB→QC class): prepare overlapping windows up front so
+        // later hops reuse IndexedGraph instead of re-opening.
+        let prepareStarted = ContinuousClock.now
+        _ = try prepared.indexedWindows(windows, repository: repository, budget: budget)
+        request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
         for (index, window) in windows.enumerated() {
             try budget.check()
             let candidates: [Coordinate]
@@ -94,11 +119,24 @@ public enum StagedRouter {
             }
             guard !candidates.isEmpty else { throw RoutingFailure.noPath }
             // Open the stage graph once; stub seams must not re-decode a 100MB pack.
-            let indexed = try openWindow(window, repository: repository, budget: budget)
+            let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
             var lastError: Error = RoutingFailure.noPath
             var advanced = false
+            var reach: EndpointReachability?
             for (attempt, hopEnd) in candidates.enumerated() {
                 try budget.check()
+                // Same stub filter as the two-pack path — NS→NB→QC handovers
+                // otherwise burn full searches on dead border pins.
+                if index + 1 < windows.count {
+                    let filterStarted = ContinuousClock.now
+                    let live = try hopLooksLive(hopEnd, origin: cursor, graph: indexed,
+                                                request: request, budget: budget, reach: &reach)
+                    request.options.counter?.recordStage("seamFilter", since: filterStarted)
+                    guard live else {
+                        lastError = RoutingFailure.noPath
+                        continue
+                    }
+                }
                 var hop = request.with(start: cursor, end: hopEnd)
                 let span = cursor.distance(to: hopEnd)
                 hop.options.compassMaxRemaining = max(450_000, span * 2.5)
@@ -248,17 +286,48 @@ public enum StagedRouter {
     }
 
     static func openWindow(_ regions: [String], repository: PackRepository,
-                           budget: ComputationBudget) throws -> IndexedGraph {
-        let packs = try regions.map { try repository.open($0, requireSeams: regions.count > 1, budget: budget) }
-        guard let first = packs.first else { throw RoutingFailure.missingPacks(regions) }
-        let graph: any RoadGraph = packs.count == 1 ? first.graph : try RegionalGraph(packs: packs, budget: budget)
-        return try IndexedGraph(graph, budget: budget)
+                           budget: ComputationBudget,
+                           prepared: PreparedGraphStore = PreparedGraphStore()) throws -> IndexedGraph {
+        try prepared.indexed(regions, repository: repository, budget: budget)
     }
 
     static func routeWindow(_ regions: [String], request: RoutingRequest, repository: PackRepository,
-                            budget: ComputationBudget) throws -> ComputedRoute {
-        let indexed = try openWindow(regions, repository: repository, budget: budget)
+                            budget: ComputationBudget,
+                            prepared: PreparedGraphStore = PreparedGraphStore()) throws -> ComputedRoute {
+        let indexed = try openWindow(regions, repository: repository, budget: budget, prepared: prepared)
         return try RoutingEngine(pack: indexed).route(request, budget: budget)
+    }
+
+    /// Directed connectivity on both halves before a full Balanced/Dirt search.
+    /// Never rules out a pin the search could still connect.
+    static func seamPinLooksLive(_ hop: Coordinate, origin: Coordinate, destination: Coordinate,
+                                 first: IndexedGraph, second: IndexedGraph,
+                                 request: RoutingRequest, budget: ComputationBudget,
+                                 reach0: inout EndpointReachability?,
+                                 reach1: inout EndpointReachability?) throws -> Bool {
+        try hopLooksLive(hop, origin: origin, graph: first, request: request, budget: budget, reach: &reach0)
+            && hopLooksLive(destination, origin: hop, graph: second, request: request, budget: budget, reach: &reach1)
+    }
+
+    static func hopLooksLive(_ hop: Coordinate, origin: Coordinate, graph: IndexedGraph,
+                             request: RoutingRequest, budget: ComputationBudget,
+                             reach: inout EndpointReachability?) throws -> Bool {
+        let matcher = RoadMatcher(pack: graph)
+        let radius = min(2000, max(80, request.matchRadiusMeters))
+        let intent = origin.bearing(to: hop) * 180 / .pi
+        let starts = try matcher.matches(at: origin, radius: radius, start: true,
+                                         policy: request.access, intent: intent, budget: budget)
+        let ends = try matcher.matches(at: hop, radius: radius, start: false,
+                                       policy: request.access, intent: intent + 180, budget: budget)
+        guard let start = starts.first, let end = ends.first else { return false }
+        let components = WeakComponents.ids(in: graph, allowUnknown: request.access.allowUnknown)
+        if WeakComponents.of(match: start, pack: graph, ids: components)
+            != WeakComponents.of(match: end, pack: graph, ids: components) {
+            return false
+        }
+        let checker = try reach ?? EndpointReachability(graph: graph, budget: budget)
+        reach = checker
+        return try checker.mayConnect(start: start, end: end, budget: budget)
     }
 
     static func knownDirtMeters(_ route: ComputedRoute) -> Double {
