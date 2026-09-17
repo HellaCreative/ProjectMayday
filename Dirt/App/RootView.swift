@@ -785,8 +785,10 @@ struct RootView: View {
     private func dockSheet(_ sheet: ActiveSheet, landscapeDockLeading: Bool?) -> some View {
         switch sheet {
         case .layers:
+            // Same top gap as Profile fully extended — sheet must not run under the DIRT logo.
             DockSheetPanel(
-                heightFraction: 1,
+                heightFraction: 0.92,
+                expandedHeightFraction: 0.92,
                 landscapeDockLeading: landscapeDockLeading,
                 material: .thinMaterial,
                 onDismiss: dismissDockSheet
@@ -1580,8 +1582,11 @@ struct RootView: View {
                         BrandChip(minHeight: 68)
                     }
                     NavCueCard()
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                // Stop at the inner edge of +/−/3D. Left matches ticker/logo (12pt).
+                .padding(.trailing, DirtHit.control + MapControlStack.itemSpacing)
+                .padding(.top, hasDynamicIsland ? islandTickerClearance : 0)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 HStack(alignment: .top, spacing: 8) {
