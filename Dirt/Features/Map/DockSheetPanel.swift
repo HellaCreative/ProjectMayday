@@ -31,14 +31,24 @@ enum DockSheetMotion {
     /// can run all the way to the edge.
     static let dockBottomGap: CGFloat = 18
 
-    /// Figma landscape vertical dock width (flush to non-island edge).
-    static let landscapeDockWidth: CGFloat = 78
+    /// Outer landscape gutter reserved for the hardware Island. Tabs and the
+    /// wordmark sit in the rail beside it — nothing draws into this column.
+    static let landscapeIslandColumn: CGFloat = 50
+
+    /// Inner landscape rail for logo + dock tabs.
+    static let landscapeDockRailWidth: CGFloat = 78
+
+    /// Full landscape dock. Island phones include the outer gutter; notch/SE do not.
+    static func landscapeDockWidth(hasIslandColumn: Bool) -> CGFloat {
+        landscapeDockRailWidth + (hasIslandColumn ? landscapeIslandColumn : 0)
+    }
 
     /// Inner padding for dock tabs (Figma landscape-primary).
     static let landscapeDockEndPadding: CGFloat = 47
 
-    /// Drawers may take at most half the screen (includes area under the dock).
-    static let landscapeMaxDrawerFraction: CGFloat = 0.5
+    /// Drawers include the strip under the dock. 55% (10% wider than half)
+    /// so Start Ride and other CTAs keep readable width in landscape.
+    static let landscapeMaxDrawerFraction: CGFloat = 0.55
 
     /// Recenter sits this far outside the route drawer’s open edge.
     static let landscapeRecenterGap: CGFloat = 24
@@ -84,6 +94,8 @@ struct DockSheetPanel<Content: View>: View {
     var showsDragIndicator: Bool = false
     /// When set, drawer is a full-height side panel that extends under the vertical dock.
     var landscapeDockLeading: Bool? = nil
+    /// Island phones keep an empty outer column so tabs never sit on the cutout.
+    var landscapeHasIslandColumn: Bool = false
     /// Thin glass — the Layers look is the sheet standard. Groupings use `groupingFill`.
     var material: Material = DirtTheme.sheetMaterial
     var onDismiss: () -> Void
@@ -214,7 +226,7 @@ struct DockSheetPanel<Content: View>: View {
     private func landscapeSide(geo: GeometryProxy, dockLeading: Bool) -> some View {
         // Half-screen total, including the strip under the dock (portrait parity).
         let panelW = geo.size.width * DockSheetMotion.landscapeMaxDrawerFraction
-        let dockW = DockSheetMotion.landscapeDockWidth
+        let dockW = DockSheetMotion.landscapeDockWidth(hasIslandColumn: landscapeHasIslandColumn)
 
         return HStack(spacing: 0) {
             if dockLeading {
