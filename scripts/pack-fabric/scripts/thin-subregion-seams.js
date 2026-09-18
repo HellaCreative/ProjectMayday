@@ -9,6 +9,10 @@
  * handover shortlist — Swift JSONDecoder on a 36MB seam file can exhaust the
  * route wall clock before search starts.
  *
+ * National topology can exceed Node's ~512MB string limit (same class of bug as
+ * streaming checkpoints in build-v4-seams). Prefer pack sidecars written by the
+ * seams run; they already hold the pair rows and stay under the string limit.
+ *
  * Usage:
  *   node scripts/pack-fabric/scripts/thin-subregion-seams.js \
  *     --topology scripts/pack-fabric/routing/candidates/fabric-v4-YYYYMMDD-NN/cross-pack-topology.v2.json \
@@ -74,17 +78,77 @@ function shortlist(rows, maxKeep) {
   return picked;
 }
 
-function writeSidecar(root, topology, regionId, neighborId, rows) {
+function readJSONFile(file) {
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+function loadPairFromSidecars(root, left, right) {
+  const leftPath = path.join(root, left, "cross-pack-seams.v2.json");
+  const rightPath = path.join(root, right, "cross-pack-seams.v2.json");
+  if (!fs.existsSync(leftPath) || !fs.existsSync(rightPath)) return null;
+  const leftDoc = readJSONFile(leftPath);
+  const rightDoc = readJSONFile(rightPath);
+  const leftRows = leftDoc.neighbors?.[right];
+  const rightRows = rightDoc.neighbors?.[left];
+  if (!Array.isArray(leftRows) || !Array.isArray(rightRows)) return null;
+  return {
+    leftRows,
+    rightRows,
+    leftDoc,
+    rightDoc,
+    meta: {
+      fabricReleaseId: leftDoc.fabricReleaseId || rightDoc.fabricReleaseId || null,
+      sourceEpoch: leftDoc.sourceEpoch || rightDoc.sourceEpoch || null
+    }
+  };
+}
+
+function loadPairFromTopology(topologyPath, left, right) {
+  let topology;
+  try {
+    topology = readJSONFile(topologyPath);
+  } catch (err) {
+    if (err && (err.code === "ERR_STRING_TOO_LONG" || /string longer than/i.test(String(err.message)))) {
+      throw new Error(
+        `topology ${topologyPath} exceeds Node string limits; pack sidecars required for thinning`
+      );
+    }
+    throw err;
+  }
+  const leftRows = topology.regions?.[left]?.neighbors?.[right];
+  const rightRows = topology.regions?.[right]?.neighbors?.[left];
+  if (!Array.isArray(leftRows) || !Array.isArray(rightRows)) {
+    throw new Error(`topology missing pair ${left}/${right}`);
+  }
+  return {
+    leftRows,
+    rightRows,
+    leftDoc: null,
+    rightDoc: null,
+    meta: {
+      fabricReleaseId: topology.fabricReleaseId || null,
+      sourceEpoch: topology.sourceEpoch || null
+    }
+  };
+}
+
+function loadPair(opts) {
+  const fromSidecars = loadPairFromSidecars(opts.root, opts.left, opts.right);
+  if (fromSidecars) return { ...fromSidecars, source: "sidecars" };
+  return { ...loadPairFromTopology(opts.topology, opts.left, opts.right), source: "topology" };
+}
+
+function writeSidecar(root, meta, existingDoc, regionId, neighborId, rows) {
   const seamPath = path.join(root, regionId, "cross-pack-seams.v2.json");
-  const existing = fs.existsSync(seamPath) ? JSON.parse(fs.readFileSync(seamPath, "utf8")) : null;
+  const existing = existingDoc || (fs.existsSync(seamPath) ? readJSONFile(seamPath) : null);
   const neighbors = {
-    ...((existing && existing.neighbors) || (topology.regions && topology.regions[regionId] && topology.regions[regionId].neighbors) || {}),
+    ...((existing && existing.neighbors) || {}),
     [neighborId]: rows
   };
   const doc = {
     schemaVersion: "dirt-cross-pack-seams.v2",
-    fabricReleaseId: topology.fabricReleaseId,
-    sourceEpoch: topology.sourceEpoch,
+    fabricReleaseId: (existing && existing.fabricReleaseId) || meta.fabricReleaseId,
+    sourceEpoch: (existing && existing.sourceEpoch) || meta.sourceEpoch,
     regionId,
     neighbors
   };
@@ -92,7 +156,7 @@ function writeSidecar(root, topology, regionId, neighborId, rows) {
   fs.writeFileSync(seamPath, raw);
   const sha256 = crypto.createHash("sha256").update(raw).digest("hex");
   const manifestPath = path.join(root, regionId, "pack-manifest.v2.json");
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const manifest = readJSONFile(manifestPath);
   manifest.seams = {
     name: "cross-pack-seams.v2.json",
     bytes: Buffer.byteLength(raw),
@@ -104,17 +168,29 @@ function writeSidecar(root, topology, regionId, neighborId, rows) {
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const topology = JSON.parse(fs.readFileSync(opts.topology, "utf8"));
-  const leftRows = topology.regions?.[opts.left]?.neighbors?.[opts.right];
-  const rightRows = topology.regions?.[opts.right]?.neighbors?.[opts.left];
-  if (!Array.isArray(leftRows) || !Array.isArray(rightRows)) {
-    throw new Error(`topology missing pair ${opts.left}/${opts.right}`);
+  if (!fs.existsSync(opts.topology)) {
+    throw new Error(`topology missing: ${opts.topology}`);
   }
-  const left = writeSidecar(opts.root, topology, opts.left, opts.right, shortlist(leftRows, opts.max));
-  const right = writeSidecar(opts.root, topology, opts.right, opts.left, shortlist(rightRows, opts.max));
-  console.log(JSON.stringify({ pair: [opts.left, opts.right], left, right }, null, 2));
+  const loaded = loadPair(opts);
+  const left = writeSidecar(
+    opts.root,
+    loaded.meta,
+    loaded.leftDoc,
+    opts.left,
+    opts.right,
+    shortlist(loaded.leftRows, opts.max)
+  );
+  const right = writeSidecar(
+    opts.root,
+    loaded.meta,
+    loaded.rightDoc,
+    opts.right,
+    opts.left,
+    shortlist(loaded.rightRows, opts.max)
+  );
+  console.log(JSON.stringify({ pair: [opts.left, opts.right], source: loaded.source, left, right }, null, 2));
 }
 
 if (require.main === module) main();
 
-module.exports = { shortlist, parseArgs };
+module.exports = { shortlist, parseArgs, loadPairFromSidecars, loadPairFromTopology, loadPair };
