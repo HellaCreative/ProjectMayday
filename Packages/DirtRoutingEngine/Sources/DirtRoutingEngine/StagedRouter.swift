@@ -28,16 +28,19 @@ public enum StagedRouter {
 
     public static func route(_ request: RoutingRequest, repository: PackRepository,
                              regions: [String], budget: ComputationBudget,
-                             prepared: PreparedGraphStore = PreparedGraphStore()) throws -> ComputedRoute {
+                             prepared: PreparedGraphStore = PreparedGraphStore(),
+                             compassStore: RoadCompassStore? = nil) throws -> ComputedRoute {
         let unique = Array(Set(regions)).sorted()
-        let startRegion = try containingRegion(request.start, regions: unique, repository: repository, budget: budget)
-        let endRegion = try containingRegion(request.end, regions: unique, repository: repository, budget: budget)
+        let startRegion = try containingRegion(request.start, regions: unique, repository: repository,
+                                               budget: budget, prepared: prepared)
+        let endRegion = try containingRegion(request.end, regions: unique, repository: repository,
+                                             budget: budget, prepared: prepared)
         let neighbors = try neighborMap(unique, repository: repository)
         let chain = try RegionConnectivity(neighbors: neighbors).chain(from: startRegion, to: endRegion)
         let windows = overlappingWindows(chain)
         guard windows.count >= 2 else {
             return try routeWindow(windows.first ?? unique, request: request, repository: repository,
-                                   budget: budget, prepared: prepared)
+                                   budget: budget, prepared: prepared, compassStore: compassStore)
         }
         var parts: [ComputedRoute] = []
         var cursor = request.start
@@ -75,7 +78,8 @@ public enum StagedRouter {
                     var hop0 = request.with(start: cursor, end: hopEnd)
                     hop0.options.compassMaxRemaining = max(450_000, cursor.distance(to: hopEnd) * 2.5)
                     let started0 = ContinuousClock.now
-                    let part0 = try RoutingEngine(pack: firstGraph).route(hop0, budget: budget)
+                    let part0 = try RoutingEngine(pack: firstGraph, compassStore: compassStore)
+                        .route(hop0, budget: budget)
                     hop0.options.counter?.recordStage("stage0:\(windows[0].joined(separator: ","))", since: started0)
                     if attempt > 0 {
                         hop0.options.counter?.recordStage("handoverRetry:\(attempt)", since: started0)
@@ -87,7 +91,8 @@ public enum StagedRouter {
                     hop1.options.arrivalEdgeID = part0.segments.last?.edgeID
                     hop1.options.counter = request.options.counter
                     let started1 = ContinuousClock.now
-                    let part1 = try RoutingEngine(pack: secondGraph).route(hop1, budget: budget)
+                    let part1 = try RoutingEngine(pack: secondGraph, compassStore: compassStore)
+                        .route(hop1, budget: budget)
                     hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
                     return stitch([part0, part1], windows: windows)
                 } catch RoutingFailure.noPath {
@@ -103,10 +108,14 @@ public enum StagedRouter {
             }
             throw lastError
         }
-        // Multi-pack (NS→NB→QC class): prepare overlapping windows up front so
-        // later hops reuse IndexedGraph instead of re-opening.
+        // Multi-pack (NS→NB→QC class): warm the first window, then prefetch the
+        // next while searching so later hops hit the store without loading every
+        // overlapping pair into RSS at once.
         let prepareStarted = ContinuousClock.now
-        _ = try prepared.indexedWindows(windows, repository: repository, budget: budget)
+        _ = try prepared.indexed(windows[0], repository: repository, budget: budget)
+        if windows.count > 1 {
+            _ = try prepared.indexed(windows[1], repository: repository, budget: budget)
+        }
         request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
         for (index, window) in windows.enumerated() {
             try budget.check()
@@ -120,6 +129,12 @@ public enum StagedRouter {
             guard !candidates.isEmpty else { throw RoutingFailure.noPath }
             // Open the stage graph once; stub seams must not re-decode a 100MB pack.
             let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
+            // Prefetch the window after next while this stage searches.
+            var prefetch: DispatchWorkItem?
+            if index + 2 < windows.count {
+                prefetch = prepared.prefetch(windows[index + 2], repository: repository, budget: budget)
+            }
+            defer { prefetch?.wait() }
             var lastError: Error = RoutingFailure.noPath
             var advanced = false
             var reach: EndpointReachability?
@@ -147,7 +162,8 @@ public enum StagedRouter {
                 }
                 let started = ContinuousClock.now
                 do {
-                    let part = try RoutingEngine(pack: indexed).route(hop, budget: budget)
+                    let part = try RoutingEngine(pack: indexed, compassStore: compassStore)
+                        .route(hop, budget: budget)
                     hop.options.counter?.recordStage(
                         "stage\(index):\(window.joined(separator: ","))", since: started)
                     if attempt > 0 {
@@ -187,11 +203,16 @@ public enum StagedRouter {
     }
 
     static func containingRegion(_ point: Coordinate, regions: [String], repository: PackRepository,
-                                 budget: ComputationBudget) throws -> String {
+                                 budget: ComputationBudget,
+                                 prepared: PreparedGraphStore = PreparedGraphStore()) throws -> String {
         let ranked = regions.sorted { repository.graphBytes($0) < repository.graphBytes($1) }
         for (index, id) in ranked.enumerated() {
             try budget.check()
             if index == ranked.count - 1 { return id }
+            // Warm IndexedGraph beats a cold open when a prior hop already prepared it.
+            if let warm = prepared.peek([id]), sampledBox(warm).contains(point) {
+                return id
+            }
             let pack = try repository.open(id, requireSeams: false, budget: budget)
             if sampledBox(pack.graph).contains(point) { return id }
         }
@@ -199,10 +220,18 @@ public enum StagedRouter {
     }
 
     static func sampledBox(_ pack: GraphPack) -> GeographicBox {
+        sampledBox(pack as any RoadGraph, nodeCount: pack.nodeCount)
+    }
+
+    static func sampledBox(_ graph: any RoadGraph) -> GeographicBox {
+        sampledBox(graph, nodeCount: graph.nodeCount)
+    }
+
+    static func sampledBox(_ graph: any RoadGraph, nodeCount: Int) -> GeographicBox {
         var minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0
-        let step = max(1, pack.nodeCount / 4_000)
-        for node in stride(from: 0, to: pack.nodeCount, by: step) {
-            let point = pack.coordinate(node: node)
+        let step = max(1, nodeCount / 4_000)
+        for node in stride(from: 0, to: nodeCount, by: step) {
+            let point = graph.coordinate(node: node)
             guard point.isValid else { continue }
             minLat = min(minLat, point.latitude)
             maxLat = max(maxLat, point.latitude)
@@ -293,9 +322,10 @@ public enum StagedRouter {
 
     static func routeWindow(_ regions: [String], request: RoutingRequest, repository: PackRepository,
                             budget: ComputationBudget,
-                            prepared: PreparedGraphStore = PreparedGraphStore()) throws -> ComputedRoute {
+                            prepared: PreparedGraphStore = PreparedGraphStore(),
+                            compassStore: RoadCompassStore? = nil) throws -> ComputedRoute {
         let indexed = try openWindow(regions, repository: repository, budget: budget, prepared: prepared)
-        return try RoutingEngine(pack: indexed).route(request, budget: budget)
+        return try RoutingEngine(pack: indexed, compassStore: compassStore).route(request, budget: budget)
     }
 
     /// Directed connectivity on both halves before a full Balanced/Dirt search.

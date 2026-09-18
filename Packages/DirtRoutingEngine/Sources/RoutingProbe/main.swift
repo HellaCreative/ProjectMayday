@@ -178,7 +178,13 @@ do {
     } else {
         let result: ComputedRoute
         if stageLong, let packRepository {
-            result = try StagedRouter.route(request, repository: packRepository, regions: regionList, budget: budget)
+            // Mirror NativeRoutingSession: one prepared store + one compass store
+            // across staged windows so prepare and compass are not rebuilt per hop.
+            let preparedGraphs = PreparedGraphStore()
+            let compassStore = RoadCompassStore()
+            result = try StagedRouter.route(request, repository: packRepository, regions: regionList,
+                                           budget: budget, prepared: preparedGraphs,
+                                           compassStore: compassStore)
         } else if let indexed {
             // The app keeps one compass store per routing session; mirror it.
             result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore()).route(request,budget: budget)
