@@ -161,9 +161,9 @@ struct IntroCarouselView: View {
         switch slide {
         case .brand: LogoBuildArt(isActive: isActive)
         case .dial: DirtDialArt(isActive: isActive)
-        case .loop: IntroFeatureArt(symbol: "arrow.triangle.2.circlepath", caption: "DIRECTION. DISTANCE. HOME.")
+        case .loop: LongWayArt(isActive: isActive)
         case .fuel: FuelNotifyArt()
-        case .offline: IntroFeatureArt(symbol: "map.fill", caption: "PREPARE BEFORE YOU GO.")
+        case .offline: MapDownloadArt(isActive: isActive)
         case .crew: CrewBeaconArt(isActive: isActive)
         }
     }
