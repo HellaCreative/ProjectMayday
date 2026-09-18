@@ -412,18 +412,27 @@ final class GraphPackStore {
     /// so BFS cannot prefer alphabetically-earlier `qc` over `qc-s`.
     nonisolated static func pathAllowedRegionIds(published: Set<String>) -> Set<String> {
         var allowed = published
-        for parent in ["on", "qc", "ca", "nl"] where published.contains(parent) {
-            let hasShard = published.contains { $0 != parent && provinceFamily($0) == parent }
-            if hasShard {
+        for parent in splitParentRegionIds where published.contains(parent) {
+            if familyHasPublishedHalf(parent, published: published) {
                 allowed.remove(parent)
             }
         }
         return allowed
     }
 
+    /// Split-province parents that `fabric-v4-20260917-02` replaces with halves.
+    nonisolated static let splitParentRegionIds: Set<String> = ["on", "qc", "ca", "nl"]
+
     /// Maps a geographic region id onto a catalog id that is actually published.
     func resolveCatalogRegionId(_ regionID: String) -> String? {
         Self.resolveCatalogRegionId(regionID, published: publishedIds)
+    }
+
+    func resolveCatalogRegionId(
+        _ regionID: String,
+        coordinate: CLLocationCoordinate2D
+    ) -> String? {
+        Self.resolveCatalogRegionId(regionID, published: publishedIds, coordinate: coordinate)
     }
 
     /// Prefer an exact published id; otherwise the province/state parent when that
@@ -471,6 +480,40 @@ final class GraphPackStore {
             .filter { $0 != family && provinceFamily($0) == family }
             .sorted()
         return shards.first
+    }
+
+    /// True when `published` contains at least one shard of this parent family.
+    nonisolated static func familyHasPublishedHalf(
+        _ regionID: String,
+        published: Set<String>
+    ) -> Bool {
+        let family = provinceFamily(regionID)
+        return published.contains { $0 != family && provinceFamily($0) == family }
+    }
+
+    /// Remap bbox/primary geographic ids onto published catalog ids.
+    /// Split parents (`on`/`qc`/`ca`/`nl`) are aliases on half-only fabrics — either
+    /// mapped via `coordinate` or dropped when a sibling half is already present —
+    /// never hard-failed as "unpublished".
+    nonisolated static func remapGeographicRegionIds(
+        _ geographic: [String],
+        coordinate: CLLocationCoordinate2D?,
+        published: Set<String>
+    ) -> (needed: [String], unpublished: [String]) {
+        var needed: [String] = []
+        var unpublished: [String] = []
+        for raw in geographic {
+            let id = raw.lowercased()
+            if let resolved = resolveCatalogRegionId(id, published: published, coordinate: coordinate) {
+                if !needed.contains(resolved) { needed.append(resolved) }
+                continue
+            }
+            if splitParentRegionIds.contains(id), familyHasPublishedHalf(id, published: published) {
+                continue
+            }
+            if !unpublished.contains(id) { unpublished.append(id) }
+        }
+        return (needed, unpublished)
     }
 
     /// Decoded pack for an installed region (active pack if it matches).
@@ -773,15 +816,15 @@ final class GraphPackStore {
                 let primaryRegions = Self.regionIds(containingAny: route)
                 return primaryRegions.isEmpty ? Self.regionIds(covering: route) : primaryRegions
             }
-            var needed: [String] = []
-            var unpublished: [String] = []
-            for id in geographic {
-                if let resolved = self.resolveCatalogRegionId(id) {
-                    if !needed.contains(resolved) { needed.append(resolved) }
-                } else {
-                    unpublished.append(id)
-                }
-            }
+            // Covering bboxes still emit legacy parents (`on`/`qc`/`ca`/`nl`).
+            // Remap with the rider coordinate so half-only fabrics never fail closed.
+            let remapped = Self.remapGeographicRegionIds(
+                geographic,
+                coordinate: coordinate,
+                published: self.publishedIds
+            )
+            let needed = remapped.needed
+            let unpublished = remapped.unpublished
             guard !needed.isEmpty else {
                 let names = (unpublished.isEmpty ? geographic : unpublished)
                     .map { self.displayTitle(forRegionId: $0) }.joined(separator: ", ")
@@ -857,7 +900,12 @@ final class GraphPackStore {
     /// Repeated GPS fixes in the same region are a no-op.
     func prepareCurrentNavigationRegionIfNeeded(at coordinate: CLLocationCoordinate2D) {
         guard let geographic = Self.primaryRegionId(containing: coordinate) else { return }
-        let catalogID = resolveCatalogRegionId(geographic) ?? geographic
+        guard let catalogID = resolveCatalogRegionId(geographic, coordinate: coordinate) else {
+            RoutingDebugLog.shared.event(
+                "navigation routing pack region skipped reason=unpublished geographic=\(geographic)"
+            )
+            return
+        }
         guard let id = NavigationRoutingPackScope.regionTransition(
             currentRegionID: catalogID,
             lastPreparedRegionID: lastAutoDownloadRegionId

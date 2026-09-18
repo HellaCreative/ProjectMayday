@@ -186,6 +186,111 @@ struct PackFirstRoutingTests {
         #expect(!prompt.regionIDs.contains("on"))
     }
 
+    @Test func halfOnlyFabricMapsAllSplitParentsToPublishedHalves() {
+        let published = fabricV4_20260917_02PublishedIds
+        let samples: [(String, CLLocationCoordinate2D, String)] = [
+            ("on", CLLocationCoordinate2D(latitude: 49.80, longitude: -94.66), "on-n"),
+            ("on", CLLocationCoordinate2D(latitude: 43.65, longitude: -79.38), "on-s"),
+            ("qc", CLLocationCoordinate2D(latitude: 45.50, longitude: -73.57), "qc-s"),
+            ("qc", CLLocationCoordinate2D(latitude: 58.10, longitude: -68.40), "qc-n"),
+            ("ca", CLLocationCoordinate2D(latitude: 32.83, longitude: -117.27), "ca-s"),
+            ("ca", CLLocationCoordinate2D(latitude: 40.80, longitude: -124.16), "ca-n"),
+            ("nl", CLLocationCoordinate2D(latitude: 47.56, longitude: -52.71), "nl-island"),
+            ("nl", CLLocationCoordinate2D(latitude: 53.30, longitude: -60.33), "nl-lab")
+        ]
+        for (parent, coordinate, half) in samples {
+            #expect(
+                GraphPackStore.resolveCatalogRegionId(
+                    parent,
+                    published: published,
+                    coordinate: coordinate
+                ) == half,
+                "\(parent) @ \(coordinate.latitude),\(coordinate.longitude)"
+            )
+            #expect(published.contains(half))
+            #expect(!published.contains(parent))
+        }
+    }
+
+    @Test func halfOnlyFabricCorridorsForQC_CA_NLNeverUseParents() {
+        let published = fabricV4_20260917_02PublishedIds
+        let corridors: [([CLLocationCoordinate2D], Set<String>, Set<String>)] = [
+            (
+                [
+                    CLLocationCoordinate2D(latitude: 44.65, longitude: -63.57), // ns
+                    CLLocationCoordinate2D(latitude: 58.10, longitude: -68.40)  // qc-n
+                ],
+                ["ns", "qc-n"],
+                ["qc", "on", "nl"]
+            ),
+            (
+                [
+                    CLLocationCoordinate2D(latitude: 45.50, longitude: -73.57), // qc-s
+                    CLLocationCoordinate2D(latitude: 47.56, longitude: -52.71)  // nl-island
+                ],
+                ["qc-s", "nl-island"],
+                ["qc", "nl", "on"]
+            ),
+            (
+                [
+                    CLLocationCoordinate2D(latitude: 32.83, longitude: -117.27), // ca-s
+                    CLLocationCoordinate2D(latitude: 40.80, longitude: -124.16)  // ca-n
+                ],
+                ["ca-s", "ca-n"],
+                ["ca"]
+            ),
+            (
+                [
+                    CLLocationCoordinate2D(latitude: 36.17, longitude: -115.14), // nv
+                    CLLocationCoordinate2D(latitude: 32.83, longitude: -117.27)  // ca-s
+                ],
+                ["nv", "ca-s"],
+                ["ca"]
+            )
+        ]
+        for (points, mustContain, mustExclude) in corridors {
+            let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+                for: points,
+                published: published
+            )
+            #expect(!catalog.isEmpty)
+            for id in mustContain { #expect(catalog.contains(id), "missing \(id) in \(catalog)") }
+            for id in mustExclude { #expect(!catalog.contains(id), "parent \(id) leaked in \(catalog)") }
+
+            let decision = PackAcquisitionEvaluator.decide(
+                coordinates: points,
+                registry: FakePackCoverage(installed: [], published: published),
+                declinedDownloads: [],
+                declinedUpdates: [],
+                protectInstalledRevisions: false
+            )
+            guard case .requestConsent(let prompt) = decision else {
+                Issue.record("expected download consent for \(points), got \(decision)")
+                continue
+            }
+            for id in mustExclude {
+                #expect(!prompt.regionIDs.contains(id))
+            }
+        }
+    }
+
+    @Test func remapGeographicRegionIdsDropsCoveringParentsOnHalfOnlyFabric() {
+        let published = fabricV4_20260917_02PublishedIds
+        let kenora = CLLocationCoordinate2D(latitude: 49.80, longitude: -94.66)
+        // Covering bboxes emit both halves and legacy parents.
+        let geographic = ["on-n", "on", "mb", "qc", "qc-n"]
+        let remapped = GraphPackStore.remapGeographicRegionIds(
+            geographic,
+            coordinate: kenora,
+            published: published
+        )
+        #expect(remapped.needed.contains("on-n"))
+        #expect(remapped.needed.contains("mb"))
+        #expect(!remapped.needed.contains("on"))
+        #expect(!remapped.needed.contains("qc"))
+        #expect(remapped.unpublished.isEmpty)
+    }
+
     @Test func onlinePlanningWaitsForPackConsentThenResumesTheSamePins() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
@@ -676,6 +781,15 @@ private func nsRequest() -> RouteRequest {
         allowUnknown: false
     )
 }
+
+/// Published ids for Dev fabric-v4-20260917-02 (no parent on/qc/ca/nl).
+private let fabricV4_20260917_02PublishedIds: Set<String> = [
+    "ab", "ak", "al", "ar", "az", "bc", "ca-n", "ca-s", "co", "ct", "de", "fl", "ga", "hi",
+    "ia", "id", "il", "in", "ks", "ky", "la", "ma", "mb", "md", "me", "mi", "mn", "mo", "ms",
+    "mt", "nb", "nc", "nd", "ne", "nh", "nj", "nl-island", "nl-lab", "nm", "ns", "nt", "nu",
+    "nv", "ny", "oh", "ok", "on-n", "on-s", "or", "pa", "pe", "qc-n", "qc-s", "ri", "sc",
+    "sd", "sk", "tn", "tx", "ut", "va", "vt", "wa", "wi", "wv", "wy", "yt"
+]
 
 @MainActor
 private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
