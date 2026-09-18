@@ -22,6 +22,7 @@ struct RoutePlannerCard: View {
     var sitsBehindDock: Bool = false
     /// Figma landscape-primary side drawer. `true` = dock leading; `false` = dock trailing.
     var landscapeDockLeading: Bool? = nil
+    var landscapeHasIslandColumn: Bool = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppEnvironment.self) private var app
     @Environment(\.modelContext) private var modelContext
@@ -290,7 +291,7 @@ struct RoutePlannerCard: View {
         GeometryReader { geo in
             // Half screen including the strip under the dock.
             let panelW = geo.size.width * DockSheetMotion.landscapeMaxDrawerFraction
-            let dockW = DockSheetMotion.landscapeDockWidth
+            let dockW = DockSheetMotion.landscapeDockWidth(hasIslandColumn: landscapeHasIslandColumn)
 
             HStack(spacing: 0) {
                 if dockLeading {
@@ -556,6 +557,7 @@ struct RoutePlannerCard: View {
             }
             .pickerStyle(.menu)
             .dirtDropdownSurface(titleColor: DirtTheme.ink)
+            .frame(minWidth: DirtHit.dropdown, alignment: .leading)
             .labelsHidden()
             .accessibilityLabel("Surface")
             .accessibilityValue(planner.profile.title)
@@ -570,7 +572,6 @@ struct RoutePlannerCard: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
-        .fixedSize(horizontal: true, vertical: false)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: DirtHit.min, alignment: .leading)
     }
@@ -635,8 +636,7 @@ struct RoutePlannerCard: View {
         if planner.stages.isEmpty {
             VStack(spacing: 8) {
                 helperBoxLabel(
-                    Text("Long-press").fontWeight(.bold)
-                        + Text(" the map for point 1, then again for point 2 to build your first leg.")
+                    Text("\(Text("Long-press").fontWeight(.bold)) the map for point 1, then again for point 2 to build your first leg.")
                 )
                 GPXImportButton(continueAsPlan: true)
             }
@@ -692,14 +692,7 @@ struct RoutePlannerCard: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity)
 
-            (
-                Text(String(format: "%.1f km", planner.totalMeters / 1000))
-                    .foregroundStyle(DirtTheme.ink)
-                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                + Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix)
-                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                + Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix)
-            )
+            Text("\(Text(String(format: "%.1f km", planner.totalMeters / 1000)).foregroundStyle(DirtTheme.ink))\(Text("  ·  ").foregroundStyle(DirtTheme.muted))\(Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix))\(Text("  ·  ").foregroundStyle(DirtTheme.muted))\(Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix))")
             .font(DirtType.metricInline)
             .fontWeight(.bold)
             .multilineTextAlignment(.center)

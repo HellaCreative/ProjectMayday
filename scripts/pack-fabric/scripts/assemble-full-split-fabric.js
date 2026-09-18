@@ -22,6 +22,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { spawnSync } = require("child_process");
 const { catalogRegionIds, OSM_REGION } = require("../routing/registry/geofabrik");
+const { readTopologySealMetaSync } = require("./topology-meta");
 
 const FABRIC = path.join(__dirname, "..");
 const DIRT = path.resolve(FABRIC, "../..");
@@ -326,12 +327,17 @@ function main() {
     };
   }
 
-  const topologyDoc = readJSON(topologyFile);
-  if (topologyDoc.fabricReleaseId !== opts.release) {
-    // Seams builder stamps from pack manifests; force release identity if needed.
-    topologyDoc.fabricReleaseId = opts.release;
-    topologyDoc.sourceEpoch = epoch;
-    writeJSON(topologyFile, topologyDoc);
+  // National topology exceeds Node string limits; read scalars + pairs via
+  // head/tail meta instead of JSON.parse of the whole file.
+  const topologyMeta = readTopologySealMetaSync(topologyFile, { regions: false });
+  if (topologyMeta.fabricReleaseId && topologyMeta.fabricReleaseId !== opts.release) {
+    die(
+      `topology fabricReleaseId ${topologyMeta.fabricReleaseId} != ${opts.release}; ` +
+        "rebuild seams under the target release (cannot rewrite GB topology in-process)"
+    );
+  }
+  if (topologyMeta.sourceEpoch && topologyMeta.sourceEpoch !== epoch) {
+    die(`topology sourceEpoch ${topologyMeta.sourceEpoch} != ${epoch}`);
   }
   const topologyIdentity = identity(topologyFile);
   const sourceLockPath = path.join(opts.root, "source-lock.json");
@@ -353,7 +359,7 @@ function main() {
     regionCount: catalog.length,
     reusedRegions: catalog.filter((id) => sourceForRegion(id, opts).kind !== "built").length,
     regions: records,
-    topology: { ...topologyIdentity, pairs: (topologyDoc.pairs || []).length }
+    topology: { ...topologyIdentity, pairs: topologyMeta.pairCount }
   };
   writeJSON(path.join(opts.root, "release.json"), release);
   console.log(

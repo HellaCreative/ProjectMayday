@@ -15,6 +15,7 @@ const { spawn, spawnSync } = require("child_process");
 const net = require("net");
 const { OSM_REGION } = require("../routing/registry/geofabrik");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
+const { readTopologySealMetaSync } = require("./topology-meta");
 
 const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
@@ -100,10 +101,11 @@ function verifyLocalCandidate(options) {
   if (!release.topology || !release.topology.sha256) die("candidate has no sealed topology index");
   const topologyFile = path.join(options.root, "cross-pack-topology.v2.json");
   const topologyIdentity = identity(topologyFile);
-  const topology = readJSON(topologyFile);
+  // National topology exceeds Node string limits; verify via streamed meta.
+  const topology = readTopologySealMetaSync(topologyFile);
   if (topologyIdentity.sha256 !== release.topology.sha256 || topologyIdentity.bytes !== release.topology.bytes ||
       topology.fabricReleaseId !== release.releaseId || topology.sourceEpoch !== release.sourceEpoch ||
-      JSON.stringify(Object.keys(topology.regions).sort()) !== JSON.stringify(expectedIds)) {
+      JSON.stringify(topology.regionIds) !== JSON.stringify(expectedIds)) {
     die("candidate topology identity or selected regions mismatch");
   }
 
