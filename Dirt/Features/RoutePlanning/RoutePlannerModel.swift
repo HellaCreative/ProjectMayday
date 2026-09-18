@@ -939,8 +939,23 @@ final class RoutePlannerModel {
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
+            let coords = requested.waypoints.map(\.coordinate.locationCoordinate)
+            let primaries = coords.compactMap { GraphPackStore.primaryRegionId(containing: $0) }
+            let geographic = GraphPackStore.requiredRoutingRegions(for: coords)
+            let catalog = self.graphPacks.requiredCatalogRoutingRegions(for: coords)
+            #if DIRT_DEVELOPMENT
+            let fabric = AppConfig.v4CandidateReleaseId
+            #else
+            let fabric = "production"
+            #endif
+            RoutingDebugLog.shared.event(
+                "pack acquisition begin stamp=\(RoutingDebugLog.diagnosticStamp) " +
+                    "fabric=\(fabric) primaries=\(primaries.joined(separator: ",")) " +
+                    "geographic=\(geographic.joined(separator: ",")) " +
+                    "catalog=\(catalog.joined(separator: ","))"
+            )
             let acquisition = self.packAcquisition.evaluate(
-                coordinates: requested.waypoints.map(\.coordinate.locationCoordinate),
+                coordinates: coords,
                 protectInstalledRevisions: self.graphPacks.protectInstalledRevisions)
             switch acquisition {
             case .requestConsent(let prompt):
@@ -959,7 +974,10 @@ final class RoutePlannerModel {
                 self.isRouting = false; self.isAssemblingRoute = false
                 self.errorMessage = warning.message; self.toast = nil
                 return
-            case .useInstalledPacks: break
+            case .useInstalledPacks:
+                RoutingDebugLog.shared.event(
+                    "pack acquisition useInstalled catalog=\(catalog.joined(separator: ","))"
+                )
             }
 
             self.itineraryBuilder.mapZoom = self.mapState.mapZoom

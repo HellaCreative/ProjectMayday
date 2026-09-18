@@ -121,6 +121,71 @@ struct PackFirstRoutingTests {
         )
     }
 
+    @Test func resolveCatalogRegionIdMapsParentToPublishedHalf() {
+        let kenora = CLLocationCoordinate2D(latitude: 49.797954, longitude: -94.662943)
+        let toronto = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+        let published: Set<String> = ["on-s", "on-n", "qc-s", "qc-n"]
+        #expect(
+            GraphPackStore.resolveCatalogRegionId(
+                "on",
+                published: published,
+                coordinate: kenora
+            ) == "on-n"
+        )
+        #expect(
+            GraphPackStore.resolveCatalogRegionId(
+                "on",
+                published: published,
+                coordinate: toronto
+            ) == "on-s"
+        )
+        // Without a coordinate, parent stays unresolved on half-only fabrics.
+        #expect(
+            GraphPackStore.resolveCatalogRegionId("on", published: published) == nil
+        )
+    }
+
+    @Test func halfOnlyFabricResolvesParentPrimaryAtKenora() {
+        let nearHalifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
+        let kenora = CLLocationCoordinate2D(latitude: 49.797954, longitude: -94.662943)
+        let published: Set<String> = [
+            "ns", "nb", "pe", "qc-s", "qc-n", "on-s", "on-n", "mb"
+        ]
+        // Force the parent id through resolve even if polygons already return on-n.
+        #expect(
+            GraphPackStore.resolveCatalogRegionId(
+                "on",
+                published: published,
+                coordinate: kenora
+            ) == "on-n"
+        )
+        let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [nearHalifax, kenora],
+            published: published
+        )
+        #expect(catalog.contains("ns"))
+        #expect(catalog.contains("on-n"))
+        #expect(catalog.contains("nb"))
+        #expect(catalog.contains("qc-s") || catalog.contains("qc-n"))
+        #expect(!catalog.contains("on"))
+        #expect(!catalog.contains("qc"))
+
+        let coverage = FakePackCoverage(installed: ["ns", "nb", "qc-s"], published: published)
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [nearHalifax, kenora],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected on-n download consent after NS/NB/QC installed, got \(decision)")
+            return
+        }
+        #expect(prompt.regionIDs.contains("on-n"))
+        #expect(!prompt.regionIDs.contains("on"))
+    }
+
     @Test func onlinePlanningWaitsForPackConsentThenResumesTheSamePins() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")

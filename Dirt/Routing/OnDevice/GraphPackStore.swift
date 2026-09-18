@@ -375,15 +375,20 @@ final class GraphPackStore {
 
     /// Corridor packs using only published catalog ids. Avoids geographic BFS
     /// hopping through unpublished parents (`qc` / `on`) when the fabric ships
-    /// halves only.
+    /// halves only. Endpoint primaries that are parents (`on`) map onto the
+    /// published half that owns the pin (`on-n` at Kenora).
     static func requiredCatalogRoutingRegions(
         for points: [CLLocationCoordinate2D],
         published: Set<String>
     ) -> [String] {
-        let primaries = points.compactMap { primaryRegionId(containing: $0) }
         var ends: [String] = []
-        for id in primaries {
-            guard let resolved = resolveCatalogRegionId(id, published: published) else {
+        for point in points {
+            guard let id = primaryRegionId(containing: point) else { continue }
+            guard let resolved = resolveCatalogRegionId(
+                id,
+                published: published,
+                coordinate: point
+            ) else {
                 return []
             }
             if !ends.contains(resolved) { ends.append(resolved) }
@@ -423,16 +428,49 @@ final class GraphPackStore {
 
     /// Prefer an exact published id; otherwise the province/state parent when that
     /// parent is the only published catalog entry (monolithic `on` while code
-    /// prefers `on-s`/`on-n`).
+    /// prefers `on-s`/`on-n`). When the fabric ships halves only, a parent id
+    /// (`on`) resolves to the half that owns `coordinate` (`on-n` / `on-s`).
     nonisolated static func resolveCatalogRegionId(
         _ regionID: String,
-        published: Set<String>
+        published: Set<String>,
+        coordinate: CLLocationCoordinate2D? = nil
     ) -> String? {
         let id = regionID.lowercased()
         if published.contains(id) { return id }
         let family = provinceFamily(id)
+        // Half → legacy parent (monolithic fabric).
         if family != id, published.contains(family) { return family }
+        // Parent → published half (half-only fabric).
+        if family == id, let coordinate,
+           let half = preferredPublishedHalf(
+            forFamily: family,
+            coordinate: coordinate,
+            published: published
+           ) {
+            return half
+        }
         return nil
+    }
+
+    /// Picks the published shard for a split province/state family.
+    nonisolated static func preferredPublishedHalf(
+        forFamily family: String,
+        coordinate: CLLocationCoordinate2D,
+        published: Set<String>
+    ) -> String? {
+        let preferred: String?
+        switch family {
+        case "on": preferred = ontarioHalf(for: coordinate)
+        case "qc": preferred = quebecHalf(for: coordinate)
+        case "ca": preferred = californiaHalf(for: coordinate)
+        case "nl": preferred = newfoundlandHalf(for: coordinate)
+        default: preferred = nil
+        }
+        if let preferred, published.contains(preferred) { return preferred }
+        let shards = published
+            .filter { $0 != family && provinceFamily($0) == family }
+            .sorted()
+        return shards.first
     }
 
     /// Decoded pack for an installed region (active pack if it matches).
@@ -1619,19 +1657,19 @@ final class GraphPackStore {
         return id
     }
 
-    static func ontarioHalf(for coordinate: CLLocationCoordinate2D) -> String {
+    nonisolated static func ontarioHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.latitude >= 46.0 ? "on-n" : "on-s"
     }
 
-    static func quebecHalf(for coordinate: CLLocationCoordinate2D) -> String {
+    nonisolated static func quebecHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.latitude >= 49.0 ? "qc-n" : "qc-s"
     }
 
-    static func californiaHalf(for coordinate: CLLocationCoordinate2D) -> String {
+    nonisolated static func californiaHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.latitude >= 37.0 ? "ca-n" : "ca-s"
     }
 
-    static func newfoundlandHalf(for coordinate: CLLocationCoordinate2D) -> String {
+    nonisolated static func newfoundlandHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.longitude <= -56.8 ? "nl-lab" : "nl-island"
     }
 
