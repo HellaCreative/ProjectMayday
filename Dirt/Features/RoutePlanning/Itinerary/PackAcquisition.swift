@@ -98,6 +98,9 @@ protocol PackCoverageInspecting: RoutingInstalledPackRegistry {
     /// Maps a geographic primary (e.g. `on-s`) onto a catalog id that is actually
     /// published (`on-s`, or legacy parent `on` when halves are absent).
     func resolveCatalogRegionId(_ regionID: String) -> String?
+    /// Corridor packs for these pins using only published catalog ids (halves,
+    /// never an unpublished parent hop like `qc` when only `qc-s`/`qc-n` ship).
+    func requiredCatalogRoutingRegions(for coordinates: [CLLocationCoordinate2D]) -> [String]
     func packRevisionState(_ regionID: String) -> PackRevisionState
     func displayTitle(forRegionId: String) -> String
 }
@@ -131,10 +134,12 @@ enum PackAcquisitionEvaluator {
         declinedUpdates: Set<String>,
         protectInstalledRevisions: Bool
     ) -> PackAcquisitionDecision {
-        let geographic = requiredRegionIDs(for: coordinates)
         let titles = { (ids: [String]) in ids.map { registry.displayTitle(forRegionId: $0) } }
 
-        if geographic.isEmpty {
+        let geographicPrimaries = coordinates.compactMap {
+            GraphPackStore.primaryRegionId(containing: $0)
+        }
+        if geographicPrimaries.isEmpty {
             return .unavailable(PackRoutingWarning(
                 regionIDs: [],
                 regionTitles: ["this pin"],
@@ -142,20 +147,14 @@ enum PackAcquisitionEvaluator {
             ))
         }
 
-        var needed: [String] = []
-        var unpublished: [String] = []
-        for id in geographic {
-            if let resolved = registry.resolveCatalogRegionId(id) {
-                if !needed.contains(resolved) { needed.append(resolved) }
-            } else {
-                unpublished.append(id)
-            }
-        }
-
-        if !unpublished.isEmpty {
+        // Do not resolve primaries in isolation without coordinates: a parent id
+        // (`on`) is unpublished on half-only fabrics but still maps to `on-n` /
+        // `on-s` for the pin. Corridor mapping below is coordinate-aware.
+        let needed = registry.requiredCatalogRoutingRegions(for: coordinates)
+        if needed.isEmpty {
             return .unavailable(PackRoutingWarning(
-                regionIDs: unpublished,
-                regionTitles: titles(unpublished),
+                regionIDs: geographicPrimaries,
+                regionTitles: titles(geographicPrimaries),
                 reason: .packUnavailable
             ))
         }
@@ -304,6 +303,22 @@ final class PackAcquisitionCoordinator {
         warnings = []
         declinedDownloads = []
         declinedUpdates = []
+    }
+
+    /// "Not now" only skips the current pending build. A new pin set should
+    /// be allowed to ask again for missing packs.
+    func clearDownloadDeclines() {
+        declinedDownloads = []
+        warnings.removeAll { $0.reason == .declinedDownload }
+    }
+
+    /// Layers Delete wiped a pack the rider previously declined to download.
+    /// Forget that decline so the next route-touch can prompt again.
+    func notePackRemoved(_ regionID: String) {
+        let id = regionID.lowercased()
+        declinedDownloads.remove(id)
+        declinedUpdates.remove(id)
+        warnings.removeAll { $0.regionIDs.contains(id) }
     }
 
     private func record(_ warning: PackRoutingWarning) {

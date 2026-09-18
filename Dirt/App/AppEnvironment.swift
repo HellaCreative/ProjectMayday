@@ -103,6 +103,9 @@ final class AppEnvironment {
             network: network,
             poiManager: nil
         )
+        graphPacks.onPackRemoved = { [planner] regionID in
+            planner.notePackRemoved(regionID)
+        }
         groups = GroupsViewModel(supabase: supabase, location: location, mapState: mapState)
         rideIntelligence = RideIntelligenceService(supabase: supabase)
         incidents = IncidentRecoveryModel(
