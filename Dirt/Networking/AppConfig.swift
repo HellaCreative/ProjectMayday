@@ -113,6 +113,16 @@ enum AppConfig {
         #endif
     }
 
+    /// Attraction dots sidecar. Graph packs are unchanged. Local extract
+    /// output is preferred in AttractionsStore when present on disk.
+    nonisolated static var attractionsManifestURL: URL {
+        #if DIRT_DEVELOPMENT
+        v4CandidateBaseURL.appendingPathComponent("attractions/manifest.json")
+        #else
+        v4ProductionBaseURL.appendingPathComponent("attractions/manifest.json")
+        #endif
+    }
+
     nonisolated static func packFileURL(version: String, regionId: String, fileName: String) -> URL {
         _ = version
         #if DIRT_DEVELOPMENT

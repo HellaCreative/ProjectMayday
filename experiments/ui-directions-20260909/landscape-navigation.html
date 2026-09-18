@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIRT — Landscape navigation</title>
+<style>
+:root {
+  --orange: #ff8000;
+  --ink: #202820;
+  --muted: #596359;
+  --nav: #202820;
+  --island: #0d0d0f;
+  --control: #16181c;
+  --hairline: rgba(255, 255, 255, 0.12);
+  --edge: 6px;
+  --gap: 12px;
+  --btn: 50px;
+  --rail: 143px;
+  --band: 78px;
+  --phone-w: 852px;
+  --phone-h: 393px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #202521;
+  background: #eef0eb;
+}
+* { box-sizing: border-box; margin: 0 }
+body { margin: 0 }
+button { font: inherit; cursor: pointer; border: 0; background: none; min-height: 44px }
+button:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px }
+::selection { background: #ffb565; color: #171b19 }
+
+.studio { max-width: 1100px; margin: auto; padding: 36px 28px 56px; display: grid; gap: 28px }
+.brief { max-width: 680px }
+.brief h1 { font-size: 36px; letter-spacing: -0.04em; line-height: 1.05; margin: 0 0 12px }
+.brief h1 span { color: var(--orange) }
+.brief p { line-height: 1.6; color: #5b655b; font-size: 14px; margin: 8px 0 }
+.note {
+  margin-top: 18px; padding: 14px;
+  background: rgba(255, 128, 0, 0.06); border: 1px solid rgba(255, 128, 0, 0.16);
+  border-radius: 10px; font-size: 12px; line-height: 1.55; color: #6b4a00;
+}
+.toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px }
+.toggles button {
+  border: 1px solid #b9bfb6; border-radius: 8px; padding: 8px 14px; min-height: 40px;
+}
+.toggles button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink) }
+.gallery-link { display: inline-block; margin-top: 16px; font-size: 13px; color: var(--orange) }
+
+.phone-frame { container-type: inline-size; width: 100%; aspect-ratio: 852 / 393 }
+.phone {
+  position: relative;
+  width: var(--phone-w); height: var(--phone-h);
+  transform: scale(calc(100cqi / 852)); transform-origin: top left;
+  border-radius: 44px; overflow: hidden; isolation: isolate;
+  box-shadow: 0 18px 40px rgba(38, 50, 36, 0.18);
+  background: #91b3a0 url("map-reference.png") center / cover;
+}
+
+.island {
+  position: absolute; top: 50%; width: 34px; height: 120px; margin-top: -60px;
+  border-radius: 20px; background: var(--island);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  pointer-events: none; z-index: 6;
+}
+.phone[data-island="leading"] .island { left: 18px }
+.phone[data-island="trailing"] .island { right: 18px }
+
+/* Chrome cluster sits opposite the island. Island side stays map. */
+.cluster {
+  position: absolute; top: 18px; bottom: 15px; z-index: 5;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.phone[data-island="leading"] .cluster { right: var(--edge); flex-direction: row }
+.phone[data-island="trailing"] .cluster { left: var(--edge); flex-direction: row-reverse }
+
+.rail {
+  width: var(--rail); flex: none;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.wordmark {
+  align-self: stretch;
+  height: var(--band);
+  font-weight: 900; font-style: italic; font-size: 18px;
+  background: var(--nav); color: #fff; border-radius: 12px;
+  padding: 0 12px; line-height: 1; border: 1px solid var(--hairline);
+  display: flex; align-items: center; gap: 8px;
+}
+.wordmark em { font-style: italic; color: var(--orange) }
+.dev {
+  font-style: normal; font-size: 8px; font-weight: 800; letter-spacing: 0.08em;
+  background: var(--orange); color: #16181c; border-radius: 999px; padding: 3px 6px;
+}
+.report {
+  background: rgba(248, 250, 252, 0.78);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border-radius: 16px;
+  padding: 12px 10px 10px;
+  color: var(--ink);
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+.report h2 { font-size: 13px; font-weight: 800; margin: 0 }
+.report .km { font-size: 22px; font-weight: 800; letter-spacing: -0.03em }
+.report .meta { font-size: 11px; color: var(--muted) }
+.act {
+  width: 100%; min-height: 48px; border-radius: 12px; font-weight: 800; font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.act.report { background: var(--orange); color: #16181c }
+.act.end {
+  background: transparent; color: #a12e28;
+  border: 1.5px solid rgba(161, 46, 40, 0.45);
+}
+
+.cue-cluster { display: flex; gap: 8px; align-items: flex-start; flex: none; padding-top: 0 }
+.cue {
+  min-width: 0; max-width: 360px; height: var(--band);
+  background: rgba(248, 250, 252, 0.88);
+  backdrop-filter: blur(20px);
+  border-radius: 14px; padding: 0 14px;
+  display: flex; gap: 10px; align-items: center;
+  font-weight: 800; font-size: 16px; color: var(--ink);
+}
+.speed {
+  flex: none; height: var(--band); width: 96px;
+  background: rgba(248, 250, 252, 0.88);
+  border-radius: 14px; padding: 0 14px;
+  display: flex; flex-direction: column; justify-content: center;
+  text-align: center;
+}
+.speed strong { display: block; font-size: 28px }
+.speed small { font-size: 10px; font-weight: 700; color: var(--muted) }
+
+.nav-col {
+  width: var(--btn); align-self: stretch;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+
+.chip {
+  width: var(--btn); height: var(--btn); min-height: var(--btn);
+  border-radius: 12px; background: var(--control); color: #fff;
+  border: 1px solid var(--hairline);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; font-size: 12px; font-weight: 700;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+.chip.on { background: var(--orange); color: #fff }
+.chip small { font-size: 6.5px; letter-spacing: 0.3px; opacity: 0.72; font-weight: 600 }
+.chip b { font-size: 10px }
+.icon {
+  width: 20px; height: 20px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.zooms {
+  position: absolute; z-index: 5; top: 18px;
+  display: flex; flex-direction: row; gap: 10px;
+}
+.phone[data-island="leading"] .zooms { left: 52px }
+.phone[data-island="trailing"] .zooms { right: 52px }
+.chip.zoom { background: #fff; color: #17191d; border-color: #999 }
+
+.junction {
+  display: none;
+  position: absolute; inset: 0; z-index: 8;
+  place-items: center;
+  background: rgba(16, 22, 18, 0.18);
+}
+.phone[data-junction="open"] .junction { display: grid }
+.junction-card {
+  width: min(420px, 70%);
+  background: rgba(250, 252, 250, 0.94);
+  backdrop-filter: blur(28px);
+  border-radius: 16px; padding: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+}
+.junction-card h3 { font-size: 18px; margin: 0 0 8px }
+.junction-card p { font-size: 14px; color: var(--muted); line-height: 1.45 }
+@media (max-width: 800px) { .studio { padding: 24px 16px 40px } }
+</style>
+<body>
+  <div class="studio">
+    <aside class="brief">
+      <h1>Chrome opposite the <span>island</span>.</h1>
+      <p>Cue, speed, brand, Report/End, and the map chips cluster on the side opposite the island so that edge stays open map. Plus and minus sit at the top of the island-side map, just in from the pill.</p>
+      <p>Flip the island to see the cluster follow the open side. Cue still opens in the centre.</p>
+      <div class="toggles">
+        <button type="button" id="flip" aria-pressed="false">Island on trailing</button>
+        <button type="button" id="junction" aria-pressed="false">Junction open</button>
+      </div>
+      <p class="note"><strong>Placement only.</strong> App chrome details are unchanged. This is packing and scale.</p>
+      <a class="gallery-link" href="landscape-island.html">Idle landscape dock →</a>
+    </aside>
+
+    <div class="phone-frame">
+      <div class="phone" data-island="leading" data-junction="closed" id="phone">
+        <div class="island" aria-hidden="true"></div>
+
+        <div class="cluster">
+          <div class="cue-cluster">
+            <div class="cue"><span aria-hidden="true">↑</span> Follow the route</div>
+            <div class="speed"><strong>0</strong><small>KM/H</small></div>
+          </div>
+          <div class="rail">
+            <div class="wordmark">DIRT<em>.</em> <span class="dev">DEV</span></div>
+            <aside class="report">
+              <div>
+                <h2>Point 2</h2>
+                <div class="km">125 km</div>
+                <p class="meta">2:53 · Ride 0:00</p>
+              </div>
+              <p class="meta">Paved</p>
+              <button class="act report" type="button">REPORT</button>
+              <button class="act end" type="button">END</button>
+              <p class="meta">Destination 124.9 km · +0 m</p>
+            </aside>
+          </div>
+          <div class="nav-col" aria-label="Map controls">
+            <button class="chip" type="button" aria-label="Route overview">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h10M5 17h7"/></svg>
+            </button>
+            <button class="chip" type="button">3D</button>
+            <button class="chip on" type="button" id="cues" aria-label="Cue">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 10v4h3l4 3V7L7 10H4Z"/>
+                <path d="M16 9.5a3.2 3.2 0 0 1 0 5"/>
+                <path d="M18.2 7.5a6 6 0 0 1 0 9"/>
+              </svg>
+            </button>
+            <button class="chip" type="button" aria-label="Compass">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m12 7 2.2 7-2.2-1.2L9.8 14Z"/></svg>
+            </button>
+            <button class="chip" type="button" aria-label="Rider status">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            </button>
+            <button class="chip on" type="button" aria-label="Recenter">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="zooms">
+          <button class="chip zoom" type="button" aria-label="Zoom in">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button class="chip zoom" type="button" aria-label="Zoom out">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+          </button>
+        </div>
+
+        <div class="junction" role="dialog" aria-label="Junction cues">
+          <div class="junction-card">
+            <h3>Junction</h3>
+            <p>Cue list sits in the middle of the window so it is not clipped by the island or the Report rail.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const phone = document.getElementById("phone");
+    const flip = document.getElementById("flip");
+    const junction = document.getElementById("junction");
+    const cues = document.getElementById("cues");
+    const setJunction = (open) => {
+      phone.dataset.junction = open ? "open" : "closed";
+      junction.setAttribute("aria-pressed", String(open));
+    };
+    flip.addEventListener("click", () => {
+      const trailing = phone.dataset.island !== "trailing";
+      phone.dataset.island = trailing ? "trailing" : "leading";
+      flip.setAttribute("aria-pressed", String(trailing));
+      flip.textContent = trailing ? "Island on leading" : "Island on trailing";
+    });
+    junction.addEventListener("click", () => setJunction(phone.dataset.junction !== "open"));
+    cues.addEventListener("click", () => setJunction(phone.dataset.junction !== "open"));
+  </script>
+</body>
+</html>

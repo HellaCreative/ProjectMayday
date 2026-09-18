@@ -148,6 +148,8 @@ enum DirtSpace {
 enum DirtHit {
     static let min: CGFloat = 44
     static let control: CGFloat = 50
+    /// Closed menu field — wide enough for “Balanced” after a landscape/portrait flip.
+    static let dropdown: CGFloat = 152
 }
 
 /// Operate-mode motion: feedback and continuity, not page-load choreography.
@@ -249,6 +251,15 @@ enum DirtIsland {
         isLandscape: Bool
     ) -> Bool {
         !isLandscape && idiom == .phone && topInset >= minimumTopInset
+    }
+
+    /// Island hardware even while landscape (portrait `isPresent` is false when rotated).
+    /// Uses the large horizontal inset on that edge (~59pt). Notch is ~47pt; SE is small.
+    static func hasHardwareCutout(
+        insets: UIEdgeInsets,
+        idiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom
+    ) -> Bool {
+        idiom == .phone && max(insets.top, insets.left, insets.right) >= minimumTopInset
     }
 }
 
@@ -561,6 +572,7 @@ struct BrandChip: View {
                 .padding(.leading, 6)
         }
         .font(.dirtUI(sitsInIslandStack ? 15 : 16, weight: .black))
+        .lineLimit(1)
         .padding(.horizontal, sitsInIslandStack ? 0 : 12)
         .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: sitsInIslandStack ? 32 : minHeight)
         .modifier(BrandChipChrome(sitsInIslandStack: sitsInIslandStack))

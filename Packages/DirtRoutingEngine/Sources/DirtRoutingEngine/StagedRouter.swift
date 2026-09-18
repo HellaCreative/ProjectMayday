@@ -103,6 +103,11 @@ public enum StagedRouter {
             }
             throw lastError
         }
+        // Multi-pack (NS→NB→QC class): prepare overlapping windows up front so
+        // later hops reuse IndexedGraph instead of re-opening.
+        let prepareStarted = ContinuousClock.now
+        _ = try prepared.indexedWindows(windows, repository: repository, budget: budget)
+        request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
         for (index, window) in windows.enumerated() {
             try budget.check()
             let candidates: [Coordinate]
@@ -117,8 +122,21 @@ public enum StagedRouter {
             let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
             var lastError: Error = RoutingFailure.noPath
             var advanced = false
+            var reach: EndpointReachability?
             for (attempt, hopEnd) in candidates.enumerated() {
                 try budget.check()
+                // Same stub filter as the two-pack path — NS→NB→QC handovers
+                // otherwise burn full searches on dead border pins.
+                if index + 1 < windows.count {
+                    let filterStarted = ContinuousClock.now
+                    let live = try hopLooksLive(hopEnd, origin: cursor, graph: indexed,
+                                                request: request, budget: budget, reach: &reach)
+                    request.options.counter?.recordStage("seamFilter", since: filterStarted)
+                    guard live else {
+                        lastError = RoutingFailure.noPath
+                        continue
+                    }
+                }
                 var hop = request.with(start: cursor, end: hopEnd)
                 let span = cursor.distance(to: hopEnd)
                 hop.options.compassMaxRemaining = max(450_000, span * 2.5)

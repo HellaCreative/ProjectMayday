@@ -3,12 +3,14 @@ import SwiftUI
 
 /// Navigation chrome — Figma `Navigation — Turn Left - Junction` (node 50:5240):
 /// - Top: `DIRT.` · turn cue (+ distance) · dark speed
-/// - Bottom: inset chrome card (top radius 16 / bottom 29) with compact REPORT / END
+/// - Bottom: full-bleed portrait ride panel
 
 // MARK: - Cue card (top center)
 
 struct NavCueCard: View {
     @Environment(AppEnvironment.self) private var app
+    /// When set, the card is clipped to the landscape top band so it lines up with speed and brand.
+    var bandHeight: CGFloat? = nil
 
     private var nav: NavigationSession { app.navigation }
 
@@ -61,8 +63,9 @@ struct NavCueCard: View {
             .layoutPriority(1)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, cueBand == .now ? 12 : 10)
-        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+        .padding(.vertical, bandHeight == nil ? (cueBand == .now ? 12 : 10) : 8)
+        .frame(maxWidth: .infinity, minHeight: bandHeight ?? 72, alignment: .leading)
+        .frame(height: bandHeight)
         .background {
             ZStack {
                 Rectangle().fill(DirtTheme.sheetMaterial)
@@ -203,7 +206,7 @@ struct NavSpeedReadout: View {
                 .foregroundStyle(DirtTheme.orange)
                 .tracking(0.8)
             Text("\(speedKMH)")
-                .font(.dirtUI(compact ? 28 : 44, weight: .heavy))
+                .font(.dirtUI(compact ? 32 : 44, weight: .heavy))
                 .foregroundStyle(DirtTheme.ink)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -213,7 +216,7 @@ struct NavSpeedReadout: View {
         .padding(.vertical, compact ? 8 : 6)
         .frame(
             width: compact ? 96 : 106,
-            height: compact ? 68 : 80,
+            height: compact ? NavChromeMetrics.landscapeTopBandHeight : 80,
             alignment: .leading
         )
         .dirtSheetSurface(radius: compact ? 12 : 16)
@@ -227,7 +230,11 @@ struct NavSpeedReadout: View {
 enum NavChromeMetrics {
     /// Figma landscape: brand chip + left rail share this column width.
     /// Wide enough for full “REPORT” + icon without truncating.
-    static let landscapeBrandColumn: CGFloat = 128
+    static let landscapeBrandColumn: CGFloat = 143
+    /// Cue, speed, and wordmark share one top-band height so the cluster edge is square.
+    static let landscapeTopBandHeight: CGFloat = 78
+    /// Outer pad on the clustered (non-island) edge — hug the phone.
+    static let landscapeClusterEdgePad: CGFloat = 6
     /// Cue gets room without eating the whole top band.
     static let landscapeCueMaxWidth: CGFloat = 320
 }
@@ -265,36 +272,6 @@ enum NavTripFormat {
         let time = travelTime(phase: phase, etaSeconds: etaSeconds)
         let climb = "+\(Self.climbMeters(climbMeters)) m"
         return "\(km) · \(time) · \(climb)"
-    }
-}
-
-struct NavStatBox: View {
-    let label: String
-    let value: String
-    var compact: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.dirtMono(compact ? 8 : 10, weight: .semibold))
-                .foregroundStyle(DirtTheme.orange)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Text(value)
-                // Values only — labels stay put. +50% over prior 16 / 20.
-                .font(.dirtMono(compact ? 24 : 30, weight: .semibold))
-                .foregroundStyle(DirtTheme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(compact ? 6 : 8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label), \(value)")
     }
 }
 
@@ -364,18 +341,8 @@ struct NavEndButton: View {
 struct NavBottomPanel: View {
     @Environment(AppEnvironment.self) private var app
     @State private var showEndConfirm = false
-    @State private var statsExpanded = false
 
     private var nav: NavigationSession { app.navigation }
-
-    /// Figma NavCueCard: ~8pt side inset on a 393pt frame; top 16 / bottom 29 radii.
-    private let panelShape = UnevenRoundedRectangle(
-        topLeadingRadius: 16,
-        bottomLeadingRadius: 29,
-        bottomTrailingRadius: 29,
-        topTrailingRadius: 16,
-        style: .continuous
-    )
 
     private var surfaceIsAlert: Bool {
         if let alert = nav.upcomingSurfaceAlert, !alert.isEmpty { return true }
@@ -412,30 +379,24 @@ struct NavBottomPanel: View {
                 waypointProgress
                 statusRow
 
-                if statsExpanded {
-                    HStack(spacing: 10) {
-                        tripStatBoxes(compact: false)
-                    }
-                }
-
                 // Report (primary) left · End (secondary + confirm) right — side by side.
                 HStack(spacing: 10) {
                     NavReportButton(fillWidth: true) { app.incidents.open() }
                     NavEndButton(fillWidth: true) { showEndConfirm = true }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 14)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
+            .safeAreaPadding(.bottom)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 ZStack {
                     Rectangle().fill(DirtTheme.sheetMaterial)
                     Rectangle().fill(Color.white.opacity(0.22))
                 }
+                .ignoresSafeArea(edges: .bottom)
             }
-            .clipShape(panelShape)
-            .overlay(panelShape.stroke(DirtTheme.chromeBorder, lineWidth: 1))
         }
     }
 
@@ -483,67 +444,29 @@ struct NavBottomPanel: View {
         return "\(Int(max(0, meters).rounded())) m"
     }
 
-    /// Surface under the tires (left) + remaining trip (right) on one tappable line.
+    /// Surface under the tires.
     private var statusRow: some View {
-        let summary = String(
-            format: "Destination %.1f km · +%@ m",
-            nav.remainingMeters / 1000,
-            NavTripFormat.climbMeters(nav.climbMeters)
-        )
-        return Button {
-            withAnimation(.easeInOut(duration: 0.18)) { statsExpanded.toggle() }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: surfaceIsAlert ? "exclamationmark.triangle.fill" : DirtSurfaceIcon.symbol(for: surfaceLine))
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(DirtTheme.orange)
-                Text(surfaceLine)
-                    .font(.dirtUI(surfaceIsAlert ? 15 : 14, weight: .bold))
-                    .foregroundStyle(DirtTheme.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                Spacer(minLength: 8)
-
-                Text(summary)
-                    .font(.dirtMono(11, weight: .semibold))
-                    .foregroundStyle(DirtTheme.ink.opacity(0.85))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(DirtTheme.orange)
-                    .rotationEffect(.degrees(statsExpanded ? 180 : 0))
-            }
-            .padding(.horizontal, 2)
-            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-            .background(surfaceIsAlert ? DirtTheme.orange.opacity(0.12) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(Rectangle())
+        HStack(spacing: 8) {
+            Image(systemName: surfaceIsAlert ? "exclamationmark.triangle.fill" : DirtSurfaceIcon.symbol(for: surfaceLine))
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(DirtTheme.orange)
+            Text(surfaceLine)
+                .font(.dirtUI(surfaceIsAlert ? 15 : 14, weight: .bold))
+                .foregroundStyle(DirtTheme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Surface \(surfaceLine). Trip \(summary)")
-        .accessibilityHint(statsExpanded ? "Hides trip detail" : "Shows trip detail")
+        .padding(.horizontal, 2)
+        .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
+        .background(surfaceIsAlert ? DirtTheme.orange.opacity(0.12) : Color.clear)
+        .accessibilityLabel("Surface \(surfaceLine)")
     }
 
     /// Upcoming change wins; otherwise the surface under the tires.
     private var surfaceLine: String {
         if let alert = nav.upcomingSurfaceAlert, !alert.isEmpty { return alert }
         return nav.currentSurfaceLabel ?? "On route"
-    }
-
-    @ViewBuilder
-    private func tripStatBoxes(compact: Bool) -> some View {
-        NavStatBox(
-            label: "destination km",
-            value: String(format: "%.1f", nav.remainingMeters / 1000),
-            compact: compact
-        )
-        NavStatBox(
-            label: "climb:m",
-            value: NavTripFormat.climbMeters(nav.climbMeters),
-            compact: compact
-        )
     }
 
     // MARK: Prefetch (legacy phase — copy matches OfflineMapPrepOverlay)
@@ -569,11 +492,16 @@ struct NavBottomPanel: View {
                     .foregroundStyle(DirtTheme.orange)
             }
         }
-        .padding(14)
+        .padding(16)
+        .safeAreaPadding(.bottom)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.sheetMaterial)
-        .clipShape(panelShape)
-        .overlay(panelShape.stroke(DirtTheme.chromeBorder, lineWidth: 1))
+        .background {
+            ZStack {
+                Rectangle().fill(DirtTheme.sheetMaterial)
+                Rectangle().fill(Color.white.opacity(0.22))
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Saving maps for the trail, \(Int(app.offline.progress * 100)) percent")
     }
@@ -585,7 +513,6 @@ struct NavBottomPanel: View {
 struct NavLandscapeRail: View {
     @Environment(AppEnvironment.self) private var app
     @State private var showEndConfirm = false
-    @State private var statsExpanded = false
 
     private var nav: NavigationSession { app.navigation }
 
@@ -674,43 +601,12 @@ struct NavLandscapeRail: View {
                 NavEndButton(title: "END", fillWidth: true) { showEndConfirm = true }
             }
 
-            let summary = String(format: "Destination %.1f km · +%@ m", nav.remainingMeters / 1000, NavTripFormat.climbMeters(nav.climbMeters))
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) { statsExpanded.toggle() }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(statsExpanded ? "Hide" : summary)
-                        .font(.dirtUI(11, weight: .semibold))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.9))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.65)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(DirtTheme.orange)
-                        .rotationEffect(.degrees(statsExpanded ? 180 : 0))
-                }
-                .padding(.horizontal, 6)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 6)
-
-            if statsExpanded {
-                VStack(spacing: 8) {
-                    NavStatBox(
-                        label: "destination km",
-                        value: String(format: "%.1f", nav.remainingMeters / 1000),
-                        compact: true
-                    )
-                    NavStatBox(
-                        label: "climb:m",
-                        value: NavTripFormat.climbMeters(nav.climbMeters),
-                        compact: true
-                    )
-                }
-            }
+            Text(String(format: "Destination %.1f km · +%@ m", nav.remainingMeters / 1000, NavTripFormat.climbMeters(nav.climbMeters)))
+                .font(.dirtUI(11, weight: .semibold))
+                .foregroundStyle(DirtTheme.ink.opacity(0.9))
+                .lineLimit(2)
+                .minimumScaleFactor(0.65)
+                .padding(.top, 6)
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -47,6 +47,9 @@ struct MapLibreMapView: UIViewRepresentable {
     private enum RoutePaintMetrics {
         static let surfaceWidth: CGFloat = 8
         static let casingWidth: CGFloat = 10
+        /// Ferry is a water crossing, not a road surface — keep it thin and dotted.
+        static let ferryWidth: CGFloat = 2.6
+        static let ferryDash: [NSNumber] = [0.55, 1.35]
     }
 
     func makeCoordinator() -> Coordinator {
@@ -140,8 +143,19 @@ struct MapLibreMapView: UIViewRepresentable {
                 .maximumZoomLevelForClustering: clusterMaxZoom
             ]
         }
+        static func packedAttractionCircleID(_ kind: MapAttractionKind) -> String {
+            "dirt-poi-attraction-\(kind.rawValue)"
+        }
+        static func packedAttractionSymbolID(_ kind: MapAttractionKind) -> String {
+            "dirt-poi-attraction-\(kind.rawValue)-icon"
+        }
+        static var packedAttractionLayerIDs: [String] {
+            MapAttractionKind.allCases.flatMap {
+                [packedAttractionCircleID($0), packedAttractionSymbolID($0)]
+            }
+        }
         static var individualLayerIDs: [String] {
-            categories.flatMap { [layerID($0.id), symbolID($0.id)] }
+            categories.flatMap { [layerID($0.id), symbolID($0.id)] } + packedAttractionLayerIDs
         }
         static var allLayerIDs: [String] {
             individualLayerIDs + [fuelClusterCircleID, fuelClusterCountID]
@@ -514,6 +528,49 @@ struct MapLibreMapView: UIViewRepresentable {
                 symbol.minimumZoomLevel = Float(POILayer.iconMinZoom)
                 style.addLayer(symbol)
             }
+            for kind in MapAttractionKind.allCases {
+                let circle = MLNCircleStyleLayer(
+                    identifier: POILayer.packedAttractionCircleID(kind),
+                    source: generalSource
+                )
+                circle.predicate = NSPredicate(
+                    format: "category == %@ AND kind == %@",
+                    "attraction",
+                    kind.rawValue
+                )
+                circle.circleColor = NSExpression(forConstantValue: kind.uiColor)
+                circle.circleRadius = NSExpression(mglJSONObject: [
+                    "interpolate", ["linear"], ["zoom"],
+                    6.5, 3.5,
+                    8.5, 5.5,
+                    11.0, 9.0,
+                    13.0, 11.0
+                ] as [Any])
+                circle.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+                circle.circleStrokeWidth = NSExpression(mglJSONObject: [
+                    "interpolate", ["linear"], ["zoom"],
+                    6.5, 1.0,
+                    11.0, 2.0
+                ] as [Any])
+                circle.minimumZoomLevel = Float(POILayer.dotMinZoom)
+                style.addLayer(circle)
+
+                let symbol = MLNSymbolStyleLayer(
+                    identifier: POILayer.packedAttractionSymbolID(kind),
+                    source: generalSource
+                )
+                symbol.predicate = NSPredicate(
+                    format: "category == %@ AND kind == %@",
+                    "attraction",
+                    kind.rawValue
+                )
+                symbol.iconImageName = NSExpression(forConstantValue: kind.iconName)
+                symbol.iconAllowsOverlap = NSExpression(forConstantValue: true)
+                symbol.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+                symbol.iconAnchor = NSExpression(forConstantValue: "center")
+                symbol.minimumZoomLevel = Float(POILayer.iconMinZoom)
+                style.addLayer(symbol)
+            }
             applyPOILayerVisibility(to: style)
         }
 
@@ -524,67 +581,35 @@ struct MapLibreMapView: UIViewRepresentable {
                       let image = POILayer.makeIcon(category: cat, color: color) else { continue }
                 style.setImage(image, forName: name)
             }
-            for kind in ["beach", "waterfall", "viewpoint", "landmark"] {
-                let name = "dirt-attraction-icon-\(kind)"
+            for kind in MapAttractionKind.allCases {
+                let name = kind.iconName
                 guard style.image(forName: name) == nil,
                       let image = POILayer.makeAttractionIcon(
-                        symbolName: MapAttraction.systemSymbolName(for: kind),
-                        color: MapAttraction.color
+                        symbolName: kind.systemSymbolName,
+                        color: kind.uiColor
                       ) else { continue }
                 style.setImage(image, forName: name)
             }
         }
 
-        /// OSM Shortbread `pois` / `land` — not Rider Services. Camps and fuel stay on `/api/poi`.
+        /// OSM Shortbread `pois` / beach land — not Rider Services.
         private func addAttractionLayers(to style: MLNStyle) {
             guard style.layer(withIdentifier: MapAttraction.layerIDs[0]) == nil,
                   let source = style.source(withIdentifier: "someoneelse")
             else { return }
 
-            let kinds: [(id: String, predicate: NSPredicate, sourceLayer: String)] = [
-                (
-                    "beach",
-                    NSPredicate(format: "natural == 'beach' OR leisure == 'beach' OR kind == 'beach'"),
-                    "pois"
-                ),
-                (
-                    "waterfall",
-                    NSPredicate(format: "natural == 'waterfall' OR waterway == 'waterfall' OR kind == 'waterfall'"),
-                    "pois"
-                ),
-                (
-                    "viewpoint",
-                    NSPredicate(format: "tourism == 'viewpoint' OR kind == 'viewpoint'"),
-                    "pois"
-                ),
-                (
-                    "landmark",
-                    NSPredicate(
-                        format: "tourism == 'attraction' OR man_made == 'lighthouse' OR kind == 'attraction' OR historic IN %@",
-                        ["monument", "memorial", "castle", "ruins", "archaeological_site", "battlefield", "fort"]
-                    ),
-                    "pois"
-                ),
-                (
-                    "beach-land",
-                    NSPredicate(format: "kind == 'beach'"),
-                    "land"
-                )
-            ]
-            for spec in kinds {
-                let iconKind = spec.id.hasPrefix("beach") ? "beach" : spec.id
-                let layer = MLNSymbolStyleLayer(
-                    identifier: "dirt-attraction-\(spec.id)",
-                    source: source
-                )
-                layer.sourceLayerIdentifier = spec.sourceLayer
-                layer.predicate = spec.predicate
-                layer.iconImageName = NSExpression(forConstantValue: "dirt-attraction-icon-\(iconKind)")
-                layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
-                layer.iconIgnoresPlacement = NSExpression(forConstantValue: false)
-                layer.iconAnchor = NSExpression(forConstantValue: "center")
-                layer.minimumZoomLevel = Float(MapAttraction.minZoom)
-                style.addLayer(layer)
+            for kind in MapAttractionKind.allCases {
+                for spec in kind.specs {
+                    let layer = MLNSymbolStyleLayer(identifier: spec.id, source: source)
+                    layer.sourceLayerIdentifier = spec.sourceLayer
+                    layer.predicate = spec.predicate
+                    layer.iconImageName = NSExpression(forConstantValue: kind.iconName)
+                    layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+                    layer.iconIgnoresPlacement = NSExpression(forConstantValue: false)
+                    layer.iconAnchor = NSExpression(forConstantValue: "center")
+                    layer.minimumZoomLevel = Float(spec.minZoom)
+                    style.addLayer(layer)
+                }
             }
             applyPOILayerVisibility(to: style)
         }
@@ -645,9 +670,10 @@ struct MapLibreMapView: UIViewRepresentable {
                 identifier: RouteFerryPaint.casingID,
                 source: ferrySource
             )
-            ferryCasing.lineColor = NSExpression(forConstantValue: UIColor.white)
-            ferryCasing.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.casingWidth)
-            ferryCasing.lineOpacity = NSExpression(forConstantValue: 0.72)
+            ferryCasing.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.routeFerry))
+            ferryCasing.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.ferryWidth + 1.4)
+            ferryCasing.lineOpacity = NSExpression(forConstantValue: 0.28)
+            ferryCasing.lineDashPattern = NSExpression(forConstantValue: RoutePaintMetrics.ferryDash)
             ferryCasing.lineCap = NSExpression(forConstantValue: "round")
             ferryCasing.lineJoin = NSExpression(forConstantValue: "round")
 
@@ -656,9 +682,9 @@ struct MapLibreMapView: UIViewRepresentable {
                 source: ferrySource
             )
             ferryLine.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.routeFerry))
-            ferryLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.surfaceWidth)
-            ferryLine.lineOpacity = NSExpression(forConstantValue: 0.92)
-            ferryLine.lineDashPattern = NSExpression(forConstantValue: [2.4, 1.1] as [NSNumber])
+            ferryLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.ferryWidth)
+            ferryLine.lineOpacity = NSExpression(forConstantValue: 1)
+            ferryLine.lineDashPattern = NSExpression(forConstantValue: RoutePaintMetrics.ferryDash)
             ferryLine.lineCap = NSExpression(forConstantValue: "round")
             ferryLine.lineJoin = NSExpression(forConstantValue: "round")
 
@@ -727,6 +753,7 @@ struct MapLibreMapView: UIViewRepresentable {
                     f.coordinate = CLLocationCoordinate2D(latitude: poi.latitude, longitude: poi.longitude)
                     f.attributes = [
                         "category": poi.category,
+                        "kind":     poi.kind       ?? "",
                         "poi_id":   poi.id,
                         "name":     poi.name         ?? "",
                         "address":  poi.address       ?? "",
@@ -744,9 +771,7 @@ struct MapLibreMapView: UIViewRepresentable {
                     MLNShapeCollectionFeature(shapes: generalShapes)
             }
 
-            if prefsChanged {
-                applyPOILayerVisibility(to: style)
-            }
+            applyPOILayerVisibility(to: style)
         }
 
         private func applyPOILayerVisibility(to style: MLNStyle) {
@@ -758,11 +783,19 @@ struct MapLibreMapView: UIViewRepresentable {
             }
             style.layer(withIdentifier: POILayer.fuelClusterCircleID)?.isVisible = prefs.showFuel
             style.layer(withIdentifier: POILayer.fuelClusterCountID)?.isVisible = prefs.showFuel
-            for id in MapAttraction.layerIDs {
-                style.layer(withIdentifier: id)?.isVisible = prefs.showAttractions
+            let packedAttractions = state.packedAttractionsAvailable
+            for kind in MapAttractionKind.allCases {
+                let visible = prefs.showsAttraction(kind)
+                style.layer(withIdentifier: POILayer.packedAttractionCircleID(kind))?.isVisible =
+                    visible && packedAttractions
+                style.layer(withIdentifier: POILayer.packedAttractionSymbolID(kind))?.isVisible =
+                    visible && packedAttractions
+                for id in kind.layerIDs {
+                    style.layer(withIdentifier: id)?.isVisible = visible && !packedAttractions
+                }
             }
             for id in MapAttraction.builtinLayerIDs {
-                style.layer(withIdentifier: id)?.isVisible = !prefs.showAttractions
+                style.layer(withIdentifier: id)?.isVisible = !prefs.showsAttraction(.viewpoint)
             }
             applyWaterNameVisibility(to: style, visible: prefs.showWaterNames)
             applyFuelReplacementEmphasis(to: style)
@@ -1805,13 +1838,14 @@ struct MapLibreMapView: UIViewRepresentable {
             )
             let poiLayerIDs = Set(POILayer.individualLayerIDs + MapAttraction.layerIDs)
             let poiHits = mapView.visibleFeatures(in: box, styleLayerIdentifiers: poiLayerIDs)
-            guard let hit = poiHits.first else { return nil }
+            guard let hit = Self.preferredPOIHit(poiHits) else { return nil }
             let attrs = hit.attributes
             let existingCategory = attrs["category"] as? String
             let isPackedPOI = existingCategory == "fuel"
                 || existingCategory == "campground"
                 || existingCategory == "lodging"
                 || existingCategory == "liquor"
+                || existingCategory == "attraction"
             if !isPackedPOI, let kind = MapAttraction.kind(from: attrs) {
                 let name = (attrs["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                 let coordinate: CLLocationCoordinate2D = {
@@ -1843,7 +1877,8 @@ struct MapLibreMapView: UIViewRepresentable {
                 brand:        (attrs["brand"]   as? String).flatMap { $0.isEmpty ? nil : $0 },
                 openingHours: nil,
                 phone:        (attrs["phone"]   as? String).flatMap { $0.isEmpty ? nil : $0 },
-                website:      (attrs["website"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                website:      (attrs["website"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                kind:         (attrs["kind"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             )
         }
 
@@ -1865,6 +1900,25 @@ struct MapLibreMapView: UIViewRepresentable {
             return mapView.visibleFeatures(in: box, styleLayerIdentifiers: layerIDs)
                 .compactMap { $0 as? MLNPointFeature }
                 .first
+        }
+
+        /// Prefer a packed station, then a named non-beach attraction, then any point.
+        private static func preferredPOIHit(_ hits: [MLNFeature]) -> MLNFeature? {
+            func isPacked(_ feature: MLNFeature) -> Bool {
+                let category = feature.attributes["category"] as? String
+                return category == "fuel"
+                    || category == "campground"
+                    || category == "lodging"
+                    || category == "liquor"
+                    || category == "attraction"
+            }
+            if let packed = hits.first(where: isPacked) { return packed }
+            let attractions: [(MLNFeature, String)] = hits.compactMap { hit in
+                guard let kind = MapAttraction.kind(from: hit.attributes) else { return nil }
+                return (hit, kind)
+            }
+            if let named = attractions.first(where: { $0.1 != "beach" }) { return named.0 }
+            return attractions.first?.0 ?? hits.first
         }
 
         private func zoomIntoFuelCluster(_ cluster: MLNPointFeature, on mapView: MLNMapView) {

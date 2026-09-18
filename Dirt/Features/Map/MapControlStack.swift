@@ -20,8 +20,15 @@ struct MapControlStack: View {
     /// Group browsing owns its own map actions. North reset is the only shared
     /// map control in that context.
     var groupOnly = false
+    /// Saved tab owns the routing sheet. Hide 3D and rider-status the same way
+    /// Groups does; restore when the rider leaves Saved.
+    var savedOnly = false
     /// Figma landscape-primary: controls run across the bottom of the open map.
     var horizontal: Bool = false
+    /// When false, +/− are omitted so they can sit on the island-side map.
+    var showsZoom: Bool = true
+    /// In-ride landscape: chips sit opposite the island. Popover opens toward the map.
+    var landscapeChipsOnTrailing: Bool? = nil
 
     @State private var cuesOpen = false
     @State private var sharingOpen = false
@@ -77,24 +84,38 @@ struct MapControlStack: View {
                 secondaryButton: .cancel(Text("Not now"))
             )
         }
-        .overlay(alignment: horizontal ? .top : .trailing) {
+        .overlay(alignment: popoverAlignment) {
             if cuesOpen {
                 cuesPopover
-                    .offset(x: horizontal ? 0 : -58, y: horizontal ? -96 : -36)
+                    .offset(x: popoverOffsetX, y: horizontal ? -96 : -36)
             }
             if sharingOpen {
                 sharingPopover
-                    .offset(x: horizontal ? 0 : -58, y: horizontal ? -150 : 40)
+                    .offset(x: popoverOffsetX, y: horizontal ? -150 : 40)
             }
         }
     }
 
+    private var popoverAlignment: Alignment {
+        if horizontal { return .top }
+        if landscapeChipsOnTrailing == false { return .leading }
+        return .trailing
+    }
+
+    private var popoverOffsetX: CGFloat {
+        if horizontal { return 0 }
+        if landscapeChipsOnTrailing == false { return 58 }
+        return -58
+    }
+
     @ViewBuilder
     private var controlButtons: some View {
-        Group {
-            zoomButton(increase: true)
-            zoomButton(increase: false)
-                .padding(horizontal ? .trailing : .bottom, Self.zoomClusterGap)
+        if showsZoom {
+            Group {
+                zoomButton(increase: true)
+                zoomButton(increase: false)
+                    .padding(horizontal ? .trailing : .bottom, Self.zoomClusterGap)
+            }
         }
         if app.navigation.phase == .active {
             if showsNavigationOverviewButton {
@@ -108,13 +129,13 @@ struct MapControlStack: View {
 
         } else {
             // Primary map: view mode and rider status remain available before
-            // navigation. Cues are ride-only. Groups owns sharing, so hide 3D
-            // and the map share chip while that sheet is open.
-            if !groupOnly {
+            // navigation. Cues are ride-only. Groups owns sharing, and Saved
+            // hides the same 3D / status chips while that tab is selected.
+            if !hidesMapFunctionChrome {
                 viewModeButton
             }
             compassButton
-            if !groupOnly {
+            if !hidesMapFunctionChrome {
                 riderStatusButton
             }
             if app.mapState.hasDisplayedRoute,
@@ -134,6 +155,8 @@ struct MapControlStack: View {
         }
     }
 
+    private var hidesMapFunctionChrome: Bool { groupOnly || savedOnly }
+
     // MARK: - Buttons
 
     private func zoomButton(increase: Bool) -> some View {
@@ -143,10 +166,16 @@ struct MapControlStack: View {
         } label: {
             Image(systemName: increase ? "plus" : "minus")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.black)
-                .frame(width: 50, height: 50)
-                .background(.white, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(white: 0.6), lineWidth: 1))
+                .foregroundStyle(DirtTheme.ink)
+                .frame(width: DirtHit.control, height: DirtHit.control)
+                .background(
+                    DirtTheme.sheetMaterial,
+                    in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
         .accessibilityLabel(increase ? "Zoom in" : "Zoom out")
@@ -207,25 +236,16 @@ struct MapControlStack: View {
             sharingOpen = false
             cuesOpen.toggle()
         } label: {
-            VStack(spacing: 1) {
-                Text("CUES")
-                    .font(.dirtMono(7, weight: .bold))
-                    .tracking(0.6)
-                    .opacity(0.62)
-                Text(app.cueSettings.mode.shortLabel)
-                    .font(.dirtMono(11, weight: .bold))
-                Text(app.cueSettings.audioEnabled ? "AUDIO ON" : "AUDIO OFF")
-                    .font(.dirtMono(6.5, weight: .bold))
-                    .opacity(0.72)
-            }
-            .foregroundStyle(.white)
-            .frame(width: 50, height: 50)
-            .background(cuesOpen ? DirtTheme.orange : DirtTheme.chrome)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-            )
+            Image(systemName: "speaker.wave.2")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 50, height: 50)
+                .background(cuesOpen ? DirtTheme.orange : DirtTheme.chrome)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+                )
         }
         .accessibilityLabel(
             "Navigation cues: \(app.cueSettings.mode.menuLabel.lowercased()), audio \(app.cueSettings.audioEnabled ? "on" : "off")"
@@ -514,5 +534,49 @@ struct MapControlStack: View {
     private func closePopovers() {
         cuesOpen = false
         sharingOpen = false
+    }
+}
+
+/// +/− pair. Landscape ride parks these on the island-side map; portrait ride
+/// stacks them under the speed readout at top-trailing.
+struct MapZoomControls: View {
+    @Environment(AppEnvironment.self) private var app
+    var axis: Axis = .horizontal
+
+    var body: some View {
+        let gap = MapControlStack.itemSpacing
+        if axis == .horizontal {
+            HStack(spacing: gap) {
+                zoomButton(increase: true)
+                zoomButton(increase: false)
+            }
+        } else {
+            VStack(spacing: gap) {
+                zoomButton(increase: true)
+                zoomButton(increase: false)
+            }
+        }
+    }
+
+    private func zoomButton(increase: Bool) -> some View {
+        Button {
+            app.mapState.zoomBy(increase ? 1 : -1)
+        } label: {
+            Image(systemName: increase ? "plus" : "minus")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(DirtTheme.ink)
+                .frame(width: DirtHit.control, height: DirtHit.control)
+                .background(
+                    DirtTheme.sheetMaterial,
+                    in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(increase ? "Zoom in" : "Zoom out")
+        .accessibilityIdentifier(increase ? "map-zoom-in" : "map-zoom-out")
     }
 }

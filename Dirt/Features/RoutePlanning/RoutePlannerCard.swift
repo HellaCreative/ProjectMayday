@@ -22,6 +22,7 @@ struct RoutePlannerCard: View {
     var sitsBehindDock: Bool = false
     /// Figma landscape-primary side drawer. `true` = dock leading; `false` = dock trailing.
     var landscapeDockLeading: Bool? = nil
+    var landscapeHasIslandColumn: Bool = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppEnvironment.self) private var app
     @Environment(\.modelContext) private var modelContext
@@ -45,9 +46,19 @@ struct RoutePlannerCard: View {
     /// Intrinsic height of the planning content below the fixed mode tabs.
     /// Portrait uses this to hug short content, then caps the sheet and scrolls.
     @State private var portraitPlanningContentHeight: CGFloat = 0
+    /// Saved list vs item detail. Back returns here without wiping the map line.
+    @State private var savedBrowsingList = false
     @ScaledMetric(relativeTo: .caption) private var planningTabHeight: CGFloat = 54
 
     private var planner: RoutePlannerModel { app.planner }
+
+    private var isSavedTab: Bool {
+        !planner.showingLoop && planner.mode == .saved
+    }
+
+    private var showingSavedDetail: Bool {
+        isSavedTab && planner.hasRoute && !savedBrowsingList
+    }
 
     private var isUpdatingSavedRoute: Bool {
         if case .update = planner.saveAffordance { return true }
@@ -116,6 +127,13 @@ struct RoutePlannerCard: View {
         .onChange(of: app.trial.isSubscribed) { _, subscribed in
             guard subscribed, let reason = app.trial.takePendingReason() else { return }
             resumeAfterSubscribe(reason)
+        }
+        .onChange(of: planner.mode) { _, mode in
+            if mode != .saved { savedBrowsingList = false }
+        }
+        .onChange(of: planner.savedRouteOrigin?.id) { old, new in
+            guard isSavedTab, savedBrowsingList, let new, new != old else { return }
+            savedBrowsingList = false
         }
         .confirmationDialog(
             "Switch to Plan a route?",
@@ -211,8 +229,27 @@ struct RoutePlannerCard: View {
             let fixedChromeHeight = 14 + min(planningTabHeight, 76) + 10 + 10
             let maxPlanningHeight = max(1, maxPanelHeight - fixedChromeHeight)
             let measuredPlanningHeight = max(1, portraitPlanningContentHeight)
-            let planningHeight = min(measuredPlanningHeight, maxPlanningHeight)
-            let panelHeight = min(maxPanelHeight, fixedChromeHeight + planningHeight)
+            // Saved hides 3D and rider-status, so the trailing stack is +/−,
+            // compass, and recenter. Raise the sheet until that plus sits just
+            // under the DIRT wordmark (same 6pt gap as the logo inset).
+            let savedStackHeight =
+                DirtHit.control * 4
+                + MapControlStack.itemSpacing * 3
+                + MapControlStack.zoomClusterGap
+            let savedPanelHeight = max(
+                160,
+                geo.size.height
+                    - savedStackHeight
+                    - DockSheetMotion.portraitRouteControlsGap
+                    - DirtIsland.wordmarkBand
+                    - 6
+            )
+            let planningHeight = isSavedTab
+                ? max(1, savedPanelHeight - fixedChromeHeight)
+                : min(measuredPlanningHeight, maxPlanningHeight)
+            let panelHeight = isSavedTab
+                ? savedPanelHeight
+                : min(maxPanelHeight, fixedChromeHeight + planningHeight)
 
             VStack(spacing: 10) {
                 tabBar
@@ -290,7 +327,7 @@ struct RoutePlannerCard: View {
         GeometryReader { geo in
             // Half screen including the strip under the dock.
             let panelW = geo.size.width * DockSheetMotion.landscapeMaxDrawerFraction
-            let dockW = DockSheetMotion.landscapeDockWidth
+            let dockW = DockSheetMotion.landscapeDockWidth(hasIslandColumn: landscapeHasIslandColumn)
 
             HStack(spacing: 0) {
                 if dockLeading {
@@ -555,6 +592,7 @@ struct RoutePlannerCard: View {
             }
             .pickerStyle(.menu)
             .dirtDropdownSurface(titleColor: DirtTheme.ink)
+            .frame(minWidth: DirtHit.dropdown, alignment: .leading)
             .labelsHidden()
             .accessibilityLabel("Surface")
             .accessibilityValue(planner.profile.title)
@@ -569,7 +607,6 @@ struct RoutePlannerCard: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
-        .fixedSize(horizontal: true, vertical: false)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: DirtHit.min, alignment: .leading)
     }
@@ -660,11 +697,55 @@ struct RoutePlannerCard: View {
     // MARK: - Saved
 
     @ViewBuilder private var savedContent: some View {
-        if planner.hasRoute {
+        if showingSavedDetail {
+            savedDetailContent
+        } else {
+            SavedRoutesList(showImport: true) { route in
+                withAnimation(DirtMotion.sheet) {
+                    savedBrowsingList = false
+                }
+                app.planner.loadSavedRoute(route)
+            }
+        }
+    }
+
+    private var savedDetailContent: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.row) {
+            HStack(spacing: DirtSpace.inner) {
+                Button {
+                    DirtMotion.light()
+                    withAnimation(DirtMotion.sheet) {
+                        savedBrowsingList = true
+                    }
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DirtTheme.action)
+                        .frame(width: DirtHit.min, height: DirtHit.min)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to saved rides")
+
+                Text("Saved rides")
+                    .font(DirtType.title)
+                    .foregroundStyle(DirtTheme.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+
+                Color.clear
+                    .frame(width: DirtHit.min, height: DirtHit.min)
+                    .accessibilityHidden(true)
+            }
+
             loadedTrackCard
-            fuelCoverageNotices
-            ferryNotice
-            HStack(spacing: 8) {
+
+            if planner.hasRoute {
+                fuelCoverageNotices
+                ferryNotice
+            }
+
+            VStack(spacing: DirtSpace.inner) {
                 Button {
                     planner.focusEntirePlannedRoute()
                     isOpen = false
@@ -672,24 +753,25 @@ struct RoutePlannerCard: View {
                     Label("View on map", systemImage: "map")
                 }
                 .buttonStyle(DirtSecondaryButtonStyle())
+
                 continuePlanningButton
             }
-        } else {
-            SavedRoutesList(showImport: true)
         }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .padding(.top, DirtSpace.tight)
     }
 
     /// The loaded track in one card: name, mix figures, and the bar — replacing the
     /// name line, the instructional paragraph, and the full stat-chip row.
     private var loadedTrackCard: some View {
         let dirt = max(0, min(100, planner.aggregateDirtPercent))
-        return VStack(alignment: .center, spacing: DirtSpace.tight) {
+        return VStack(alignment: .center, spacing: DirtSpace.inner) {
             Text(loadedTrackName)
                 .font(DirtType.rowTitle)
                 .fontWeight(.bold)
                 .foregroundStyle(DirtTheme.ink)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
+                .lineLimit(3)
                 .frame(maxWidth: .infinity)
 
             (
@@ -711,15 +793,16 @@ struct RoutePlannerCard: View {
             // paved/gravel/loose/unknown composition.
             SurfaceMixBar(
                 composition: planner.surfaceComposition,
-                height: 6,
+                height: 8,
                 showsLabels: false
             )
         }
-        .padding(DirtSpace.inner)
+        .padding(.horizontal, DirtSpace.row)
+        .padding(.vertical, DirtSpace.row)
         .frame(maxWidth: .infinity)
-        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
@@ -1738,81 +1821,118 @@ private struct SwipeRevealDelete<Content: View>: View {
 
 struct SavedRoutesList: View {
     var showImport = false
+    var onSelect: ((SavedRoute) -> Void)? = nil
     @Environment(AppEnvironment.self) private var app
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedRoute.createdAt, order: .reverse) private var routes: [SavedRoute]
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: DirtSpace.row) {
+            DirtSectionLabel(title: "Saved rides")
+
             if showImport {
-                GPXImportButton()
-                Text("Edit and export tracks from Gaia, Garmin, or another app.")
-                    .font(.dirtUI(11))
-                    .foregroundStyle(DirtTheme.muted)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
+                VStack(alignment: .center, spacing: DirtSpace.tight) {
+                    GPXImportButton()
+                    Text("Edit and export tracks from Gaia, Garmin, or another app.")
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.muted)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, DirtSpace.inner)
+                }
             }
 
             if routes.isEmpty {
                 Text("No saved routes yet. Route somewhere and tap Save, or import a GPX track.")
-                    .font(.dirtUI(12))
+                    .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, DirtSpace.row)
+                    .padding(.vertical, DirtSpace.section)
+                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                            .stroke(DirtTheme.hairline, lineWidth: 1)
+                    )
             } else {
-                ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(routes) { route in
-                            HStack(spacing: 10) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(route.name)
-                                        .font(.dirtUI(13, weight: .bold))
-                                        .foregroundStyle(DirtTheme.ink)
-                                    HStack(spacing: 8) {
-                                        Text(String(format: "%.1f km", route.distanceMeters / 1000))
-                                            .font(.dirtMono(11, weight: .semibold))
-                                            .foregroundStyle(DirtTheme.muted)
-                                        Text("\(route.dirtPercent)% dirt")
-                                            .font(.dirtMono(11, weight: .semibold))
-                                            .foregroundStyle(DirtTheme.dirtMix)
-                                        Text(route.profile.title)
-                                            .font(.dirtUI(11, weight: .semibold))
-                                            .foregroundStyle(DirtTheme.muted)
-                                    }
-                                }
-                                Spacer()
-                                Button("View") {
-                                    app.planner.loadSavedRoute(route)
-                                }
-                                .buttonStyle(DirtChipStyle(isActive: true))
-                                Button {
-                                    modelContext.delete(route)
-                                    try? modelContext.save()
-                                } label: {
-                                    Image(systemName: "trash")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(DirtTheme.danger)
-                                        .frame(width: DirtHit.min, height: DirtHit.min)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("Delete saved route")
-                            }
-                            .padding(.horizontal, 10)
-                            .frame(minHeight: DirtHit.control)
-                            .background(DirtTheme.rowFill)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(DirtTheme.hairline, lineWidth: 1)
-                            )
-                        }
+                VStack(spacing: DirtSpace.inner) {
+                    ForEach(routes) { route in
+                        savedRouteRow(route)
                     }
                 }
-                .frame(maxHeight: 240)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .padding(.top, DirtSpace.tight)
+    }
+
+    private func savedRouteRow(_ route: SavedRoute) -> some View {
+        HStack(alignment: .center, spacing: DirtSpace.inner) {
+            Button {
+                if let onSelect {
+                    onSelect(route)
+                } else {
+                    app.planner.loadSavedRoute(route)
+                }
+            } label: {
+                HStack(alignment: .center, spacing: DirtSpace.inner) {
+                    VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                        Text(route.name)
+                            .font(DirtType.rowTitle)
+                            .fontWeight(.bold)
+                            .foregroundStyle(DirtTheme.ink)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                        Text(savedRouteMeta(route))
+                            .font(DirtType.metricInline)
+                            .foregroundStyle(DirtTheme.muted)
+                            .lineLimit(2)
+                        Text("\(route.dirtPercent)% dirt")
+                            .font(DirtType.metricInline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(DirtTheme.dirtMix)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(DirtTheme.muted)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens this saved ride")
+
+            Button {
+                modelContext.delete(route)
+                try? modelContext.save()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DirtTheme.danger)
+                    .frame(width: DirtHit.min, height: DirtHit.min)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete saved route")
+        }
+        .padding(.horizontal, DirtSpace.row)
+        .padding(.vertical, DirtSpace.inner)
+        .frame(maxWidth: .infinity, minHeight: DirtHit.control + DirtSpace.tight)
+        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+    }
+
+    private func savedRouteMeta(_ route: SavedRoute) -> String {
+        let km = String(format: "%.1f km", route.distanceMeters / 1000)
+        let profile = route.profile.title
+        return "\(km)  ·  \(profile)"
     }
 }
 
