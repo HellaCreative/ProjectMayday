@@ -147,23 +147,9 @@ enum PackAcquisitionEvaluator {
             ))
         }
 
-        var unpublishedEnds: [String] = []
-        for id in geographicPrimaries {
-            if registry.resolveCatalogRegionId(id) == nil, !unpublishedEnds.contains(id) {
-                unpublishedEnds.append(id)
-            }
-        }
-        if !unpublishedEnds.isEmpty {
-            return .unavailable(PackRoutingWarning(
-                regionIDs: unpublishedEnds,
-                regionTitles: titles(unpublishedEnds),
-                reason: .packUnavailable
-            ))
-        }
-
-        // Path inside the published catalog only. Geographic BFS otherwise hops
-        // through parent ids (`qc`, `on`) that half-only fabrics do not publish,
-        // which blocked route-touch download for NS→Kenora / on-s→on-n corridors.
+        // Do not resolve primaries in isolation without coordinates: a parent id
+        // (`on`) is unpublished on half-only fabrics but still maps to `on-n` /
+        // `on-s` for the pin. Corridor mapping below is coordinate-aware.
         let needed = registry.requiredCatalogRoutingRegions(for: coordinates)
         if needed.isEmpty {
             return .unavailable(PackRoutingWarning(
