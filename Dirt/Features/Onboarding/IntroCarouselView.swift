@@ -35,9 +35,9 @@ struct IntroCarouselView: View {
             case .dial:
                 "Choose Clean, Balanced or Dirt. Adjust ride wander and your road preferences to shape the journey."
             case .loop:
-                "Pick a direction, distance and surface. DIRT finds a round trip from where you are, with waypoints you can adjust."
+                "Pick a direction, a distance, a round trip from where you are."
             case .fuel:
-                "Set your fuel range and reserve. DIRT plans mapped fuel stops along your ride—and lets you choose an alternative."
+                "Set your range. DIRT notifies you when fuel is running low — then you can route to a station. It does not drop fuel stops onto your line."
             case .offline:
                 "Download regional maps before you leave coverage. Keep your packs up to date and prepare your route before heading out."
             case .crew:
@@ -48,12 +48,37 @@ struct IntroCarouselView: View {
 
     var body: some View {
         ZStack {
+            Color(dirtHex: 0x0B0C0E).ignoresSafeArea()
+
             LinearGradient(
                 colors: [Color(dirtHex: 0x0B0C0E), Color(dirtHex: 0x1A1408)],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea()
+
+            RideBackdropVideo(playing: page == 0)
+                .opacity(page == 0 ? 1 : 0)
+
+            // Keep type and chrome readable over the ride plate.
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [Color.black.opacity(page == 0 ? 0.38 : 0), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 88)
+                Spacer(minLength: 0)
+                LinearGradient(
+                    colors: [.clear, Color(dirtHex: 0x0B0C0E).opacity(page == 0 ? 0.78 : 0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 220)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: page)
 
             VStack(spacing: 0) {
                 header
@@ -87,6 +112,8 @@ struct IntroCarouselView: View {
                 Text(".").italic().foregroundStyle(DirtTheme.orange)
             }
             .font(.system(size: 20, weight: .black))
+            .opacity(page == 0 ? 0 : 1)
+            .accessibilityHidden(page == 0)
             .accessibilityLabel("DIRT")
 
             Spacer(minLength: 0)
@@ -105,26 +132,27 @@ struct IntroCarouselView: View {
     }
 
     private func slideBody(_ slide: Slide) -> some View {
-        VStack(alignment: .leading, spacing: DirtSpace.row) {
-            Spacer(minLength: 0)
-
+        VStack(alignment: .leading, spacing: 0) {
             art(for: slide)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: slide == .brand ? .center : .top)
 
-            Text(slide.title)
-                .font(.dirtUI(28, weight: .heavy))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: DirtSpace.tight) {
+                Text(slide.title)
+                    .font(.dirtUI(28, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Text(slide.body)
-                .font(.dirtUI(16, weight: .medium))
-                .foregroundStyle(.white.opacity(0.72))
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 0)
+                Text(slide.body)
+                    .font(.dirtUI(16, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, DirtSpace.section)
         }
         .padding(.horizontal, DirtSpace.section)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, DirtSpace.inner)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 
     @ViewBuilder
@@ -133,9 +161,9 @@ struct IntroCarouselView: View {
         switch slide {
         case .brand: LogoBuildArt(isActive: isActive)
         case .dial: DirtDialArt(isActive: isActive)
-        case .loop: IntroFeatureArt(symbol: "arrow.triangle.2.circlepath", caption: "OUT THERE. BACK HERE.")
-        case .fuel: IntroFeatureArt(symbol: "fuelpump.fill", caption: "YOUR RANGE. YOUR RIDE.")
-        case .offline: IntroFeatureArt(symbol: "map.fill", caption: "PREPARE BEFORE YOU GO.")
+        case .loop: LongWayArt(isActive: isActive)
+        case .fuel: FuelNotifyArt()
+        case .offline: MapDownloadArt(isActive: isActive)
         case .crew: CrewBeaconArt(isActive: isActive)
         }
     }
@@ -158,37 +186,110 @@ struct IntroCarouselView: View {
     private var advanceButton: some View {
         Button {
             if isLast {
+                DirtMotion.medium()
                 onFinished()
             } else {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                DirtMotion.light()
+                withAnimation(reduceMotion ? nil : DirtMotion.sheet) {
                     page += 1
                 }
             }
         } label: {
-            Text(isLast ? "Start riding" : "Next")
-                .frame(maxWidth: .infinity)
+            HStack(spacing: DirtSpace.tight) {
+                Text(isLast ? "Start riding" : "Next")
+                if isLast {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 15, weight: .bold))
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(DirtCTAStyle.brand())
-        .accessibilityHint(isLast ? "Finishes the intro" : "Shows the next slide")
+        .shadow(
+            color: isLast ? DirtTheme.orange.opacity(0.38) : .clear,
+            radius: isLast ? 16 : 0,
+            y: isLast ? 6 : 0
+        )
+        .accessibilityHint(isLast ? "Finishes the intro and opens the map" : "Shows the next slide")
     }
 }
 
-/// Uses the same map-control icon vocabulary as the app, with no sample metrics.
-private struct IntroFeatureArt: View {
+/// Large feature mark with room between the icon and the copy below.
+struct IntroFeatureArt: View {
     let symbol: String
     let caption: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(spacing: DirtSpace.row) {
+            Spacer(minLength: 0)
             Image(systemName: symbol)
-                .font(.system(size: 76, weight: .medium))
+                .font(.system(size: 128, weight: .medium))
                 .foregroundStyle(DirtTheme.orange)
+                .symbolRenderingMode(.hierarchical)
             Text(caption)
                 .font(.caption.weight(.bold))
-                .tracking(1.2)
+                .tracking(1.4)
                 .foregroundStyle(.white.opacity(0.55))
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 190, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Fuel is a notification + optional reroute, not pins DIRT drops on the line.
+struct FuelNotifyArt: View {
+    var body: some View {
+        VStack(spacing: DirtSpace.row) {
+            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                HStack(alignment: .top, spacing: DirtSpace.inner) {
+                    Image(systemName: "fuelpump.fill")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(DirtTheme.orange)
+                        .frame(width: DirtHit.min, height: DirtHit.min)
+                    VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                        Text("Fuel running low")
+                            .font(DirtType.rowTitle)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                        Text("About 30 km of usable range left.")
+                            .font(DirtType.helper)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+
+                HStack(spacing: DirtSpace.tight) {
+                    Text("Route to a station")
+                        .font(DirtType.chip)
+                        .fontWeight(.bold)
+                        .foregroundStyle(DirtTheme.onOrange)
+                        .padding(.horizontal, DirtSpace.row)
+                        .frame(minHeight: DirtHit.min)
+                        .background(DirtTheme.orange, in: Capsule())
+                    Text("Not now")
+                        .font(DirtType.chip)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .padding(.horizontal, DirtSpace.inner)
+                        .frame(minHeight: DirtHit.min)
+                }
+            }
+            .padding(DirtSpace.row)
+            .frame(maxWidth: 340, alignment: .leading)
+            .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                    .stroke(DirtTheme.orange.opacity(0.45), lineWidth: 1)
+            )
+
+            Text("YOUR TANK. YOUR CALL.")
+                .font(.caption.weight(.bold))
+                .tracking(1.4)
+                .foregroundStyle(.white.opacity(0.55))
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityHidden(true)
     }
 }
