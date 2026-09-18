@@ -261,6 +261,40 @@ struct ItineraryBuilderTests {
         #expect(source.routeRequests.first?.accessPolicy.motorizedUnknown == false)
     }
 
+    @Test func departureHopOverrideDrivesRouteOnlyRebuildProfileAndAllowUnknown() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 100_000
+        let initial = makeItinerary(points, profile: .cleanest)
+        let builder = ItineraryBuilder()
+        let first = await builder.build(
+            initial, from: 0, reuse: nil, fuel: .routeOnly,
+            source: .fixed(source), onProgress: { _ in }
+        )
+        let leg = try #require(initial.legs.first)
+        let departure = leg.from.uuidString
+        let profiled = reduce(
+            initial,
+            .setHopProfile(legID: leg.id, stationID: departure, .dirt)
+        )
+        let allowed = reduce(
+            profiled.itinerary,
+            .setHopAllowUnknown(legID: leg.id, stationID: departure, true)
+        )
+        source.routeRequests.removeAll()
+
+        let rebuilt = await builder.build(
+            allowed.itinerary, from: 0, reuse: first, fuel: .routeOnly,
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(source.routeRequests.contains {
+            $0.profile == .dirt && $0.accessPolicy.motorizedUnknown == true
+        })
+        #expect(rebuilt.legs.first?.routeProfile == .dirt)
+        #expect(rebuilt.legs.first?.endsAtFuelStop == nil)
+    }
+
     @Test func profileAndUnknownEditsRebuildOnlyOneLegOfFive() async throws {
         let points = (0...5).map { point(Double($0)) }
         let laterPump = point(4.5)
