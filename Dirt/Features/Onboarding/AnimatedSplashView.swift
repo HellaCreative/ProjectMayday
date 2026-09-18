@@ -269,9 +269,10 @@ final class SplashThrottleAudio {
     }
 
     func stop() {
+        retryWork?.cancel()
+        retryWork = nil
         player?.stop()
         player = nil
-        sessionReady = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
