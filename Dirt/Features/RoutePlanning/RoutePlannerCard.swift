@@ -636,8 +636,7 @@ struct RoutePlannerCard: View {
         if planner.stages.isEmpty {
             VStack(spacing: 8) {
                 helperBoxLabel(
-                    Text("Long-press").fontWeight(.bold)
-                        + Text(" the map for point 1, then again for point 2 to build your first leg.")
+                    Text("\(Text("Long-press").fontWeight(.bold)) the map for point 1, then again for point 2 to build your first leg.")
                 )
                 GPXImportButton(continueAsPlan: true)
             }
@@ -693,14 +692,7 @@ struct RoutePlannerCard: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity)
 
-            (
-                Text(String(format: "%.1f km", planner.totalMeters / 1000))
-                    .foregroundStyle(DirtTheme.ink)
-                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                + Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix)
-                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                + Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix)
-            )
+            Text("\(Text(String(format: "%.1f km", planner.totalMeters / 1000)).foregroundStyle(DirtTheme.ink))\(Text("  ·  ").foregroundStyle(DirtTheme.muted))\(Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix))\(Text("  ·  ").foregroundStyle(DirtTheme.muted))\(Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix))")
             .font(DirtType.metricInline)
             .fontWeight(.bold)
             .multilineTextAlignment(.center)

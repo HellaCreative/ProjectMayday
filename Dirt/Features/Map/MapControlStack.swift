@@ -20,6 +20,9 @@ struct MapControlStack: View {
     /// Group browsing owns its own map actions. North reset is the only shared
     /// map control in that context.
     var groupOnly = false
+    /// Saved tab owns the routing sheet. Hide 3D and rider-status the same way
+    /// Groups does; restore when the rider leaves Saved.
+    var savedOnly = false
     /// Figma landscape-primary: controls run across the bottom of the open map.
     var horizontal: Bool = false
     /// When false, +/− are omitted so they can sit on the island-side map.
@@ -126,13 +129,13 @@ struct MapControlStack: View {
 
         } else {
             // Primary map: view mode and rider status remain available before
-            // navigation. Cues are ride-only. Groups owns sharing, so hide 3D
-            // and the map share chip while that sheet is open.
-            if !groupOnly {
+            // navigation. Cues are ride-only. Groups owns sharing, and Saved
+            // hides the same 3D / status chips while that tab is selected.
+            if !hidesMapFunctionChrome {
                 viewModeButton
             }
             compassButton
-            if !groupOnly {
+            if !hidesMapFunctionChrome {
                 riderStatusButton
             }
             if app.mapState.hasDisplayedRoute,
@@ -151,6 +154,8 @@ struct MapControlStack: View {
             }
         }
     }
+
+    private var hidesMapFunctionChrome: Bool { groupOnly || savedOnly }
 
     // MARK: - Buttons
 
