@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import Testing
 @testable import Dirt
 
@@ -187,6 +188,9 @@ private final class GroupPlannerPackCoverage: PackCoverageInspecting, PackInstal
     }
     func isRoutingPackPublished(_ regionID: String) -> Bool { true }
     func resolveCatalogRegionId(_ regionID: String) -> String? { regionID.lowercased() }
+    func requiredCatalogRoutingRegions(for coordinates: [CLLocationCoordinate2D]) -> [String] {
+        coordinates.compactMap { GraphPackStore.primaryRegionId(containing: $0)?.lowercased() }
+    }
     func packRevisionState(_ regionID: String) -> PackRevisionState { .current }
     func displayTitle(forRegionId id: String) -> String { id.uppercased() }
     func installVerifiedPacks(_ regionIDs: [String], replaceInstalled: Bool) async throws {}
