@@ -370,12 +370,50 @@ final class GraphPackStore {
     /// Geographic primaries/paths remapped onto ids present in the loaded catalog.
     /// Prefer published halves (`on-s`/`on-n`); fall back to legacy parent (`on`).
     func requiredCatalogRoutingRegions(for points: [CLLocationCoordinate2D]) -> [String] {
-        var ordered: [String] = []
-        for id in Self.requiredRoutingRegions(for: points) {
-            guard let resolved = resolveCatalogRegionId(id), !ordered.contains(resolved) else { continue }
-            ordered.append(resolved)
+        Self.requiredCatalogRoutingRegions(for: points, published: publishedIds)
+    }
+
+    /// Corridor packs using only published catalog ids. Avoids geographic BFS
+    /// hopping through unpublished parents (`qc` / `on`) when the fabric ships
+    /// halves only.
+    static func requiredCatalogRoutingRegions(
+        for points: [CLLocationCoordinate2D],
+        published: Set<String>
+    ) -> [String] {
+        let primaries = points.compactMap { primaryRegionId(containing: $0) }
+        var ends: [String] = []
+        for id in primaries {
+            guard let resolved = resolveCatalogRegionId(id, published: published) else {
+                return []
+            }
+            if !ends.contains(resolved) { ends.append(resolved) }
+        }
+        guard !ends.isEmpty else { return [] }
+
+        var ordered = ends
+        let allowed = pathAllowedRegionIds(published: published)
+        for (a, b) in zip(ends, ends.dropFirst()) {
+            guard let path = shortestRegionPath(from: a, to: b, allowedRegionIds: allowed) else {
+                continue
+            }
+            for id in path where !ordered.contains(id) {
+                ordered.append(id)
+            }
         }
         return ordered
+    }
+
+    /// When halves are published, drop the monolithic parent from corridor search
+    /// so BFS cannot prefer alphabetically-earlier `qc` over `qc-s`.
+    nonisolated static func pathAllowedRegionIds(published: Set<String>) -> Set<String> {
+        var allowed = published
+        for parent in ["on", "qc", "ca", "nl"] where published.contains(parent) {
+            let hasShard = published.contains { $0 != parent && provinceFamily($0) == parent }
+            if hasShard {
+                allowed.remove(parent)
+            }
+        }
+        return allowed
     }
 
     /// Maps a geographic region id onto a catalog id that is actually published.

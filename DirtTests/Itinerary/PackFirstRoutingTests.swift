@@ -405,6 +405,75 @@ struct PackFirstRoutingTests {
         #expect(merged == Set(["ns", "nb"]))
     }
 
+    @Test func halfOnlyFabricUsesPublishedShardsForCrossOntarioCorridor() {
+        let toronto = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+        let kenora = CLLocationCoordinate2D(latitude: 49.8114, longitude: -94.4781)
+        let published: Set<String> = [
+            "ns", "nb", "pe", "qc-s", "qc-n", "on-s", "on-n", "mb"
+        ]
+        let path = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [toronto, kenora],
+            published: published
+        )
+        #expect(path == ["on-s", "on-n"])
+        #expect(!path.contains("on"))
+        #expect(!path.contains("qc"))
+
+        let coverage = FakePackCoverage(installed: [], published: published)
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [toronto, kenora],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected on-s/on-n download consent, got \(decision)")
+            return
+        }
+        #expect(prompt.kind == .download)
+        #expect(prompt.regionIDs == ["on-s", "on-n"])
+    }
+
+    @Test func halfOnlyFabricDoesNotBlockNSToKenoraOnParentQCHop() {
+        // From Here GPS in NS → Kenora. Geographic BFS used to hop ns→nb→qc→on-n
+        // and then mark `qc` unpublished when only qc-s/qc-n ship.
+        let nearHalifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
+        let kenora = CLLocationCoordinate2D(latitude: 49.8114, longitude: -94.4781)
+        let published: Set<String> = [
+            "ns", "nb", "pe", "qc-s", "qc-n", "on-s", "on-n", "mb"
+        ]
+        let geographic = GraphPackStore.requiredRoutingRegions(for: [nearHalifax, kenora])
+        #expect(geographic.contains("qc") || geographic.contains("on"))
+
+        let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [nearHalifax, kenora],
+            published: published
+        )
+        #expect(catalog.contains("ns"))
+        #expect(catalog.contains("nb"))
+        #expect(catalog.contains("on-n"))
+        #expect(catalog.contains("qc-s") || catalog.contains("qc-n"))
+        #expect(!catalog.contains("qc"))
+        #expect(!catalog.contains("on"))
+
+        let coverage = FakePackCoverage(installed: ["ns", "nb", "qc-s"], published: published)
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [nearHalifax, kenora],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected download consent for remaining ON/QC shards, got \(decision)")
+            return
+        }
+        #expect(prompt.kind == .download)
+        #expect(prompt.regionIDs.contains("on-n"))
+        #expect(!prompt.regionIDs.contains("qc"))
+    }
+
     @Test func replaceInstalledFailsClosedWhenRegionMissingFromCatalog() {
         #expect(
             GraphPackStore.shouldReplaceInstalledRevision(
@@ -573,6 +642,10 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
 
     func resolveCatalogRegionId(_ regionID: String) -> String? {
         GraphPackStore.resolveCatalogRegionId(regionID, published: published)
+    }
+
+    func requiredCatalogRoutingRegions(for coordinates: [CLLocationCoordinate2D]) -> [String] {
+        GraphPackStore.requiredCatalogRoutingRegions(for: coordinates, published: published)
     }
 
     func packRevisionState(_ regionID: String) -> PackRevisionState {
