@@ -342,9 +342,27 @@ struct PackFirstRoutingTests {
             )
         ])
         #expect(rows.map(\.id) == ["ns", "pe"])
+        #expect(rows.map(\.id) == rows.map { $0.id.lowercased() })
         #expect(rows.allSatisfy { $0.canDelete && $0.canDownload == false })
         #expect(rows.first { $0.id == "pe" }?.revisionState == .stale)
         #expect(rows.first { $0.id == "pe" }?.revisionLabel.contains("installed") == true)
+    }
+
+    @Test func replaceInstalledFailsClosedWhenRegionMissingFromCatalog() {
+        #expect(
+            GraphPackStore.shouldReplaceInstalledRevision(
+                hasChecksumValidInstalledRevision: true,
+                replaceInstalled: true,
+                protectInstalledRevisions: false
+            )
+        )
+        #expect(
+            GraphPackStore.shouldReplaceInstalledRevision(
+                hasChecksumValidInstalledRevision: true,
+                replaceInstalled: true,
+                protectInstalledRevisions: true
+            ) == false
+        )
     }
 
     @Test func packDeletionRemovesOldAndCurrentRevisionsOnlyForRequestedRegion() throws {
