@@ -53,8 +53,10 @@ final class RoutePlannerModel {
             start = builtLeg.fromCoordinate
             end = builtLeg.toCoordinate
             let departureID = departureFuelStopID ?? riderLeg.from.uuidString
-            let effectiveProfile = builtLeg.routeProfile
-                ?? riderLeg.effectiveProfile(departingFrom: departureID)
+            // Stage controls follow rider intent (leg / hop override), not the
+            // last committed geometry — otherwise a pending rebuild can make the
+            // Dirt/Balanced/Clean control lie about what the next search will use.
+            let effectiveProfile = riderLeg.effectiveProfile(departingFrom: departureID)
             profile = effectiveProfile
             allowUnknown = riderLeg.allowsUnknown(
                 departingFrom: departureID,
@@ -1458,10 +1460,13 @@ final class RoutePlannerModel {
     func setFuelHopProfile(_ newProfile: RouteProfile, at index: Int) {
         guard stages.indices.contains(index) else { return }
         let stage = stages[index]
-        if let stationID = stage.departureFuelStopID {
-            guard let leg = itinerary.legs.first(where: { $0.id == stage.riderLegID }),
-                  leg.effectiveProfile(departingFrom: stationID) != newProfile
-            else { return }
+        guard let leg = itinerary.legs.first(where: { $0.id == stage.riderLegID }) else { return }
+        // A pump departure keeps a hop override. Departing from the rider
+        // waypoint (or an unbuilt stage) owns the whole span — same path as
+        // setStageProfile — so Plan Clean → Dirt/Balanced actually rebuilds.
+        if let stationID = stage.departureFuelStopID,
+           stationID != leg.from.uuidString {
+            guard leg.effectiveProfile(departingFrom: stationID) != newProfile else { return }
             RoutingDebugLog.shared.event(
                 "fuel leg override departure=\(stationID) profile=\(newProfile.rawValue) " +
                     "replanFrom=\(stationID)"
@@ -1560,15 +1565,23 @@ final class RoutePlannerModel {
     func setStageAllowUnknown(_ allow: Bool, at index: Int) {
         guard stages.indices.contains(index) else { return }
         let stage = stages[index]
-        guard let departureID = stage.departureFuelStopID else { return }
-        apply(
-            .setHopAllowUnknown(
-                legID: stage.riderLegID,
-                stationID: departureID,
-                allow
-            ),
-            source: "card-hop-unknown"
-        )
+        guard let leg = itinerary.legs.first(where: { $0.id == stage.riderLegID }) else { return }
+        if let departureID = stage.departureFuelStopID,
+           departureID != leg.from.uuidString {
+            apply(
+                .setHopAllowUnknown(
+                    legID: stage.riderLegID,
+                    stationID: departureID,
+                    allow
+                ),
+                source: "card-hop-unknown"
+            )
+        } else {
+            apply(
+                .setAllowUnknown(legID: stage.riderLegID, allow),
+                source: "card-hop-unknown-first"
+            )
+        }
     }
 
     func setStageAvoidMotorways(_ on: Bool, at index: Int) {
