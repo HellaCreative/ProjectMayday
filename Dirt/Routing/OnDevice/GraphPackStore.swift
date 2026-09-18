@@ -628,14 +628,17 @@ final class GraphPackStore {
 
     func updateRegion(_ regionId: String) async throws {
         // Navigation pins its installed revision for the duration of the ride.
+        let id = regionId.lowercased()
         guard !protectInstalledRevisions else {
             throw NSError(domain: "DIRT.Packs", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "End navigation before updating this pack."])
         }
-        guard managementInFlight.insert(regionId).inserted else { throw CocoaError(.fileLocking) }
-        defer { managementInFlight.remove(regionId) }
-        if let pending = downloadTasks[regionId] { await pending.value }
-        try await installVerifiedPacks([regionId], replaceInstalled: true)
+        guard managementInFlight.insert(id).inserted else { throw CocoaError(.fileLocking) }
+        defer { managementInFlight.remove(id) }
+        if let pending = downloadTasks[id] {
+            await pending.value
+        }
+        try await installVerifiedPacks([id], replaceInstalled: true)
     }
 
     /// Start Nav: prepare only the province/state containing the rider's start.
@@ -1343,13 +1346,19 @@ final class GraphPackStore {
                 applyCatalog(published: published, sizes: sizes)
             }
 
-            guard let region = manifest.regions.first(where: { $0.id.lowercased() == regionId }),
+            let normalizedRegionId = regionId.lowercased()
+            guard let region = manifest.regions.first(where: { $0.id.lowercased() == normalizedRegionId }),
                   Self.regionHasPhoneGraph(region)
             else {
-                setInstall(regionId, .unavailable)
+                setInstall(normalizedRegionId, .unavailable)
                 if asNavigationPrep {
-                    phase = .skipped("No pack published for \(regionId)")
+                    phase = .skipped("No pack published for \(normalizedRegionId)")
                     progress = 1
+                }
+                // Manual Update must fail closed — a silent return left Layers
+                // looking like the button did nothing.
+                if replaceInstalled {
+                    throw PackAcquisitionError.unavailable(regionID: normalizedRegionId)
                 }
                 return
             }

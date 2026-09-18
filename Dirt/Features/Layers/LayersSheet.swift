@@ -8,6 +8,7 @@ struct LayersSheet: View {
     @Environment(AppEnvironment.self) private var app
     @State private var busyPacks: Set<String> = []
     @State private var packError: String?
+    @State private var pendingDeleteID: String?
 
     @AppStorage(MapStyleCatalog.preferenceKey) private var styleIDRaw = MapStyleID.shortbreadRich.rawValue
     @AppStorage("dirt.layers.fuel") private var showFuel = false
@@ -116,6 +117,16 @@ struct LayersSheet: View {
     private var downloadedMapsCard: some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
             DirtSectionLabel(title: "Downloaded maps")
+            Text("Installed when a route needs them. Update or delete packs already on this phone — DIRT does not browse a download storefront.")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            if let packError {
+                Text(packError)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if app.graphPacks.installedManagementRows.isEmpty {
                 Text("No maps downloaded yet")
                     .font(DirtType.helper)
@@ -124,33 +135,45 @@ struct LayersSheet: View {
                     .padding(.vertical, DirtSpace.tight)
             }
             ForEach(app.graphPacks.installedManagementRows) { row in
-                HStack(spacing: DirtSpace.tight) {
+                HStack(alignment: .center, spacing: DirtSpace.tight) {
                     VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                         Text(row.title).font(DirtType.rowTitle)
                         Text("\(row.revisionLabel) · \(ByteCountFormatter.string(fromByteCount: row.bytes, countStyle: .file))")
                             .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.muted)
+                            .foregroundStyle(
+                                row.revisionState == .stale ? DirtTheme.action : DirtTheme.muted
+                            )
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if busyPacks.contains(row.id) || app.graphPacks.managementInFlight.contains(row.id) {
                         ProgressView()
+                            .tint(DirtTheme.orange)
+                            .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
+                            .accessibilityLabel(row.revisionState == .stale ? "Updating pack" : "Deleting pack")
                     } else {
-                        if row.revisionState == .stale {
-                            Button("Update") { managePack(row.id, update: true) }
+                        HStack(spacing: DirtSpace.row) {
+                            if row.revisionState == .stale {
+                                Button("Update") {
+                                    managePack(row.id, update: true)
+                                }
                                 .foregroundStyle(DirtTheme.action)
-                                .frame(minHeight: DirtHit.min)
+                                .buttonStyle(.plain)
+                                .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
+                                .contentShape(Rectangle())
+                                .accessibilityLabel("Update \(row.title)")
+                            }
+                            Button("Delete", role: .destructive) {
+                                pendingDeleteID = row.id
+                            }
+                            .foregroundStyle(DirtTheme.danger)
+                            .buttonStyle(.plain)
+                            .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
+                            .contentShape(Rectangle())
+                            .accessibilityLabel("Delete \(row.title)")
                         }
-                        Button("Delete", role: .destructive) { managePack(row.id, update: false) }
-                            .frame(minHeight: DirtHit.min)
+                        .font(DirtType.chip)
                     }
                 }
-                .font(DirtType.chip)
-                .buttonStyle(.plain)
-            }
-            if let packError {
-                Text(packError)
-                    .font(DirtType.helper)
-                    .foregroundStyle(DirtTheme.danger)
             }
         }
         .padding(DirtSpace.row)
@@ -160,17 +183,48 @@ struct LayersSheet: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
+        .confirmationDialog(
+            deleteConfirmTitle,
+            isPresented: Binding(
+                get: { pendingDeleteID != nil },
+                set: { if !$0 { pendingDeleteID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete pack", role: .destructive) {
+                if let id = pendingDeleteID {
+                    pendingDeleteID = nil
+                    managePack(id, update: false)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeleteID = nil
+            }
+        } message: {
+            Text("Removes the installed routing pack from this phone. DIRT will ask again when a route needs it.")
+        }
+    }
+
+    private var deleteConfirmTitle: String {
+        guard let id = pendingDeleteID else { return "Delete pack?" }
+        let title = app.graphPacks.displayTitle(forRegionId: id)
+        return "Delete \(title)?"
     }
 
     private func managePack(_ id: String, update: Bool) {
         guard busyPacks.insert(id).inserted else { return }
         packError = nil
-        Task {
+        Task { @MainActor in
             defer { busyPacks.remove(id) }
             do {
-                if update { try await app.graphPacks.updateRegion(id) }
-                else { try await app.graphPacks.deleteRegion(id) }
-            } catch { packError = error.localizedDescription }
+                if update {
+                    try await app.graphPacks.updateRegion(id)
+                } else {
+                    try await app.graphPacks.deleteRegion(id)
+                }
+            } catch {
+                packError = "Could not \(update ? "update" : "delete") pack. \(error.localizedDescription)"
+            }
         }
     }
 

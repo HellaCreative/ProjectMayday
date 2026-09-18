@@ -3473,6 +3473,7 @@ final class RoutePlannerModel {
         let coords = allCoordinates
         guard coords.count > 1 else {
             navigation.cancelPrefetch()
+            graphPacks.protectInstalledRevisions = false
             mapState.unlockRouteEditingAfterPrepCancel()
             return
         }
@@ -3519,6 +3520,10 @@ final class RoutePlannerModel {
         navigationStartTask = nil
         offline.cancelPrep()
         graphPacks.cancel()
+        // Start Nav pins installed revisions; cancelling prep must release that
+        // pin or Layers Update/Delete keep throwing with no visible progress.
+        graphPacks.protectInstalledRevisions = false
+        graphPacks.cancelQuietDownloads()
         navigation.cancelPrefetch()
         activeGroupTracking = nil
         groupFollowerStoppedSince = nil
