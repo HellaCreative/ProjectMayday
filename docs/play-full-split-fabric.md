@@ -1,6 +1,6 @@
 # Play: full-split fabric (`fabric-v4-20260917-02`)
 
-Binary: **`PLACEHOLDER`** on `cursor/play-full-split-fabric-1885`. Richard presses Play.
+Binary: **`bbea9bc`** on `cursor/play-full-split-fabric-1885`. Richard presses Play.
 
 ## Catalog
 
@@ -30,7 +30,7 @@ Province↔state travel testing with install prompts everywhere — not Ontario-
 
 ## Play
 
-1. Play **`PLACEHOLDER`**.
+1. Play **`bbea9bc`**.
 2. Open PACKS: every region should list, plus ON/QC/CA/NL halves (no parent `on`/`qc`/`ca`/`nl`).
 3. Pin anywhere in CA or US → install prompt for the covering pack(s).
 4. Build a province↔state route (e.g. NS→ME, ON-south→NY, QC-south→VT, BC→WA). Confirm route builds.
