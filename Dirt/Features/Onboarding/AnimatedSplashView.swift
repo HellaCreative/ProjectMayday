@@ -273,6 +273,7 @@ final class SplashThrottleAudio {
         retryWork = nil
         player?.stop()
         player = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // Leave the shared session up. setActive(false) pauses the intro's
+        // muted AVPlayer (ride.mov), which froze the plate around one second in.
     }
 }

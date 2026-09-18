@@ -59,7 +59,6 @@ struct IntroCarouselView: View {
 
             RideBackdropVideo(playing: page == 0)
                 .opacity(page == 0 ? 1 : 0)
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: page)
 
             // Keep type and chrome readable over the ride plate.
             VStack(spacing: 0) {
