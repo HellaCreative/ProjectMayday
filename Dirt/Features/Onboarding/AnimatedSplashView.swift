@@ -65,6 +65,7 @@ struct AnimatedSplashView: View {
                 .ignoresSafeArea()
                 .opacity(blackout ? 1 : 0)
         }
+        .onAppear { audio.prepare() }
         .task { await run() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("DIRT")
@@ -128,11 +129,14 @@ struct AnimatedSplashView: View {
         start = Date()
         blipHaptic.prepare()
         surgeHaptic.prepare()
+        audio.prepare()
 
         guard !reduceMotion else {
             withAnimation(.easeOut(duration: 0.3)) { arrived = true }
-            try? await Task.sleep(for: .milliseconds(700))
+            audio.play()
+            try? await Task.sleep(for: .milliseconds(1_800))
             guard !Task.isCancelled else { return }
+            audio.fadeOut()
             onFinished()
             return
         }
@@ -189,31 +193,67 @@ struct AnimatedSplashView: View {
 // MARK: - Audio
 
 /// Plays the owner-provided motorcycle recording during the accepted splash timeline.
+///
+/// `.ambient` honours the Ring/Silent switch. Simulator has no silent switch, so the
+/// rev played on the Mac and died on a silenced iPhone. `.playback` matches navigation
+/// cues: speaker output, silent-switch ignored, Music still mixes. Reduce Motion still
+/// skips the visual roost — the sting itself is the brand, so it still plays.
 @MainActor
 final class SplashThrottleAudio {
     private var player: AVAudioPlayer?
+    private var retryWork: DispatchWorkItem?
 
-    func play() {
-        guard !UIAccessibility.isReduceMotionEnabled else { return }
-        guard let url = Bundle.main.url(forResource: "MyKTM", withExtension: "m4a") else {
+    func prepare() {
+        guard player == nil else {
+            activateSession()
             return
         }
+        guard let url = Self.resourceURL else { return }
 
         do {
-            let session = AVAudioSession.sharedInstance()
-            // Ambient: respects the mute switch, mixes under Music if that's on.
-            try session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
-            try session.setActive(true)
-
+            activateSession()
             let player = try AVAudioPlayer(contentsOf: url)
             player.volume = 0.85
             player.prepareToPlay()
-            player.play()
             self.player = player
         } catch {
             // Brand audio is optional — never block the splash on a session failure.
             player = nil
         }
+    }
+
+    func play() {
+        retryWork?.cancel()
+        if player == nil { prepare() }
+        activateSession()
+        guard let player else { return }
+        player.currentTime = 0
+        player.volume = 0.85
+        if player.play() { return }
+
+        // Device session can still be warming on the first frame; try once more.
+        let work = DispatchWorkItem { [weak self] in
+            self?.activateSession()
+            self?.player?.currentTime = 0
+            self?.player?.play()
+        }
+        retryWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
+    }
+
+    private func activateSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setActive(true, options: [])
+        } catch {
+            // Session is best-effort; play() retries once if this frame fails.
+        }
+    }
+
+    private static var resourceURL: URL? {
+        Bundle.main.url(forResource: "MyKTM", withExtension: "m4a")
+            ?? Bundle.main.url(forResource: "MyKTM", withExtension: "m4a", subdirectory: "Resources")
     }
 
     func fadeOut() {
@@ -231,6 +271,7 @@ final class SplashThrottleAudio {
     func stop() {
         player?.stop()
         player = nil
+        sessionReady = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }

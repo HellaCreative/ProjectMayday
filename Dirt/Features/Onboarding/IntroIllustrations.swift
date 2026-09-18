@@ -2,23 +2,22 @@ import SwiftUI
 
 // MARK: - Shared canvas
 
-/// Fixed-height stage for the intro art so slide text sits on the same baseline
-/// across all three pages.
+/// Flexible stage so later slides can give the picture most of the height
+/// and keep it away from the title.
 private struct IllustrationStage<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
         content
-            .frame(maxWidth: .infinity)
-            .frame(height: 190)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityHidden(true)
     }
 }
 
 // MARK: - 1. Logo build
 
-/// The splash beat, replayed inside slide one so the brand moment reads as
-/// deliberate rather than something the rider blinked and missed.
+/// Brand beat on the first intro slide: wordmark almost full width, roost and
+/// throttle pops over the ride plate.
 struct LogoBuildArt: View {
     var isActive: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -27,17 +26,24 @@ struct LogoBuildArt: View {
     @State private var settled = false
     @State private var blip = 0
     @State private var paused = true
+    @State private var kick: CGFloat = 1
 
-    private static let blipTimes: [Double] = [0.35, 0.78]
+    private static let blipTimes: [Double] = [0.28, 0.62, 0.88, 1.12]
 
     var body: some View {
-        IllustrationStage {
+        GeometryReader { geo in
+            let mark = min(geo.size.width * 0.34, 128)
             ZStack {
                 if !reduceMotion {
+                    SparkBurstField(
+                        start: start,
+                        blips: Self.blipTimes,
+                        paused: paused
+                    )
                     RoostField(
                         start: start,
                         blips: Self.blipTimes,
-                        origin: CGPoint(x: 0.63, y: 0.56),
+                        origin: CGPoint(x: 0.58, y: 0.62),
                         paused: paused
                     )
                 }
@@ -49,13 +55,23 @@ struct LogoBuildArt: View {
                     Text(".")
                         .italic()
                         .foregroundStyle(DirtTheme.orange)
-                        .scaleEffect(blip > 0 ? 1.5 : 1, anchor: .bottomLeading)
-                        .shadow(color: DirtTheme.orange.opacity(blip > 0 ? 0.9 : 0), radius: 12)
+                        .scaleEffect(blip > 0 ? 1.7 : 1, anchor: .bottomLeading)
+                        .shadow(
+                            color: DirtTheme.orange.opacity(blip > 0 || settled ? 0.95 : 0),
+                            radius: blip > 0 ? 28 : 14
+                        )
                 }
-                .font(.system(size: 52, weight: .black))
+                .font(.system(size: mark, weight: .black))
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+                .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
                 .opacity(settled ? 1 : 0)
-                .offset(x: settled ? (blip > 0 ? -4 : 0) : -28)
+                .offset(x: settled ? (blip > 0 ? -8 : 0) : -geo.size.width * 0.12)
+                .scaleEffect(kick)
+                .frame(maxWidth: .infinity)
             }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .accessibilityHidden(true)
         }
         .onChange(of: isActive, initial: true) { _, active in
             guard active else {
@@ -69,24 +85,36 @@ struct LogoBuildArt: View {
     private func play() async {
         guard !reduceMotion else {
             settled = true
+            kick = 1
             return
         }
 
         start = Date()
         paused = false
         settled = false
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { settled = true }
+        kick = 0.72
+        withAnimation(.spring(response: 0.46, dampingFraction: 0.58)) {
+            settled = true
+            kick = 1.08
+        }
+        try? await Task.sleep(for: .milliseconds(280))
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) { kick = 1 }
 
         for (index, time) in Self.blipTimes.enumerated() {
             let previous = index == 0 ? 0 : Self.blipTimes[index - 1]
             try? await Task.sleep(for: .milliseconds(Int((time - previous) * 1000)))
-            withAnimation(.easeOut(duration: 0.1)) { blip += 1 }
-            try? await Task.sleep(for: .milliseconds(120))
-            withAnimation(.easeIn(duration: 0.16)) { blip -= 1 }
+            withAnimation(.easeOut(duration: 0.08)) {
+                blip += 1
+                kick = 1.06
+            }
+            try? await Task.sleep(for: .milliseconds(110))
+            withAnimation(.easeIn(duration: 0.14)) {
+                blip -= 1
+                kick = 1
+            }
         }
 
-        // Let the last clods land, then stop the redraw loop.
-        try? await Task.sleep(for: .milliseconds(1_200))
+        try? await Task.sleep(for: .milliseconds(1_400))
         paused = true
     }
 }
@@ -130,13 +158,13 @@ struct DirtDialArt: View {
             ZStack {
                 RouteLine()
                     .trim(from: 0, to: progress)
-                    .stroke(Color.white.opacity(0.22), style: .init(lineWidth: 7, lineCap: .round))
+                    .stroke(Color.white.opacity(0.22), style: .init(lineWidth: 10, lineCap: .round))
 
                 RouteLine()
                     .trim(from: dashStart, to: max(dashStart, dashEnd))
                     .stroke(
                         DirtTheme.orange,
-                        style: .init(lineWidth: 7, lineCap: .round, dash: [9, 6])
+                        style: .init(lineWidth: 10, lineCap: .round, dash: [11, 7])
                     )
 
                 badges
@@ -154,7 +182,7 @@ struct DirtDialArt: View {
     private var badges: some View {
         VStack(alignment: .trailing, spacing: 6) {
             Text("\(dirtPercent)% DIRT")
-                .font(.dirtUI(13, weight: .heavy))
+                .font(.dirtUI(16, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(DirtTheme.onOrange)
                 .padding(.horizontal, 10)

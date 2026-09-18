@@ -73,15 +73,15 @@ enum CoachStep: Int, CaseIterable {
     var body: String {
         switch self {
         case .openRoute:
-            "Your location is already set as the start. Tap Route to begin."
+            "Your location is already the start. Tap Route."
         case .dropPin:
-            "Tap the map to drop your destination — or long-press a road to snap it. DIRT routes there from where you're standing."
+            "Tap the map to drop where you're going — or long-press a road to snap it."
         case .ride:
-            "Hit the green Start to ride it. Or switch to Plan a route to keep adding waypoints."
+            "Green Start rides this line. Plan a route if you want more waypoints."
             case .crew:
-                "Create a group to get a code, or join with a friend's — then you'll see each other on the map. This is the one part that needs an account."
+                "Create a group for a code, or join with a friend's. You'll see each other on the map. This is the one part that needs an account."
             case .account:
-                "Sign in with Apple and see DIRT PRO in Profile. Keep-awake and ride contribution live here too."
+                "Sign in with Apple and find DIRT PRO in Profile. Keep-awake and ride contribution live here too."
         }
     }
 
@@ -145,19 +145,22 @@ struct CoachMarksOverlay: View {
         // Sit on whichever side of the target has room; the dock and the planner
         // are both bottom chrome, so in practice this puts the card over the map.
         let arrowDown = target.midY > size.height / 2
-        let width = min(size.width - 2 * DirtSpace.section, 360)
+        let width = min(size.width - 2 * DirtSpace.section, 380)
+        let lift: CGFloat = 108
 
         return VStack(spacing: 0) {
             if !arrowDown { arrowRow(pointingDown: false, cardWidth: width, in: size, target: target) }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: DirtSpace.inner) {
                 Text(step.title)
-                    .font(.dirtUI(16, weight: .heavy))
-                    .foregroundStyle(DirtTheme.orange)
+                    .font(.dirtUI(20, weight: .heavy))
+                    .foregroundStyle(.white)
 
                 Text(step.body)
-                    .font(.dirtUI(14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(DirtType.helper)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: DirtSpace.inner) {
@@ -166,42 +169,45 @@ struct CoachMarksOverlay: View {
                     Spacer(minLength: 0)
 
                     Button("Skip tour", action: onSkip)
-                        .font(.dirtUI(13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .font(DirtType.chip)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white.opacity(0.55))
                         .frame(minHeight: DirtHit.min)
                         .contentShape(Rectangle())
 
                     if step.showsConfirm {
                         Button(step.isLast ? "Done" : "Next", action: onAdvance)
-                            .font(.dirtUI(14, weight: .heavy))
+                            .font(DirtType.chip)
+                            .fontWeight(.heavy)
                             .foregroundStyle(DirtTheme.onOrange)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, DirtSpace.row)
                             .frame(minHeight: DirtHit.min)
                             .background(DirtTheme.orange, in: Capsule())
                             .contentShape(Capsule())
                     }
                 }
-                .padding(.top, 2)
             }
-            .padding(DirtSpace.row)
+            .padding(.horizontal, DirtSpace.row)
+            .padding(.vertical, DirtSpace.row)
             .background {
                 ZStack {
                     Rectangle().fill(DirtTheme.chromeMaterial)
                     Rectangle().fill(DirtTheme.chromeScrim)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(DirtTheme.orange.opacity(0.55), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                    .stroke(DirtTheme.orange.opacity(0.4), lineWidth: 1)
             )
+            .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
 
             if arrowDown { arrowRow(pointingDown: true, cardWidth: width, in: size, target: target) }
         }
         .frame(width: width, alignment: .leading)
         .position(
             x: size.width / 2,
-            y: arrowDown ? target.minY - 84 : target.maxY + 84
+            y: arrowDown ? target.minY - lift : target.maxY + lift
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(step.title). \(step.body)")
