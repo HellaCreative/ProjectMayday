@@ -306,6 +306,22 @@ final class PackAcquisitionCoordinator {
         declinedUpdates = []
     }
 
+    /// "Not now" only skips the current pending build. A new pin set should
+    /// be allowed to ask again for missing packs.
+    func clearDownloadDeclines() {
+        declinedDownloads = []
+        warnings.removeAll { $0.reason == .declinedDownload }
+    }
+
+    /// Layers Delete wiped a pack the rider previously declined to download.
+    /// Forget that decline so the next route-touch can prompt again.
+    func notePackRemoved(_ regionID: String) {
+        let id = regionID.lowercased()
+        declinedDownloads.remove(id)
+        declinedUpdates.remove(id)
+        warnings.removeAll { $0.regionIDs.contains(id) }
+    }
+
     private func record(_ warning: PackRoutingWarning) {
         warnings.removeAll { $0.id == warning.id }
         warnings.append(warning)
