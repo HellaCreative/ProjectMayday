@@ -90,6 +90,59 @@ test("distinct nodes on one OSM way remain available; duplicate proofs and denie
 });
 
 
+test("topology checkpoint streams past JSON.stringify string limits", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dirt-v4-seams-stream-"));
+  const file = path.join(root, "cross-pack-topology.v2.json.partial");
+  // ~2k proofs is enough to prove we never build one giant string of the whole doc;
+  // the production failure was JSON.stringify(doc) on CA-scale arrays.
+  const proof = {
+    coordinate: [-119.5, 36.1],
+    gapMeters: 0,
+    osmNodeId: "1",
+    osmWayId: "2",
+    localEdgeId: "2:1:3",
+    remoteEdgeId: "2:1:3",
+    proof: { kind: "shared-node" },
+    edge: {
+      osmWayId: "2",
+      fromOsmNodeId: "1",
+      toOsmNodeId: "3",
+      accessForward: 0,
+      accessReverse: 0,
+      layer: 0,
+      structureLeaf: null
+    },
+    barrierDecision: "open",
+    restrictions: []
+  };
+  const rows = Array.from({ length: 2500 }, (_, i) => ({
+    ...proof,
+    osmNodeId: String(i + 1),
+    coordinate: [-119.5, 36 + (i % 1000) / 1000]
+  }));
+  const doc = {
+    schemaVersion: "dirt-cross-pack-topology.v2",
+    generatedAt: "2026-09-18T08:00:00.000Z",
+    sourceEpoch: "locked-fixture-epoch",
+    regions: {
+      "ca-n": { neighbors: { "ca-s": rows } },
+      "ca-s": { neighbors: { "ca-n": rows } }
+    },
+    pairs: [{ left: "ca-n", right: "ca-s", proofs: rows.length }]
+  };
+  const { writeTopologyDocument, writeCheckpoint } = require("./build-v4-seams");
+  writeCheckpoint(path.join(root, "cross-pack-topology.v2.json"), doc);
+  assert.equal(fs.existsSync(file), true);
+  const roundTrip = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.equal(roundTrip.pairs[0].proofs, 2500);
+  assert.equal(roundTrip.regions["ca-n"].neighbors["ca-s"].length, 2500);
+  assert.equal(roundTrip.regions["ca-s"].neighbors["ca-n"].length, 2500);
+  writeTopologyDocument(path.join(root, "cross-pack-topology.v2.json"), doc);
+  const finalDoc = JSON.parse(fs.readFileSync(path.join(root, "cross-pack-topology.v2.json"), "utf8"));
+  assert.equal(finalDoc.regions["ca-n"].neighbors["ca-s"].length, 2500);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test("national coverage permits declared isolated packs but not missing required neighbors", () => {
   const {assertNeighborCoverage, uniquePairs} = require("./build-v4-seams");
   const {REGION_NEIGHBOURS} = require("../routing/regional/merge");

@@ -36,6 +36,58 @@ function checkpointPath(output) {
   return `${output}.partial`;
 }
 
+/**
+ * Stream a topology document without JSON.stringify on the whole object.
+ * CA-scale pair proofs (~500k+) exceed Node's max string length when stringified
+ * in one shot; writing scalars + array elements incrementally stays under the limit.
+ */
+function writeTopologyDocument(file, doc) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const fd = fs.openSync(file, "w");
+  const ws = (chunk) => {
+    fs.writeSync(fd, chunk);
+  };
+  try {
+    ws("{");
+    ws(`"schemaVersion":${JSON.stringify(doc.schemaVersion)}`);
+    ws(`,"generatedAt":${JSON.stringify(doc.generatedAt)}`);
+    ws(`,"sourceEpoch":${JSON.stringify(doc.sourceEpoch)}`);
+    if (Object.prototype.hasOwnProperty.call(doc, "fabricReleaseId")) {
+      ws(`,"fabricReleaseId":${JSON.stringify(doc.fabricReleaseId)}`);
+    }
+    ws(`,"regions":{`);
+    const regionIds = Object.keys(doc.regions || {}).sort();
+    for (let r = 0; r < regionIds.length; r += 1) {
+      const regionId = regionIds[r];
+      if (r) ws(",");
+      ws(`${JSON.stringify(regionId)}:{"neighbors":{`);
+      const neighbors = (doc.regions[regionId] && doc.regions[regionId].neighbors) || {};
+      const neighborIds = Object.keys(neighbors).sort();
+      for (let n = 0; n < neighborIds.length; n += 1) {
+        const neighborId = neighborIds[n];
+        if (n) ws(",");
+        ws(`${JSON.stringify(neighborId)}:[`);
+        const rows = neighbors[neighborId] || [];
+        for (let i = 0; i < rows.length; i += 1) {
+          if (i) ws(",");
+          ws(JSON.stringify(rows[i]));
+        }
+        ws("]");
+      }
+      ws("}}");
+    }
+    ws(`},"pairs":[`);
+    const pairs = doc.pairs || [];
+    for (let i = 0; i < pairs.length; i += 1) {
+      if (i) ws(",");
+      ws(JSON.stringify(pairs[i]));
+    }
+    ws("]}\n");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 function loadCheckpoint(output) {
   const file = checkpointPath(output);
   if (!fs.existsSync(file)) return null;
@@ -47,9 +99,7 @@ function loadCheckpoint(output) {
 }
 
 function writeCheckpoint(output, doc) {
-  const file = checkpointPath(output);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(doc) + "\n");
+  writeTopologyDocument(checkpointPath(output), doc);
 }
 
 function shaFile(file) {
@@ -134,6 +184,38 @@ function publicRow(row, localEdgeId, remoteEdgeId) {
   };
 }
 
+function writeSeamSidecar(file, sidecar) {
+  // Compact streamed write — pretty-printed CA-scale neighbor arrays exceed
+  // JSON.stringify string limits the same way checkpoints do.
+  const fd = fs.openSync(file, "w");
+  const ws = (chunk) => {
+    fs.writeSync(fd, chunk);
+  };
+  try {
+    ws("{");
+    ws(`"schemaVersion":${JSON.stringify(sidecar.schemaVersion)}`);
+    ws(`,"fabricReleaseId":${JSON.stringify(sidecar.fabricReleaseId)}`);
+    ws(`,"sourceEpoch":${JSON.stringify(sidecar.sourceEpoch)}`);
+    ws(`,"regionId":${JSON.stringify(sidecar.regionId)}`);
+    ws(`,"neighbors":{`);
+    const neighborIds = Object.keys(sidecar.neighbors || {}).sort();
+    for (let n = 0; n < neighborIds.length; n += 1) {
+      const neighborId = neighborIds[n];
+      if (n) ws(",");
+      ws(`${JSON.stringify(neighborId)}:[`);
+      const rows = sidecar.neighbors[neighborId] || [];
+      for (let i = 0; i < rows.length; i += 1) {
+        if (i) ws(",");
+        ws(JSON.stringify(rows[i]));
+      }
+      ws("]");
+    }
+    ws("}}\n");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 function writeRegionSidecars(root, doc) {
   const releaseIds = new Set();
   for (const id of Object.keys(doc.regions).sort()) {
@@ -156,7 +238,7 @@ function writeRegionSidecars(root, doc) {
       regionId: id,
       neighbors: doc.regions[id].neighbors
     };
-    fs.writeFileSync(seamPath, JSON.stringify(sidecar, null, 2) + "\n");
+    writeSeamSidecar(seamPath, sidecar);
     const manifestPath = path.join(dir, "pack-manifest.v2.json");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     manifest.capabilities = [...new Set([...(manifest.capabilities || []), SEAM_CAPABILITY])];
@@ -246,10 +328,9 @@ function main() {
     throw new Error(`topology incomplete: ${doc.pairs.length}/${pairs.length} pairs`);
   }
   writeRegionSidecars(options.root, doc);
-  fs.mkdirSync(path.dirname(options.output), { recursive: true });
-  // National proof data exceeds the JS string limit when expanded with indentation.
-  // Compact JSON preserves every field and connection without that expansion.
-  fs.writeFileSync(options.output, JSON.stringify(doc) + "\n");
+  // National / split-pair proof data exceeds the JS string limit for one-shot
+  // JSON.stringify; stream scalars + array elements the same way as checkpoints.
+  writeTopologyDocument(options.output, doc);
   const partial = checkpointPath(options.output);
   if (fs.existsSync(partial)) fs.unlinkSync(partial);
   console.log(JSON.stringify({ output: options.output, pairs: doc.pairs.length, sourceEpoch: doc.sourceEpoch }, null, 2));
@@ -262,4 +343,13 @@ if (require.main === module) {
   }
 }
 
-module.exports = { assertNeighborCoverage, main, parseArgs, uniquePairs, selectProofs, writeRegionSidecars };
+module.exports = {
+  assertNeighborCoverage,
+  main,
+  parseArgs,
+  uniquePairs,
+  selectProofs,
+  writeRegionSidecars,
+  writeTopologyDocument,
+  writeCheckpoint
+};
