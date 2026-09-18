@@ -796,6 +796,9 @@ final class RoutePlannerModel {
         switch action {
         case .replaceAll, .clear:
             routingSessionSeed = UInt64.random(in: 1...9_007_199_254_740_991)
+            // A prior "Not now" must not permanently block route-touch download
+            // after the rider changes pins or wipes packs.
+            packAcquisition.clearDownloadDeclines()
         default:
             break
         }
@@ -900,6 +903,10 @@ final class RoutePlannerModel {
         resumePendingPackBuild()
     }
 
+    func notePackRemoved(_ regionID: String) {
+        packAcquisition.notePackRemoved(regionID)
+    }
+
     private func resumePendingPackBuild() {
         guard let pending = pendingPackBuild else { return }
         pendingPackBuild = nil
@@ -936,11 +943,19 @@ final class RoutePlannerModel {
                 coordinates: requested.waypoints.map(\.coordinate.locationCoordinate),
                 protectInstalledRevisions: self.graphPacks.protectInstalledRevisions)
             switch acquisition {
-            case .requestConsent:
+            case .requestConsent(let prompt):
+                RoutingDebugLog.shared.event(
+                    "pack consent requested kind=\(prompt.kind == .update ? "update" : "download") " +
+                        "regions=\(prompt.regionIDs.joined(separator: ","))"
+                )
                 self.pendingPackBuild = (from: legIndex,through: throughLegIndex,reuse: reuse,replanFromStationID: replanFromStationID)
                 self.isRouting = false; self.isAssemblingRoute = false; self.toast = nil
                 return
             case .unavailable(let warning):
+                RoutingDebugLog.shared.event(
+                    "pack acquisition unavailable reason=\(warning.reason == .declinedDownload ? "declined" : "missing") " +
+                        "regions=\(warning.regionIDs.joined(separator: ","))"
+                )
                 self.isRouting = false; self.isAssemblingRoute = false
                 self.errorMessage = warning.message; self.toast = nil
                 return

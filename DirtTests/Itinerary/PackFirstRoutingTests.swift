@@ -348,6 +348,63 @@ struct PackFirstRoutingTests {
         #expect(rows.first { $0.id == "pe" }?.revisionLabel.contains("installed") == true)
     }
 
+    @Test func decliningDownloadOnlyBlocksUntilPinsChange() {
+        let coverage = FakePackCoverage(installed: [], published: ["ns"])
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let decision = coordinator.evaluate(
+            coordinates: [halifax.locationCoordinate, sydney.locationCoordinate],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent = decision else {
+            Issue.record("expected download consent, got \(decision)")
+            return
+        }
+        coordinator.declineConsent()
+        #expect(coordinator.declinedDownloads.contains("ns"))
+
+        // New pin set (replaceAll/clear) forgets "Not now".
+        coordinator.clearDownloadDeclines()
+        #expect(coordinator.declinedDownloads.isEmpty)
+
+        let again = coordinator.evaluate(
+            coordinates: [halifax.locationCoordinate, sydney.locationCoordinate],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = again else {
+            Issue.record("expected download consent after clear, got \(again)")
+            return
+        }
+        #expect(prompt.regionIDs == ["ns"])
+    }
+
+    @Test func deletingPackClearsDownloadDecline() {
+        let coverage = FakePackCoverage(installed: [], published: ["ns", "nb"])
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        _ = coordinator.evaluate(
+            coordinates: [halifax.locationCoordinate, fredericton.locationCoordinate],
+            protectInstalledRevisions: false
+        )
+        coordinator.declineConsent()
+        #expect(coordinator.declinedDownloads.contains("ns"))
+        #expect(coordinator.declinedDownloads.contains("nb"))
+
+        coordinator.notePackRemoved("ns")
+        #expect(!coordinator.declinedDownloads.contains("ns"))
+        #expect(coordinator.declinedDownloads.contains("nb"))
+    }
+
+    @Test func catalogRefreshPreservesInFlightVerifiedRegions() {
+        let busy = Set(["nb", "qc"])
+        let scanned = Set(["ns"])
+        let live = Set(["nb", "pe"])
+        let merged = GraphPackStore.mergeVerifiedRegions(
+            scanned: scanned,
+            live: live,
+            managementInFlight: busy
+        )
+        #expect(merged == Set(["ns", "nb"]))
+    }
+
     @Test func replaceInstalledFailsClosedWhenRegionMissingFromCatalog() {
         #expect(
             GraphPackStore.shouldReplaceInstalledRevision(

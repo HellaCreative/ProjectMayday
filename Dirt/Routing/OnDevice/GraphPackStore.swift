@@ -116,6 +116,11 @@ final class GraphPackStore {
     /// Fired when a quiet pack finishes — unused after waypoint-driven acquisition.
     var onQuietPackReady: ((String) -> Void)?
 
+    /// Fired after an installed pack is removed from disk (Layers Delete).
+    /// Route planning uses this to forget a prior "Not now" so route-touch
+    /// download can ask again.
+    var onPackRemoved: ((String) -> Void)?
+
     private var task: Task<Void, Never>?
     private var downloadTasks: [String: Task<Void, Never>] = [:]
     /// Region ids started by auto-download (cancelled on End Nav).
@@ -299,9 +304,18 @@ final class GraphPackStore {
                 }
             }
             publishedIds = published
-            verifiedInstalledRegionIds = await Self.verifyInstalledRegions(
+            let verified = await Self.verifyInstalledRegions(
                 manifest: manifest,
                 cacheRoot: cacheRoot
+            )
+            // Layers Update holds managementInFlight across download + the
+            // post-install current-revision check. A catalog scan that started
+            // before the new bytes landed must not wipe that verified insert or
+            // the Update button fails with a false checksum mismatch.
+            verifiedInstalledRegionIds = Self.mergeVerifiedRegions(
+                scanned: verified,
+                live: verifiedInstalledRegionIds,
+                managementInFlight: managementInFlight
             )
             applyCatalog(published: published, sizes: sizes)
             refreshInstalledFromDisk()
@@ -309,6 +323,17 @@ final class GraphPackStore {
             applyCatalog(published: publishedIds, sizes: [:])
             refreshInstalledFromDisk()
         }
+    }
+
+    /// Keeps in-flight Update/Delete verified inserts when a concurrent catalog
+    /// scan captured disk state from before those bytes landed.
+    nonisolated static func mergeVerifiedRegions(
+        scanned: Set<String>,
+        live: Set<String>,
+        managementInFlight: Set<String>
+    ) -> Set<String> {
+        guard !managementInFlight.isEmpty else { return scanned }
+        return scanned.union(live.intersection(managementInFlight))
     }
 
     /// Avoid hammering the CDN on every Start Nav tap.
@@ -386,10 +411,10 @@ final class GraphPackStore {
     }
 
     func isInstalled(_ regionId: String) -> Bool {
-        let id = regionId.lowercased()
-        if findGraphFileURL(regionId: id) != nil { return true }
-        if activePack?.metadata.regionId?.lowercased() == id { return true }
-        return loadedRegionIds.contains { $0.lowercased() == id }
+        // Disk is the only authority. A decoded activePack or a stale
+        // loadedRegionIds entry must not survive Layers Delete and block
+        // route-touch re-download.
+        findGraphFileURL(regionId: regionId.lowercased()) != nil
     }
 
     /// Absolute path of the on-disk graph when present (any manifest version folder).
@@ -458,7 +483,10 @@ final class GraphPackStore {
                 )
             }
             if replaceInstalled || !hadInstalled {
-                guard packRevisionState(id) == .current else {
+                // Re-assert after a possible concurrent catalog refresh. The
+                // download already matched catalog identity before publish.
+                verifiedInstalledRegionIds.insert(id)
+                guard hasCompleteNativePack(id) else {
                     throw PackAcquisitionError.checksumMismatch(regionID: id)
                 }
             } else if !isInstalled(id) {
@@ -609,6 +637,7 @@ final class GraphPackStore {
             phase = .idle
         }
         refreshInstalledFromDisk()
+        onPackRemoved?(id)
     }
 
     static func removeInstalledRevisions(regionID: String, cacheRoot: URL) throws {
