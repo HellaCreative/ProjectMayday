@@ -39,6 +39,8 @@ public struct SearchOptions: Sendable {
     public var backtrackFactor: Double = 4
     public var seed: UInt64 = 0
     public var varietyEnabled = true
+    /// Explore another coherent riding area before falling back to ordinary routing.
+    public var composeDirtRide = false
     public var arrivalEdgeID: String?
     public var arrivalRestrictions: [RestrictionProgress] = []
     /// Extra legal destinations for a nearest-reachable search. Corridor and
@@ -353,6 +355,19 @@ public struct PathSearch: Sendable {
         let repeated = options.repeatEdges
         let penalized = options.penalizedDirtEdges
         let needIdentity = !avoid.isEmpty || !prior.isEmpty || !repeated.isEmpty || !penalized.isEmpty
+        // Identity membership is constant for this request. Resolve it only for
+        // roads actually visited, once per road rather than once per label.
+        var memberships: [Int: UInt8] = [:]
+        func membership(_ edge: Int) -> UInt8 {
+            guard needIdentity else { return 0 }
+            if let cached = memberships[edge] { return cached }
+            let local = pack.edgeID(edge), stable = pack.identity(of: edge)
+            func contains(_ set: Set<String>) -> Bool { set.contains(local) || set.contains(stable) }
+            let value: UInt8 = (contains(avoid) ? 1 : 0) | (contains(prior) ? 2 : 0)
+                | (contains(repeated) ? 4 : 0) | (contains(penalized) ? 8 : 0)
+            memberships[edge] = value
+            return value
+        }
         let startRemaining = remaining(of: startNode)
         let useRoadProgress = compass != nil && startRemaining.isFinite && !startRemaining.isInfinite
             && options.objective != .distance && !options.disableProgressRegression
@@ -415,7 +430,7 @@ public struct PathSearch: Sendable {
                 let e = arc.edge
                 let physicalEdge = pack.restrictionEdge(e)
                 if let previous = current.arc, previous.edge == e, current.state.node < pack.nodeCount { continue }
-                if !avoid.isEmpty && pack.matches(e, identities: avoid) {
+                if !avoid.isEmpty && membership(e) & 1 != 0 {
                     let leavingPin = current.state.node == startNode
                     let arrivingPin = arc.target == endNode
                     if !leavingPin && !arrivingPin { continue }
@@ -560,8 +575,8 @@ public struct PathSearch: Sendable {
                 let bucket = resource ? min(19,max(0,Int((options.precedingDirtMeters+dirt)/max(1,options.precedingMeters+meters)*20))) : 0
                 let previousTier = current.state.incoming >= 0 && current.state.incoming < pack.edgeCount
                     ? ProfilePolicy.tier(pack.roadClass(current.state.incoming)) : nil
-                let id = needIdentity ? pack.edgeID(e) : ""
-                let penalizedDirt = !penalized.isEmpty && (penalized.contains(id) || pack.matches(e, identities: penalized))
+                let roadMembership = membership(e)
+                let penalizedDirt = roadMembership & 8 != 0
                 var step = resource ? arc.meters : policy.step(pack: pack,edge: e,meters: arc.meters,objective: options.objective,
                     from: fromPoint,to: toPoint,start: start.coordinate,end: end.coordinate,startOnHighway: startHighway,
                     endOnHighway: endHighway,penalizedDirt: penalizedDirt,previousTier: previousTier,
@@ -590,8 +605,8 @@ public struct PathSearch: Sendable {
                     step *= RouteVariety.multiplier(seed: options.seed, edge: e)
                 }
                 if urban { step *= policy.style == .cleanest ? (policy.avoidMajorHighways ? 10 : 2) : 120 }
-                if !prior.isEmpty && pack.matches(e, identities: prior) { step *= max(1,options.backtrackFactor) }
-                if !repeated.isEmpty && pack.matches(e, identities: repeated) { step *= max(1,options.repeatFactor) }
+                if roadMembership & 2 != 0 { step *= max(1,options.backtrackFactor) }
+                if roadMembership & 4 != 0 { step *= max(1,options.repeatFactor) }
                 let cost = current.cost+step
                 guard cost.isFinite, step >= 0 else { throw RoutingFailure.invalidPack("nonfinite search cost") }
                 // Under a finite tank/fog cap, a cheap short label must not dominate

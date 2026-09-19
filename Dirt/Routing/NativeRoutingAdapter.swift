@@ -119,44 +119,15 @@ nonisolated enum ProcessMemory {
 /// A dedicated executor keeps pack preparation/search away from app UI work.
 /// Only local directories enter this boundary; it cannot fetch missing packs.
 actor NativeRoutingSession {
-    private var cachedKey: String?
-    private var cachedGraph: IndexedGraph?
-    private var cachedFuel: [DirtRoutingEngine.FuelStation] = []
-    private let compassStore = RoadCompassStore(capacity: 8)
+    private let compassStore = RoadCompassStore(capacity: 2)
     private let preparedGraphs = PreparedGraphStore()
-    /// Returns the prepared graph and, when this call built it, how long opening packs,
-    /// joining regions, indexing and decoding fuel took.
+    /// Acquisition has already installed these files. Preparation validates and
+    /// indexes them once; route calculation does not decode advisory fuel data.
     private func prepare(_ directories: [String:URL],budget: ComputationBudget) throws -> (graph: IndexedGraph, detail: String?) {
-        let regions = directories.keys.sorted()
-        let key = try regions.map { id in
-            let manifest = directories[id]!.appendingPathComponent("pack-manifest.v2.json")
-            return id+":"+manifest.path+":"+(try Data(contentsOf: manifest)).base64EncodedString()
-        }.joined(separator: "|")
-        if key == cachedKey, let cachedGraph { return (cachedGraph, nil) }
         let started = ContinuousClock.now
         let repository = try PackRepository(installedDirectories: directories)
-        let installed = try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
-        let openedMs = elapsedMs(from: started)
-        guard installed.first != nil else { throw RoutingFailure.missingPacks(regions) }
-        let joinedMs = elapsedMs(from: started)
-        let indexed: IndexedGraph
-        // Always go through the session PreparedGraphStore so multi-pack joins
-        // and later staged hops share the same IndexedGraph identity.
-        indexed = try preparedGraphs.indexed(regions, repository: repository, budget: budget)
-        let indexedMs = elapsedMs(from: started)
-        var fuel: [String:DirtRoutingEngine.FuelStation] = [:]
-        for item in installed {
-            guard let file = PackedFuel.decodeFile(item.fuelData) else { throw RoutingFailure.invalidPack("fuel data") }
-            for station in file.stations {
-                let row = DirtRoutingEngine.FuelStation(id: station.id,coordinate: .init(longitude: station.lon,latitude: station.lat),
-                    name: station.name,brand: station.brand,address: station.address)
-                if let previous = fuel[row.id], previous.coordinate != row.coordinate { throw RoutingFailure.invalidPack("conflicting fuel identity") }
-                fuel[row.id] = row
-            }
-        }
-        cachedKey = key; cachedGraph = indexed; cachedFuel = fuel.values.sorted { $0.id < $1.id }
-        let detail = "open:\(openedMs),join:\(joinedMs-openedMs),index:\(indexedMs-joinedMs),fuel:\(elapsedMs(from: started)-indexedMs)"
-        return (indexed, detail)
+        let indexed = try preparedGraphs.indexed(directories.keys.sorted(), repository: repository, budget: budget)
+        return (indexed, "prepare:\(elapsedMs(from: started))")
     }
     private func elapsedMs(from start: ContinuousClock.Instant) -> Int {
         let d = start.duration(to: .now).components
@@ -169,7 +140,7 @@ actor NativeRoutingSession {
     private func log(_ label: String,started: ContinuousClock.Instant,prepared: Int,prepareDetail: String?,
                      counter: SearchCounter,outcome: String) {
         let total = elapsedMs(from: started)
-        let searchMs = max(0, total - prepared)
+        let searchMs = Int(counter.searchMilliseconds.rounded())
         let pops = counter.pops
         let usPerPop = pops > 0 ? Int(Double(searchMs) * 1000.0 / Double(pops)) : 0
         let memory = ProcessMemory.megabytes()

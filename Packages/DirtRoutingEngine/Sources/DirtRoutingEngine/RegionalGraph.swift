@@ -165,17 +165,49 @@ public final class RegionalGraph: RoadGraph {
                 self.mask = mask
             }
         }
+        // Index precisely the membership predicate used by seam restriction proofs.
+        // A full restriction scan for every border node is quadratic preparation.
+        var edgeRows = [[Int: Set<Int>]](repeating: [:], count: graphs.count)
+        var nodeRows = [[Int: Set<Int>]](repeating: [:], count: graphs.count)
+        for p in graphs.indices {
+            for (row, restriction) in graphs[p].restrictions.enumerated() {
+                if row & 1023 == 0 { try budget.check() }
+                nodeRows[p][restriction.viaNode, default: []].insert(row)
+                for edge in Set([restriction.fromEdge, restriction.toEdge] + restriction.viaEdges) {
+                    edgeRows[p][edge, default: []].insert(row)
+                }
+            }
+        }
         func relevant(_ p: Int,_ node: Int) -> Set<RestrictionProof> {
-            let incident = Set(graphs[p].outgoing(node).map(\.edge))
-            return Set(graphs[p].restrictions.filter { r in
-                r.viaNode == node || incident.contains(r.fromEdge) || incident.contains(r.toEdge) || !incident.isDisjoint(with: r.viaEdges)
-            }.map { r in
+            var rows = nodeRows[p][node, default: []]
+            for arc in graphs[p].outgoing(node) {
+                rows.formUnion(edgeRows[p][arc.edge, default: []])
+            }
+            return Set(rows.sorted().map { graphs[p].restrictions[$0] }.map { r in
                 RestrictionProof(relation: r.relationID,
                                  from: proof(p,r.fromEdge),
                                  to: proof(p,r.toEdge),
                                  via: r.viaEdges.map { proof(p,$0) },
                                  only: r.only, mask: r.vehicleMask)
             })
+        }
+        struct ReciprocalProof: Hashable {
+            let node: String
+            let edge: SeamDocument.EdgeProof
+            let proof: String
+        }
+        var reciprocal = [[String: Set<ReciprocalProof>]]()
+        for document in documents {
+            var neighbors: [String: Set<ReciprocalProof>] = [:]
+            for (neighbor, anchors) in document.neighbors {
+                var rows = Set<ReciprocalProof>()
+                for (index, anchor) in anchors.enumerated() {
+                    if index & 1023 == 0 { try budget.check() }
+                    rows.insert(.init(node: anchor.osmNodeId, edge: anchor.edge, proof: anchor.proof))
+                }
+                neighbors[neighbor] = rows
+            }
+            reciprocal.append(neighbors)
         }
         var parent: [Int:Int] = [:], linkedRegions: [Int:Set<Int>] = [:]
         func root(_ n: Int) -> Int { var r = n; while let p = parent[r], p != r { r = p }; return r }
@@ -190,9 +222,8 @@ public final class RegionalGraph: RoadGraph {
                           anchor.gapMeters.isFinite, anchor.gapMeters >= 0, anchor.gapMeters <= 2,
                           anchor.coordinate.count == 2,
                           let ln = located[left][anchor.osmNodeId], let rn = located[right][anchor.osmNodeId],
-                          documents[right].neighbors[document.regionId]?.contains(where: {
-                              $0.osmNodeId == anchor.osmNodeId && $0.edge == anchor.edge && $0.proof == anchor.proof
-                          }) == true else { throw RoutingFailure.invalidPack("unreciprocated seam proof") }
+                          reciprocal[right][document.regionId]?.contains(.init(
+                              node: anchor.osmNodeId, edge: anchor.edge, proof: anchor.proof)) == true else { throw RoutingFailure.invalidPack("unreciprocated seam proof") }
                     let lg = graphs[left], rg = graphs[right]
                     let stated = Coordinate(longitude: anchor.coordinate[0],latitude: anchor.coordinate[1])
                     let leftPoint = lg.coordinate(node: ln), rightPoint = rg.coordinate(node: rn)

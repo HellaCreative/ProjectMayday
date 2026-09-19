@@ -8,21 +8,30 @@ struct ArcIndex: Sendable {
     let outEdge: [Int32]
     let inStart: [Int32]
     let inArcs: [Int32]
+    let targets: [Int32]
+    let forwards: [Bool]
+    let meters: [Double]
 
     init(nodeCount: Int, budget: ComputationBudget, outgoing: (Int) -> [RoadArc]) throws {
-        var arcCount = 0
-        for node in 0..<nodeCount { arcCount += outgoing(node).count }
+        // Do not walk and materialize every outgoing list just to count it;
+        // append in source order and grow the compact buffers as needed.
+        guard nodeCount < Int(Int32.max) else { throw RoutingFailure.resourceLimit("arc index") }
+        let arcCount = nodeCount
         var outStart = [Int32](repeating: 0, count: nodeCount + 1)
         var outSource: [Int32] = [], outEdge: [Int32] = [], targets: [Int32] = []
         outSource.reserveCapacity(arcCount); outEdge.reserveCapacity(arcCount); targets.reserveCapacity(arcCount)
+        var forwards: [Bool] = [], meters: [Double] = []
+        forwards.reserveCapacity(arcCount); meters.reserveCapacity(arcCount)
         var inStart = [Int32](repeating: 0, count: nodeCount + 1)
         for node in 0..<nodeCount {
             if node & 4095 == 0 { try budget.check() }
             for arc in outgoing(node) {
                 let target = arc.target >= 0 && arc.target < nodeCount ? arc.target : -1
                 outSource.append(Int32(node)); outEdge.append(Int32(arc.edge)); targets.append(Int32(target))
+                forwards.append(arc.forward); meters.append(arc.meters)
                 if target >= 0 { inStart[target + 1] += 1 }
             }
+            guard outSource.count < Int(Int32.max) else { throw RoutingFailure.resourceLimit("arc index") }
             outStart[node + 1] = Int32(outSource.count)
         }
         for node in 0..<nodeCount { inStart[node + 1] += inStart[node] }
@@ -35,6 +44,7 @@ struct ArcIndex: Sendable {
         }
         self.outStart = outStart; self.outSource = outSource; self.outEdge = outEdge
         self.inStart = inStart; self.inArcs = inArcs
+        self.targets = targets; self.forwards = forwards; self.meters = meters
     }
 }
 

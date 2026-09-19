@@ -9,30 +9,34 @@ public final class PreparedGraphStore: @unchecked Sendable {
 
     private let lock = NSLock()
     private var graphs: [String: IndexedGraph] = [:]
+    private var recency: [String] = []
+    private let capacity: Int
     /// Keys currently building — waiters block on the condition instead of double-building.
     private var inflight: Set<String> = []
     private let gate = NSCondition()
 
-    public init() {}
+    public init(capacity: Int = 2) { self.capacity = max(1, capacity) }
 
     public func key(for regions: [String]) -> String {
         regions.sorted().joined(separator: "+")
     }
 
-    /// Return a warm graph without building. Used by containingRegion so bbox
-    /// checks can skip a cold open when a prior hop already indexed the pack.
-    public func peek(_ regions: [String]) -> IndexedGraph? {
-        let key = key(for: regions)
+    /// Region order determines local road numbering and is part of the identity.
+    public func peek(_ regions: [String], repository: PackRepository) throws -> IndexedGraph? {
+        let key = try repository.preparationIdentity(regions)
         lock.lock(); defer { lock.unlock() }
         return graphs[key]
     }
 
     public func indexed(_ regions: [String], repository: PackRepository,
                         budget: ComputationBudget) throws -> IndexedGraph {
-        let key = key(for: regions)
+        try budget.check()
+        let key = try repository.preparationIdentity(regions)
         while true {
+            try budget.check()
             lock.lock()
             if let hit = graphs[key] {
+                recency.removeAll { $0 == key }; recency.append(key)
                 lock.unlock()
                 return hit
             }
@@ -46,7 +50,9 @@ public final class PreparedGraphStore: @unchecked Sendable {
                     lock.unlock()
                     if let ready { gate.unlock(); return ready }
                     if !waiting { break }
-                    gate.wait()
+                    _ = gate.wait(until: Date(timeIntervalSinceNow: 0.05))
+                    do { try budget.check() }
+                    catch { gate.unlock(); throw error }
                 }
                 gate.unlock()
                 continue
@@ -59,6 +65,10 @@ public final class PreparedGraphStore: @unchecked Sendable {
             let built = try Self.build(regions: regions, repository: repository, budget: budget)
             lock.lock()
             graphs[key] = built
+            recency.removeAll { $0 == key }; recency.append(key)
+            while recency.count > capacity {
+                graphs.removeValue(forKey: recency.removeFirst())
+            }
             inflight.remove(key)
             lock.unlock()
             gate.lock(); gate.broadcast(); gate.unlock()

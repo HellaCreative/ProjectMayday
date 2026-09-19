@@ -40,16 +40,14 @@ public struct RoadCompass: Sendable {
                               budget: ComputationBudget,
                               maxRemaining: Double = .infinity) throws -> RoadCompass {
         let count = pack.nodeCount
-        var incoming = Array(repeating: [(Int, Double)](), count: count)
+        let arcs: ArcIndex
         if let indexed = pack as? IndexedGraph {
-            incoming = indexed.predecessors
+            arcs = try indexed.arcIndex(budget: budget)
         } else {
-            for node in 0..<count {
-                if node & 4095 == 0 { try budget.check() }
-                for arc in pack.outgoing(node) {
-                    let meters = pack.distance(arc.edge)
-                    guard arc.target >= 0, arc.target < count, meters.isFinite, meters >= 0 else { continue }
-                    incoming[arc.target].append((node, meters))
+            arcs = try ArcIndex(nodeCount: count, budget: budget) { node in
+                pack.outgoing(node).map { arc in
+                    RoadArc(target: arc.target, edge: arc.edge, forward: arc.forward,
+                            meters: pack.distance(arc.edge))
                 }
             }
         }
@@ -70,7 +68,10 @@ public struct RoadCompass: Sendable {
             pops += 1
             if current.1 != remaining[current.0] { continue }
             if current.1 > maxRemaining { continue }
-            for (from, meters) in incoming[current.0] {
+            for slot in Int(arcs.inStart[current.0])..<Int(arcs.inStart[current.0 + 1]) {
+                let arc = Int(arcs.inArcs[slot])
+                let from = Int(arcs.outSource[arc]), meters = arcs.meters[arc]
+                guard meters.isFinite, meters >= 0 else { continue }
                 let candidate = current.1 + meters
                 if candidate < remaining[from] {
                     remaining[from] = candidate

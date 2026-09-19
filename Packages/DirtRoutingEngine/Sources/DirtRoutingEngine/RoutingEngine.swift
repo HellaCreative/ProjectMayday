@@ -97,6 +97,9 @@ public struct RoutingEngine: Sendable {
         throw lastFailure
     }
     public func route(_ request: RoutingRequest,start: RoadMatch,end: RoadMatch,budget: ComputationBudget) throws -> ComputedRoute {
+        if let composed = try composedDirtRide(request, start: start, end: end, budget: budget) {
+            return composed
+        }
         var request = request
         if ProcessInfo.processInfo.environment["DIRT_NO_CITY_WALL"] == "1" {
             request.options.cityWall = false
@@ -105,12 +108,11 @@ public struct RoutingEngine: Sendable {
         let compassStarted = ContinuousClock.now
         let compass: RoadCompass?
         do {
-            // The compass ignores access, so Allow Unknown shares it; the graph size
-            // keeps a store that outlives a region change from reusing another graph's table.
+            // Tables belong to this exact prepared graph, including its local numbering.
             let cap = request.options.compassMaxRemaining
             let key = "\(pack.nodeCount):\(pack.edgeCount):\(end.edge):\(end.alongMeters):\(cap)"
-            if let store = compassStore {
-                compass = .init(remaining: try store.remaining(for: key) {
+            if let store = compassStore, let indexed = pack as? IndexedGraph {
+                compass = .init(remaining: try store.remaining(for: indexed.cacheIdentity + ":" + key) {
                     try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: cap).remaining
                 })
             } else {

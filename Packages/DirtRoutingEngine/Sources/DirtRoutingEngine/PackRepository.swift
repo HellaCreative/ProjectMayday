@@ -85,6 +85,22 @@ public struct PackRepository: Sendable {
     public func missing(_ regions: [String]) -> [String] {
         Array(Set(regions.filter { directories[$0] == nil })).sorted()
     }
+    /// Immutable installed-byte identity for process-local preparation reuse.
+    /// Include local file revisions as well as the entire manifest: replacing a
+    /// corrupt artifact under an unchanged manifest must trigger verification.
+    func preparationIdentity(_ regions: [String]) throws -> String {
+        try regions.map { region in
+            guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
+            let manifest = try Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json"))
+            let revisions = try ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"].map { name in
+                let url = root.appendingPathComponent(name)
+                guard FileManager.default.fileExists(atPath: url.path) else { return name + ":missing" }
+                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                return "\(name):\(attributes[.systemFileNumber] ?? "-"):\(attributes[.size] ?? "-"):\((attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? -1):\((attributes[.creationDate] as? Date)?.timeIntervalSince1970 ?? -1)"
+            }.joined(separator: "|")
+            return root.standardizedFileURL.path + ":" + manifest.base64EncodedString() + ":" + revisions
+        }.joined(separator: "\n")
+    }
     public func open(_ region: String, requireSeams: Bool = false, budget: ComputationBudget = .init(seconds: 60)) throws -> InstalledRoutingPack {
         try budget.check()
         guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }

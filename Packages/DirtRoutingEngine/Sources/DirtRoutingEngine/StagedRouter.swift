@@ -220,10 +220,11 @@ public enum StagedRouter {
                 candidates = [request.end]
             }
             guard !candidates.isEmpty else { throw RoutingFailure.noPath }
-            // Prefetch the window after next while this stage searches.
+            // Keep only the active and next window resident; completed routes own
+            // geometry, not their prepared graphs.
             var prefetch: DispatchWorkItem?
-            if index + 2 < windows.count {
-                prefetch = prepared.prefetch(windows[index + 2], repository: repository, budget: budget)
+            if index + 1 < windows.count {
+                prefetch = prepared.prefetch(windows[index + 1], repository: repository, budget: budget)
             }
             defer { prefetch?.wait() }
             var lastError: Error = RoutingFailure.noPath
@@ -312,7 +313,7 @@ public enum StagedRouter {
             try budget.check()
             if index == ranked.count - 1 { return id }
             // Warm IndexedGraph beats a cold open when a prior hop already prepared it.
-            if let warm = prepared.peek([id]), sampledBox(warm).contains(point) {
+            if let warm = try prepared.peek([id], repository: repository), sampledBox(warm).contains(point) {
                 return id
             }
             let pack = try repository.open(id, requireSeams: false, budget: budget)

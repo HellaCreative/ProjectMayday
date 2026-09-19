@@ -570,7 +570,7 @@ that guesses here can lose work or bloat the checkout.
   the SIDECAR volume. Richard builds DIRT Dev from this checkout. Do not create a
   second worktree, clone, or copy of the project. Probe and experiment builds go
   to the session scratch directory, never to another checkout.
-- **Working branch:** `cursor/on-device-routing-speed-37c5`. This branch is the
+- **Working branch:** `cursor/stub-island-seam-rank-f339`. This branch is the
   source of truth for current work, whatever its name suggests.
 - **Remotes:** `github` → `https://github.com/HellaCreative/ProjectMayday`
   (public). There is no `origin`. The old internal-disk clone at
@@ -598,25 +598,44 @@ that guesses here can lose work or bloat the checkout.
 
 ## 8. Current state and Cursor handoff — September 15
 
-### Read this before changing code
+### Current implementation and qualification — September 19
 
-Owner instruction (15 Sep): Cursor continues the work and Claude reviews what
-Cursor reports. Work directly in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt` on branch
-`cursor/on-device-routing-speed-37c5`. Do not create extra worktrees or copies of
-the project; the owner builds DIRT Dev from this checkout and accepts work only
-after a phone build. One commit per step.
+Owner authorization: implement and qualify speed, memory and useful ride variety,
+then prepare main for the owner's Xcode Play build. Everyday one/two-region rides
+(Kitchener–Barrie and NS–NB) take priority; Halifax–Squamish through Canada is a
+stress case. Fuel is advisory only, outside route generation. Preserve the app
+foundation and Loop. No phone install, production deployment or pack publication
+is authorized by this work.
 
-- HEAD `57d57be` (overnight 15–16 Sep report below). Fallback: tag
-  `pre-find-speed-2026-09-15` (commit `cda849b`, the exact 15 Sep 05:45 working
-  tree including the previously uncommitted greenfield work), also pushed to the
-  internal-disk repository.
-- `ccb3e1e`: Balanced crash fix (an infinite corridor width was printed with
-  `Int`), `SearchCounter`, probe options, `Scripts/speed-matrix.sh`,
-  `Scripts/compare-receipts.py`. `300d2c3`: honest app log. `22fccc8`: endpoint
-  reachability check after a failed pair, corridor reuse, multi-destination
-  compass cache. `5ce0320` added whole-module flags; `6be017a` reverts them.
-- Verified: 41 package tests; clean DIRT Dev build for generic iOS; all 16 matrix
-  routes identical to the receipts taken before these changes.
+Work began at `5383862` in the working checkout. GitHub main `a3824c5` has five
+additional interface/navigation/settings commits absent from this branch; these
+must be preserved in integration. The existing immutable input is
+`fabric-v4-20260917-02`, including `cross-pack-seams.v2`.
+
+Verified host evidence is in ignored `.build/routing-experiments-20260919`.
+On Apple M1 / 16 GB / macOS 26.6.2, the exact restriction-membership preparation
+index alone previously reduced Halifax–Squamish from 76.05 to 51.60 seconds with
+identical road receipts. The first compact-adjacency/two-window-cache candidate
+preserved the same roads and 76.9% dirt, reducing paired-run peak physical
+footprint from approximately 2.2 GB to 859 MB, but measured 76.50 / 66.95 seconds
+fresh/repeated. This is a memory improvement, **not yet a speed qualification**.
+OS disk cache and unrelated host activity are uncontrolled. These are host results,
+not phone measurements or measured allocator peaks. Full region indexes still
+exist; this is not selective neighborhood loading.
+
+The original profile-weight widening trials did not materially improve everyday
+route variety. Exploratory composition now proposes other mapped legal dirt
+areas and proves both sides with incoming-road/turn continuity. It is disabled
+by default until real-route qualification. It must preserve rider points, reject
+repeated-road inflation, and leave Loop behavior intact. Fixed roughly-800 km
+cuts are not adopted: the trial increased repeated roads and depended on an
+already calculated full route.
+
+Current focused/package checks: 91 tests pass, including compact-connection and
+reverse-guidance equivalence, bounded preparation reuse, changed-artifact
+revalidation, actual incoming road at a composed junction, and seeded proposal
+reproducibility. Integrated source, real-route quality and app checks remain
+pending; nothing in this section denotes physical-device acceptance.
 
 ### Measurement
 

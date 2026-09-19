@@ -9,9 +9,8 @@ public struct IndexedGraph: RoadGraph {
     private let longEdges: [Int]
     private let siblings: [Int:[Int]]
     private let weakCache = WeakComponentCache()
-    private let outgoingArcs: [[RoadArc]]
-    let predecessors: [[(Int, Double)]]
-    private let arcIndexCache = ArcIndexCache()
+    private let arcs: ArcIndex
+    let cacheIdentity = UUID().uuidString
     private static let cellDegrees = 0.05
     private static let coincidentMeters = 2.0
     public init(_ graph: any RoadGraph, maximumEntries: Int = 8_000_000,
@@ -55,22 +54,12 @@ public struct IndexedGraph: RoadGraph {
             }
         }
         siblings = lists
-        var outgoingArcs = Array(repeating: [RoadArc](), count: graph.nodeCount)
-        var predecessors = Array(repeating: [(Int, Double)](), count: graph.nodeCount)
-        for node in 0..<graph.nodeCount {
-            if node & 4095 == 0 { try budget.check() }
-            let arcs = graph.outgoing(node).map { arc in
-                arc.meters.isFinite ? arc : RoadArc(target: arc.target,edge: arc.edge,forward: arc.forward,
-                                                    meters: graph.distance(arc.edge))
-            }
-            outgoingArcs[node] = arcs
-            for arc in arcs {
-                guard arc.target >= 0, arc.target < graph.nodeCount, arc.meters.isFinite, arc.meters >= 0 else { continue }
-                predecessors[arc.target].append((node, arc.meters))
+        arcs = try ArcIndex(nodeCount: graph.nodeCount, budget: budget) { node in
+            graph.outgoing(node).map { arc in
+                arc.meters.isFinite ? arc : RoadArc(target: arc.target, edge: arc.edge,
+                                                    forward: arc.forward, meters: graph.distance(arc.edge))
             }
         }
-        self.outgoingArcs = outgoingArcs
-        self.predecessors = predecessors
         try budget.check()
     }
     public func candidates(near point: Coordinate,radius: Double) -> [Int] {
@@ -94,8 +83,11 @@ public struct IndexedGraph: RoadGraph {
     public var restrictionIndex: RestrictionIndex { graph.restrictionIndex }
     public func coordinate(node: Int) -> Coordinate { graph.coordinate(node: node) }
     public func outgoing(_ node: Int) -> [RoadArc] {
-        guard node >= 0, node < outgoingArcs.count else { return [] }
-        return outgoingArcs[node]
+        guard node >= 0, node < nodeCount else { return [] }
+        return (Int(arcs.outStart[node])..<Int(arcs.outStart[node + 1])).map { i in
+            RoadArc(target: Int(arcs.targets[i]), edge: Int(arcs.outEdge[i]),
+                    forward: arcs.forwards[i], meters: arcs.meters[i])
+        }
     }
     public func endpoint(_ edge: Int,from: Bool) -> Int { graph.endpoint(edge,from: from) }
     public func restrictionEdge(_ edge: Int) -> Int { graph.restrictionEdge(edge) }
@@ -118,6 +110,7 @@ public struct IndexedGraph: RoadGraph {
     }
     /// Flat arc lists for reachability checks, built on first use.
     func arcIndex(budget: ComputationBudget) throws -> ArcIndex {
-        try arcIndexCache.value { try ArcIndex(nodeCount: nodeCount, budget: budget) { outgoing($0) } }
+        try budget.check()
+        return arcs
     }
 }
