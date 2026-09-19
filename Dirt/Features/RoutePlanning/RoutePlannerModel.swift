@@ -1988,7 +1988,11 @@ final class RoutePlannerModel {
                 guard !Task.isCancelled,
                       self.navigationRerouteGeneration == requestGeneration
                 else { return }
-                self.toast = error.localizedDescription
+                if self.navigation.missTurnActive {
+                    self.navigation.setMissTurnFailure(error.localizedDescription)
+                } else {
+                    self.toast = error.localizedDescription
+                }
             }
         }
     }
@@ -1997,6 +2001,158 @@ final class RoutePlannerModel {
         navigationRerouteTask?.cancel()
         navigationRerouteTask = nil
         navigationRerouteGeneration += 1
+    }
+
+    /// Continue & reroute: forward rebuild, last ride style. Rider must tap first.
+    func continueAfterMissTurn() {
+        navigation.continueMissTurnReroute()
+    }
+
+    /// Reverse the verified line to the last junction. No new ground.
+    func turnAroundAfterMissTurn() {
+        cancelNavigationReroute()
+        guard navigation.phase == .active else { return }
+        if let backtrack = backtrackGeometry() {
+            applyBacktrack(coordinates: backtrack.coordinates)
+            navigation.clearMissTurn(recovered: false)
+        } else {
+            navigation.setMissTurnFailure("Not far enough along the route to turn around.")
+        }
+    }
+
+    /// GPS → nearest packed fuel POI → rejoin the line ahead (two A→B + splice).
+    func routeToNearestPackedFuelStation() {
+        guard navigation.phase == .active,
+              let rider = locationService.currentCoordinate else { return }
+        navigation.noteFuelViaSearchStarted()
+        cancelNavigationReroute()
+        navigationRerouteGeneration += 1
+        let requestGeneration = navigationRerouteGeneration
+        navigationRerouteTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performFuelViaRoute(from: rider, requestGeneration: requestGeneration)
+        }
+    }
+
+    private func performFuelViaRoute(
+        from rider: RouteCoordinate,
+        requestGeneration: Int
+    ) async {
+        let pad = 80_000.0 / 111_000.0
+        let stations = graphPacks.fuelStations(
+            minLat: rider.latitude - pad,
+            maxLat: rider.latitude + pad,
+            minLon: rider.longitude - pad,
+            maxLon: rider.longitude + pad
+        )
+        let riderLoc = CLLocation(latitude: rider.latitude, longitude: rider.longitude)
+        guard let station = stations.min(by: {
+            riderLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+                < riderLoc.distance(from: CLLocation(latitude: $1.latitude, longitude: $1.longitude))
+        }) else {
+            navigation.setFuelPromptFailure("No fuel station in this pack")
+            return
+        }
+        let stationCoord = RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
+        guard let rejoin = navigation.coordinateAheadOnRoute(by: 40) else {
+            navigation.setFuelPromptFailure("No fuel station in this pack")
+            return
+        }
+
+        do {
+            let toStation = try await routeWhileNavigating(
+                from: rider,
+                to: stationCoord,
+                networkOnline: network.isOnline
+            )
+            guard !Task.isCancelled, navigationRerouteGeneration == requestGeneration else { return }
+            let fromStation = try await routeWhileNavigating(
+                from: stationCoord,
+                to: rejoin,
+                networkOnline: network.isOnline
+            )
+            guard !Task.isCancelled,
+                  navigationRerouteGeneration == requestGeneration,
+                  navigation.phase == .active
+            else { return }
+
+            let outbound = concatenateRouteResponses(toStation, fromStation)
+            if shouldPreserveStagesForRecovery,
+               let idx = activeStageIndex(near: rider) {
+                let spliced = spliceReturnPath(outbound, ontoStageAt: idx)
+                applyActiveStageResponse(spliced, at: idx, isReturnToNetwork: false)
+            } else {
+                applyFuelViaAsReplacement(outbound, rejoin: rejoin)
+            }
+            navigation.beginFuelVia(to: stationCoord)
+            refreshMap()
+        } catch {
+            guard !Task.isCancelled, navigationRerouteGeneration == requestGeneration else { return }
+            navigation.setFuelPromptFailure(error.localizedDescription)
+        }
+    }
+
+    private func concatenateRouteResponses(_ first: RouteResponse, _ second: RouteResponse) -> RouteResponse {
+        var combined = first.coordinates
+        for coordinate in second.coordinates where coordinate != combined.last {
+            combined.append(coordinate)
+        }
+        let meters = GeoMath.lineMeters(combined)
+        var maneuvers = first.maneuvers ?? []
+        let firstMeters = first.distanceMeters ?? GeoMath.lineMeters(first.coordinates)
+        if let later = second.maneuvers {
+            maneuvers.append(contentsOf: later.map { $0.shiftingAlong(by: firstMeters) })
+        }
+        let segs = (first.segments ?? []) + (second.segments ?? [])
+        return makeStoredRouteResponse(
+            coordinates: combined,
+            distanceMeters: meters,
+            dirtPercent: first.stats?.dirtPercent ?? second.stats?.dirtPercent ?? 0,
+            pavedPercent: first.stats?.pavedPercent ?? second.stats?.pavedPercent ?? 0,
+            imported: false,
+            networkSegments: segs.isEmpty ? nil : segs,
+            maneuvers: maneuvers.isEmpty ? nil : maneuvers
+        )
+    }
+
+    private func applyFuelViaAsReplacement(_ outbound: RouteResponse, rejoin: RouteCoordinate) {
+        let existing = navigation.coordinates
+        let rejoinLoc = CLLocation(latitude: rejoin.latitude, longitude: rejoin.longitude)
+        var combined = outbound.coordinates
+        if let nearest = GeoMath.nearestVertex(to: rejoinLoc, in: existing) {
+            let remaining = Array(existing[nearest.index...])
+            for coordinate in remaining where coordinate != combined.last {
+                combined.append(coordinate)
+            }
+        }
+        let meters = GeoMath.lineMeters(combined)
+        let response = makeStoredRouteResponse(
+            coordinates: combined,
+            distanceMeters: meters,
+            dirtPercent: outbound.stats?.dirtPercent ?? 0,
+            pavedPercent: outbound.stats?.pavedPercent ?? 100,
+            imported: false,
+            networkSegments: outbound.segments,
+            maneuvers: outbound.maneuvers
+        )
+        let target = preservedFinalDestination ?? combined.last
+        mode = .fromHere
+        destination = target
+        if let start = response.coordinates.first, let end = target ?? response.coordinates.last {
+            seedCanonicalBuild(
+                coordinates: [start, end],
+                profile: profile,
+                allowUnknown: allowUnknown,
+                responses: [response]
+            )
+        }
+        let display = MapState.displaySegments(from: [response])
+        navigation.replaceRoute(
+            coordinates: response.coordinates,
+            maneuvers: response.maneuvers ?? [],
+            segments: display,
+            networkSegments: networkSegments(from: [response])
+        )
     }
 
     // MARK: - Waypoint drag (map pin drag-to-move)
@@ -3687,7 +3843,7 @@ final class RoutePlannerModel {
             cleaned.count >= 3
             ? RideContributionCandidate(
                 edgeIds: cleaned,
-                distanceMeters: navigation.traveledMeters,
+                distanceMeters: navigation.riddenDistanceMeters,
                 startedAt: navigation.startedAt
             )
             : nil
@@ -3991,7 +4147,11 @@ final class RoutePlannerModel {
             guard !Task.isCancelled,
                   navigationRerouteGeneration == requestGeneration
             else { return }
-            toast = error.localizedDescription
+            if navigation.missTurnActive {
+                navigation.setMissTurnFailure(error.localizedDescription)
+            } else {
+                toast = error.localizedDescription
+            }
         }
     }
 

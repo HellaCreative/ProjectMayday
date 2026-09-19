@@ -60,19 +60,21 @@ enum DirtTheme {
 
     // MARK: - Surfaces over live map
 
-    /// Sheets sit on system material so the map still reads underneath — translucency
-    /// here is orientation, not decoration. `.thin` keeps terrain legible through the
-    /// panel; `.regular` washed out to near-white over bright basemaps.
-    static let sheetMaterial: Material = .regularMaterial
+    /// Dock and modal sheets. Thin glass so the map still reads underneath —
+    /// the Layers look is the sheet standard. Groupings sit on `groupingFill`,
+    /// not on a second material.
+    static let sheetMaterial: Material = .thinMaterial
     /// Map controls and dock: thin material carrying a dark scrim, so white glyphs
     /// keep contrast over snow, water, and satellite imagery alike.
     static let chromeMaterial: Material = .ultraThinMaterial
     /// Scrim strength over `chromeMaterial`; tuned to hold ≥4.5:1 for white glyphs.
     static let chromeScrim = Color(dirtHex: 0x16181C, opacity: 0.72)
 
-    /// Rows and cards layered on a material sheet. Translucent so the sheet still
-    /// reads as one surface instead of an opaque slab pasted over the map.
-    static let rowFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.18)
+    /// Opaque islands on thin glass. Sections, segments, and cards use this so
+    /// they contrast off the map showing through the sheet — not more glass.
+    static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.94)
+    /// Rows and cards on a glass sheet. Same fill as `groupingFill` — one language.
+    static let rowFill = groupingFill
     /// Nav HUD primary text on chrome (Figma `--panel/2`).
     static let panelText = Color(dirtHex: 0xEEF3F7)
     /// Nav HUD metric values on chrome (Figma `--bg`).
@@ -286,17 +288,26 @@ enum DirtType {
 
 /// Sheet and control surfaces over the live map.
 extension View {
-    /// Material sheet surface: map stays legible underneath, edges stay crisp.
+    /// Overlay chrome (HUD chips). Dock sheets use `sheetMaterial` on `DockSheetPanel`.
     func dirtSheetSurface(
         radius: CGFloat = DirtRadius.card,
         shadow: Bool = true
     ) -> some View {
-        background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+        background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .stroke(DirtTheme.hairline, lineWidth: 1)
             )
             .shadow(color: shadow ? .black.opacity(0.16) : .clear, radius: 14, y: 6)
+    }
+
+    /// Opaque grouping on thin glass (cards, sections, unselected segments).
+    func dirtGroupingSurface(radius: CGFloat = DirtRadius.control) -> some View {
+        background(DirtTheme.groupingFill, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(DirtTheme.hairline, lineWidth: 1)
+            )
     }
 
     /// Dark glass used by map controls, the dock, and the brand chip. `tint` replaces
@@ -423,7 +434,11 @@ struct DirtSecondaryButtonStyle: ButtonStyle {
                 .padding(.vertical, DirtSpace.inner)
                 .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                 .foregroundStyle(foreground)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+                .background(DirtTheme.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                )
                 .opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.45)
                 .contentShape(RoundedRectangle(cornerRadius: DirtRadius.control))
         }
@@ -450,7 +465,7 @@ struct DirtChipStyle: ButtonStyle {
                 .font(DirtType.chip)
                 .padding(.horizontal, dense ? DirtSpace.inner : DirtSpace.row)
                 .frame(minHeight: dense ? 34 : DirtHit.min)
-                .background(isActive ? DirtTheme.orange : DirtTheme.wash)
+                .background(isActive ? DirtTheme.orange : DirtTheme.groupingFill)
                 .foregroundStyle(isActive ? DirtTheme.onOrange : DirtTheme.ink)
                 .clipShape(RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
                 .overlay(
@@ -623,7 +638,7 @@ extension View {
             .foregroundStyle(titleColor)
             .padding(.horizontal, 10)
             .frame(minHeight: 36)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(dirtHex: 0xD8DADD), lineWidth: 1))
+            .background(DirtTheme.groupingFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(DirtTheme.hairline, lineWidth: 1))
     }
 }

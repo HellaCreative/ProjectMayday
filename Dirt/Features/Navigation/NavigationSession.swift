@@ -60,6 +60,36 @@ final class NavigationSession {
     private(set) var currentSurfaceLabel: String?
     private(set) var upcomingSurfaceAlert: String?
     private(set) var offRoute = false
+    /// Cue-card miss-turn prompt. Nav stays open until Continue, Turn around, or rejoin.
+    private(set) var missTurnActive = false
+    /// Sticky Continue failure (no legal forward line). Not a one-second toast.
+    private(set) var missTurnReason: String?
+    /// True while Continue & reroute is in flight.
+    private(set) var missTurnRerouting = false
+    /// GPS breadcrumbs for End Ride distance (contribute still uses edge ids).
+    private(set) var riddenTrack: [RouteCoordinate] = []
+    /// Fuel Range switch as Navigation sees it this ride.
+    private(set) var fuelNotificationsOn = false
+    /// Remaining usable metres when notifications are on; nil when off.
+    var remainingFuelMeters: Double? {
+        guard fuelNotificationsOn, usableFuelMeters > 0 else { return nil }
+        return max(0, usableFuelMeters - fuelBurnedMeters)
+    }
+    /// HUD toast: route to the nearest packed station. Not shown on the cue.
+    private(set) var fuelStationPromptVisible = false
+    /// Sticky fuel-via failure on the same chrome as the toast.
+    private(set) var fuelPromptReason: String?
+    /// Did you fuel up? — only after arriving at a station they routed to.
+    private(set) var fuelFillPromptVisible = false
+    private var usableFuelMeters: Double = 0
+    private var fuelBurnedMeters: Double = 0
+    private var lastFuelFix: CLLocation?
+    private var acknowledgedFuelRung = 0
+    private var pendingFuelRung = 0
+    private var fuelViaActive = false
+    private var fuelViaStation: RouteCoordinate?
+    /// Last on-route TBT, frozen when they leave the line so a puddle skip can be named.
+    private var lastUpcomingManeuver: RouteManeuver?
     /// Cumulative uphill meters this session (for HUD climb, not absolute altitude).
     private(set) var climbMeters: Double = 0
     /// Live speed (m/s) from the last GPS fix — used for ETA when moving.
@@ -70,7 +100,6 @@ final class NavigationSession {
     /// Optional speech hook: (spoken text, stable announce key).
     var onCueAnnounced: ((String, String) -> Void)?
     private var offRouteStrikes = 0
-    private var lastRerouteRequest: Date?
     private var lastSurfaceAlertKey: String?
     private var deliveredCuePhases: [String: Set<NavigationCuePhase>] = [:]
     private var announcedStageApproaches: Set<String> = []
@@ -92,6 +121,7 @@ final class NavigationSession {
 
     /// Wired by the planner: recalculates from the rider's position to the
     /// preserved destination with the same profile + access policy.
+    /// Fired only after **Continue & reroute** — never as a silent auto-reroute.
     var onRerouteNeeded: (() -> Void)?
     /// Cancels an in-flight reroute if the rider naturally rejoins the line.
     var onRouteRecovered: (() -> Void)?
@@ -181,8 +211,9 @@ final class NavigationSession {
         edgeSpans = RideEdgeSequence.spans(from: networkSegments)
         if !continuing {
             riddenEdgeIds = []
+            riddenTrack = []
             startedAt = Date()
-            lastRerouteRequest = nil
+            beginFuelTracking(enabled: FuelRangePrefs.notificationsEnabled, resetBurn: true)
         }
         // A replacement line has its own segment indices and starts progress at
         // zero, so continuity must be re-anchored by its first location fix.
@@ -190,6 +221,8 @@ final class NavigationSession {
         lastProgressLocation = nil
         offRoute = false
         offRouteStrikes = 0
+        lastUpcomingManeuver = nil
+        clearMissTurn(recovered: false)
         lastSurfaceAlertKey = nil
         if !continuing {
             deliveredCuePhases = [:]
@@ -219,6 +252,7 @@ final class NavigationSession {
             cueMode: cueMode
         )
             .sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
+        guard !missTurnActive else { return }
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
@@ -272,31 +306,18 @@ final class NavigationSession {
         // a rider on a curved road can sit 80+ m from the nearest vertex while
         // riding directly on the surface. Same segment-projection
         // approach (`nearestProjection` / 50 m on-route).
+        recordRiddenFix(location)
+        accumulateFuelBurn(from: location)
+        noteArrivalAtFuelViaIfNeeded(location)
+
         guard let proj = projectionRespectingContinuity(for: location) else { return }
 
         // 50 m on-route threshold.
-        // Three consecutive misses required before declaring off-route so GPS
-        // scatter and brief shadows don't trigger unnecessary reroutes.
+        // Named skip fires when that turn is behind the rider. Unnamed drift
+        // still needs three consecutive misses so a GPS jump does not false-alarm.
         let wasOffRoute = offRoute || offRouteStrikes > 0
         if proj.offMeters > 50 {
-            offRouteStrikes += 1
-            if offRouteStrikes >= 3 {
-                offRoute = true
-                currentCue = "Off route — recalculating…"
-                currentCueMeters = nil
-                currentManeuver = nil
-                followingManeuver = nil
-                followingManeuverMeters = nil
-                upcomingSurfaceAlert = nil
-                let now = Date()
-                if lastRerouteRequest == nil || now.timeIntervalSince(lastRerouteRequest!) > 20 {
-                    lastRerouteRequest = now
-                    onRerouteNeeded?()
-                }
-            }
-            // A rejected projection must never become the continuity anchor or
-            // advance progress. Otherwise repeated stationary off-route fixes
-            // can ratchet the local search window along a nearby future arm.
+            handleOffRoute()
             return
         }
 
@@ -311,7 +332,10 @@ final class NavigationSession {
         )
         offRouteStrikes = 0
         offRoute = false
-        if wasOffRoute { onRouteRecovered?() }
+        if wasOffRoute {
+            clearMissTurn(recovered: true)
+            onRouteRecovered?()
+        }
 
         updateSurfaceContext()
 
@@ -333,6 +357,13 @@ final class NavigationSession {
         // Top cue card + voice are turn-by-turn only. Surface stays on the bottom
         // chrome (`currentSurfaceLabel` / `upcomingSurfaceAlert`) — never steal the
         // maneuver channel when the next junction is still far away.
+        lastUpcomingManeuver = nextManeuver.flatMap { man in
+            let kind = (man.type ?? man.kind ?? "").lowercased()
+            return kind == "arrive" ? nil : man
+        }
+
+        if missTurnActive { return }
+
         if let next = nextManeuver, let metersToTurn {
             currentCue = next.displayLabel(cueMode: cueMode)
             currentCueMeters = metersToTurn
@@ -407,6 +438,7 @@ final class NavigationSession {
         surfaceRuns = []
         edgeSpans = []
         riddenEdgeIds = []
+        riddenTrack = []
         cumulative = []
         stageEndMeters = []
         stages = []
@@ -414,6 +446,9 @@ final class NavigationSession {
         remainingMeters = 0
         traveledMeters = 0
         offRoute = false
+        lastUpcomingManeuver = nil
+        clearMissTurn(recovered: false)
+        resetFuelTracking()
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
@@ -425,13 +460,245 @@ final class NavigationSession {
         deliveredCuePhases = [:]
         announcedStageApproaches = []
         announcedStageArrivals = []
-        lastRerouteRequest = nil
         lastMatchedSegmentIndex = nil
         lastProgressLocation = nil
         climbMeters = 0
         lastAltitudeMeters = nil
         startedAt = nil
         lastSpeedMPS = 0
+    }
+
+    /// GPS path length including a bypass, used at End Ride. Contribute still
+    /// sends edge ids from the planned (and later Continue) line.
+    var riddenDistanceMeters: Double {
+        max(traveledMeters, GeoMath.lineMeters(riddenTrack))
+    }
+
+    /// Vertex ahead of last on-route progress — rejoin target for a fuel via.
+    func coordinateAheadOnRoute(by meters: Double = 40) -> RouteCoordinate? {
+        guard coordinates.count > 1, cumulative.count == coordinates.count else { return nil }
+        let along = min(totalMeters, traveledMeters + max(0, meters))
+        if let index = cumulative.firstIndex(where: { $0 >= along }) {
+            return coordinates[index]
+        }
+        return coordinates.last
+    }
+
+    func continueMissTurnReroute() {
+        guard phase == .active, missTurnActive, !missTurnRerouting else { return }
+        missTurnRerouting = true
+        missTurnReason = nil
+        onRerouteNeeded?()
+    }
+
+    func setMissTurnFailure(_ message: String) {
+        missTurnRerouting = false
+        missTurnReason = message
+    }
+
+    func clearMissTurn(recovered: Bool) {
+        missTurnActive = false
+        missTurnReason = nil
+        missTurnRerouting = false
+        if recovered {
+            evaluateFuelStationPrompt()
+        }
+    }
+
+    func beginFuelTracking(enabled: Bool, resetBurn: Bool) {
+        if !enabled {
+            resetFuelTracking()
+            return
+        }
+        fuelNotificationsOn = true
+        usableFuelMeters = FuelRangePrefs.snapshot.usableMeters
+        if resetBurn {
+            fuelBurnedMeters = 0
+            acknowledgedFuelRung = 0
+            pendingFuelRung = 0
+            lastFuelFix = nil
+        }
+        fuelStationPromptVisible = false
+        fuelPromptReason = nil
+        fuelFillPromptVisible = false
+        fuelViaActive = false
+        fuelViaStation = nil
+    }
+
+    func setFuelNotificationsEnabled(_ enabled: Bool) {
+        guard phase == .active else {
+            if !enabled { resetFuelTracking() }
+            return
+        }
+        if enabled == fuelNotificationsOn { return }
+        if enabled {
+            beginFuelTracking(enabled: true, resetBurn: true)
+        } else {
+            resetFuelTracking()
+        }
+    }
+
+    func snoozeFuelStationPrompt() {
+        fuelStationPromptVisible = false
+        fuelPromptReason = nil
+        acknowledgedFuelRung = max(acknowledgedFuelRung, pendingFuelRung)
+    }
+
+    func noteFuelViaSearchStarted() {
+        fuelStationPromptVisible = false
+        fuelPromptReason = nil
+    }
+
+    func beginFuelVia(to station: RouteCoordinate) {
+        fuelViaActive = true
+        fuelViaStation = station
+        fuelStationPromptVisible = false
+        fuelPromptReason = nil
+        fuelFillPromptVisible = false
+        acknowledgedFuelRung = max(acknowledgedFuelRung, pendingFuelRung)
+    }
+
+    func setFuelPromptFailure(_ message: String) {
+        fuelViaActive = false
+        fuelViaStation = nil
+        fuelFillPromptVisible = false
+        fuelStationPromptVisible = true
+        fuelPromptReason = message
+    }
+
+    func confirmFuelFill() {
+        fuelBurnedMeters = 0
+        acknowledgedFuelRung = 0
+        pendingFuelRung = 0
+        lastFuelFix = nil
+        fuelFillPromptVisible = false
+        fuelViaActive = false
+        fuelViaStation = nil
+        fuelPromptReason = nil
+    }
+
+    func dismissFuelFillPrompt() {
+        fuelFillPromptVisible = false
+        fuelViaActive = false
+        fuelViaStation = nil
+    }
+
+    private func handleOffRoute() {
+        let named = namedMissManeuverIfBehind()
+        if let named {
+            presentMissTurn(named: named)
+            return
+        }
+        offRouteStrikes += 1
+        if offRouteStrikes >= 3 {
+            presentMissTurn(named: nil)
+        }
+    }
+
+    private func namedMissManeuverIfBehind() -> RouteManeuver? {
+        guard let man = lastUpcomingManeuver, let along = man.alongMeters else { return nil }
+        let kind = (man.type ?? man.kind ?? "").lowercased()
+        if kind == "arrive" { return nil }
+        // At or past the turn (now-window). Instant named skip; unnamed keeps 3-fix.
+        guard along <= traveledMeters + 80 else { return nil }
+        return man
+    }
+
+    private func presentMissTurn(named: RouteManeuver?) {
+        offRoute = true
+        currentCueMeters = nil
+        followingManeuver = nil
+        followingManeuverMeters = nil
+        upcomingSurfaceAlert = nil
+        fuelStationPromptVisible = false
+        if missTurnActive { return }
+        missTurnActive = true
+        missTurnReason = nil
+        missTurnRerouting = false
+        if let named {
+            currentManeuver = named
+            currentCue = Self.missedTurnCue(for: named, cueMode: cueMode)
+        } else {
+            currentManeuver = nil
+            currentCue = "You're off the line."
+        }
+    }
+
+    static func missedTurnCue(for maneuver: RouteManeuver, cueMode: NavigationCueMode) -> String {
+        let side = maneuver.side?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        if !side.isEmpty {
+            if maneuver.isRallyCurve, let number = maneuver.number {
+                return "You missed a turn — you were supposed to take \(side) \(number) back there."
+            }
+            return "You missed a turn — you were supposed to turn \(side) back there."
+        }
+        let label = maneuver.displayLabel(cueMode: cueMode).lowercased()
+        return "You missed a turn — you were supposed to \(label) back there."
+    }
+
+    private func recordRiddenFix(_ location: CLLocation) {
+        let point = RouteCoordinate(
+            longitude: location.coordinate.longitude,
+            latitude: location.coordinate.latitude
+        )
+        if let last = riddenTrack.last, GeoMath.meters(last, point) < 12 {
+            return
+        }
+        if riddenTrack.count >= 20_000 {
+            riddenTrack.removeFirst(riddenTrack.count - 19_999)
+        }
+        riddenTrack.append(point)
+    }
+
+    private func accumulateFuelBurn(from location: CLLocation) {
+        guard fuelNotificationsOn else { return }
+        if let last = lastFuelFix {
+            let delta = location.distance(from: last)
+            if delta > 1, delta < 250 {
+                fuelBurnedMeters += delta
+            }
+        }
+        lastFuelFix = location
+        evaluateFuelStationPrompt()
+    }
+
+    private func evaluateFuelStationPrompt() {
+        guard fuelNotificationsOn, usableFuelMeters > 0 else { return }
+        guard !fuelViaActive, !fuelFillPromptVisible else { return }
+        if missTurnActive {
+            fuelStationPromptVisible = false
+            return
+        }
+        if fuelStationPromptVisible { return }
+        let burnedFraction = min(1, fuelBurnedMeters / usableFuelMeters)
+        let rung = Int((burnedFraction * 10).rounded(.down))
+        guard rung >= 1, rung > acknowledgedFuelRung else { return }
+        pendingFuelRung = rung
+        fuelStationPromptVisible = true
+        fuelPromptReason = nil
+    }
+
+    private func noteArrivalAtFuelViaIfNeeded(_ location: CLLocation) {
+        guard fuelViaActive, let station = fuelViaStation else { return }
+        let here = CLLocation(latitude: station.latitude, longitude: station.longitude)
+        guard location.distance(from: here) <= 80 else { return }
+        fuelViaActive = false
+        fuelFillPromptVisible = true
+        fuelStationPromptVisible = false
+    }
+
+    private func resetFuelTracking() {
+        fuelNotificationsOn = false
+        usableFuelMeters = 0
+        fuelBurnedMeters = 0
+        lastFuelFix = nil
+        acknowledgedFuelRung = 0
+        pendingFuelRung = 0
+        fuelStationPromptVisible = false
+        fuelPromptReason = nil
+        fuelFillPromptVisible = false
+        fuelViaActive = false
+        fuelViaStation = nil
     }
 
     /// Match only the locally reachable portion of an established route.
