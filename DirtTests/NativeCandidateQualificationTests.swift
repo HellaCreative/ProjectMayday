@@ -10,8 +10,49 @@ import DirtRoutingEngine
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_CANDIDATE"] == "1"))
 struct NativeCandidateQualificationTests {
     private var root: URL {
-        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        if let path = ProcessInfo.processInfo.environment["DIRT_QUALIFY_PACK_ROOT"], !path.isEmpty {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
+        return URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("scripts/pack-fabric/routing/candidates/fabric-v4-20260917-02/packs")
+    }
+
+    @Test(.timeLimit(.minutes(3)))
+    func confederationBridgeCompletesBothDirectionsInEveryStyle() async throws {
+        let directories = Dictionary(uniqueKeysWithValues: ["nb", "pe"].map { ($0, root.appendingPathComponent($0)) })
+        let repository = try PackRepository(installedDirectories: directories)
+        for id in ["nb", "pe"] {
+            let installed = try repository.open(id, requireSeams: true)
+            if let expected = ProcessInfo.processInfo.environment["DIRT_QUALIFY_FABRIC"] {
+                #expect(installed.manifest.fabricReleaseId == expected)
+            }
+        }
+        let points = [Coordinate(longitude: -63.8150711, latitude: 46.1636391),
+                      Coordinate(longitude: -63.740036, latitude: 46.2202911)]
+        for reversed in [false, true] {
+            let session = NativeRoutingSession()
+            for style: RidingStyle in [.dirt, .balanced, .cleanest] {
+                for repeatRun in 0...1 {
+                    var request = RoutingRequest(start: points[reversed ? 1 : 0],
+                        end: points[reversed ? 0 : 1], style: style, allowUnknown: false, seed: 1)
+                    request.profile.wander = 0.5
+                    request.profile.avoidMajorHighways = true
+                    request.options.cityWall = true
+                    let started = ContinuousClock.now
+                    let route = try await session.route(request, directories: directories)
+                    #expect(route.limit == nil)
+                    #expect(route.start.coordinate.distance(to: request.start) <= 250)
+                    #expect(route.end.coordinate.distance(to: request.end) <= 250)
+                    #expect(route.segments.allSatisfy { $0.structure != "ferry" && $0.access == 0 })
+                    #expect(route.segments.contains { $0.edgeID.hasPrefix("646650186:") || $0.edgeID.hasPrefix("w646650186:") })
+                    #expect(RouteQuality(route: route).reriddenMeters == 0)
+                    let response = NativeRoutingAdapter.response(route, style: style)
+                    let reopened = try JSONDecoder().decode(RouteResponse.self, from: JSONEncoder().encode(response))
+                    #expect(reopened.geometry == response.geometry)
+                    report("bridge-\(reversed ? "reverse" : "forward")-\(style.rawValue)-run\(repeatRun)", started: started, route: route)
+                }
+            }
+        }
     }
 
     @Test(.timeLimit(.minutes(5)))

@@ -106,6 +106,12 @@ change. Two older tests that expected the unsupported transfer now require
 disconnection. The stronger source-identity/seam/turn tests remain passing:
 `engine-verified-junction-tests.log` records 121 passing; the reproducer is
 `unverified-junction-before.log`. Fresh-region route qualification remains open.
+App acquisition still passes all 33 checks (`prepared-candidate-app-tests.xcresult`).
+The native qualification suite accepts an explicit `DIRT_QUALIFY_PACK_ROOT` and
+`DIRT_QUALIFY_FABRIC`, so fresh data can be tested without overwriting old fixtures.
+Its bridge replay checks both directions and all three styles through the app's
+native session and response/save decoding. It has compiled; it has not yet run
+against the fresh release.
 
 The fresh NB input contains 13 footway/cycleway source ways with explicit
 motor-vehicle permission that the former highway-class filter discarded.
