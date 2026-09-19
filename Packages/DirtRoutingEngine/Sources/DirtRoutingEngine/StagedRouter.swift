@@ -13,10 +13,18 @@ public enum StagedRouter {
     public static let handoverCandidateLimit = 12
 
     /// Preserve structural facts until handover ranking has selected a pin.
-    /// A water-like candidate remains a legal fallback; it is never discarded.
+    /// Water-like and stub-island candidates remain legal fallbacks; they are
+    /// never discarded — only demoted so giant-component land seams try first.
     struct HandoverCandidate {
         let coordinate: Coordinate
         let waterLike: Bool
+        let stubIsland: Bool
+
+        init(coordinate: Coordinate, waterLike: Bool, stubIsland: Bool = false) {
+            self.coordinate = coordinate
+            self.waterLike = waterLike
+            self.stubIsland = stubIsland
+        }
     }
 
     /// Dirt only: leave wall-clock for later pins so one dead seam cannot burn
@@ -328,16 +336,67 @@ public enum StagedRouter {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
-        // Keep every seam row; water-like demotion is a rank key, not an exclude.
-        // Grouping by node would collapse diversity on dense borders (nb↔me).
+        // Keep every seam row; water-like / stub-island demotion is a rank key,
+        // not an exclude. Grouping by node would collapse diversity on dense
+        // borders (nb↔me). Prefer seams that sit in the largest weak component
+        // of both the shared and next packs — host fabric keeps many ON/MB and
+        // coastal ME proofs on stub islands that pass geodesic ranking then
+        // die in hopLooksLive / onward stages.
+        let stubOsm = try stubIslandOsmNodeIds(shared: shared, next: next, repository: repository)
         let points = anchors.compactMap { row -> HandoverCandidate? in
             guard row.coordinate.count == 2 else { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
             guard point.isValid else { return nil }
-            return .init(coordinate: point, waterLike: isWaterLike(row.edge))
+            return .init(
+                coordinate: point,
+                waterLike: isWaterLike(row.edge),
+                stubIsland: stubOsm.contains(row.osmNodeId)
+            )
         }
         return pickHandoverCandidates(from: points, origin: origin, toward: dest,
                                       limit: handoverCandidateLimit)
+    }
+
+    /// OSM node ids whose seam proof is missing from the giant weak component
+    /// on either side of the handover. Used only as a ranking demotion.
+    static func stubIslandOsmNodeIds(shared: String, next: String,
+                                     repository: PackRepository,
+                                     budget: ComputationBudget = .init(seconds: 120)) throws -> Set<String> {
+        let sharedPack = try repository.open(shared, requireSeams: false, budget: budget).graph
+        let nextPack = try repository.open(next, requireSeams: false, budget: budget).graph
+        let sharedIds = WeakComponents.ids(in: sharedPack, allowUnknown: true)
+        let nextIds = WeakComponents.ids(in: nextPack, allowUnknown: true)
+        let sharedGiant = giantComponentId(from: sharedIds)
+        let nextGiant = giantComponentId(from: nextIds)
+        let anchors = try repository.loadSeams(shared).neighbors[next]
+            ?? repository.loadSeams(next).neighbors[shared]
+            ?? []
+        let wanted = Set(anchors.map(\.osmNodeId))
+        guard !wanted.isEmpty else { return [] }
+        let sharedNodes = osmNodeIndex(in: sharedPack, wanted: wanted)
+        let nextNodes = osmNodeIndex(in: nextPack, wanted: wanted)
+        var stubs: Set<String> = []
+        for id in wanted {
+            let sharedOk = sharedNodes[id].map { sharedIds[$0] == sharedGiant } ?? false
+            let nextOk = nextNodes[id].map { nextIds[$0] == nextGiant } ?? false
+            if !(sharedOk && nextOk) { stubs.insert(id) }
+        }
+        return stubs
+    }
+
+    static func giantComponentId(from ids: [Int]) -> Int {
+        var sizes: [Int: Int] = [:]
+        for id in ids { sizes[id, default: 0] += 1 }
+        return sizes.max(by: { $0.value < $1.value })?.key ?? 0
+    }
+
+    static func osmNodeIndex(in pack: any RoadGraph, wanted: Set<String>) -> [String: Int] {
+        var found: [String: Int] = [:]
+        for n in 0..<pack.nodeCount {
+            let id = String(pack.osmNodeID(n))
+            if wanted.contains(id) { found[id] = n }
+        }
+        return found
     }
 
     /// Values are from `routing/lib/structure.js:isWaterCrossing`; timed
@@ -426,12 +485,12 @@ public enum StagedRouter {
     /// Geographic "best" alone is not enough — overlap stubs can look perfect
     /// on detour while remaining unreachable in one half, so callers try
     /// several diversified pins. Rank order: land before water-like, then
-    /// interquartile seam belt before lon/lat fringe (replaces NB/ME lon gate),
-    /// then detour.
+    /// giant-component before stub-island, then interquartile seam belt before
+    /// anti-progress lon fringe (replaces NB/ME lon gate), then detour.
     static func pickHandoverCandidates(from points: [Coordinate], origin: Coordinate,
                                        toward dest: Coordinate, limit: Int) -> [Coordinate] {
         pickHandoverCandidates(from: points.map {
-            .init(coordinate: $0, waterLike: false)
+            .init(coordinate: $0, waterLike: false, stubIsland: false)
         }, origin: origin, toward: dest, limit: limit)
     }
 
@@ -458,27 +517,23 @@ public enum StagedRouter {
         guard !points.isEmpty, limit > 0 else { return [] }
         let direct = max(1, origin.distance(to: dest))
         let fringe = seamFringeFlags(for: points, toward: dest)
-        let ranked = zip(points, fringe).map { point, isFringe -> (score: Double, point: Coordinate, waterLike: Bool, fringe: Bool) in
+        let ranked = zip(points, fringe).map { point, isFringe -> (
+            score: Double, point: Coordinate, waterLike: Bool, stubIsland: Bool, fringe: Bool
+        ) in
             let via = origin.distance(to: point.coordinate) + point.coordinate.distance(to: dest)
-            return (via / direct, point.coordinate, point.waterLike, isFringe)
-        }.sorted {
-            if $0.waterLike != $1.waterLike { return !$0.waterLike }
-            if $0.fringe != $1.fringe { return !$0.fringe }
-            return $0.score < $1.score
-        }
+            return (via / direct, point.coordinate, point.waterLike, point.stubIsland, isFringe)
+        }.sorted(by: handoverRankLessThan)
 
         // Keep the best pin per ~0.4° longitude cell so western stubs cannot
         // crowd out the connected Hwy 69 / French River band.
-        var byCell: [Int:(score: Double, point: Coordinate, waterLike: Bool, fringe: Bool)] = [:]
+        var byCell: [Int:(
+            score: Double, point: Coordinate, waterLike: Bool, stubIsland: Bool, fringe: Bool
+        )] = [:]
         for row in ranked {
             let cell = Int((row.point.longitude * 2.5).rounded(.towardZero))
             if byCell[cell] == nil { byCell[cell] = row }
         }
-        let diversified = byCell.values.sorted {
-            if $0.waterLike != $1.waterLike { return !$0.waterLike }
-            if $0.fringe != $1.fringe { return !$0.fringe }
-            return $0.score < $1.score
-        }.map(\.point)
+        let diversified = byCell.values.sorted(by: handoverRankLessThan).map(\.point)
         var spaced: [Coordinate] = []
         for point in diversified {
             if spaced.contains(where: { $0.distance(to: point) < 8_000 }) { continue }
@@ -505,6 +560,17 @@ public enum StagedRouter {
 
     static func pickHandover(from points: [Coordinate], origin: Coordinate, toward dest: Coordinate) -> Coordinate? {
         pickHandoverCandidates(from: points, origin: origin, toward: dest, limit: 1).first
+    }
+
+    /// Shared sort key for corridor diversification: land → giant → belt → detour.
+    static func handoverRankLessThan(
+        _ a: (score: Double, point: Coordinate, waterLike: Bool, stubIsland: Bool, fringe: Bool),
+        _ b: (score: Double, point: Coordinate, waterLike: Bool, stubIsland: Bool, fringe: Bool)
+    ) -> Bool {
+        if a.waterLike != b.waterLike { return !a.waterLike }
+        if a.stubIsland != b.stubIsland { return !a.stubIsland }
+        if a.fringe != b.fringe { return !a.fringe }
+        return a.score < b.score
     }
 
     static func openWindow(_ regions: [String], repository: PackRepository,

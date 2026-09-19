@@ -41,6 +41,24 @@ struct StagedRouterTests {
         #expect(picks.contains(where: { abs($0.longitude - east.longitude) < 0.05 }))
     }
 
+    @Test func handoverStubIslandDemotesDisconnectedSeamProofs() {
+        let origin = Coordinate(longitude: -66.1, latitude: 45.3)
+        let dest = Coordinate(longitude: -69.8, latitude: 43.7)
+        let giant = Coordinate(longitude: -67.28, latitude: 45.19)
+        // Better detour than giant, but marked stub-island and far enough to
+        // survive the 8 km spacing pass as a demoted fallback.
+        let stub = Coordinate(longitude: -67.10, latitude: 45.05)
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: [
+                .init(coordinate: stub, waterLike: false, stubIsland: true),
+                .init(coordinate: giant, waterLike: false, stubIsland: false)
+            ],
+            origin: origin, toward: dest, limit: 8)
+        #expect(picks.first?.longitude == giant.longitude)
+        #expect(picks.first?.latitude == giant.latitude)
+        #expect(picks.contains(where: { abs($0.longitude - stub.longitude) < 0.01 }))
+    }
+
     @Test func handoverStructuralQualityDemotesFerryAndWaterCrossing() {
         let origin = Coordinate(longitude: -66.1, latitude: 45.3) // Fredericton-ish
         let dest = Coordinate(longitude: -69.8, latitude: 43.7) // Portland-ish
