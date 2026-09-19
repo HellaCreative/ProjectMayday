@@ -683,6 +683,7 @@ struct RoutePlannerCard: View {
     /// name line, the instructional paragraph, and the full stat-chip row.
     private var loadedTrackCard: some View {
         let dirt = max(0, min(100, planner.aggregateDirtPercent))
+        let unknown = planner.aggregateUnknownPercent
         return VStack(alignment: .center, spacing: DirtSpace.tight) {
             Text(loadedTrackName)
                 .font(DirtType.rowTitle)
@@ -692,7 +693,17 @@ struct RoutePlannerCard: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity)
 
-            Text("\(Text(String(format: "%.1f km", planner.totalMeters / 1000)).foregroundStyle(DirtTheme.ink))\(Text("  ·  ").foregroundStyle(DirtTheme.muted))\(Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix))\(Text("  ·  ").foregroundStyle(DirtTheme.muted))\(Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix))")
+            (
+                Text(String(format: "%.1f km", planner.totalMeters / 1000)).foregroundStyle(DirtTheme.ink)
+                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
+                + Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix)
+                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
+                + Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix)
+                + (unknown > 0
+                    ? Text("  ·  ").foregroundStyle(DirtTheme.muted)
+                        + Text("\(unknown)% unknown").foregroundStyle(DirtTheme.muted)
+                    : Text(""))
+            )
             .font(DirtType.metricInline)
             .fontWeight(.bold)
             .multilineTextAlignment(.center)
@@ -700,8 +711,7 @@ struct RoutePlannerCard: View {
             .lineLimit(2)
             .minimumScaleFactor(0.8)
 
-            // The text stays Dirt/Paved; the line preserves the honest
-            // paved/gravel/loose/unknown composition.
+            // Text chips match the four-family bar (unknown was previously omitted).
             SurfaceMixBar(
                 composition: planner.surfaceComposition,
                 height: 6,
@@ -1328,6 +1338,9 @@ struct RoutePlannerCard: View {
             statChip(String(format: "%.1f", planner.totalMeters / 1000), label: "KM", color: DirtTheme.ink)
             statChip("\(planner.aggregateDirtPercent)%", label: "DIRT", color: DirtTheme.dirtMix)
             statChip("\(planner.aggregatePavedPercent)%", label: "PAVED", color: DirtTheme.pavedMix)
+            if planner.aggregateUnknownPercent > 0 {
+                statChip("\(planner.aggregateUnknownPercent)%", label: "UNK", color: DirtTheme.muted)
+            }
             mixBar
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

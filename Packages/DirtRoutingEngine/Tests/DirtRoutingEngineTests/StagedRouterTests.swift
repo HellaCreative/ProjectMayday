@@ -41,6 +41,24 @@ struct StagedRouterTests {
         #expect(picks.contains(where: { abs($0.longitude - east.longitude) < 0.05 }))
     }
 
+    @Test func nbMeHandoverPrefersLandBorderOverIslandApproaches() {
+        let origin = Coordinate(longitude: -66.1, latitude: 45.3) // Fredericton-ish
+        let dest = Coordinate(longitude: -69.8, latitude: 43.7) // Portland-ish
+        var points: [Coordinate] = []
+        // Land Calais–St. Stephen belt.
+        points.append(.init(longitude: -67.28, latitude: 45.19))
+        points.append(.init(longitude: -67.32, latitude: 45.16))
+        // Passamaquoddy island / ferry approaches (east).
+        points.append(.init(longitude: -66.96, latitude: 44.91))
+        points.append(.init(longitude: -66.98, latitude: 44.86))
+        let landOnly = points.filter { $0.longitude <= -67.05 }
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: landOnly, origin: origin, toward: dest, limit: 8)
+        #expect(!picks.isEmpty)
+        #expect(picks.allSatisfy { $0.longitude <= -67.05 })
+        #expect(!picks.contains(where: { $0.longitude > -67.05 }))
+    }
+
     @Test func chainLocalAimUsesNextPackSeamNotFinalDestination() throws {
         // Early NS→west hops must aim at the next onward seam belt, not Whistler.
         // Same eastern half set already clears NS→Winnipeg; dest-biased ranking

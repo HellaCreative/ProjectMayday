@@ -101,7 +101,9 @@ public enum StagedRouter {
                 } catch RoutingFailure.noMatch {
                     lastError = RoutingFailure.noMatch
                     continue
-                } catch let RoutingFailure.resourceLimit(kind) where kind == "labels" {
+                } catch let RoutingFailure.resourceLimit(kind) where kind == "labels" || kind == "time" {
+                    // Providence Dirt (012024Z) burned 60s on a dead nb→me pin;
+                    // try the next diversified handover instead of aborting.
                     lastError = RoutingFailure.resourceLimit(kind)
                     continue
                 }
@@ -195,9 +197,9 @@ public enum StagedRouter {
                 } catch RoutingFailure.noMatch {
                     lastError = RoutingFailure.noMatch
                     continue
-                } catch let RoutingFailure.resourceLimit(kind) where kind == "labels" {
-                    // Overlap stubs can look perfect on detour while thrashing
-                    // the label budget — keep walking the diversified list.
+                } catch let RoutingFailure.resourceLimit(kind) where kind == "labels" || kind == "time" {
+                    // Overlap stubs / long Dirt hops can burn labels or the wall
+                    // clock on a dead pin — keep walking the diversified list.
                     lastError = RoutingFailure.resourceLimit(kind)
                     continue
                 }
@@ -270,10 +272,17 @@ public enum StagedRouter {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
-        let points = anchors.compactMap { row -> Coordinate? in
+        var points = anchors.compactMap { row -> Coordinate? in
             guard row.coordinate.count == 2 else { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
             return point.isValid ? point : nil
+        }
+        // NB↔ME land border sits near −67.3. Passamaquoddy island / ferry approaches
+        // sit further east and pull Clean into the St. Stephen bay scribble (012024Z).
+        let pair = Set([shared.lowercased(), next.lowercased()])
+        if pair == Set(["nb", "me"]) {
+            let land = points.filter { $0.longitude <= -67.05 }
+            if !land.isEmpty { points = land }
         }
         return pickHandoverCandidates(from: points, origin: origin, toward: dest,
                                       limit: handoverCandidateLimit)

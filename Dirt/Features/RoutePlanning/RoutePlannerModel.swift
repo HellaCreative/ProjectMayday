@@ -606,6 +606,10 @@ final class RoutePlannerModel {
         hasRoute ? surfaceComposition.pavedPercent : 0
     }
 
+    var aggregateUnknownPercent: Int {
+        hasRoute ? surfaceComposition.unknownPercent : 0
+    }
+
     var surfaceComposition: RouteSurfaceComposition {
         RouteSurfaceComposition.from(responses: activeResponses)
     }
