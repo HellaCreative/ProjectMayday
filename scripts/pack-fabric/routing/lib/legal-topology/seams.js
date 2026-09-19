@@ -35,6 +35,11 @@ function edgeProof(pack, edge) {
   const from = Number(pack.edgeFrom[edge]);
   const to = Number(pack.edgeTo[edge]);
   const leaves = typeof pack.edgeLeaves === "function" ? pack.edgeLeaves(edge) : {};
+  // Sidecar ranking needs the actual V4 ferry signal. Keep it out of
+  // edgeProofKey: crossing time is quality metadata, not legal topology.
+  const crossingSeconds = typeof pack.crossingSeconds === "function"
+    ? Number(pack.crossingSeconds(edge)) || 0
+    : 0;
   return {
     osmWayId: String(pack.osmWayIds[edge]),
     fromOsmNodeId: String(pack.osmNodeIds[from]),
@@ -42,7 +47,8 @@ function edgeProof(pack, edge) {
     accessForward: Number(pack.edgeAccess[edge * 2]),
     accessReverse: Number(pack.edgeAccess[edge * 2 + 1]),
     layer: Number(leaves.layer || 0),
-    structureLeaf: leaves.structureLeaf || null
+    structureLeaf: leaves.structureLeaf || null,
+    crossingSeconds
   };
 }
 

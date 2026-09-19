@@ -41,25 +41,64 @@ struct StagedRouterTests {
         #expect(picks.contains(where: { abs($0.longitude - east.longitude) < 0.05 }))
     }
 
-    @Test func nbMeHandoverPrefersLandBorderOverIslandApproaches() {
+    @Test func handoverStructuralQualityDemotesFerryAndWaterCrossing() {
         let origin = Coordinate(longitude: -66.1, latitude: 45.3) // Fredericton-ish
         let dest = Coordinate(longitude: -69.8, latitude: 43.7) // Portland-ish
-        var points: [Coordinate] = []
-        // Land Calais–St. Stephen belt.
-        points.append(.init(longitude: -67.28, latitude: 45.19))
-        points.append(.init(longitude: -67.32, latitude: 45.16))
-        // Passamaquoddy island / ferry approaches (east).
-        points.append(.init(longitude: -66.96, latitude: 44.91))
-        points.append(.init(longitude: -66.98, latitude: 44.86))
-        let landOnly = points.filter { $0.longitude <= -67.05 }
+        let ferry = Coordinate(longitude: -67.00, latitude: 45.00)
+        let ford = Coordinate(longitude: -67.06, latitude: 45.05)
+        let land = Coordinate(longitude: -67.35, latitude: 45.20)
         let picks = StagedRouter.pickHandoverCandidates(
-            from: landOnly, origin: origin, toward: dest, limit: 8)
+            from: [
+                .init(coordinate: ferry, waterLike: true),
+                .init(coordinate: ford, waterLike: true),
+                .init(coordinate: land, waterLike: false)
+            ],
+            origin: origin, toward: dest, limit: 8)
         #expect(!picks.isEmpty)
-        #expect(picks.allSatisfy { $0.longitude <= -67.05 })
-        #expect(!picks.contains(where: { $0.longitude > -67.05 }))
+        #expect(picks.first?.longitude == land.longitude)
+        #expect(picks.first?.latitude == land.latitude)
     }
 
-    @Test func chainLocalAimUsesNextPackSeamNotFinalDestination() throws {
+    @Test func handoverStructuralQualityKeepsWaterOnlyFallbacks() {
+        let origin = Coordinate(longitude: -66.1, latitude: 45.3)
+        let dest = Coordinate(longitude: -69.8, latitude: 43.7)
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: [
+                .init(coordinate: .init(longitude: -67.00, latitude: 45.00), waterLike: true),
+                .init(coordinate: .init(longitude: -67.45, latitude: 45.20), waterLike: true)
+            ],
+            origin: origin, toward: dest, limit: 8)
+        #expect(picks.count == 2)
+    }
+
+    @Test func dirtHandoverSlicesReserveTimeForLaterCandidates() {
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 60, candidatesLeft: 12) == 5)
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 60, candidatesLeft: 2) == 20)
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 10, candidatesLeft: 5) == 3)
+    }
+
+    @Test func timedSeamProofIsWaterLikeWhenFerryLeafIsMissing() {
+        let timed = SeamDocument.EdgeProof(
+            osmWayId: "ferry", fromOsmNodeId: "a", toOsmNodeId: "b",
+            accessForward: 1, accessReverse: 1, layer: 0,
+            structureLeaf: nil, crossingSeconds: 3_600
+        )
+        #expect(StagedRouter.isWaterLike(timed))
+        let leafOnly = SeamDocument.EdgeProof(
+            osmWayId: "ford", fromOsmNodeId: "a", toOsmNodeId: "b",
+            accessForward: 1, accessReverse: 1, layer: 0,
+            structureLeaf: "ford", crossingSeconds: nil
+        )
+        #expect(StagedRouter.isWaterLike(leafOnly))
+        let land = SeamDocument.EdgeProof(
+            osmWayId: "road", fromOsmNodeId: "a", toOsmNodeId: "b",
+            accessForward: 1, accessReverse: 1, layer: 0,
+            structureLeaf: nil, crossingSeconds: 0
+        )
+        #expect(!StagedRouter.isWaterLike(land))
+    }
+
+    @Test func stageAimContractUsesNextPackSeamNotFinalDestination() throws {
         // Early NS→west hops must aim at the next onward seam belt, not Whistler.
         // Same eastern half set already clears NS→Winnipeg; dest-biased ranking
         // is what kills nb→qc-s when the rider pin is in BC.
@@ -115,6 +154,15 @@ struct StagedRouterTests {
         )
         #expect(last.longitude == rockies.longitude)
         #expect(last.latitude == rockies.latitude)
+
+        // The two-pack branch invokes the same aim function; its only handover
+        // is followed by the final rider destination, not an invented seam aim.
+        let twoPackFinal = try StagedRouter.chainLocalAim(
+            windows: [["nb"], ["me"]], stageIndex: 0, next: "me",
+            finalDestination: rockies, repository: repo
+        )
+        #expect(twoPackFinal.longitude == rockies.longitude)
+        #expect(twoPackFinal.latitude == rockies.latitude)
     }
 
     private func writeSeamFixture(root: URL, region: String, neighbors: [String:[Coordinate]]) throws {

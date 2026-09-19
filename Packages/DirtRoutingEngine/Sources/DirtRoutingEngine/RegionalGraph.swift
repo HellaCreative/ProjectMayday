@@ -9,6 +9,43 @@ struct SeamDocument: Decodable, Sendable {
         let accessReverse: UInt8
         let layer: Int
         let structureLeaf: String?
+        /// Ranking metadata only. Old seam sidecars omit this field.
+        /// Excluded from Equatable/Hashable so timing drift cannot reject a
+        /// legally reciprocal seam during RegionalGraph join.
+        let crossingSeconds: UInt32?
+
+        init(osmWayId: String, fromOsmNodeId: String, toOsmNodeId: String,
+             accessForward: UInt8, accessReverse: UInt8, layer: Int,
+             structureLeaf: String?, crossingSeconds: UInt32? = nil) {
+            self.osmWayId = osmWayId
+            self.fromOsmNodeId = fromOsmNodeId
+            self.toOsmNodeId = toOsmNodeId
+            self.accessForward = accessForward
+            self.accessReverse = accessReverse
+            self.layer = layer
+            self.structureLeaf = structureLeaf
+            self.crossingSeconds = crossingSeconds
+        }
+
+        static func == (lhs: EdgeProof, rhs: EdgeProof) -> Bool {
+            lhs.osmWayId == rhs.osmWayId
+                && lhs.fromOsmNodeId == rhs.fromOsmNodeId
+                && lhs.toOsmNodeId == rhs.toOsmNodeId
+                && lhs.accessForward == rhs.accessForward
+                && lhs.accessReverse == rhs.accessReverse
+                && lhs.layer == rhs.layer
+                && lhs.structureLeaf == rhs.structureLeaf
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(osmWayId)
+            hasher.combine(fromOsmNodeId)
+            hasher.combine(toOsmNodeId)
+            hasher.combine(accessForward)
+            hasher.combine(accessReverse)
+            hasher.combine(layer)
+            hasher.combine(structureLeaf)
+        }
     }
     struct Anchor: Decodable, Sendable {
         let coordinate: [Double]

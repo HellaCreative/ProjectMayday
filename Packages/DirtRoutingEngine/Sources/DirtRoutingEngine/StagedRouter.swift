@@ -12,6 +12,30 @@ public enum StagedRouter {
     /// How many diversified corridor pins to try before giving up a hop.
     public static let handoverCandidateLimit = 12
 
+    /// Preserve structural facts until handover ranking has selected a pin.
+    /// A water-like candidate remains a legal fallback; it is never discarded.
+    struct HandoverCandidate {
+        let coordinate: Coordinate
+        let waterLike: Bool
+    }
+
+    /// Dirt only: divide remaining wall-clock across remaining candidates so one
+    /// dead pin cannot burn the whole parent budget (Providence 012024Z).
+    static func dirtCandidateSliceSeconds(remainingSeconds: Double, candidatesLeft: Int) -> Double {
+        let share = max(0, remainingSeconds) / Double(max(1, candidatesLeft))
+        return min(20, max(3, share))
+    }
+
+    static func budgetForHandoverCandidate(_ budget: ComputationBudget, style: RidingStyle,
+                                           attempt: Int, candidateCount: Int) -> ComputationBudget {
+        guard style == .dirt else { return budget }
+        let candidatesLeft = max(1, candidateCount - attempt)
+        // The final remaining candidate gets the full parent remainder.
+        guard candidatesLeft > 1 else { return budget }
+        return budget.limited(to: dirtCandidateSliceSeconds(
+            remainingSeconds: budget.remainingSeconds, candidatesLeft: candidatesLeft))
+    }
+
     public static func shouldStage(regionCount: Int, start: Coordinate, end: Coordinate) -> Bool {
         let span = start.distance(to: end)
         if regionCount >= 3 { return span > longGeodesicMeters }
@@ -48,8 +72,12 @@ public enum StagedRouter {
         // pin that is live in the origin half but a stub in the dest half
         // cannot commit the corridor.
         if windows.count == 2, let originPack = windows[0].last, let destPack = windows[1].last {
+            // Same staged-aim contract as multi-pack. Two-pack has no onward seam
+            // belt, so chainLocalAim returns the rider destination.
+            let toward = try chainLocalAim(windows: windows, stageIndex: 0, next: destPack,
+                                           finalDestination: request.end, repository: repository)
             let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
-                                              toward: request.end, repository: repository)
+                                              toward: toward, repository: repository)
             guard !pins.isEmpty else { throw RoutingFailure.noPath }
             let prepareStarted = ContinuousClock.now
             let graphs = try prepared.indexedWindows(windows, repository: repository, budget: budget)
@@ -74,15 +102,26 @@ public enum StagedRouter {
                     lastError = RoutingFailure.noPath
                     continue
                 }
+                let candidatesLeft = max(1, pins.count - attempt)
+                let sliceSeconds = request.profile.style == .dirt && candidatesLeft > 1
+                    ? dirtCandidateSliceSeconds(remainingSeconds: budget.remainingSeconds,
+                                                candidatesLeft: candidatesLeft)
+                    : budget.remainingSeconds
+                let attemptBudget = budgetForHandoverCandidate(
+                    budget, style: request.profile.style, attempt: attempt, candidateCount: pins.count)
                 do {
                     var hop0 = request.with(start: cursor, end: hopEnd)
                     hop0.options.compassMaxRemaining = max(450_000, cursor.distance(to: hopEnd) * 2.5)
                     let started0 = ContinuousClock.now
                     let part0 = try RoutingEngine(pack: firstGraph, compassStore: compassStore)
-                        .route(hop0, budget: budget)
+                        .route(hop0, budget: attemptBudget)
                     hop0.options.counter?.recordStage("stage0:\(windows[0].joined(separator: ","))", since: started0)
                     if attempt > 0 {
                         hop0.options.counter?.recordStage("handoverRetry:\(attempt)", since: started0)
+                    }
+                    if request.profile.style == .dirt {
+                        hop0.options.counter?.recordStage(
+                            "handoverSlice:\(attempt):\(Int(sliceSeconds.rounded()))s", since: started0)
                     }
                     var hop1 = request.with(start: part0.end.coordinate, end: request.end)
                     hop1.options.compassMaxRemaining = max(450_000, part0.end.coordinate.distance(to: request.end) * 2.5)
@@ -92,7 +131,7 @@ public enum StagedRouter {
                     hop1.options.counter = request.options.counter
                     let started1 = ContinuousClock.now
                     let part1 = try RoutingEngine(pack: secondGraph, compassStore: compassStore)
-                        .route(hop1, budget: budget)
+                        .route(hop1, budget: attemptBudget)
                     hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
                     return stitch([part0, part1], windows: windows)
                 } catch RoutingFailure.noPath {
@@ -170,6 +209,13 @@ public enum StagedRouter {
                         continue
                     }
                 }
+                let candidatesLeft = max(1, candidates.count - attempt)
+                let sliceSeconds = request.profile.style == .dirt && index + 1 < windows.count && candidatesLeft > 1
+                    ? dirtCandidateSliceSeconds(remainingSeconds: budget.remainingSeconds,
+                                                candidatesLeft: candidatesLeft)
+                    : budget.remainingSeconds
+                let attemptBudget = budgetForHandoverCandidate(
+                    budget, style: request.profile.style, attempt: attempt, candidateCount: candidates.count)
                 var hop = request.with(start: cursor, end: hopEnd)
                 let span = cursor.distance(to: hopEnd)
                 hop.options.compassMaxRemaining = max(450_000, span * 2.5)
@@ -181,11 +227,15 @@ public enum StagedRouter {
                 let started = ContinuousClock.now
                 do {
                     let part = try RoutingEngine(pack: indexed, compassStore: compassStore)
-                        .route(hop, budget: budget)
+                        .route(hop, budget: attemptBudget)
                     hop.options.counter?.recordStage(
                         "stage\(index):\(window.joined(separator: ","))", since: started)
                     if attempt > 0 {
                         hop.options.counter?.recordStage("handoverRetry:\(attempt)", since: started)
+                    }
+                    if request.profile.style == .dirt, index + 1 < windows.count {
+                        hop.options.counter?.recordStage(
+                            "handoverSlice:\(attempt):\(Int(sliceSeconds.rounded()))s", since: started)
                     }
                     parts.append(part)
                     cursor = part.end.coordinate
@@ -272,20 +322,36 @@ public enum StagedRouter {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
-        var points = anchors.compactMap { row -> Coordinate? in
-            guard row.coordinate.count == 2 else { return nil }
+        // Group by seam node so a land-backed crossing demotes ferry proofs at
+        // the same pin rather than competing as duplicate coordinates.
+        var groups: [String: HandoverCandidate] = [:]
+        for row in anchors {
+            guard row.coordinate.count == 2 else { continue }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
-            return point.isValid ? point : nil
+            guard point.isValid else { continue }
+            let key = row.osmNodeId.isEmpty
+                ? String(format: "%.5f,%.5f", point.longitude, point.latitude)
+                : row.osmNodeId
+            let water = isWaterLike(row.edge)
+            if let existing = groups[key] {
+                groups[key] = .init(coordinate: existing.coordinate,
+                                    waterLike: existing.waterLike && water)
+            } else {
+                groups[key] = .init(coordinate: point, waterLike: water)
+            }
         }
-        // NB↔ME land border sits near −67.3. Passamaquoddy island / ferry approaches
-        // sit further east and pull Clean into the St. Stephen bay scribble (012024Z).
-        let pair = Set([shared.lowercased(), next.lowercased()])
-        if pair == Set(["nb", "me"]) {
-            let land = points.filter { $0.longitude <= -67.05 }
-            if !land.isEmpty { points = land }
-        }
-        return pickHandoverCandidates(from: points, origin: origin, toward: dest,
+        return pickHandoverCandidates(from: Array(groups.values), origin: origin, toward: dest,
                                       limit: handoverCandidateLimit)
+    }
+
+    /// Values are from `routing/lib/structure.js:isWaterCrossing`; timed
+    /// crossings are included because published V4 packs can omit a ferry leaf.
+    static func isWaterLike(_ edge: SeamDocument.EdgeProof) -> Bool {
+        let leaf = edge.structureLeaf?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let timedFerry = edge.crossingSeconds.map { $0 > 0 } ?? false
+        return timedFerry
+            || leaf == "ferry"
+            || ["ford", "low_water_crossing", "stepping_stones", "stream", "tidal"].contains(leaf)
     }
 
     /// Intermediate hops aim at the next pack's onward seam belt. The final hop
@@ -325,24 +391,37 @@ public enum StagedRouter {
     /// all-pairs spacing scan on that set blows the wall clock before search.
     /// Geographic "best" alone is not enough — overlap stubs can look perfect
     /// on detour while remaining unreachable in one half, so callers try
-    /// several diversified pins.
+    /// several diversified pins. Land-backed groups rank before water-like.
     static func pickHandoverCandidates(from points: [Coordinate], origin: Coordinate,
+                                       toward dest: Coordinate, limit: Int) -> [Coordinate] {
+        pickHandoverCandidates(from: points.map {
+            .init(coordinate: $0, waterLike: false)
+        }, origin: origin, toward: dest, limit: limit)
+    }
+
+    static func pickHandoverCandidates(from points: [HandoverCandidate], origin: Coordinate,
                                        toward dest: Coordinate, limit: Int) -> [Coordinate] {
         guard !points.isEmpty, limit > 0 else { return [] }
         let direct = max(1, origin.distance(to: dest))
-        let ranked = points.map { point -> (score: Double, point: Coordinate) in
-            let via = origin.distance(to: point) + point.distance(to: dest)
-            return (via / direct, point)
-        }.sorted { $0.score < $1.score }
+        let ranked = points.map { point -> (score: Double, point: Coordinate, waterLike: Bool) in
+            let via = origin.distance(to: point.coordinate) + point.coordinate.distance(to: dest)
+            return (via / direct, point.coordinate, point.waterLike)
+        }.sorted {
+            if $0.waterLike != $1.waterLike { return !$0.waterLike }
+            return $0.score < $1.score
+        }
 
         // Keep the best pin per ~0.4° longitude cell so western stubs cannot
         // crowd out the connected Hwy 69 / French River band.
-        var byCell: [Int:(score: Double, point: Coordinate)] = [:]
+        var byCell: [Int:(score: Double, point: Coordinate, waterLike: Bool)] = [:]
         for row in ranked {
             let cell = Int((row.point.longitude * 2.5).rounded(.towardZero))
             if byCell[cell] == nil { byCell[cell] = row }
         }
-        let diversified = byCell.values.sorted { $0.score < $1.score }.map(\.point)
+        let diversified = byCell.values.sorted {
+            if $0.waterLike != $1.waterLike { return !$0.waterLike }
+            return $0.score < $1.score
+        }.map(\.point)
         var spaced: [Coordinate] = []
         for point in diversified {
             if spaced.contains(where: { $0.distance(to: point) < 8_000 }) { continue }
