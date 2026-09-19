@@ -12,6 +12,9 @@ p.add_argument('cases',type=Path); p.add_argument('output',type=Path)
 p.add_argument('--styles',default='dirt,balanced,cleanest')
 p.add_argument('--only',default=''); p.add_argument('--wander',type=float,default=.5)
 p.add_argument('--unknown',action='store_true'); p.add_argument('--seed',type=int,default=1)
+p.add_argument('--build-receipt',type=Path,help='Pinned source identity and SHA256 of the built executable')
+p.add_argument('--pause-file',type=Path,help='Pause between cases while this file exists; excludes idle time from measurements')
+p.add_argument('--stop-file',type=Path,help='Finish the active case and stop before another case when this file exists')
 a=p.parse_args(); a.output.mkdir(parents=True,exist_ok=True)
 probe=a.probe.resolve(); packs=a.packs.resolve()
 def git(*args):
@@ -24,6 +27,13 @@ identity={'source':git('rev-parse','HEAD'),'sourceDiffSHA256':hashlib.sha256(git
  'memoryBytes':int(subprocess.check_output(['sysctl','-n','hw.memsize'],text=True)),
  'windowSeconds':60,'maximumLabels':1600000,'wander':a.wander,'allowUnknown':a.unknown,
  'avoidHighways':True,'avoidCities':True,'seed':a.seed,'fuelRouting':False}
+if a.build_receipt:
+ build=json.loads(a.build_receipt.read_text())
+ if build['probeSHA256'] != identity['probeSHA256']:
+  raise SystemExit('Build receipt does not identify this executable.')
+ identity['source']=build['source']
+ identity['sourceDiffSHA256']=build['sourceDiffSHA256']
+ identity['buildReceiptSHA256']=hashlib.sha256(a.build_receipt.read_bytes()).hexdigest()
 identityPath=a.output/'identity.json'
 if identityPath.exists() and json.loads(identityPath.read_text()) != identity:
  raise SystemExit('Output identity changed; use a new output directory, never mix candidates.')
@@ -35,6 +45,12 @@ for case in cases:
   key=case['id']+'-'+style
   resultPath=a.output/(key+'.json')
   if resultPath.exists(): continue
+  paused=False
+  while a.pause_file and a.pause_file.exists():
+   if a.stop_file and a.stop_file.exists(): raise SystemExit('Stopped between cases; completed receipts preserved.')
+   if not paused: print('Paused between cases; no route clock is running.',flush=True);paused=True
+   time.sleep(.5)
+  if a.stop_file and a.stop_file.exists(): raise SystemExit('Stopped between cases; completed receipts preserved.')
   raw=a.output/(key+'.raw.json'); timing=a.output/(key+'.time')
   command=[str(probe),str(packs),','.join(case['regions']),*map(str,case['from']),*map(str,case['to']),
     style,'60',str(a.seed),str(case.get('zoom','-'))]

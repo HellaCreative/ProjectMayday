@@ -688,6 +688,15 @@ and node identities. No tolerance was increased, connector fabricated, or pack
 changed. Detailed comparisons are in `.build/us-routing-20260919/ca-*-nv-geometry.json`.
 Resolving those pack conflicts remains outstanding and does not justify relaxing
 legal/topological validation for other regions.
+Provenance inspection explains the mismatch: ca-n/ca-s use OSM timestamp
+2026-09-16T20:21:21Z, while nv uses 2026-09-06T20:21:35Z despite the shared
+September 17 sourceEpoch. Across the installed fabric, 59 regions contain
+September 6 source data and eight split regions contain September 16 data
+(ca-n/ca-s, nl-island/nl-lab, on-n/on-s, qc-n/qc-s). Different dates alone do not
+prove every connection broken; the conflicting road bytes above do prove these
+California–Nevada failures. `.build/us-routing-20260919/pack-source-dates.json`
+records timestamps and source/graph/geometry hashes for every region. No source
+data or distributed artifacts were rebuilt or replaced.
 
 Intrastate cardinal/diagonal tests, Hawaii, longer multistate runs, all-style
 qualification, physical-device performance and the secondary acquisition UI
