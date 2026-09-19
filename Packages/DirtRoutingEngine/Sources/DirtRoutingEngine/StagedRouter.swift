@@ -19,11 +19,15 @@ public enum StagedRouter {
         let waterLike: Bool
     }
 
-    /// Dirt only: divide remaining wall-clock across remaining candidates so one
-    /// dead pin cannot burn the whole parent budget (Providence 012024Z).
+    /// Dirt only: leave wall-clock for later pins so one dead seam cannot burn
+    /// the parent budget (Providence 012024Z). Cap is higher than FuelPlanner's
+    /// 20s fuel-hop ceiling — staged Dirt personality searches need tens of
+    /// seconds on nb+qc-s / prairie windows (005137Z stage timings).
     static func dirtCandidateSliceSeconds(remainingSeconds: Double, candidatesLeft: Int) -> Double {
-        let share = max(0, remainingSeconds) / Double(max(1, candidatesLeft))
-        return min(20, max(3, share))
+        let later = max(0, candidatesLeft - 1)
+        let reserve = Double(later) * 20
+        let available = max(0, remainingSeconds - reserve)
+        return min(remainingSeconds, max(20, available))
     }
 
     static func budgetForHandoverCandidate(_ budget: ComputationBudget, style: RidingStyle,

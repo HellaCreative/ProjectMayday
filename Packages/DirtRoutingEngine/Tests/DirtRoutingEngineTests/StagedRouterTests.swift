@@ -72,9 +72,14 @@ struct StagedRouterTests {
     }
 
     @Test func dirtHandoverSlicesReserveTimeForLaterCandidates() {
-        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 60, candidatesLeft: 12) == 5)
-        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 60, candidatesLeft: 2) == 20)
-        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 10, candidatesLeft: 5) == 3)
+        // 12 candidates / 300s parent: reserve 11×20s, first pin gets ~80s.
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 300, candidatesLeft: 12) == 80)
+        // Two left / 60s: reserve 20s, current gets 40s.
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 60, candidatesLeft: 2) == 40)
+        // Tight parent still keeps a 20s floor when reserve would go negative.
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 30, candidatesLeft: 5) == 20)
+        // Never invent time beyond the parent remainder.
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 15, candidatesLeft: 3) == 15)
     }
 
     @Test func timedSeamProofIsWaterLikeWhenFerryLeafIsMissing() {
