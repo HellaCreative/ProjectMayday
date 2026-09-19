@@ -398,7 +398,11 @@ final class GraphPackStore {
         var ordered = ends
         let allowed = pathAllowedRegionIds(published: published)
         for (a, b) in zip(ends, ends.dropFirst()) {
-            guard let path = shortestRegionPath(from: a, to: b, allowedRegionIds: allowed) else {
+            guard let path = preferredCorridorPath(
+                from: a,
+                to: b,
+                allowedRegionIds: allowed
+            ) else {
                 continue
             }
             for id in path where !ordered.contains(id) {
@@ -418,6 +422,37 @@ final class GraphPackStore {
             }
         }
         return allowed
+    }
+
+    /// Canadian provinces/territories and their published halves. Used to keep
+    /// Canada↔Canada corridors on the Canadian network when a published path exists.
+    nonisolated static let canadianRegionIds: Set<String> = [
+        "ns", "nb", "pe", "nl", "nl-island", "nl-lab",
+        "qc", "qc-s", "qc-n", "on", "on-s", "on-n",
+        "mb", "sk", "ab", "bc", "yt", "nt", "nu"
+    ]
+
+    nonisolated static func isCanadianRegion(_ regionID: String) -> Bool {
+        canadianRegionIds.contains(regionID.lowercased())
+    }
+
+    /// Canada↔Canada corridors prefer a published Canadian-only path so equal-hop
+    /// BFS cannot slip through ND/MT (or other US borders) alphabetically.
+    /// Cross-border rides still use the full adjacency graph.
+    nonisolated static func preferredCorridorPath(
+        from: String,
+        to: String,
+        allowedRegionIds: Set<String>
+    ) -> [String]? {
+        let start = from.lowercased()
+        let end = to.lowercased()
+        if isCanadianRegion(start), isCanadianRegion(end) {
+            let canadianOnly = allowedRegionIds.intersection(canadianRegionIds)
+            if let path = shortestRegionPath(from: start, to: end, allowedRegionIds: canadianOnly) {
+                return path
+            }
+        }
+        return shortestRegionPath(from: start, to: end, allowedRegionIds: allowedRegionIds)
     }
 
     /// Split-province parents that `fabric-v4-20260917-02` replaces with halves.
@@ -970,7 +1005,7 @@ final class GraphPackStore {
 
     /// Deterministic adjacency-only path. A point-corner or bbox overlap can
     /// never enter this traversal because it is absent from the registry.
-    static func shortestRegionPath(
+    nonisolated static func shortestRegionPath(
         from: String,
         to: String,
         allowedRegionIds: Set<String>
@@ -995,7 +1030,7 @@ final class GraphPackStore {
         return nil
     }
 
-    private static let roadReachableNeighbours: [String: Set<String>] = [
+    private nonisolated static let roadReachableNeighbours: [String: Set<String>] = [
         "bc": ["ab", "yt", "nt", "ak", "wa", "id", "mt"],
         "ab": ["bc", "sk", "nt", "mt"],
         "sk": ["ab", "mb", "mt", "nd"],
@@ -2061,8 +2096,10 @@ final class GraphPackStore {
         let primaries = points.compactMap { primaryRegionId(containing: $0) }
         var result: [String] = []
         for id in primaries where !result.contains(id) { result.append(id) }
-        for (a,b) in zip(primaries,primaries.dropFirst()) {
-            for id in shortestRegionPath(from: a,to: b,allowedRegionIds: Set(roadReachableNeighbours.keys)) ?? [] where !result.contains(id) {
+        let allowed = Set(roadReachableNeighbours.keys)
+        for (a, b) in zip(primaries, primaries.dropFirst()) {
+            for id in preferredCorridorPath(from: a, to: b, allowedRegionIds: allowed) ?? []
+            where !result.contains(id) {
                 result.append(id)
             }
         }

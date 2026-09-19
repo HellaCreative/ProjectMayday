@@ -575,6 +575,69 @@ struct PackFirstRoutingTests {
         #expect(merged == Set(["ns", "nb"]))
     }
 
+    @Test func canadaToCanadaCorridorPrefersCanadianProvincesOverUS() {
+        let nearHalifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
+        // Whistler / Duffey Lake area — same west pin Richard used.
+        let nearWhistler = CLLocationCoordinate2D(latitude: 50.3463, longitude: -122.8234)
+        let published = fabricV4_20260917_02PublishedIds
+
+        let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [nearHalifax, nearWhistler],
+            published: published
+        )
+        #expect(catalog.contains("ns"))
+        #expect(catalog.contains("bc"))
+        #expect(catalog.contains("mb"))
+        #expect(catalog.contains("sk"))
+        #expect(catalog.contains("ab"))
+        #expect(!catalog.contains("nd"))
+        #expect(!catalog.contains("mt"))
+        #expect(!catalog.contains("mn"))
+        #expect(!catalog.contains("wa"))
+        #expect(!catalog.contains("on"))
+        #expect(!catalog.contains("qc"))
+
+        let path = GraphPackStore.preferredCorridorPath(
+            from: "ns",
+            to: "bc",
+            allowedRegionIds: published
+        )
+        #expect(path == ["ns", "nb", "qc-s", "on-n", "mb", "sk", "ab", "bc"])
+
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [nearHalifax, nearWhistler],
+            registry: FakePackCoverage(
+                installed: ["ns", "nb", "qc-s", "on-n"],
+                published: published
+            ),
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected Canadian corridor download consent, got \(decision)")
+            return
+        }
+        #expect(prompt.regionIDs.contains("bc"))
+        #expect(prompt.regionIDs.contains("mb"))
+        #expect(prompt.regionIDs.contains("sk"))
+        #expect(prompt.regionIDs.contains("ab"))
+        #expect(!prompt.regionIDs.contains("nd"))
+        #expect(!prompt.regionIDs.contains("mt"))
+    }
+
+    @Test func crossBorderCorridorMayStillUseUSNeighbours() {
+        let vancouver = CLLocationCoordinate2D(latitude: 49.28, longitude: -123.12)
+        let seattle = CLLocationCoordinate2D(latitude: 47.61, longitude: -122.33)
+        let published = fabricV4_20260917_02PublishedIds
+        let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [vancouver, seattle],
+            published: published
+        )
+        #expect(catalog.contains("bc"))
+        #expect(catalog.contains("wa"))
+    }
+
     @Test func halfOnlyFabricUsesPublishedShardsForCrossOntarioCorridor() {
         let toronto = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
         let kenora = CLLocationCoordinate2D(latitude: 49.8114, longitude: -94.4781)
