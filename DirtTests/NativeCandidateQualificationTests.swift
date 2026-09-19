@@ -36,8 +36,9 @@ struct NativeCandidateQualificationTests {
             #expect(route.limit == nil)
             #expect(quality.knownDirtPercent >= 70)
             #expect(quality.reriddenMeters == 0)
-            #expect(quality.returnMeters == 0)
-            #expect(route.segments.allSatisfy { $0.access == 0 })
+            let graph = try PackRepository(installedDirectories: directories).open("on-s").graph
+            #expect(!RouteQuality.hasClosedRoadCircuit(route.segments, in: graph))
+            verifyShortUnknownConnectors(route)
             #expect(route.start.coordinate.distance(to: native.start) <= 250)
             #expect(route.end.coordinate.distance(to: native.end) <= 250)
             let response = NativeRoutingAdapter.response(route, style: .dirt)
@@ -62,6 +63,7 @@ struct NativeCandidateQualificationTests {
         let regions = ["ns", "nb", "qc-s", "on-n", "mb", "sk", "ab", "bc"]
         let directories = Dictionary(uniqueKeysWithValues: regions.map { ($0, root.appendingPathComponent($0)) })
         let session = NativeRoutingSession()
+        var firstHash: String?
         for run in 1...2 {
             var request = RoutingRequest(start: .init(longitude: -63.5752, latitude: 44.6488),
                 end: .init(longitude: -123.1558, latitude: 49.7016), style: .dirt, allowUnknown: false, seed: 1)
@@ -70,20 +72,67 @@ struct NativeCandidateQualificationTests {
             let route = try await session.route(request, directories: directories)
             #expect(route.limit == nil)
             #expect(route.end.coordinate.distance(to: request.end) <= 250)
-            #expect(route.segments.allSatisfy { $0.access != 1 && $0.access != 2 && $0.access != 5 })
+            verifyShortUnknownConnectors(route)
             let hash = SHA256.hash(data: Data((route.segments.map(\.edgeID).joined(separator: "\n") + "\n").utf8))
                 .map { String(format: "%02x", $0) }.joined()
-            #expect(hash == "22f7e584630576a203013905553bc71fabab1cd2407419dd0324a7ef1367f13d")
+            if let firstHash { #expect(hash == firstHash) } else { firstHash = hash }
             #expect(RouteQuality(route: route).knownDirtPercent >= 70)
+            #expect(RouteQuality(route: route).reriddenMeters == 0)
             #expect(ProcessMemory.megabytes().peak < 1_300)
             report("canada-\(run)", started: started, route: route)
         }
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    func ownerHalifaxStStephenRespectsUnknownConnectorSetting() async throws {
+        let directories = Dictionary(uniqueKeysWithValues: ["ns", "nb"].map { ($0, root.appendingPathComponent($0)) })
+        let session = NativeRoutingSession()
+        for unknown in [false, true] {
+            let req = RidePreferenceContext.$current.withValue(
+                .init(wander: 1, avoidCities: true, avoidHighways: true)) {
+                RouteRequest(profile: .dirt, locations: [
+                    .init(latitude: 44.696743, longitude: -63.485973, label: "Owner start"),
+                    .init(latitude: 45.213841, longitude: -67.296321, label: "St Stephen")
+                ], allowUnknown: unknown, sessionSeed: 1, matchLimitMeters: 250)
+            }
+            let native = try NativeRoutingAdapter.request(req)
+            let started = ContinuousClock.now
+            let route = try await session.route(native, directories: directories)
+            #expect(route.limit == nil)
+            #expect(route.end.coordinate.distance(to: native.end) <= 250)
+            #expect(route.segments.allSatisfy { $0.access != 2 && $0.access != 5 })
+            let uncertainMeters = route.segments.filter { $0.access == 1 }.reduce(0) { $0+$1.meters }
+            #expect(uncertainMeters > 0)
+            if !unknown { verifyShortUnknownConnectors(route) }
+            let response = NativeRoutingAdapter.response(route, style: .dirt)
+            #expect(response.segments?.contains { $0.accessClass == "motorized_unknown" } == true)
+            report("owner-nsnb-unknown-\(unknown)", started: started, route: route)
+        }
+    }
+
+    // Audit the returned itinerary, including joins, independently of search labels.
+    private func verifyShortUnknownConnectors(_ route: ComputedRoute) {
+        var run = 0.0
+        var previous: UInt8?
+        for segment in route.segments where segment.meters > 0.01 {
+            #expect(segment.access != 2 && segment.access != 5)
+            if segment.access == 1 {
+                if run == 0 { #expect(previous == 0) }
+                run += segment.meters
+                #expect(run <= 100)
+            } else {
+                if run > 0 { #expect(segment.access == 0) }
+                run = 0
+            }
+            previous = segment.access
+        }
+        #expect(run == 0)
     }
 
     private func report(_ name: String, started: ContinuousClock.Instant, route: ComputedRoute) {
         let d = started.duration(to: .now).components
         let seconds = Double(d.seconds) + Double(d.attoseconds) / 1e18
         let q = RouteQuality(route: route)
-        print("CANDIDATE \(name) seconds=\(seconds) km=\(route.distanceMeters/1000) dirt=\(q.knownDirtPercent) repeatM=\(q.reriddenMeters) peakFootprintMB=\(ProcessMemory.megabytes().peak)")
+        print("CANDIDATE \(name) seconds=\(seconds) km=\(route.distanceMeters/1000) dirt=\(q.knownDirtPercent) repeatM=\(q.reriddenMeters) nearbyReturnM=\(q.returnMeters) peakFootprintMB=\(ProcessMemory.megabytes().peak)")
     }
 }

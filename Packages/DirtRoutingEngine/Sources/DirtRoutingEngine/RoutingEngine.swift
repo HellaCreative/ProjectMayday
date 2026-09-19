@@ -53,14 +53,28 @@ public struct RoutingEngine: Sendable {
         // carriageway on the short NS comparison.
         let intent = request.start.bearing(to: request.end)*180 / .pi
         let matchStarted = ContinuousClock.now
-        let starts = try matcher.matches(at: request.start,radius: radius,start: true,policy: request.access,intent: intent,budget: budget)
+        let startCandidates = try matcher.matches(at: request.start,radius: radius,start: true,policy: request.access,
+            intent: request.options.arrivalEdgeID == nil ? intent : nil,
+            limit: request.options.arrivalEdgeID == nil ? 12 : 64,budget: budget)
+        // A staged continuation already has an exact incoming road and position.
+        // Do not rematch it onto a nearby parallel road in the next window.
+        let starts: [RoadMatch]
+        if let incoming = request.options.arrivalEdgeID {
+            starts = startCandidates.filter {
+                pack.matches($0.edge, identities: [incoming]) && $0.coordinate.distance(to: request.start) < 1
+                    && (request.options.continuationForward == nil || $0.forward == request.options.continuationForward)
+            }
+        } else { starts = startCandidates }
+        if let incoming = request.options.arrivalEdgeID {
+            request.options.counter?.recordStage("continuation:\(incoming):forward=\(String(describing: request.options.continuationForward)):matches=\(starts.count):point=\(request.start.longitude),\(request.start.latitude)", since: .now)
+        }
         let ends = try matcher.matches(at: request.end,radius: radius,start: false,policy: request.access,intent: intent+180,budget: budget)
         request.options.counter?.recordStage("match", since: matchStarted)
         guard !starts.isEmpty, !ends.isEmpty else { throw RoutingFailure.noMatch }
         // JS `selectConnectedSnapPair`: score stays on each directed candidate;
         // connectivity is a later filter, not a rescore. Prefer the same weak
         // component so a closer island cannot steal the destination road.
-        let components = WeakComponents.ids(in: pack, allowUnknown: request.access.allowUnknown)
+        let components = WeakComponents.ids(in: pack, allowUnknown: request.access.includesUnknownConnectivity)
         var lastFailure: RoutingFailure = .noPath
         let pairs = starts.flatMap { start in ends.map { (start,$0) } }.enumerated().sorted {
             let a = $0.element.0.score+$0.element.1.score, b = $1.element.0.score+$1.element.1.score

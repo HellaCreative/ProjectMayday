@@ -18,7 +18,7 @@ extension RoutingEngine {
         var reference: ComputedRoute?
         let attemptBudget = budget.limited(to: min(24, budget.remainingSeconds * 0.5))
         for pass in 0..<2 {
-        for pin in proposals.prefix(2) {
+        for pin in proposals.prefix(6) {
             try budget.check()
             guard attemptBudget.remainingSeconds > 0 else { break }
             let attemptStarted = ContinuousClock.now
@@ -40,6 +40,20 @@ extension RoutingEngine {
                 secondRequest.options.precedingDirtMeters += first.segments.filter { $0.surface == .gravel || $0.surface == .loose }.reduce(0) { $0 + $1.meters }
                 secondRequest.options.priorEdges.formUnion(first.segments.map(\.edgeID))
                 secondRequest.options.avoidEdges.formUnion(first.segments.map(\.edgeID))
+                if request.profile.style == .dirt {
+                    for segment in first.segments {
+                        let ends = [(pack.endpoint(segment.edge, from: segment.forward), segment.geometry.first),
+                                    (pack.endpoint(segment.edge, from: !segment.forward), segment.geometry.last)]
+                        for (node, traversedPoint) in ends {
+                            let junction = pack.coordinate(node: node)
+                            // A clipped first/last road does not visit both of its junctions.
+                            if let traversedPoint, traversedPoint.distance(to: junction) < 0.1,
+                               junction.distance(to: first.end.coordinate) > 0.1 {
+                                secondRequest.options.avoidCircuitNodes.insert(node)
+                            }
+                        }
+                    }
+                }
                 let second = try rideSection(secondRequest, start: incoming, end: end, budget: attemptBudget)
                 guard second.limit == nil else { continue }
                 var result = ComputedRoute(start: first.start, end: second.end,
@@ -50,10 +64,12 @@ extension RoutingEngine {
                     arrivalRestrictions: second.arrivalRestrictions)
                 let quality = RouteQuality(route: result, urbanBoxes: UrbanCores.boxes(in: pack))
                 request.options.counter?.recordStage("rideQuality:dirt=\(quality.knownDirtPercent),repeat=\(Int(quality.reriddenMeters)),return=\(Int(quality.returnMeters)),scrap=\(Int(quality.shortDirtScrapMeters))", since: .now)
+                let closedCircuit = RouteQuality.hasClosedRoadCircuit(result.segments, in: pack)
+                request.options.counter?.recordStage("realCircuit:\(closedCircuit)", since: .now)
                 // Owner's Dirt qualification floor; never buy it with repeated
                 // spurs or a circuit returning to a place already ridden.
                 guard quality.knownDirtPercent >= 70, quality.reriddenMeters == 0,
-                      quality.returnMeters == 0, quality.shortDirtScrapMeters == 0 else { continue }
+                      !closedCircuit, quality.shortDirtScrapMeters == 0 else { continue }
                 result.searchSummary = "composed-dirt/\(Int(quality.knownDirtPercent))%/\(pack.identity(of: pin.edge))"
                 result.maneuvers = NavigationCues.make(route: result, graph: pack, access: request.access, arrival: request.options.arrival)
                 return result
@@ -95,6 +111,7 @@ extension RoutingEngine {
         var options = request.options
         options.composeDirtRide = false
         options.objective = .pavement
+        options.preventLocalCircuits = request.profile.style == .dirt
         options.roadRemaining = try RoadCompass.toward(end: end, pack: pack, budget: budget,
             maxRemaining: options.compassMaxRemaining).remaining
         return try PathSearch(pack: pack).search(start: start, end: end,
@@ -107,9 +124,9 @@ extension RoutingEngine {
                      center: Coordinate? = nil, budget: ComputationBudget) throws -> [RoadMatch] {
         let a = start.coordinate, b = end.coordinate
         let span = a.distance(to: b), bearing = a.bearing(to: b)
-        let reach = min(120_000, span * (0.08 + 0.50 * request.profile.appetite))
+        let reach = request.profile.wanderFreedom * min(120_000, span * (0.08 + 0.50 * request.profile.appetite))
         let urban = UrbanCores.boxes(in: pack)
-        let components = WeakComponents.ids(in: pack, allowUnknown: request.access.allowUnknown)
+        let components = WeakComponents.ids(in: pack, allowUnknown: request.access.includesUnknownConnectivity)
         let originComponent = WeakComponents.of(match: start, pack: pack, ids: components)
         var random = request.options.seed
         func unit() -> Double {
@@ -122,33 +139,76 @@ extension RoutingEngine {
         }
         let firstSide = unit() < 0.5 ? -1.0 : 1.0
         var proposals: [RoadMatch] = []
+        var fallbackEdges = Set<Int>()
+        // Start at the requested breadth, then halve the extra reach until the
+        // previous envelope is represented. Distant failed proposals cannot
+        // remove nearby usable dirt areas from consideration.
+        var radialScales = [1.0]
+        if request.profile.style == .dirt {
+            let floor = 1 / request.profile.wanderFreedom
+            var scale = 0.5
+            while scale > floor { radialScales.append(scale); scale *= 0.5 }
+            if floor < 1 { radialScales.append(floor) }
+        }
         for side in [firstSide, -firstSide] {
             try budget.check()
             let fraction = 0.40 + unit() * 0.20
             let middle = center ?? Coordinate(longitude: a.longitude + (b.longitude - a.longitude) * fraction,
                                     latitude: a.latitude + (b.latitude - a.latitude) * fraction)
-            let radius = reach * (0.65 + unit() * 0.35)
-            let angle = bearing + side * .pi / 2
-            let target = Coordinate(longitude: middle.longitude + sin(angle) * radius / (111_000 * max(0.2, cos(middle.latitude * .pi / 180))),
-                                    latitude: middle.latitude + cos(angle) * radius / 111_000)
-            var best: (distance: Double, match: RoadMatch)?
-            for (index, edge) in pack.candidates(near: target, radius: max(5_000, reach * 0.25)).enumerated() {
-                if index & 255 == 0 { try budget.check() }
-                let family = ProfilePolicy.family(pack.surfaceLeaf(edge))
-                guard family == .gravel || family == .loose,
-                      pack.distance(edge) >= request.profile.minimumMeaningfulDirtMeters,
-                      pack.accessCode(edge, forward: true) == 0, pack.accessCode(edge, forward: false) == 0,
-                      !["motorway", "trunk", "arterial"].contains(ProfilePolicy.tier(pack.roadClass(edge))) else { continue }
-                let point = pack.coordinate(node: pack.endpoint(edge, from: true))
-                guard !urban.contains(where: { $0.contains(point) }) else { continue }
-                let length = pack.polyline(edge).adjacentDistance()
-                let match = RoadMatch(edge: edge, coordinate: point, distanceMeters: 0,
-                                      alongMeters: 0, geometryMeters: length)
-                guard WeakComponents.of(match: match, pack: pack, ids: components) == originComponent else { continue }
-                let distance = point.distance(to: target)
-                if best == nil || distance < best!.distance { best = (distance, match) }
+            let sampledRadius = reach * (0.65 + unit() * 0.35)
+            for radialScale in radialScales {
+                let radius = sampledRadius * radialScale
+                let angle = bearing + side * .pi / 2
+                let target = Coordinate(longitude: middle.longitude + sin(angle) * radius / (111_000 * max(0.2, cos(middle.latitude * .pi / 180))),
+                                        latitude: middle.latitude + cos(angle) * radius / 111_000)
+                var best: (distance: Double, match: RoadMatch)?
+                for (index, edge) in pack.candidates(near: target, radius: max(5_000, reach * 0.25)).enumerated() {
+                    if index & 255 == 0 { try budget.check() }
+                    let family = ProfilePolicy.family(pack.surfaceLeaf(edge))
+                    guard family == .gravel || family == .loose,
+                          pack.distance(edge) >= request.profile.minimumMeaningfulDirtMeters,
+                          pack.accessCode(edge, forward: true) == 0, pack.accessCode(edge, forward: false) == 0,
+                          !["motorway", "trunk", "arterial"].contains(ProfilePolicy.tier(pack.roadClass(edge))) else { continue }
+                    let point = pack.coordinate(node: pack.endpoint(edge, from: true))
+                    guard !urban.contains(where: { $0.contains(point) }) else { continue }
+                    let length = pack.polyline(edge).adjacentDistance()
+                    let match = RoadMatch(edge: edge, coordinate: point, distanceMeters: 0,
+                                          alongMeters: 0, geometryMeters: length)
+                    guard WeakComponents.of(match: match, pack: pack, ids: components) == originComponent else { continue }
+                    let distance = point.distance(to: target)
+                    if best == nil || distance < best!.distance { best = (distance, match) }
+                }
+                if let best, !proposals.contains(where: { $0.edge == best.match.edge }) {
+                    proposals.append(best.match)
+                    if request.profile.wanderFreedom > 1, radialScale <= 1 / request.profile.wanderFreedom {
+                        fallbackEdges.insert(best.match.edge)
+                    }
+                }
             }
-            if let best, !proposals.contains(where: { $0.edge == best.match.edge }) { proposals.append(best.match) }
+        }
+        if request.profile.style == .dirt {
+            // A discovery hint, not a feasibility claim or a changed road score:
+            // try areas with more nearby permitted dirt before sparse fragments.
+            let radius = request.profile.minimumUsefulDirtMeters * 2
+            var ranked: [(index: Int, match: RoadMatch, dirt: Double)] = []
+            for (index, match) in proposals.enumerated() {
+                try budget.check()
+                var dirt = 0.0
+                for (n, edge) in pack.candidates(near: match.coordinate, radius: radius).enumerated() {
+                    if n & 255 == 0 { try budget.check() }
+                    let family = ProfilePolicy.family(pack.surfaceLeaf(edge))
+                    if (family == .gravel || family == .loose),
+                       pack.accessCode(edge, forward: true) == 0 || pack.accessCode(edge, forward: false) == 0 {
+                        dirt += pack.distance(edge)
+                    }
+                }
+                ranked.append((index, match, dirt))
+            }
+            return ranked.sorted {
+                let a = fallbackEdges.contains($0.match.edge), b = fallbackEdges.contains($1.match.edge)
+                if a != b { return !a }
+                return $0.dirt == $1.dirt ? $0.index < $1.index : $0.dirt > $1.dirt
+            }.map(\.match)
         }
         return proposals
     }

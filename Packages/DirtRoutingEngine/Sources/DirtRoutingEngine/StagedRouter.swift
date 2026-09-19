@@ -144,8 +144,10 @@ public enum StagedRouter {
                     var hop0 = request.with(start: cursor, end: hopEnd)
                     hop0.options.compassMaxRemaining = max(450_000, cursor.distance(to: hopEnd) * 2.5)
                     let started0 = ContinuousClock.now
-                    let part0 = try RoutingEngine(pack: firstGraph, compassStore: compassStore)
+                    var part0 = try RoutingEngine(pack: firstGraph, compassStore: compassStore)
                         .route(hop0, budget: attemptBudget)
+                    part0 = try handoverBeforeFinalRoad(part0, request: hop0, graph: firstGraph,
+                        nextGraph: secondGraph, budget: attemptBudget)
                     if let limit = part0.limit { throw RoutingFailure.resourceLimit(limit) }
                     hop0.options.counter?.recordStage("stage0:\(windows[0].joined(separator: ","))", since: started0)
                     if attempt > 0 {
@@ -159,16 +161,18 @@ public enum StagedRouter {
                     hop1.options.compassMaxRemaining = max(450_000, part0.end.coordinate.distance(to: request.end) * 2.5)
                     hop1.options.precedingMeters = part0.distanceMeters
                     hop1.options.precedingDirtMeters = knownDirtMeters(part0)
+                    hop1.options.priorEdges.formUnion(part0.segments.map { firstGraph.identity(of: $0.edge) })
                     // Local array numbering belongs to the originating pack.
                     // Carry original topology identity into the next window.
                     hop1.options.arrivalEdgeID = part0.segments.last.map { firstGraph.identity(of: $0.edge) }
+                    hop1.options.continuationForward = part0.segments.last?.forward
                     guard part0.arrivalRestrictions.isEmpty else {
                         throw RoutingFailure.unsupported("Active turn sequence requires a continuous regional search")
                     }
                     hop1.options.counter = request.options.counter
                     let started1 = ContinuousClock.now
-                    let part1 = try RoutingEngine(pack: secondGraph, compassStore: compassStore)
-                        .route(hop1, budget: attemptBudget)
+                    let part1 = try routeAvoidingEarlierRoads(hop1, graph: secondGraph,
+                        compassStore: compassStore, budget: attemptBudget)
                     hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
                     return try stitch([part0, part1], windows: windows)
                 } catch RoutingFailure.noPath {
@@ -198,6 +202,7 @@ public enum StagedRouter {
         request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
         var stageBudget = budget
         var incomingIdentity: String?
+        var traversedRoads = request.options.priorEdges
         for (index, window) in windows.enumerated() {
             let budget = stageBudget
             try budget.check()
@@ -265,20 +270,22 @@ public enum StagedRouter {
                 let attemptBudget = budgetForHandoverCandidate(
                     budget, style: request.profile.style, attempt: attempt, candidateCount: candidates.count)
                 var hop = request.with(start: cursor, end: hopEnd)
+                hop.options.priorEdges = traversedRoads
                 let span = cursor.distance(to: hopEnd)
                 hop.options.compassMaxRemaining = max(450_000, span * 2.5)
                 if let previous = parts.last {
                     hop.options.precedingMeters = parts.reduce(0) { $0 + $1.distanceMeters }
                     hop.options.precedingDirtMeters = parts.reduce(0) { $0 + knownDirtMeters($1) }
                     hop.options.arrivalEdgeID = incomingIdentity
+                    hop.options.continuationForward = previous.segments.last?.forward
                     guard previous.arrivalRestrictions.isEmpty else {
                         throw RoutingFailure.unsupported("Active turn sequence requires a continuous regional search")
                     }
                 }
                 let started = ContinuousClock.now
                 do {
-                    let part = try RoutingEngine(pack: indexed, compassStore: compassStore)
-                        .route(hop, budget: attemptBudget)
+                    var part = try routeAvoidingEarlierRoads(hop, graph: indexed,
+                        compassStore: compassStore, budget: attemptBudget)
                     hop.options.counter?.recordStage(
                         "stage\(index):\(window.joined(separator: ","))", since: started)
                     if attempt > 0 {
@@ -289,7 +296,25 @@ public enum StagedRouter {
                             "handoverSlice:\(attempt):\(Int(sliceSeconds.rounded()))s", since: started)
                     }
                     guard part.limit == nil else { throw RoutingFailure.resourceLimit(part.limit!) }
+                    if index + 1 < windows.count {
+                        let nextGraph = try openWindow(windows[index + 1], repository: repository,
+                            budget: budget, prepared: prepared)
+                        part = try handoverBeforeFinalRoad(part, request: hop, graph: indexed,
+                            nextGraph: nextGraph, budget: budget)
+                        guard let arrivalIdentity = part.segments.last.map({ indexed.identity(of: $0.edge) }) else {
+                            throw RoutingFailure.noMatch
+                        }
+                        let continuations = try RoadMatcher(pack: nextGraph).matches(at: part.end.coordinate,
+                            radius: 1, start: true, policy: request.access, limit: 64, budget: budget)
+                        guard continuations.contains(where: {
+                            nextGraph.matches($0.edge, identities: [arrivalIdentity]) && $0.forward == part.segments.last?.forward
+                                && canContinueForward($0, graph: nextGraph, request: request)
+                        }) else { throw RoutingFailure.noMatch }
+                    }
                     incomingIdentity = part.segments.last.map { indexed.identity(of: $0.edge) }
+                    // Remember original road identities before evicting this window.
+                    // The next window has different local indices but the same roads.
+                    traversedRoads.formUnion(part.segments.map { indexed.identity(of: $0.edge) })
                     parts.append(part)
                     cursor = part.end.coordinate
                     advanced = true
@@ -316,6 +341,86 @@ public enum StagedRouter {
             }
         }
         return try stitch(parts, windows: windows)
+    }
+
+    /// A shared incoming road can be only a stub in the next pack. A cut at
+    /// its end needs a legal onward exit; its mere presence is not continuity.
+    static func canContinueForward(_ match: RoadMatch, graph: any RoadGraph, request: RoutingRequest) -> Bool {
+        guard let forward = match.forward else { return false }
+        let node = graph.endpoint(match.edge, from: !forward)
+        if match.coordinate.distance(to: graph.coordinate(node: node)) >= 1 { return true }
+        let incoming = graph.restrictionEdge(match.edge)
+        for at in [node] + graph.coincidentSiblings(node) {
+            for arc in graph.outgoing(at) {
+                guard graph.restrictionEdge(arc.edge) != incoming, graph.distance(arc.edge) > 0.01 else { continue }
+                let code = graph.accessCode(arc.edge, forward: arc.forward)
+                let shortUnknown = request.profile.style != .cleanest && code == 1 && graph.distance(arc.edge) <= 100
+                guard request.access.permits(code, isStart: false, isEnd: false) || shortUnknown else { continue }
+                if graph.restrictionIndex.advance([], from: incoming,
+                    to: graph.restrictionEdge(arc.edge), at: at) != nil { return true }
+            }
+        }
+        return false
+    }
+
+    /// A generated border target is not a rider waypoint. If the previous
+    /// junction already has the same incoming road in the next graph, hand over
+    /// there instead of forcing a ride down the last road solely to reach a pin.
+    /// The next search decides whether that road is useful for the onward ride.
+    static func handoverBeforeFinalRoad(_ route: ComputedRoute, request: RoutingRequest,
+                                       graph: any RoadGraph, nextGraph: any RoadGraph,
+                                       budget: ComputationBudget) throws -> ComputedRoute {
+        guard route.limit == nil, route.segments.count > 1 else { return route }
+        let prefix = Array(route.segments.dropLast())
+        guard let last = prefix.last, last.access == 0, let point = last.geometry.last,
+              point.distance(to: route.start.coordinate) > 1 else { return route }
+        let matches = try RoadMatcher(pack: nextGraph).matches(at: point, radius: 1, start: true,
+            policy: request.access, limit: 64, budget: budget)
+        guard matches.contains(where: { nextGraph.matches($0.edge, identities: [graph.identity(of: last.edge)]) && $0.forward == last.forward
+                && canContinueForward($0, graph: nextGraph, request: request) }) else {
+            return route
+        }
+        // Recover the legal prefix state from the already proved path. Never
+        // truncate a via-way restriction into an unrestricted regional start.
+        var active = request.options.arrival?.restrictions ?? request.options.arrivalRestrictions
+        for i in prefix.indices.dropFirst() {
+            if i & 255 == 0 { try budget.check() }
+            let prior = prefix[i-1], segment = prefix[i]
+            guard let advanced = graph.restrictionIndex.advance(active,
+                from: graph.restrictionEdge(prior.edge), to: graph.restrictionEdge(segment.edge),
+                at: graph.endpoint(segment.edge, from: segment.forward)) else { return route }
+            active = advanced
+        }
+        guard active.isEmpty else { return route }
+        let geometry = graph.polyline(last.edge)
+        let length = zip(geometry, geometry.dropFirst()).reduce(0.0) { $0 + $1.0.distance(to: $1.1) }
+        let end = RoadMatch(edge: last.edge, coordinate: point, distanceMeters: 0,
+            alongMeters: last.forward ? length : 0, geometryMeters: length, forward: last.forward)
+        var result = ComputedRoute(start: route.start, end: end, segments: prefix,
+            distanceMeters: prefix.reduce(0) { $0+$1.meters }, searchCost: route.searchCost,
+            poppedLabels: route.poppedLabels, arrivalRestrictions: active)
+        result.searchSummary = "handover-before-final-road[\(route.searchSummary ?? "-")]"
+        result.maneuvers = NavigationCues.make(route: result, graph: graph, access: request.access,
+                                             arrival: request.options.arrival)
+        return result
+    }
+
+    /// Try a fresh continuation before charging the ordinary repeat penalty.
+    /// Necessary access can still reuse a road if excluding it proves no path;
+    /// both attempts share the existing window deadline and caller exclusions.
+    static func routeAvoidingEarlierRoads(_ request: RoutingRequest, graph: any RoadGraph,
+                                         compassStore: RoadCompassStore?, budget: ComputationBudget) throws -> ComputedRoute {
+        let engine = RoutingEngine(pack: graph, compassStore: compassStore)
+        guard request.profile.style == .dirt, !request.options.priorEdges.isEmpty else {
+            return try engine.route(request, budget: budget)
+        }
+        var fresh = request
+        fresh.options.avoidEdges.formUnion(request.options.priorEdges)
+        do { return try engine.route(fresh, budget: budget) }
+        catch RoutingFailure.noPath {
+            try budget.check()
+            return try engine.route(request, budget: budget)
+        }
     }
 
     static func neighborMap(_ regions: [String], repository: PackRepository) throws -> [String:Set<String>] {
@@ -434,8 +539,8 @@ public enum StagedRouter {
             currentGraph = try repository.open(shared, requireSeams: false, budget: budget).graph
         }
         let nextPack = try repository.open(next, requireSeams: false, budget: budget).graph
-        let currentIds = WeakComponents.ids(in: currentGraph, allowUnknown: access.allowUnknown)
-        let nextIds = WeakComponents.ids(in: nextPack, allowUnknown: access.allowUnknown)
+        let currentIds = WeakComponents.ids(in: currentGraph, allowUnknown: access.includesUnknownConnectivity)
+        let nextIds = WeakComponents.ids(in: nextPack, allowUnknown: access.includesUnknownConnectivity)
         let originComponent = try originWeakComponent(
             origin: origin, graph: currentGraph, ids: currentIds, access: access, budget: budget)
             ?? giantComponentId(from: currentIds)
@@ -646,7 +751,15 @@ public enum StagedRouter {
             }
             ordered = interleaved
         }
-        if ordered.isEmpty, let first = ranked.first?.point { ordered = [first] }
+        // A short border can fit in one cell. Diversity must not erase the
+        // other topology choices when its first arrival cannot continue.
+        // Keep the existing bound and try these only after the diverse choices.
+        if ordered.count < limit {
+            for row in ranked where !ordered.contains(row.point) {
+                ordered.append(row.point)
+                if ordered.count >= limit { break }
+            }
+        }
         return Array(ordered.prefix(limit))
     }
 
@@ -706,7 +819,7 @@ public enum StagedRouter {
         let ends = try matcher.matches(at: hop, radius: radius, start: false,
                                        policy: request.access, intent: intent + 180, budget: budget)
         guard let start = starts.first, let end = ends.first else { return false }
-        let components = WeakComponents.ids(in: graph, allowUnknown: request.access.allowUnknown)
+        let components = WeakComponents.ids(in: graph, allowUnknown: request.access.includesUnknownConnectivity)
         if WeakComponents.of(match: start, pack: graph, ids: components)
             != WeakComponents.of(match: end, pack: graph, ids: components) {
             return false
@@ -732,15 +845,10 @@ public enum StagedRouter {
                                  segments: [], distanceMeters: 0, searchCost: 0, poppedLabels: 0,
                                  arrivalRestrictions: [])
         }
-        var segments: [RouteSegment] = []
-        for (index, part) in parts.enumerated() {
-            if index > 0, let previous = segments.last, let next = part.segments.first,
-               previous.edgeID == next.edgeID, previous.edgeID.isEmpty == false {
-                segments.append(contentsOf: part.segments.dropFirst())
-            } else {
-                segments.append(contentsOf: part.segments)
-            }
-        }
+        // Each stage is clipped at its actual endpoint. Two adjacent pieces of
+        // the same road can be disjoint continuations, or a real reversal. Keep
+        // both: dropping the second piece loses distance and hides backtracking.
+        let segments = parts.flatMap(\.segments)
         var combined = ComputedRoute(start: first.start, end: last.end, segments: segments,
                                      distanceMeters: segments.reduce(0) { $0 + $1.meters },
                                      searchCost: parts.reduce(0) { $0 + $1.searchCost },

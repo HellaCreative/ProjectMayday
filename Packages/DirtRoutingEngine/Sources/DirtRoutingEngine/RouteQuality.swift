@@ -100,6 +100,29 @@ public struct RouteQuality: Sendable {
         minimumSectionDirtPercent = (0..<4).map { sectionTotal[$0] > 0 ? (sectionKnown[$0]/sectionTotal[$0]*1000).rounded()/10 : 0 }.min() ?? 0
     }
 
+    /// A real circuit revisits a source junction after riding away. Merely
+    /// passing within kilometres of another road is not a repeated junction.
+    public static func hasClosedRoadCircuit(_ segments: [RouteSegment], in graph: any RoadGraph) -> Bool {
+        var visited: [Int64: Double] = [:]
+        var walked = 0.0
+        func revisits(_ node: Int, at meters: Double) -> Bool {
+            let id = graph.osmNodeID(node)
+            if let before = visited[id], meters - before > 0.5 { return true }
+            visited[id] = meters
+            return false
+        }
+        for segment in segments {
+            let from = graph.endpoint(segment.edge, from: segment.forward)
+            let to = graph.endpoint(segment.edge, from: !segment.forward)
+            if let point = segment.geometry.first, point.distance(to: graph.coordinate(node: from)) < 0.1,
+               revisits(from, at: walked) { return true }
+            walked += segment.meters
+            if let point = segment.geometry.last, point.distance(to: graph.coordinate(node: to)) < 0.1,
+               revisits(to, at: walked) { return true }
+        }
+        return false
+    }
+
     /// One run per edge per direction; every repeat of an edge already ridden
     /// counts as re-ridden road (§5 rule 3).
     public static func reriddenMeters(_ segments: [RouteSegment]) -> Double {

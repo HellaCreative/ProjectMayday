@@ -24,6 +24,11 @@ public struct AccessPolicy: Sendable {
     public init(allowUnknown: Bool = false, startIsCustomer: Bool = false, endIsCustomer: Bool = false) {
         self.allowUnknown = allowUnknown; self.startIsCustomer = startIsCustomer; self.endIsCustomer = endIsCustomer
     }
+    /// Off still permits a continuous connector of at most 100 m, bounded by
+    /// through-permitted roads. Weak connectivity must include code 1 as an
+    /// optimistic possibility, not proof of access or a valid length. Exact search
+    /// enforces the continuous cap (and excludes it for Clean); matching stays strict.
+    var includesUnknownConnectivity: Bool { true }
     func permits(_ code: UInt8, isStart: Bool, isEnd: Bool) -> Bool {
         switch code {
         case 0: return true

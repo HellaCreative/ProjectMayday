@@ -20,6 +20,113 @@ struct StagedRouterTests {
         #expect(try StagedRouter.stitch([complete, complete], windows: [["ns"], ["nb"]]).limit == nil)
     }
 
+    @Test func continuationChoosesUnusedRoadsAndRetainsNecessaryAccessFallback() throws {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),.init(longitude: 0.01, latitude: 0),
+            .init(longitude: 0.02, latitude: 0),.init(longitude: 0.03, latitude: 0),
+            .init(longitude: 0.02, latitude: 0.01),.init(longitude: 0.04, latitude: 0)]
+        let graph = PolicyTests.Line(nodes: nodes, edges: [(0,1),(1,2),(2,3),(1,4),(4,3),(3,5)],
+            surfaces: Array(repeating: "gravel", count: 6), roads: Array(repeating: "track", count: 6))
+        var request = RoutingRequest(start: nodes[0], end: nodes[5], style: .dirt)
+        request.options.priorEdges = [graph.identity(of: 1),graph.identity(of: 2)]
+        let ride = try StagedRouter.routeAvoidingEarlierRoads(request, graph: graph, compassStore: nil, budget: .init())
+        #expect(!ride.segments.contains { $0.edge == 1 || $0.edge == 2 })
+        #expect(ride.segments.contains { $0.edge == 3 })
+        #expect(ride.end.coordinate.distance(to: request.end) < 1)
+
+        let single = PolicyTests.Line(nodes: Array(nodes.prefix(4)), edges: [(0,1),(1,2),(2,3)],
+            surfaces: Array(repeating: "gravel", count: 3), roads: Array(repeating: "track", count: 3))
+        var unavoidable = RoutingRequest(start: nodes[0], end: nodes[3], style: .dirt)
+        unavoidable.options.priorEdges = [single.identity(of: 1)]
+        let fallback = try StagedRouter.routeAvoidingEarlierRoads(unavoidable, graph: single, compassStore: nil, budget: .init())
+        #expect(fallback.segments.contains { $0.edge == 1 })
+        #expect(fallback.end.coordinate.distance(to: unavoidable.end) < 1)
+    }
+
+    @Test func joiningClippedRoadPreservesOnwardDistanceAndVisibleReversal() throws {
+        func part(_ from: Double, _ to: Double, meters: Double, forward: Bool) -> ComputedRoute {
+            let a = Coordinate(longitude: from, latitude: 0), b = Coordinate(longitude: to, latitude: 0)
+            let segment = RouteSegment(edge: 0, edgeID: "same-source-road", forward: forward, meters: meters,
+                surface: .gravel, surfaceLeaf: "gravel", roadClass: "track", structure: "", access: 0, geometry: [a,b])
+            return ComputedRoute(start: .init(edge: 0, coordinate: a, distanceMeters: 0, alongMeters: 0, geometryMeters: 100),
+                end: .init(edge: 0, coordinate: b, distanceMeters: 0, alongMeters: meters, geometryMeters: 100),
+                segments: [segment], distanceMeters: meters, searchCost: 1, poppedLabels: 1, arrivalRestrictions: [])
+        }
+        let a = part(0, 0.0005, meters: 50, forward: true)
+        let onward = try StagedRouter.stitch([a,part(0.0005,0.001,meters: 50,forward: true)], windows: [["a"],["b"]])
+        #expect(onward.distanceMeters == 100)
+        #expect(RouteQuality.reriddenMeters(onward.segments) == 0)
+        let reversed = try StagedRouter.stitch([a,part(0.0005,0.0002,meters: 30,forward: false)], windows: [["a"],["b"]])
+        #expect(reversed.distanceMeters == 80)
+        #expect(RouteQuality.reriddenMeters(reversed.segments) == 30)
+    }
+
+    @Test func continuationCannotSnapToANearbyUnrelatedRoad() {
+        let graph = PolicyTests.Line(nodes: [.init(longitude: 0, latitude: 0),.init(longitude: 0.01, latitude: 0)],
+            edges: [(0,1)], surfaces: ["gravel"], roads: ["track"])
+        var request = RoutingRequest(start: graph.nodes[0], end: graph.nodes[1], style: .dirt)
+        request.options.arrivalEdgeID = "a-different-road-in-the-previous-pack"
+        #expect(throws: RoutingFailure.noMatch) { try RoutingEngine(pack: graph).route(request) }
+    }
+
+    @Test func generatedHandoverCanMoveToASharedJunctionButNotEraseAnActiveTurnSequence() throws {
+        for restricted in [false, true] {
+            var graph = UnknownConnectorTests.Graph(lengths: [100,100,100], access: [0,0,0])
+            if restricted {
+                graph.restrictions = [.init(relationID: 1, fromEdge: 0, toEdge: 2, viaNode: 1, viaEdges: [1], only: true)]
+            }
+            var request = RoutingRequest(start: graph.coordinate(node: 0), end: graph.coordinate(node: 3), style: .dirt)
+            request.options.objective = .distance
+            let start = RoadMatch(edge: 0, coordinate: request.start, distanceMeters: 0, alongMeters: 0, geometryMeters: 100, forward: true)
+            let end = RoadMatch(edge: 2, coordinate: request.end, distanceMeters: 0, alongMeters: 100, geometryMeters: 100, forward: true)
+            let route = try PathSearch(pack: graph).search(start: start, end: end, policy: request.profile,
+                access: request.access, options: request.options)
+            let result = try StagedRouter.handoverBeforeFinalRoad(route, request: request, graph: graph,
+                nextGraph: graph, budget: .init())
+            #expect(result.segments.count == (restricted ? 3 : 2))
+            #expect(result.distanceMeters == (restricted ? 300 : 200))
+            #expect(result.end.coordinate == graph.coordinate(node: restricted ? 3 : 2))
+        }
+    }
+
+    @Test func generatedCutPreservesTravelDirectionOnTheIncomingRoad() throws {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),.init(longitude: 0.02, latitude: 0),
+            .init(longitude: 0.01, latitude: 0.02)]
+        let graph = PolicyTests.Line(nodes: nodes, edges: [(0,1),(1,2),(2,0)],
+            surfaces: ["gravel","gravel","gravel"], roads: ["track","track","track"])
+        var request = RoutingRequest(start: .init(longitude: 0.01, latitude: 0), end: nodes[0], style: .dirt)
+        request.options.arrivalEdgeID = graph.identity(of: 0)
+        request.options.continuationForward = true
+        let route = try RoutingEngine(pack: graph).route(request)
+        #expect(route.segments.first?.edge == 0)
+        #expect(route.segments.first?.forward == true)
+        #expect(route.segments.contains { $0.edge == 1 })
+        #expect(route.end.coordinate.distance(to: request.end) < 1)
+    }
+
+    @Test func sharedRoadStubIsNotAnOnwardConnection() {
+        let request = RoutingRequest(start: .init(longitude: 0, latitude: 0), end: .init(longitude: 1, latitude: 0), style: .dirt)
+        let stub = UnknownConnectorTests.Graph(lengths: [100], access: [0])
+        let match = RoadMatch(edge: 0, coordinate: stub.coordinate(node: 1), distanceMeters: 0,
+            alongMeters: 100, geometryMeters: 100, forward: true)
+        #expect(!StagedRouter.canContinueForward(match, graph: stub, request: request))
+        let through = UnknownConnectorTests.Graph(lengths: [100,100], access: [0,0])
+        #expect(StagedRouter.canContinueForward(match, graph: through, request: request))
+        let blocked = UnknownConnectorTests.Graph(lengths: [100,100], access: [0,2])
+        #expect(!StagedRouter.canContinueForward(match, graph: blocked, request: request))
+        var prohibitedTurn = through
+        prohibitedTurn.restrictions = [.init(relationID: 1, fromEdge: 0, toEdge: 1, viaNode: 1, only: false)]
+        #expect(!StagedRouter.canContinueForward(match, graph: prohibitedTurn, request: request))
+    }
+
+    @Test func shortBorderRetainsNearbyTopologyAlternativesWithinTheExistingLimit() {
+        let points = (0..<20).map { Coordinate(longitude: -64.2 + Double($0)*0.0001, latitude: 45.8) }
+        let picks = StagedRouter.pickHandoverCandidates(from: points,
+            origin: .init(longitude: -63.5, latitude: 44.7), toward: .init(longitude: -67.3, latitude: 45.2), limit: 12)
+        #expect(picks.count == 12)
+        #expect(Set(picks.map(\.longitude)).count == 12)
+        #expect(picks.allSatisfy { points.contains($0) })
+    }
+
     private var portersLake: Coordinate { .init(longitude: -63.34024797349485, latitude: 44.764804567541226) }
     private var gaspe: Coordinate { .init(longitude: -64.273363, latitude: 48.922934) }
     private var dartmouth: Coordinate { .init(longitude: -63.57, latitude: 44.67) }

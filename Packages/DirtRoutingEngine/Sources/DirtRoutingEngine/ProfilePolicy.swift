@@ -1,6 +1,9 @@
 import Foundation
 
 public struct ProfilePolicy: Sendable {
+    /// Keep the tight end unchanged and open the upper Dirt range progressively.
+    /// Full Wander has 2.5 times the previous exploration and detour allowance.
+    var wanderFreedom: Double { style == .dirt ? 1 + 1.5 * appetite * appetite : 1 }
     public var style: RidingStyle
     public var avoidMajorHighways = true
     public var preferBackRoads = true
@@ -63,7 +66,7 @@ public struct ProfilePolicy: Sendable {
         // `roadSidewaysFraction` / `roadBackwardAllowanceMeters` instead (§5.6).
         let tight = 0.04
         let full = style == .dirt ? 0.25 : 0.18
-        return clipped * (tight + (full - tight) * appetite)
+        return wanderFreedom * clipped * (tight + (full - tight) * appetite)
     }
     /// Extra ridden meters beyond road-progress toward B. Wander 0 keeps a
     /// modest wiggle; full wander pays for S-curves and wide swings (§5.6).
@@ -71,7 +74,7 @@ public struct ProfilePolicy: Sendable {
         let remaining = startRemaining.isFinite ? max(0, startRemaining) : 50_000
         let tight = 0.42
         let wide = 0.90
-        return remaining * (tight + (wide - tight) * appetite) + 8_000
+        return wanderFreedom * (remaining * (tight + (wide - tight) * appetite) + 8_000)
     }
     /// Share of ridden meters that may go sideways. Diagnostic/legacy; search
     /// uses `roadExtraMeters` so prefixes of a legal S-curve are not killed.
@@ -87,7 +90,7 @@ public struct ProfilePolicy: Sendable {
         let remaining = startRemaining.isFinite ? max(0, startRemaining) : 40_000
         let tight = 8_000.0
         let wide = min(120_000, max(20_000, remaining * 0.30))
-        return tight + (wide - tight) * appetite
+        return wanderFreedom * (tight + (wide - tight) * appetite)
     }
     /// Geodesic fallback when no road compass is available. Wander 0 is 2 km,
     /// not a fixed 15 km gate; Clean never applies it.
@@ -249,7 +252,7 @@ public struct ProfilePolicy: Sendable {
         let pull = 1 - appetite
         let xt = abs(to.crossTrack(from: start, to: end)) / 1000
         let k = style == .dirt ? (0.0006 + pull * 0.0044) : (0.002 + pull * 0.012)
-        return (meters / 1000) * xt * xt * k
+        return (meters / 1000) * xt * xt * k / wanderFreedom
     }
     /// Extra cost each time the search enters dirt from a non-dirt surface.
     /// Stacks with `shortDirtClawback` so many separate >1 km grabs lose to

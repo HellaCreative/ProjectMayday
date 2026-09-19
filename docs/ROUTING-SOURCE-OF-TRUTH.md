@@ -54,8 +54,8 @@ not a substitute for fixing regional continuity.
 | Dirt | Strive for 100% meaningful continuous known dirt. Richard expects substantial dirt riding, ordinarily 70–80% or better where the connected legal network supports it; the 675 km / 47% Porters Lake–St Stephen phone result is explicitly rejected. Seek worthwhile meandering dirt alternatives instead of optimizing a straight or short journey. Meaningful dirt is a continuous run of roughly a kilometre or more between paved connectors; a dirt segment shorter than about 500 m does not count as dirt and must never be chosen merely to raise the percentage — this prevents dipping in and out of a paved connector to inflate the statistic. A Dirt result that approaches half pavement has failed as Dirt, not merely scored low. Use paved connections when necessary, preserve fuel/access, and avoid repeated spurs that only inflate the statistic. A low-dirt completed route is not successful Dirt qualification; explain limitations without silently redefining the chosen style. |
 | Balanced | Seek the closest feasible mix to half dirt/unpaved and half paved across the owning rider leg, subject to the other constraints. Fuel stops do not each restart the mix target. |
 | Clean | Prefer paved backroads. Do not hunt for dirt; disclose necessary other-surface endpoint access or connections. |
-| Wander | Continuously adjust willingness to meander and travel farther within the selected style. Full Wander must allow substantial coherent dirt detours; decreasing Wander limits detour appetite without silently converting Dirt to Balanced or Clean. It is not a guarantee that arbitrary endpoints have a 100% dirt connection. Adjacent Wander values may select the same roads; Wander granularity need not make every tick differ. Route-to-route variety across separate generations is a distinct requirement (see "A different ride every time"). |
-| Allow Unknown | Explicitly permit the supported uncertain-road/access category. It never overrides known motorcycle prohibitions, barriers, or closures. Clean keeps it off. Unknown surface and uncertain motor access are distinct facts. |
+| Wander | Continuously adjust willingness to meander and travel farther within the selected style. Full Wander deliberately leans toward broad, substantial coherent dirt detours; the rider can rein it in with the slider. Decreasing Wander limits detour appetite without silently converting Dirt to Balanced or Clean. It is not a guarantee that arbitrary endpoints have a 100% dirt connection. Adjacent Wander values may select the same roads; Wander granularity need not make every tick differ. Route-to-route variety across separate generations is a distinct requirement (see "A different ride every time"). |
+| Allow Unknown | For Dirt and Balanced, off permits only short mapped unknown-motorcycle-access connectors: at most 100 m for an entire continuous uncertain stretch, between through-permitted roads. On also permits longer supported uncertain-access sections. Neither setting overrides known motorcycle prohibitions, barriers, or closures. Clean excludes uncertain motor access. Unknown surface and uncertain motor access remain distinct facts; a short uncertain connector is not proof of permission. |
 
 DIRT is a back-roads product. Avoid highways, divided highways, and major
 thoroughfares in every style — Clean included — unless a short unavoidable
@@ -620,83 +620,120 @@ incoming roads use original topology identity. An active multi-road turn sequenc
 that cannot yet be carried across windows fails explicitly rather than being dropped;
 full cross-window sequence remapping remains an open limitation.
 
-Intentional route-selection change: non-staged new Dirt generations may propose
-another mapped legal dirt area. The seed changes the area explored and Wander
-changes its reach. Both sides are searched legally and the actual incoming road
-and turn state are carried through the generated point. A composed candidate must
-reach both rider points, deliver at least 70% known dirt, and avoid repeated-road,
-return-loop and short-scrap inflation; otherwise the ordinary router remains the
-fallback, with honest low-dirt reporting. Full Wander is broader on qualified
-Ontario rides. Staged country route selection and Loop composition are unchanged.
-Saved route geometry is not regenerated. Fixed roughly-800 km cuts are not adopted:
-the trial increased repeated roads and depended on an already calculated route.
+September 19 follow-up: Richard explicitly requested a more extreme upper Wander
+range, then approved **100 m continuous unknown-motorcycle-access connectors
+with Allow Unknown off**. Allow Unknown on keeps longer uncertain sections
+available. This supersedes the earlier off-means-no-code-1 interpretation.
+Known prohibitions and closures remain excluded. Clean still excludes uncertain
+motor access. Source packs and their access classifications are unchanged.
 
-Verified host evidence: ignored `.build/routing-experiments-20260919`, Apple M1
-MacBookPro17,1 / 16 GB / macOS 26.6.2. Dirt, Wander 100%, Allow Unknown off,
-avoid cities/highways on, no fuel computation; seed 1 unless stated. Current packs
-are unchanged `fabric-v4-20260917-02`, `cross-pack-seams.v2`; evidence contains every
-participating manifest/hash, binary hash, source-file hashes, settings and roads.
+Full Dirt Wander now uses 2.5 times the previous corridor, extra-distance and
+backward-progress allowance, with progressively less extra freedom toward zero.
+Zero Wander retains its earlier geometry/progress settings. Candidate discovery
+tries wider dirt areas while retaining nearer alternatives, ordered by nearby
+permitted known dirt as a discovery hint; actual road search proves the ride.
+Non-staged composition rejects repeated roads, closed source-junction circuits
+and short dirt scraps. Passing near an earlier part of the ride on a different
+road is no longer automatically rejected by the old two-kilometre proximity
+check. Loop's far-pin extent and ordinary legal turn-around behavior are retained.
+Saved route geometry is not regenerated. Fixed roughly-800 km cuts remain rejected.
 
-| Workload | Before | Current host result |
+Long-route stages now retain traversed original road identities before releasing
+their graphs. Dirt continuations first try unused roads, with the ordinary
+repeat-penalty fallback only if exclusion returns no path; attempts share the
+existing deadline. A first widened country replay exposed 506 km of repeated
+roads, so that result was rejected. Carrying the previous-road penalty alone
+reduced it to 22 km but was also rejected as a regression. The final repair also
+preserves the exact incoming road and direction at generated cuts, keeps all
+clipped road pieces when joining stages, and can move an internal cut back to a
+verified shared junction with an onward exit. Trimming cannot erase an active
+turn sequence. Nearby border alternatives remain available within the existing
+12-candidate bound when geographic spacing would otherwise leave only one.
+These are deliberate route-selection/continuity corrections, not performance-only
+changes. No search deadlines or label budgets were enlarged.
+
+Unknown-off connectors accumulate actual routed length across consecutive code-1
+pieces. Their search labels retain the accumulated length, including zero-length
+junction transfers, and reject runs over 100 m. Entry and exit must be on
+through-permitted roads; internal stages cannot end inside an unfinished uncertain
+connector. Matching still excludes uncertain-access pins with the switch off.
+Weak connectivity includes uncertain roads only as optimistic discovery, never as
+proof that the connector cap or access requirement has passed. Returned segments
+retain `motorized_unknown`; uncertainty is not relabeled as proven permission.
+
+Qualification evidence lives in ignored `.build/routing-experiments-20260919`.
+Host: Apple M1 MacBookPro17,1, 16 GB, macOS 26.6.2. Immutable packs remain
+`fabric-v4-20260917-02` with seams v2. Each replay records pack manifests/hashes,
+source hashes, binary hash, seed, settings and actual segments. Dirt, Wander 100%,
+Unknown off, city/highway avoidance on, seed 1 and no fuel computation unless
+explicitly stated. Disk cache and unrelated host activity are uncontrolled;
+process-cold means preparation stores were fresh, not an emptied OS cache.
+
+| Workload | Earlier candidate | Broader Wander / short-connector candidate |
 | --- | --- | --- |
-| Halifax–Squamish, process-cold | 77.06 s control | 67.96 s total, 33.81 s search |
-| Halifax–Squamish, repeated | earlier unbounded-retention pair 42.79 s | 60.60 s; bounded memory intentionally rebuilds evicted windows |
-| Cross-country paired peak physical footprint | 2.14 GB control | 0.849 GB current batch, about 60% lower |
-| Kitchener–Barrie, full Wander | about 10.5 s warm, 184 km / 64.9% dirt | 8.99 s first preparation; 1.73–1.87 s warm; seeds 1/2/3 produce 265/285/293 km and 77.8/78.6/79.1% known dirt |
-| Ontario variation batch peak physical footprint | not a comparable isolated baseline | 289 MB; no measured repeated roads in any accepted alternative |
-| Porters Lake–St Stephen | existing staged low-dirt result | 4.13 s, 871 km / 60.4% dirt; **still below Dirt qualification** |
-| Porters Lake–Cape Breton / Yarmouth | existing low-dirt results | 2.37 / 2.23 s, 60.6 / 56.3% dirt; **still below Dirt qualification** |
+| Kitchener–Barrie full Wander, seeds 1/2/3 | 265/285/293 km; 77.8/78.6/79.1% dirt; 1.73–1.87 s warm | 360/317/362 km; 83.5/80.6/81.5% dirt; 9.85 s first preparation, 2.81/3.56 s warm; zero repeated roads |
+| Kitchener–Barrie Wander 0/50/100, seed 1 | 177/261/265 km | 177/303/360 km; 62.9/80.3/83.5% dirt; half-Wander still costs 15.65 s warm |
+| Owner Halifax–St Stephen, exact Sept 19 coordinates, Unknown off | about 902 km / 58.3% dirt | about 902.2 km / 56.3% dirt, 7.25 s first preparation; two uncertain connectors of 100 m and 45 m; **does not meet Dirt quality target** |
+| Same owner route, Unknown on | about 930 km / 66.3% dirt | about 1,013.4 km / 65.4% dirt, 4.23 s warm; long uncertain access remains available; **does not meet Dirt quality target** |
 
-Cross-country returned identical road receipt
-`22f7e584630576a203013905553bc71fabab1cd2407419dd0324a7ef1367f13d`,
-9,673.9 km / 76.9% known dirt, 1,589 m repeated roads. All sampled geometry lies
-inside the existing simplified Canadian province polygons and all returned access
-codes are 0. This is not a proof of every turn or every unsampled point. Unknown
-**surface** remains 5.7% on that route; it is not counted as known dirt and is
-distinct from unknown motor access. Ontario repeats with a frozen seed reproduce
-the same roads. Wander 0/50/100 produced 177/261/265 km for seed 1, with the 50%
-case taking 13.03 s warm; the slider is not yet uniformly fast.
+| Halifax–Squamish through Canada, seed 1, cold/warm | narrower candidate 9,673.9 km / 76.9% dirt, about 68/61 s host | 12,247.9 km / 81.5% dirt, 87.85/82.52 s host; zero repeated roads; broader ride costs more time |
 
-OS disk cache and unrelated host activity are uncontrolled. Host physical footprint
-and RSS are measured; allocator peaks and physical-iPhone times are not. These
-results do not claim phone acceptance, whole-country low latency, or fully solved
-Dirt quality on the Maritimes routes. Broader connected-area exploration and
-regional ride variety remain open. Failure of these tested alternatives does not
-prove a higher dirt share is impossible.
+The country host replay reports 56.93/57.10 s search, peak 929,233 labels,
+877,269,440 bytes peak physical footprint and 966,770,688 bytes maximum RSS.
+Cold/warm road hashes match (`c1d9441131d489d393a224601c9ba417238fa1ec87c0aa1e2b8ae774e99f4c9b`).
+An independent returned-segment audit finds five uncertain connectors totalling
+220 m (longest 58 m), no explicit prohibited/closed road, and a maximum 1.19 m
+geometry join offset across recorded regional connections. The owner NS–NB
+routes have zero geometry join gaps and zero repeated roads; Unknown on uses
+149,058 m of uncertain access, which remains distinct from known dirt.
 
-96 engine tests pass, including exact connection/reverse-guidance checks, bounded
-reuse and changed-byte rejection, composed-route endpoints and no-repeat checks,
-seed reproducibility, cancellation shared across child budgets, and preserving
-incomplete outcomes when joining stages. The final selected app suite passed
-161 tests, including both actual NativeRoutingSession qualification tests;
-the earlier skipped run is not counted as route qualification. All five selected
-interface tests pass, including the requested long-search notice. Its screenshot
-was inspected for legibility and clipping. No extra simulator was created.
+The owner coordinates above are `(44.696743,-63.485973)` to
+`(45.213841,-67.296321)`. Qualifying host evidence: Ontario in
+`candidate-wander-connectors`, owner NS–NB in `candidate-nearby-handoffs`, and
+country in `candidate-live-handoffs`. The last country host replay predates the
+nearby-border candidate-list repair; final app qualification covers that repair.
+Intermediate country outputs with repeated roads, hidden tails, or failed
+continuations are rejected experiments, not qualifying routes.
 
-This is ready for the owner's DIRT Dev Xcode Play test on White, not production
-or physical-device acceptance. No phone build was replaced, pack revised,
-server deployed, or App Store archive created. The owner should first compare
-Kitchener–Barrie new generations at full Wander and then Halifax–Squamish through
-Canada; review the displayed roads as well as wait time. The Maritimes Dirt
-quality shortfall and the other limitations below remain open.
+110 engine tests pass, including continuous 100/101 m boundaries, segmented
+unknown stretches, zero-length transfers, explicit denials, long Unknown-on
+sections, unknown endpoint exclusion, source-junction circuits versus nearby
+roads, unused-road continuation with a necessary-access fallback, exact incoming
+road/direction, clipped-stage distance, active turn sequence preservation, and
+shared-road stubs/forbidden exits. Release engine-suite evidence:
+`wander-engine-tests.log`. Final app qualification uses the existing iPhone17 /
+iOS26.5 simulator on the same M1 host, DIRT Dev Debug, serial testing, through
+`NativeRoutingSession` and `NativeRoutingAdapter`. Ontario seeds 1/2/3 return
+83.5/80.6/81.5% dirt in 23.52/9.04/10.57 s (first preparation then warm);
+repeating seed 1 takes 9.72 s and returns identical roads. Peak process footprint
+reaches 327 MiB. First Ontario preparation is 12.76 s; search is 4.15–5.63 s.
+Save/JSON-reopen and surface-display consistency checks pass. These timings include
+response validation and are development-simulator measurements, not phone timings.
+The country cold/warm app runs pass at 143.62/120.89 s, 12,247.9 km,
+81.5% known dirt and zero repeated roads, with identical selected-road hashes.
+Country preparation windows take 13.31/8.19 s and search 83.21/82.75 s; remaining
+time includes matching/guidance, retries, graph access, geometry and validation.
+Peak process footprint is 562 MiB (process-wide high-water mark; not an allocator
+peak). The final app country replay includes the nearby-border alternative repair.
+Evidence: `wander-app-final.log`, `wander-app-final.xcresult`, and
+`wander-app-final-identity.json` (source/binary identity and pack manifests).
+Owner NS–NB app runs also pass the endpoint, access and connector assertions:
+14.49 s Unknown off, 9.91 s on, with the same 56.3/65.4% dirt as the host replay.
+These run after country preparation and are not isolated cold-start measurements;
+562 MiB is the inherited process high-water mark, not NS–NB-specific memory.
+All three integrated tests pass (341.98 s suite). This establishes the tested
+behavior and safeguards, not Maritimes Dirt-quality acceptance or full product
+qualification.
+Candidate stamp: `broad-wander-connectors-20260919b`; a new DIRT Dev Xcode Play
+build is required. Recoverable pre-change main: `b24c502`.
 
-Actual app-session measurements on the existing iPhone17 / iOS26.5 simulator,
-UDID `CC6035EE-9C03-48A2-ACBA-DDE3B068642A`, on the M1 host above:
-
-| Workload | First preparation | Repeated | Peak app physical footprint |
-| --- | --- | --- | --- |
-| Kitchener–Barrie, seeds 1/2/3/1 | 23.67 s | 7.29 / 7.37 / 7.36 s | 271 MiB |
-| Halifax–Squamish, seed 1 twice | 118.81 s | 101.37 s | 584 MiB |
-
-Evidence: `simulator-final.xcresult`, `simulator-final.log`, and
-`simulator-final-identity.json` in the ignored evidence directory above. App
-identity is DIRT Dev 2 (45), `com.mayday.dirt.dev`; this native change requires
-a new Xcode Play build. These are Debug app-session times, not host probe times
-or physical-phone claims.
-Ontario retains 77.8/78.6/79.1% dirt, zero repeated roads, distinct new seeds and
-identical frozen-seed geometry after response serialization. Canada retains the
-exact road receipt above. Cold Ontario latency still needs improvement; do not
-claim the older 15-second cold Ontario target is met by this workload.
+Remaining limitations: Maritimes dirt percentages above are still below the
+owner's target; broader Wander and short connectors do not guarantee improvement
+on every corridor. Full-region preparation remains; true selective neighborhood
+loading is unfinished. Half-Wander latency is not uniformly low. Physical-phone
+acceptance and allocation-peak instrumentation are not established by host or
+simulator checks. No phone build, pack publication, server deployment or archive
+has been performed by this follow-up.
 
 The owner requested a caveat inside the existing progress animation only after
 a route has been building for 20 seconds, including with Reduce Motion enabled.
@@ -1351,7 +1388,7 @@ designation and bit1 seasonal; those facts do not override legal motorcycle acce
 
 Directed `edgeAccess`: 0 through allowed; 1 unknown; 2 denied; 3 endpoint
 destination only; 4 endpoint customers only; 5 fail-closed conditional/seasonal.
-Allow Unknown may affect 1, never reopen 2–5 as through permission.
+For Dirt/Balanced, code 1 is allowed with Allow Unknown on, or as a continuous mapped connector of at most 100 m between through-permitted roads with it off (owner decision, September 19). The cap is cumulative across segmented roads and cannot reset at a zero-length connector or internal stage. Codes 2–5 never become through permission. Clean continues to exclude code 1.
 
 Barrier section: u32 count then 16-byte records: osmNodeId i64, graphNode u32,
 decision u8 (0 allow, 1 block, 2 fail-closed ambiguous), padding 3 bytes.

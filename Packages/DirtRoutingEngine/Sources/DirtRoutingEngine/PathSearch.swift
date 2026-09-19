@@ -10,6 +10,12 @@ public struct SearchArrival: Sendable {
 }
 
 public struct SearchOptions: Sendable {
+    /// Local graph junctions already ridden by an earlier composed section.
+    /// Scoped to the same graph; never carried as indices across regional windows.
+    var avoidCircuitNodes: Set<Int> = []
+    /// Recreational candidate generation only. Ordinary and Loop searches retain
+    /// their legal turn-around behavior; final composition also checks all nodes.
+    var preventLocalCircuits = false
     public var arrival: SearchArrival?
     public var precedingMeters = 0.0
     public var precedingDirtMeters = 0.0
@@ -41,6 +47,9 @@ public struct SearchOptions: Sendable {
     public var varietyEnabled = true
     /// Explore another coherent riding area before falling back to ordinary routing.
     public var composeDirtRide = false
+    /// Generated regional cuts continue the incoming direction, just as one
+    /// uninterrupted search would. Rider waypoints retain ordinary turn-around behavior.
+    var continuationForward: Bool?
     public var arrivalEdgeID: String?
     public var arrivalRestrictions: [RestrictionProgress] = []
     /// Extra legal destinations for a nearest-reachable search. Corridor and
@@ -176,7 +185,8 @@ public struct PathSearch: Sendable {
         let incoming: Int
         let restrictions: [RestrictionProgress]
         let bucket: Int
-        var simple: SimpleKey? { restrictions.isEmpty ? SimpleKey(node: node, incoming: incoming, bucket: bucket) : nil }
+        var unknownConnectorMeters: Double = 0
+        var simple: SimpleKey? { restrictions.isEmpty && unknownConnectorMeters == 0 ? SimpleKey(node: node, incoming: incoming, bucket: bucket) : nil }
     }
     struct SimpleKey: Hashable {
         let node: Int
@@ -390,6 +400,8 @@ public struct PathSearch: Sendable {
             guard bestIndex(current.state) == entry.label else { continue }
             pops += 1
             if current.state.node == endNode {
+                // A connector must exit onto a positive-length permitted road.
+                guard current.state.unknownConnectorMeters == 0 else { continue }
                 goals.append(entry.label)
                 if resource {
                     if policy.style == .balanced && abs((options.precedingDirtMeters+current.dirtMeters)/max(1,options.precedingMeters+current.meters)-0.5) <= 0.005 { break }
@@ -411,7 +423,8 @@ public struct PathSearch: Sendable {
                 }
                 for sibling in pack.coincidentSiblings(current.state.node) where sibling != current.state.node && sibling < pack.nodeCount {
                     let state = State(node: sibling,incoming: current.state.incoming,
-                                      restrictions: current.state.restrictions,bucket: current.state.bucket)
+                                      restrictions: current.state.restrictions,bucket: current.state.bucket,
+                                      unknownConnectorMeters: current.state.unknownConnectorMeters)
                     if let previous = bestIndex(state), labels[previous].cost <= current.cost { continue }
                     if labels.count >= budget.maximumLabels { limit = "labels"; break search }
                     let index = labels.count
@@ -428,6 +441,7 @@ public struct PathSearch: Sendable {
             }
             for arc in arcs {
                 let e = arc.edge
+                if !options.avoidCircuitNodes.isEmpty, arc.target != endNode, options.avoidCircuitNodes.contains(arc.target) { continue }
                 let physicalEdge = pack.restrictionEdge(e)
                 if let previous = current.arc, previous.edge == e, current.state.node < pack.nodeCount { continue }
                 if !avoid.isEmpty && membership(e) & 1 != 0 {
@@ -437,7 +451,33 @@ public struct PathSearch: Sendable {
                 }
                 let isStart = e == start.edge || customerStart.contains(e)
                 let isEnd = e == end.edge || extraEndEdges.contains(e) || customerEnd.contains(e)
-                if !access.permits(pack.accessCode(e,forward: arc.forward),isStart: isStart,isEnd: isEnd) { continue }
+                let accessCode = pack.accessCode(e,forward: arc.forward)
+                var unknownConnectorMeters = current.state.unknownConnectorMeters
+                if !access.allowUnknown && policy.style != .cleanest && accessCode == 1 {
+                    if unknownConnectorMeters == 0 {
+                        // Look through zero-length virtual/coincident junctions. A
+                        // pin, customer approach, or another uncertain section is
+                        // not proof of a permitted entry to this connector.
+                        var cursor: Int? = entry.label
+                        var permittedEntry = false
+                        while let i = cursor {
+                            if let previous = labels[i].arc, previous.meters > 0.01 {
+                                permittedEntry = pack.accessCode(previous.edge, forward: previous.forward) == 0
+                                break
+                            }
+                            cursor = labels[i].parent
+                        }
+                        guard permittedEntry else { continue }
+                    }
+                    unknownConnectorMeters += arc.meters
+                    guard unknownConnectorMeters <= 100 else { continue }
+                } else {
+                    guard access.permits(accessCode,isStart: isStart,isEnd: isEnd) else { continue }
+                    if unknownConnectorMeters > 0, arc.meters > 0.01 {
+                        guard accessCode == 0 else { continue }
+                        unknownConnectorMeters = 0
+                    }
+                }
                 if policy.style == .cleanest && !policy.cleanEligible(pack: pack,edge: e,
                     endpoint: isStart || isEnd,pavedOnly: options.pavedOnly) { continue }
                 let nextRestrictions: [RestrictionProgress]
@@ -451,6 +491,8 @@ public struct PathSearch: Sendable {
                 do {
                     var ancestor: Int? = entry.label, depth = 0, overlaps = false
                     while let a = ancestor, depth < 128 {
+                        if options.preventLocalCircuits, arc.meters > 0.01,
+                           labels[a].state.node == arc.target { overlaps = true; break }
                         if let previous = labels[a].arc, labels[a].state.incoming == physicalEdge,
                            min(previous.upper,arc.upper)-max(previous.lower,arc.lower) > 0.5 {
                             overlaps = true; break
@@ -618,12 +660,13 @@ public struct PathSearch: Sendable {
                 let band = banded
                     ? min(bandCount, max(0, Int(meters / (options.maximumMeters / Double(bandCount)))))
                     : bucket
-                let state = State(node: arc.target,incoming: physicalEdge,restrictions: nextRestrictions,bucket: band)
+                let state = State(node: arc.target,incoming: physicalEdge,restrictions: nextRestrictions,bucket: band,
+                                  unknownConnectorMeters: unknownConnectorMeters)
                 if banded {
                     var dominated = false
                     for b in 0...band {
                         let probe = State(node: arc.target,incoming: physicalEdge,
-                                          restrictions: nextRestrictions,bucket: b)
+                                          restrictions: nextRestrictions,bucket: b,unknownConnectorMeters: unknownConnectorMeters)
                         if let previous = bestIndex(probe), labels[previous].cost <= cost {
                             dominated = true; break
                         }
@@ -647,6 +690,7 @@ public struct PathSearch: Sendable {
             }
         }
         func reconstruct(_ chosen: Int) -> ComputedRoute? {
+            guard labels[chosen].state.unknownConnectorMeters == 0 else { return nil }
             var path: [Arc] = [], cursor: Int? = chosen
             while let i = cursor { if let arc = labels[i].arc { path.append(arc) }; cursor = labels[i].parent }
             path.reverse()

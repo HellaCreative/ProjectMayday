@@ -64,9 +64,40 @@ struct RideCompositionTests {
             let a = try engine.ridingAreas(request, start: start, end: end, budget: .init())
             let b = try engine.ridingAreas(request, start: start, end: end, budget: .init())
             #expect(a.map(\.edge) == b.map(\.edge))
-            #expect(a.count == 2)
+            #expect((2...6).contains(a.count))
+            #expect(Set(a.map(\.edge)).count == a.count)
             choices.insert(a.map { String($0.edge) }.joined(separator: ","))
         }
         #expect(choices.count > 1)
     }
+    @Test func closedCircuitUsesJunctionIdentityNotProximity() {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),
+            .init(longitude: 0.1, latitude: 0), .init(longitude: 0.1, latitude: 0.1),
+            .init(longitude: 0, latitude: 0.001), .init(longitude: 0, latitude: 0)]
+        let graph = PolicyTests.Line(nodes: nodes, edges: [(0,1),(1,2),(2,0),(2,3),(2,4)],
+            surfaces: Array(repeating: "gravel", count: 5), roads: Array(repeating: "track", count: 5))
+        func section(_ e: Int) -> RouteSegment {
+            .init(edge: e, edgeID: graph.edgeID(e), forward: true, meters: graph.distance(e),
+                  surface: .gravel, surfaceLeaf: "gravel", roadClass: "track", structure: "",
+                  access: 0, geometry: graph.polyline(e))
+        }
+        #expect(RouteQuality.hasClosedRoadCircuit([section(0),section(1),section(2)], in: graph))
+        let nearby = [section(0),section(1),section(3)]
+        #expect(RouteQuality.returnMeters(nearby) > 0)
+        #expect(!RouteQuality.hasClosedRoadCircuit(nearby, in: graph))
+        // A different source node at exactly the same coordinate is not a junction.
+        #expect(!RouteQuality.hasClosedRoadCircuit([section(0),section(1),section(4)], in: graph))
+    }
+
+    @Test func clippedRoadAndAdjacentSplitDoNotInventVisitedJunctions() {
+        let graph = PolicyTests.Line(nodes: [.init(longitude: 0, latitude: 0),.init(longitude: 0.1, latitude: 0)],
+            edges: [(0,1)], surfaces: ["gravel"], roads: ["track"])
+        func piece(_ from: Double, _ to: Double) -> RouteSegment {
+            .init(edge: 0, edgeID: "road", forward: true, meters: (to-from)*111_195,
+                surface: .gravel, surfaceLeaf: "gravel", roadClass: "track", structure: "", access: 0,
+                geometry: [.init(longitude: from, latitude: 0),.init(longitude: to, latitude: 0)])
+        }
+        #expect(!RouteQuality.hasClosedRoadCircuit([piece(0,0.05),piece(0.05,0.1)], in: graph))
+    }
+
 }
