@@ -1,4 +1,5 @@
 import Foundation
+import DirtRoutingEngine
 import Testing
 @testable import Dirt
 
@@ -16,12 +17,22 @@ import Testing
         #expect(RoutePlannerModel.loopReturnPoint(in: closed.itinerary) == nil)
     }
 
-    @MainActor @Test func defaultRequestsDoNotChangeAcceptedPayload() {
+    @MainActor @Test func defaultRequestsUseRiderDefaultsInNativeRouting() throws {
         #expect(RouteRequestOptions().ridePreferences == nil)
+        for profile in [RouteProfile.dirt, .balanced, .cleanest] {
+            let request = RouteRequest(profile: profile, locations: [
+                .init(latitude: 44.7, longitude: -63.3, label: "Start"),
+                .init(latitude: 45, longitude: -63, label: "End")
+            ], allowUnknown: false)
+            let native = try NativeRoutingAdapter.request(request)
+            #expect(native.profile.wander == 0.5)
+            #expect(native.profile.avoidMajorHighways)
+            #expect(native.options.cityWall)
+        }
     }
 
     @MainActor @Test func settingsAreCapturedByRequestsAndDoNotLeakToNextBuild() async throws {
-        let preferences = RidePreferences(wander: 0.25, avoidCities: false, avoidHighways: true)
+        let preferences = RidePreferences(wander: 0.25, avoidCities: false, avoidHighways: false)
         let captured = await RidePreferenceContext.$current.withValue(preferences) {
             await Task.yield()
             return RouteRequestOptions()
@@ -30,6 +41,15 @@ import Testing
         #expect(RouteRequestOptions().ridePreferences == nil)
         let decoded = try JSONDecoder().decode(RouteRequestOptions.self, from: JSONEncoder().encode(captured))
         #expect(decoded.ridePreferences == preferences)
+        let native = try RidePreferenceContext.$current.withValue(decoded.ridePreferences) {
+            try NativeRoutingAdapter.request(RouteRequest(profile: .dirt, locations: [
+                .init(latitude: 44.7, longitude: -63.3, label: "Start"),
+                .init(latitude: 45, longitude: -63, label: "End")
+            ], allowUnknown: false))
+        }
+        #expect(native.profile.wander == 0.25)
+        #expect(!native.profile.avoidMajorHighways)
+        #expect(!native.options.cityWall)
     }
 
     @MainActor @Test func olderOptionsRemainDecodable() throws {
@@ -38,7 +58,7 @@ import Testing
     }
 
     @Test func invalidWanderIsNormalized() {
-        #expect(RidePreferences(wander: -.infinity).normalized.wander == 1)
+        #expect(RidePreferences(wander: -.infinity).normalized.wander == 0.5)
         #expect(RidePreferences(wander: -1).normalized.wander == 0)
         #expect(RidePreferences(wander: 2).normalized.wander == 1)
     }

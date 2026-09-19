@@ -54,7 +54,7 @@ not a substitute for fixing regional continuity.
 | Dirt | Strive for 100% meaningful continuous known dirt. Richard expects substantial dirt riding, ordinarily 70–80% or better where the connected legal network supports it; the 675 km / 47% Porters Lake–St Stephen phone result is explicitly rejected. Seek worthwhile meandering dirt alternatives instead of optimizing a straight or short journey. Meaningful dirt is a continuous run of roughly a kilometre or more between paved connectors; a dirt segment shorter than about 500 m does not count as dirt and must never be chosen merely to raise the percentage — this prevents dipping in and out of a paved connector to inflate the statistic. A Dirt result that approaches half pavement has failed as Dirt, not merely scored low. Use paved connections when necessary, preserve fuel/access, and avoid repeated spurs that only inflate the statistic. A low-dirt completed route is not successful Dirt qualification; explain limitations without silently redefining the chosen style. |
 | Balanced | Seek the closest feasible mix to half dirt/unpaved and half paved across the owning rider leg, subject to the other constraints. Fuel stops do not each restart the mix target. |
 | Clean | Prefer paved backroads. Do not hunt for dirt; disclose necessary other-surface endpoint access or connections. |
-| Wander | Continuously adjust willingness to meander and travel farther within the selected style. Full Wander deliberately leans toward broad, substantial coherent dirt detours; the rider can rein it in with the slider. Decreasing Wander limits detour appetite without silently converting Dirt to Balanced or Clean. It is not a guarantee that arbitrary endpoints have a 100% dirt connection. Adjacent Wander values may select the same roads; Wander granularity need not make every tick differ. Route-to-route variety across separate generations is a distinct requirement (see "A different ride every time"). |
+| Wander | Default to 50%. Continuously adjust willingness to meander and travel farther within the selected style. Full Wander deliberately leans toward broad, substantial coherent dirt detours; the rider can rein it in with the slider. Decreasing Wander limits detour appetite without silently converting Dirt to Balanced or Clean. It is not a guarantee that arbitrary endpoints have a 100% dirt connection. Adjacent Wander values may select the same roads; Wander granularity need not make every tick differ. Route-to-route variety across separate generations is a distinct requirement (see "A different ride every time"). |
 | Allow Unknown | For Dirt and Balanced, off permits only short mapped unknown-motorcycle-access connectors: at most 100 m for an entire continuous uncertain stretch, between through-permitted roads. On also permits longer supported uncertain-access sections. Neither setting overrides known motorcycle prohibitions, barriers, or closures. Clean excludes uncertain motor access. Unknown surface and uncertain motor access remain distinct facts; a short uncertain connector is not proof of permission. |
 
 DIRT is a back-roads product. Avoid highways, divided highways, and major
@@ -63,6 +63,8 @@ connector or legal endpoint access requires one. Small rural towns remain usable
 and are often necessary: they carry the fuel. An unnecessary trip through a large
 city or built-up area is avoided; passing through a small town is not.
 
+Avoid highways and Avoid cities both default to on in every riding style.
+Explicit saved ride preferences retain the rider’s chosen values.
 This avoidance is a default preference, not an absolute rule. A rider point
 placed on or near a highway, in a city, or inside a large settlement is
 deliberate intent and must be reached: use the minimum necessary highway or urban
@@ -766,7 +768,19 @@ on the existing serial iPhone17/iOS26.5 simulator on the M1 host. Evidence:
 These verify planner actions and real routing, not physical touch gestures on
 the phone. Final DIRT Dev build succeeds. New native build required; stamp
 `waypoint-continuity-20260919c`.
-Pre-repair checkpoint: `87f9ba5`. Phone acceptance remains the next owner step.
+Pre-repair checkpoint: `87f9ba5`. The owner subsequently reported that planning
+with their own waypoints worked from Nova Scotia to BC on the phone, and approved
+the Wander experience and yellow long-planning notice. This is acceptance of that
+reported journey, not qualification of every corridor or gesture case.
+
+The owner requested new-ride defaults of 50% Wander, Avoid highways on, and Avoid
+cities on. The settings display and native request adapter now share those
+fallback defaults; explicit saved preferences remain unchanged. The broad 100%
+Wander setting and yellow progress notice are unchanged. A new native build is
+required for these default changes. The DIRT Dev build and all five focused
+`RidePreferencesTests` pass on the existing serial iPhone17/iOS26.5 simulator,
+including native defaults for all three styles and explicit saved-setting
+overrides. Evidence: `.build/ride-defaults-20260919b.xcresult`.
 
 The owner requested a caveat inside the existing progress animation only after
 a route has been building for 20 seconds, including with Reduce Motion enabled.
@@ -1130,7 +1144,7 @@ resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
   behavior. Do not tweak weights ad hoc until that design is settled.
 - Avoid-highways / avoid-cities (audit 15 Sep Stage 1 phone): both toggles
   are wired into `ProfilePolicy` / `SearchOptions.cityWall` via
-  `RidePreferences`. Dirt’s displayed default for avoid-highways is **off**.
+  `RidePreferences`. Both avoidance switches now default to **on** in every style.
   Fuel hops inherit `cityWall` and `avoidMajorHighways` from the rider
   request (no `cityWall = false` override in `FuelPlanner`). Soft urban ×120
   still applies when a search enters a core. If highways still look unchanged

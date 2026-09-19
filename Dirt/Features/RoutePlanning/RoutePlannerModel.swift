@@ -321,7 +321,7 @@ final class RoutePlannerModel {
     var ridePreferences: RidePreferences?
 
     var displayedRidePreferences: RidePreferences {
-        ridePreferences ?? RidePreferences(avoidHighways: profile == .cleanest && avoidMotorways)
+        ridePreferences ?? RidePreferences()
     }
 
     func applyRidePreferences(_ preferences: RidePreferences) {

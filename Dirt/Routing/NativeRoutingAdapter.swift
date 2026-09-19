@@ -33,10 +33,11 @@ nonisolated enum NativeRoutingAdapter {
         native.access.endIsCustomer = req.options?.endEndpointKind == "customers"
         native.mapZoom = req.options?.mapZoom
         native.matchRadiusMeters = req.options?.matchLimitMeters ?? NativeRoutingAdapter.maximumMatchMeters
-        native.profile.avoidMajorHighways = req.options?.ridePreferences?.avoidHighways ?? true
+        let preferences = (req.options?.ridePreferences ?? RidePreferences()).normalized
+        native.profile.avoidMajorHighways = preferences.avoidHighways
         native.profile.preferBackRoads = req.profile == .cleanest
-        native.profile.wander = req.options?.ridePreferences?.normalized.wander ?? 1
-        native.options.cityWall = req.options?.ridePreferences?.avoidCities ?? true
+        native.profile.wander = preferences.wander
+        native.options.cityWall = preferences.avoidCities
         native.options.arrivalEdgeID = req.options?.arrivalEdgeId
         native.options.arrivalRestrictions = (req.options?.arrivalRestrictions ?? []).map {
             RestrictionProgress(pattern: $0.pattern, progress: $0.progress)

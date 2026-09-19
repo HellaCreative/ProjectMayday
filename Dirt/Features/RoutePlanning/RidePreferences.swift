@@ -3,13 +3,13 @@ import Foundation
 /// A route-build snapshot; nil keeps the accepted profile defaults.
 nonisolated struct RidePreferences: Codable, Equatable, Hashable, Sendable {
     var preferDifferentRoads: Bool?
-    var wander: Double = 1
+    var wander: Double = 0.5
     var avoidCities: Bool = true
-    var avoidHighways: Bool = false
+    var avoidHighways: Bool = true
 
     var normalized: Self {
         var copy = self
-        copy.wander = wander.isFinite ? min(1, max(0, wander)) : 1
+        copy.wander = wander.isFinite ? min(1, max(0, wander)) : 0.5
         return copy
     }
 }
