@@ -193,8 +193,8 @@ single existing iPhone 17 / iOS 26.5 simulator: acquisition policy, 12 bridge
 calculations, owner Halifax–St Stephen with Unknown off/on, and both owner
 Cape Breton inserted-waypoint cases with continuous legs and preserved pins.
 Owner NS–NB takes 10.609 s / 8.383 s for off/on, with peak footprints 163/188 MB;
-these are different settings, not a cold/warm comparison. No physical device was
-installed or accepted during this work.
+these are different settings, not a cold/warm comparison. This qualification
+run did not install or accept a physical-device build.
 
 Southern Quebec Montreal–Quebec app-session replay also passes cold and warm
 with identical selected roads, no repeated mileage, no reported limit and
@@ -218,6 +218,14 @@ main's DIRT Dev stamp is `fresh-seven-20260919a`. Source identity is recorded in
 `final-native-source-receipt.json`, with the candidate patch hashes. Production
 still points to its unchanged `fabric-v4-20260909-02` release. The owner can now
 Xcode Play DIRT Dev and accept the fresh pack updates for physical testing.
+
+At the owner’s subsequent explicit request, source `1bd6e08` was built as
+DIRT Dev 2 (45), verified as development-only, installed and launched on White
+(iPhone 16, iOS 26.6.2) on September 19. The binary contains stamp
+`fresh-seven-20260919a` and candidate `fabric-v4-20260919-01`. Evidence:
+`white-device-build-receipt.json`, `white-device-install.json` and
+`white-device-launch.json`. Installation and launch succeeded; owner route
+acceptance and fresh pack downloads on the phone remain to be verified.
 
 Remaining limits: owner NS–NB Balanced is only about 17–19% dirt, also below its
 intended mix. Four long NS–QC Balanced/Clean results repeat about 0.66–2.28 km;
