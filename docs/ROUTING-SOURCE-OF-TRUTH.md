@@ -171,7 +171,9 @@ Selected full-segment fresh-data replays (`selected-shapes/`) have continuous
 joins, zero prohibited/conditional-closed segments and zero repeated mileage.
 At Wander 1, owner Halifax–St Stephen remains 56.8% meaningful known dirt with
 Unknown off and 68.9% on; off's longest uncertain connector is 100 m, on's is
-15.23 km. These are not 70–80% Dirt acceptance. Halifax–PE still chooses the ferry
+15.23 km. Under the owner’s distance-aware acceptance guidance, those percentages
+alone do not fail this long ride; overall riding character still needs review.
+Halifax–PE still chooses the ferry
 at Wander 0.5, despite separately verified bridge availability. QC split traversal
 is 71.7% dirt; source connectivity and riding-quality outcomes remain distinct.
 These shape receipts establish the inspected roads, not universal ride quality.
@@ -199,8 +201,9 @@ with identical selected roads, no repeated mileage, no reported limit and
 uncertain connectors within the allowed 100 m cap (`qc-native.xcresult`). On the same M1 host's iPhone
 17 / iOS 26.5 Debug simulator, totals are 55.757 / 44.863 s; cold preparation is
 11.109 s and peak footprints are 342 / 426 MB. This satisfies completion and the
-current resource ceiling, not the desired everyday speed or Dirt quality: the
-397 km ride remains 47.1% meaningful dirt. Simulator timing is not phone timing.
+current resource ceiling, not the desired everyday speed. The 397 km ride is
+47.1% meaningful dirt; review its overall character and detours rather than
+failing it on percentage alone. Simulator timing is not phone timing.
 
 The actual `GraphPackStore` CDN acquisition test also passes
 (`published-native.xcresult`): refreshed seven-region catalog, NS–PE acquisition
@@ -270,7 +273,7 @@ not a substitute for fixing regional continuity.
 
 | Control | Intended outcome |
 | --- | --- |
-| Dirt | Strive for 100% meaningful continuous known dirt. Richard expects substantial dirt riding, ordinarily 70–80% or better where the connected legal network supports it; the 675 km / 47% Porters Lake–St Stephen phone result is explicitly rejected. Seek worthwhile meandering dirt alternatives instead of optimizing a straight or short journey. Meaningful dirt is a continuous run of roughly a kilometre or more between paved connectors; a dirt segment shorter than about 500 m does not count as dirt and must never be chosen merely to raise the percentage — this prevents dipping in and out of a paved connector to inflate the statistic. A Dirt result that approaches half pavement has failed as Dirt, not merely scored low. Use paved connections when necessary, preserve fuel/access, and avoid repeated spurs that only inflate the statistic. A low-dirt completed route is not successful Dirt qualification; explain limitations without silently redefining the chosen style. |
+| Dirt | Seek substantial, meaningful continuous known dirt, with 100% an aspiration where practical. The owner’s September 19 testing clarifies that longer-distance journeys, especially across regions, can have lower dirt percentages unless excessive wandering is introduced. Do not impose 70–80% as a fixed acceptance threshold for those journeys or force extra distance merely to reach it; assess the ride against its length, useful connections and the rider’s Wander setting. Seek worthwhile meandering dirt alternatives instead of optimizing a straight or short journey. Meaningful dirt is a continuous run of roughly a kilometre or more between paved connectors; a dirt segment shorter than about 500 m does not count as dirt and must never be chosen merely to raise the percentage — this prevents dipping in and out of a paved connector to inflate the statistic. Use paved connections when necessary, preserve fuel/access, and avoid repeated spurs that only inflate the statistic. A lower percentage alone does not fail a long Dirt ride, and completion alone does not qualify its riding character. Continue seeking worthwhile dirt alternatives without silently changing the chosen style; preserve honest surface reporting and rider review. |
 | Balanced | Seek the closest feasible mix to half dirt/unpaved and half paved across the owning rider leg, subject to the other constraints. Fuel stops do not each restart the mix target. |
 | Clean | Prefer paved backroads. Do not hunt for dirt; disclose necessary other-surface endpoint access or connections. |
 | Wander | Default to 50%. Continuously adjust willingness to meander and travel farther within the selected style. Full Wander deliberately leans toward broad, substantial coherent dirt detours; the rider can rein it in with the slider. Decreasing Wander limits detour appetite without silently converting Dirt to Balanced or Clean. It is not a guarantee that arbitrary endpoints have a 100% dirt connection. Adjacent Wander values may select the same roads; Wander granularity need not make every tick differ. Route-to-route variety across separate generations is a distinct requirement (see "A different ride every time"). |
@@ -1069,9 +1072,9 @@ qualification.
 Candidate stamp: `broad-wander-connectors-20260919b`; a new DIRT Dev Xcode Play
 build is required. Recoverable pre-change main: `b24c502`.
 
-Remaining limitations: Maritimes dirt percentages above are still below the
-owner's target; broader Wander and short connectors do not guarantee improvement
-on every corridor. Full-region preparation remains; true selective neighborhood
+Remaining limitations: broader Wander and short connectors do not guarantee
+more dirt on every corridor. Apply the current distance-aware acceptance in
+section 2; the earlier percentage targets are not fixed gates for long rides. Full-region preparation remains; true selective neighborhood
 loading is unfinished. Half-Wander latency is not uniformly low. Physical-phone
 acceptance and allocation-peak instrumentation are not established by host or
 simulator checks. No phone build, pack publication, server deployment or archive
@@ -1531,7 +1534,8 @@ resume §8 tasks 6, 7, 8 in order, then this list one item at a time:
   than freely draggable locations” — delete or rewrite when Stage 2 ships.
 - Overnight 15–16 Sep (do not fix inline): north-NB Dirt wander 50 and 100 are
   the same ride (edge hash `4a4d525e1c5c`). Cape Breton and Yarmouth do differ.
-- Overnight 15–16 Sep: contract Dirt is still 57–66%, not 70–80%. Yarmouth is
+- Historical 15–16 Sep measurement: Dirt was 57–66%, against the then-used
+  70–80% target; apply section 2’s current distance-aware acceptance. Yarmouth is
   the weakest (57.1%). Clean on all three corridors is 0% dirt, so a paved
   spine exists; the connected legal dirt is what is missing, not a paved-only
   search. Profile candidate + away×1 did not reach 70% on any of the three.
