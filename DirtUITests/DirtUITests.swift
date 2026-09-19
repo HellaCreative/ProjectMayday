@@ -133,6 +133,24 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testLongRouteProgressExplainsWaitAndConditionalPackDownload() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_ROUTE_PROGRESS"] = "long-craft"
+        app.launch()
+        skipOnboardingIfPresented(in: app)
+        let progress = app.descendants(matching: .any)["route-progress-toast"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 8))
+        let value = progress.value as? String ?? ""
+        XCTAssertTrue(value.contains("10 seconds to over a minute"))
+        XCTAssertTrue(value.contains("Any missing or outdated map packs"))
+        XCTAssertLessThan(progress.frame.maxY, app.windows.firstMatch.frame.maxY)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Long Route Progress — Time and Packs"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testRouteProgressShowsCraftHypeCopy() throws {
         let app = XCUIApplication()
         app.launchEnvironment["DIRT_UI_TEST_ROUTE_PROGRESS"] = "craft"

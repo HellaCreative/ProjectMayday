@@ -1091,7 +1091,8 @@ struct RootView: View {
             }
 
             if let progress = app.planner.activeRouteProgressMessage {
-                ToastView(text: progress, isBuildingRoute: true)
+                ToastView(text: progress, isBuildingRoute: true,
+                          longBuildExpected: app.planner.longRouteBuildExpected)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
@@ -1114,7 +1115,8 @@ struct RootView: View {
     private var landscapeMapStatusStack: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let progress = app.planner.activeRouteProgressMessage {
-                ToastView(text: progress, isBuildingRoute: true)
+                ToastView(text: progress, isBuildingRoute: true,
+                          longBuildExpected: app.planner.longRouteBuildExpected)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
@@ -1972,9 +1974,16 @@ private struct KeepAwakeLifecycle: ViewModifier {
 struct ToastView: View {
     let text: String
     var isBuildingRoute = false
+    var longBuildExpected = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hypeLineIndex = 0
+    @State private var elapsedTwentySeconds = false
+
+    private var longBuildNotice: String? {
+        isBuildingRoute && (longBuildExpected || elapsedTwentySeconds)
+            ? RoutePlannerModel.longRouteBuildNotice : nil
+    }
 
     private var rotatesHype: Bool {
         isBuildingRoute && RoutePlannerModel.usesRotatingBuildHype(for: text)
@@ -2009,13 +2018,26 @@ struct ToastView: View {
                         .contentTransition(.opacity)
                     RouteBuildPistonIndicator()
                         .accessibilityHidden(true)
+                    if let longBuildNotice {
+                        Text(longBuildNotice)
+                            .font(DirtType.helper)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .frame(minWidth: 200, maxWidth: 240, alignment: .leading)
                 .accessibilityElement(children: .ignore)
                 .accessibilityIdentifier("route-progress-toast")
                 .accessibilityLabel(progress.title)
-                .accessibilityValue("\(progress.detail). In progress.")
+                .accessibilityValue("\(progress.detail). In progress.\(longBuildNotice.map { " " + $0 } ?? "")")
                 .accessibilityAddTraits(.updatesFrequently)
+                .task(id: isBuildingRoute) {
+                    elapsedTwentySeconds = false
+                    guard isBuildingRoute else { return }
+                    do { try await Task.sleep(for: .seconds(20)) }
+                    catch { return }
+                    elapsedTwentySeconds = true
+                }
                 .task(id: "\(text)-\(rotatesHype)-\(reduceMotion)") {
                     hypeLineIndex = 0
                     guard rotatesHype, !reduceMotion else { return }

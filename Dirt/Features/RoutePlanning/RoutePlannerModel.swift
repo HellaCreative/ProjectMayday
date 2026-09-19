@@ -174,6 +174,7 @@ final class RoutePlannerModel {
         invalidateInFlightRoutes()
         let runID = UUID()
         loopRunID = runID
+        longRouteBuildExpected = GeoMath.meters(start, far) >= 1_000_000
         isRouting = true
         isAssemblingRoute = true
         errorMessage = nil
@@ -449,6 +450,7 @@ final class RoutePlannerModel {
     private(set) var pendingMemberRouteReplacement: GroupMemberRouteTarget?
 
     private(set) var isRouting = false
+    private(set) var longRouteBuildExpected = false
     var errorMessage: String?
     /// Non-destructive fuel recovery/status shown in the compact fuel summary.
     private(set) var fuelPlanNotice: String?
@@ -932,6 +934,7 @@ final class RoutePlannerModel {
         let preferences = ridePreferences
         let fuel = FuelRangePrefs.snapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)
+        longRouteBuildExpected = false
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
         isRouting = true
@@ -947,6 +950,10 @@ final class RoutePlannerModel {
             let primaries = coords.compactMap { GraphPackStore.primaryRegionId(containing: $0) }
             let geographic = GraphPackStore.requiredRoutingRegions(for: coords)
             let catalog = self.graphPacks.requiredCatalogRoutingRegions(for: coords)
+            // A broad early hint, not a promise of a specific completion time.
+            // Other unexpectedly slow requests show the same notice after 20s.
+            self.longRouteBuildExpected = catalog.count > 2
+                || zip(coords, coords.dropFirst()).reduce(0.0) { $0 + GeoMath.meters($1.0, $1.1) } >= 1_000_000
             #if DIRT_DEVELOPMENT
             let fabric = AppConfig.v4CandidateReleaseId
             #else
@@ -1178,6 +1185,7 @@ final class RoutePlannerModel {
     static let calculatingFuelRangeToast = "Checking fuel range"
     /// Stable build-progress key. ToastView rotates rider-facing hype over this — never show raw.
     static let craftingRouteToast = "Crafting your route"
+    static let longRouteBuildNotice = "Longer rides can take 10 seconds to over a minute to plan. Any missing or outdated map packs need to download first."
     static let noFuelStopRequiredToast = "No fuel stop required"
     static let legCompleteToast = "Leg complete"
 
@@ -3003,7 +3011,8 @@ final class RoutePlannerModel {
     /// Stable active-build state used by UI tests to verify that route
     /// progress remains pinned under the logo instead of behaving like a
     /// transient toast over the planning sheet.
-    func installRouteProgressFixtureForTesting(_ message: String) {
+    func installRouteProgressFixtureForTesting(_ message: String, longBuild: Bool = false) {
+        longRouteBuildExpected = longBuild
         isRouting = true
         fuelPlanningStatus = message
         toast = message

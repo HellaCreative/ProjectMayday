@@ -1,6 +1,6 @@
 # DIRT routing — source of truth
 
-Updated: 2026-09-16. Owner: Richard Smith.
+Updated: 2026-09-19. Owner: Richard Smith.
 
 ## 1. Authority and purpose
 
@@ -11,12 +11,11 @@ rule; do not append a competing rule, create another routing specification, or
 use an old experiment as current instructions. Git history retains old decisions.
 Richard's current instructions take precedence over this document.
 
-Routing is being rebuilt from a fresh statement of the vision. Existing code,
+The current native engine is the implementation being improved. Existing code,
 packs, tests, and measured experiments are assets to evaluate, not obligations
-to preserve an unsuccessful architecture. Richard subsequently authorized deleting the old Swift routing implementation
-and rebuilding it greenfield from the successful JavaScript live-pack pipeline.
-Preserve Swift infrastructure supporting the JavaScript/app flow. This does not
-authorize rebuilding published data, reverting the app, or changing its interface.
+to preserve unsuccessful behavior. The earlier engine replacement is historical;
+the active task does not authorize another rewrite, rebuilding published data,
+reverting the app, or changing its interface beyond the owner-requested progress notice.
 
 There is no requirement to use live server routing, keep complete regional
 graphs in a persistent service, publish every experiment, maintain identical
@@ -38,7 +37,7 @@ future Android work also live here; implementation or parity is not implied.
 
 DIRT helps motorcycle riders create useful adventures over connected roads and
 trails, through their chosen places, with understandable surface choices and
-fuel planning. Short rides, long rides, and province/state crossings are all
+fuel awareness. Short rides, long rides, and province/state crossings are all
 part of the intended product. A border is not an error or the end of a journey.
 
 The rider chooses places and riding preferences. DIRT should produce a legal,
@@ -125,13 +124,10 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 - From Here preserves the chosen origin and destination. Plan preserves the
   ordered rider points. Computation, fuel generation, and regional subdivision
   must not silently delete, reorder, or substitute them.
-- Rider points and generated fuel stops have distinct stable identities. A
-  rider-selected station remains a rider point; generated stops remain F1, F2,
-  and so on. Internal regional boundaries are not extra rider waypoints.
-- Fuel stops are movable like rider waypoints. A dropped fuel stop snaps to a
-  mapped pump when one is under it. A replacement must verify legal incoming
-  and onward routing/fuel, retain unaffected earlier stages, and reject stale
-  results.
+- Rider-selected stations remain rider points with stable identities. Automatic
+  fuel stops are not generated. Internal regional boundaries are not extra rider
+  waypoints. Moving a rider-selected station rebuilds its affected route legs
+  with legal incoming and onward access and rejects stale results.
 - A selected rider waypoint highlights and can be dragged. After movement and
   release, ask the rider to confirm placement. Yes initiates rebuilding; No
   permits further refinement. Inserting a draft into a leg alone does not show
@@ -139,9 +135,9 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
 - Match placement to a nearby legally usable road. Show the matched position;
   do not secretly move a point across water, a barrier, or onto an unrelated
   distant road to force success. Preserve requested and matched coordinates.
-- Edits preserve unaffected stages and settings. Revalidate downstream fuel
-  when a changed approach or distance affects it. Cancelled or older results
-  cannot overwrite newer rider intent.
+- Edits preserve unaffected stages and settings. Refresh advisory fuel information
+  after the roads change. Cancelled or older results cannot overwrite newer rider
+  intent.
 - Save, reopen, and start preserve the chosen route, points, settings, fuel
   identities, and generation identity. New rides or relevant edits may choose
   different qualified roads. A performance-only change should preserve results
@@ -471,9 +467,9 @@ time as well as individual windows; a fast inner loop is not a fast product.
 
 Each calculation/window must have explicit resource bounds and cancellation,
 including preparation and allocation. Long itineraries may progress through
-fresh bounded windows after a valid committed rider/fuel stage. Do not impose
-one short immutable deadline over an arbitrarily long trip or count successful
-fuel stops toward a failed-retry limit. Bound failed/no-progress repetition;
+fresh bounded windows after a valid committed rider or internal road stage. Do not
+impose one short immutable deadline over an arbitrarily long trip or count
+successful stages toward a failed-retry limit. Bound failed/no-progress repetition;
 never reset internal clocks invisibly to hide overruns.
 
 Memory must be bounded by useful loaded work, not by blindly allocating every
@@ -503,23 +499,21 @@ per-request memory, cancellations, and cold behavior on the actual service class
 
 ## 7. Qualification and working method
 
-### Active owner-directed sequence — September 14
+### Active owner-directed sequence — September 19
 
-Work in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`, branch
-`cursor/on-device-routing-speed-37c5`, starting commit `5f7cb8d`.
-Richard's latest instruction replaces the earlier incremental native-repair and
-routing-before-fuel sequence: remove the old Swift routing implementation and
-its lockstep copies, and build a fresh implementation from the JavaScript
-live-pack reference. Port the complete pipeline, including fuel and regional
-continuity. Preserve native app infrastructure required by the successful live
-flow. The new routing path must use installed packs without network access;
-network access is for pack acquisition, never an automatic routing fallback.
+Work in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`. The current task began at
+`5383862` on `cursor/stub-island-seam-rank-f339`. Implement and qualify reduced
+memory, faster route generation, broader Wander and meaningful route variety,
+prioritizing everyday one/two-region rides. Prepare a reviewed candidate on main
+for Richard's Xcode Play build; do not install a phone build or deploy production
+as a side effect. Preserve the accepted app foundation and current main fixes.
+Fuel remains advisory only, outside route generation. Historical fuel-chain
+measurements below do not authorize restoring that planner.
 
-The build-45 rollback is `8a7bc98` (restoring `0da738f`). The checked-in JavaScript
-reference at this task's starting commit is recorded with per-file hashes in
-`Packages/DirtRoutingEngine/ReferenceIdentity.json`. Those source hashes do not
-by themselves prove the exact server deployment used in the successful phone
-test. Keep that distinction explicit in acceptance evidence.
+Use immutable `fabric-v4-20260917-02` packs and verified seams v2 for current
+qualification. Historical packs and JavaScript measurements are comparison assets,
+not substitutes for current native/app tests. The existing Swift routing engine
+is the implementation being improved; do not restart it or restore an older app.
 
 Correct JavaScript defects and improve efficiency where justified. Record and
 test deliberate behavioral changes rather than describing different behavior as
@@ -545,10 +539,9 @@ The acceptance matrix must cover:
 - NS–NB, NS–QC/ON, Canada–US, and longer multi-region chains, in both relevant
   directions, including alternate connections around lakes/water/ferries.
 - Dirt, Balanced, Clean, supported Unknown settings, and meaningful Wander
-  values; fuel on/off and the rider's actual reserve-adjusted ranges.
-- Initial nearby fuel, legal same-edge station access, arrival-direction
-  restrictions, late-stage fuel choice, destination escape, and journeys with
-  more than sixteen valid fuel continuations.
+  values. Fuel notifications on/off must not change calculated roads or add stops.
+- Legal arrival-direction restrictions, regional tails, and preserved rider points.
+  Earlier automatic fuel-continuation tests are historical, not active requirements.
 - Edit/cancel/resume, stale replies, generated-versus-rider point identity,
   save/reopen/start, and unaffected-stage preservation.
 - Honest road/fuel outcomes for limits, real disconnection, missing data, and
@@ -570,15 +563,16 @@ that guesses here can lose work or bloat the checkout.
   the SIDECAR volume. Richard builds DIRT Dev from this checkout. Do not create a
   second worktree, clone, or copy of the project. Probe and experiment builds go
   to the session scratch directory, never to another checkout.
-- **Working branch:** `cursor/stub-island-seam-rank-f339`. This branch is the
-  source of truth for current work, whatever its name suggests.
+- **Working branch for the owner's next Xcode Play:** `main`, advanced to the
+  September 19 qualified development candidate. The prior working branch
+  `cursor/stub-island-seam-rank-f339` retains the implementation checkpoints.
 - **Remotes:** `github` → `https://github.com/HellaCreative/ProjectMayday`
   (public). There is no `origin`. The old internal-disk clone at
   `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` is gone; do not recreate it.
-- **Publishing:** `git push github HEAD:main`. GitHub `main` was written from this
-  work on 16 Sep and matches the working branch. The previous GitHub `main`
-  (August) is preserved as `archive/main-2026-08-13`. The local `main` branch
-  (`b436a58`, 29 July) is stale and unused.
+- **Publishing:** `git push github HEAD:main`, normal fast-forward only. Main
+  `a3824c5` was merged before this candidate, preserving its settings and
+  navigation fixes. The earlier GitHub main (August) remains preserved as
+  `archive/main-2026-08-13`. Local main is now used for the owner's build.
 - **Never fetch ProjectMayday into this checkout.** Doing it once pulled every
   unrelated experiment branch and grew `.git` from 95 MB to 7 GB. This checkout
   pushes; it does not fetch. `.git` is about 100 MB after `git gc`.
@@ -596,7 +590,7 @@ that guesses here can lose work or bloat the checkout.
   does not read Git; explain in plain language what a command will do before
   proposing it.
 
-## 8. Current state and Cursor handoff — September 15
+## 8. Current implementation and evidence
 
 ### Current implementation and qualification — September 19
 
@@ -607,35 +601,112 @@ stress case. Fuel is advisory only, outside route generation. Preserve the app
 foundation and Loop. No phone install, production deployment or pack publication
 is authorized by this work.
 
-Work began at `5383862` in the working checkout. GitHub main `a3824c5` has five
-additional interface/navigation/settings commits absent from this branch; these
-must be preserved in integration. The existing immutable input is
-`fabric-v4-20260917-02`, including `cross-pack-seams.v2`.
+Work began at `5383862`; it remains the recoverable pre-change checkpoint.
+Implementation checkpoint `df919b9` includes the native app qualification tests.
+Main `a3824c5` was integrated while retaining the later
+app refinements from the working branch. Exact performance changes include compact
+shared outgoing/reverse connections, indexed seam/restriction proofs, two-window
+preparation retention, removal of duplicate app preparation, weak reuse of mapped
+packs, two-entry sidecar reuse, small verified region envelopes, and shared scoring
+tables. Road-compass reuse is bound to the exact prepared graph; changed artifact
+identities require verification. Full region indexes still exist: this is **not**
+selective neighborhood loading.
 
-Verified host evidence is in ignored `.build/routing-experiments-20260919`.
-On Apple M1 / 16 GB / macOS 26.6.2, the exact restriction-membership preparation
-index alone previously reduced Halifax–Squamish from 76.05 to 51.60 seconds with
-identical road receipts. The first compact-adjacency/two-window-cache candidate
-preserved the same roads and 76.9% dirt, reducing paired-run peak physical
-footprint from approximately 2.2 GB to 859 MB, but measured 76.50 / 66.95 seconds
-fresh/repeated. This is a memory improvement, **not yet a speed qualification**.
-OS disk cache and unrelated host activity are uncontrolled. These are host results,
-not phone measurements or measured allocator peaks. Full region indexes still
-exist; this is not selective neighborhood loading.
+A completed internal stage may start a fresh 60-second window. Preparation and
+failed attempts share each window's absolute deadline; label limits remain
+1.6 million. Cancellation is shared with preparation workers. A search limit stays
+an incomplete calculation even if later alternatives return no path. Cross-window
+incoming roads use original topology identity. An active multi-road turn sequence
+that cannot yet be carried across windows fails explicitly rather than being dropped;
+full cross-window sequence remapping remains an open limitation.
 
-The original profile-weight widening trials did not materially improve everyday
-route variety. Exploratory composition now proposes other mapped legal dirt
-areas and proves both sides with incoming-road/turn continuity. It is disabled
-by default until real-route qualification. It must preserve rider points, reject
-repeated-road inflation, and leave Loop behavior intact. Fixed roughly-800 km
-cuts are not adopted: the trial increased repeated roads and depended on an
-already calculated full route.
+Intentional route-selection change: non-staged new Dirt generations may propose
+another mapped legal dirt area. The seed changes the area explored and Wander
+changes its reach. Both sides are searched legally and the actual incoming road
+and turn state are carried through the generated point. A composed candidate must
+reach both rider points, deliver at least 70% known dirt, and avoid repeated-road,
+return-loop and short-scrap inflation; otherwise the ordinary router remains the
+fallback, with honest low-dirt reporting. Full Wander is broader on qualified
+Ontario rides. Staged country route selection and Loop composition are unchanged.
+Saved route geometry is not regenerated. Fixed roughly-800 km cuts are not adopted:
+the trial increased repeated roads and depended on an already calculated route.
 
-Current focused/package checks: 91 tests pass, including compact-connection and
-reverse-guidance equivalence, bounded preparation reuse, changed-artifact
-revalidation, actual incoming road at a composed junction, and seeded proposal
-reproducibility. Integrated source, real-route quality and app checks remain
-pending; nothing in this section denotes physical-device acceptance.
+Verified host evidence: ignored `.build/routing-experiments-20260919`, Apple M1
+MacBookPro17,1 / 16 GB / macOS 26.6.2. Dirt, Wander 100%, Allow Unknown off,
+avoid cities/highways on, no fuel computation; seed 1 unless stated. Current packs
+are unchanged `fabric-v4-20260917-02`, `cross-pack-seams.v2`; evidence contains every
+participating manifest/hash, binary hash, source-file hashes, settings and roads.
+
+| Workload | Before | Current host result |
+| --- | --- | --- |
+| Halifax–Squamish, process-cold | 77.06 s control | 67.96 s total, 33.81 s search |
+| Halifax–Squamish, repeated | earlier unbounded-retention pair 42.79 s | 60.60 s; bounded memory intentionally rebuilds evicted windows |
+| Cross-country paired peak physical footprint | 2.14 GB control | 0.849 GB current batch, about 60% lower |
+| Kitchener–Barrie, full Wander | about 10.5 s warm, 184 km / 64.9% dirt | 8.99 s first preparation; 1.73–1.87 s warm; seeds 1/2/3 produce 265/285/293 km and 77.8/78.6/79.1% known dirt |
+| Ontario variation batch peak physical footprint | not a comparable isolated baseline | 289 MB; no measured repeated roads in any accepted alternative |
+| Porters Lake–St Stephen | existing staged low-dirt result | 4.13 s, 871 km / 60.4% dirt; **still below Dirt qualification** |
+| Porters Lake–Cape Breton / Yarmouth | existing low-dirt results | 2.37 / 2.23 s, 60.6 / 56.3% dirt; **still below Dirt qualification** |
+
+Cross-country returned identical road receipt
+`22f7e584630576a203013905553bc71fabab1cd2407419dd0324a7ef1367f13d`,
+9,673.9 km / 76.9% known dirt, 1,589 m repeated roads. All sampled geometry lies
+inside the existing simplified Canadian province polygons and all returned access
+codes are 0. This is not a proof of every turn or every unsampled point. Unknown
+**surface** remains 5.7% on that route; it is not counted as known dirt and is
+distinct from unknown motor access. Ontario repeats with a frozen seed reproduce
+the same roads. Wander 0/50/100 produced 177/261/265 km for seed 1, with the 50%
+case taking 13.03 s warm; the slider is not yet uniformly fast.
+
+OS disk cache and unrelated host activity are uncontrolled. Host physical footprint
+and RSS are measured; allocator peaks and physical-iPhone times are not. These
+results do not claim phone acceptance, whole-country low latency, or fully solved
+Dirt quality on the Maritimes routes. Broader connected-area exploration and
+regional ride variety remain open. Failure of these tested alternatives does not
+prove a higher dirt share is impossible.
+
+96 engine tests pass, including exact connection/reverse-guidance checks, bounded
+reuse and changed-byte rejection, composed-route endpoints and no-repeat checks,
+seed reproducibility, cancellation shared across child budgets, and preserving
+incomplete outcomes when joining stages. The final selected app suite passed
+161 tests, including both actual NativeRoutingSession qualification tests;
+the earlier skipped run is not counted as route qualification. All five selected
+interface tests pass, including the requested long-search notice. Its screenshot
+was inspected for legibility and clipping. No extra simulator was created.
+
+This is ready for the owner's DIRT Dev Xcode Play test on White, not production
+or physical-device acceptance. No phone build was replaced, pack revised,
+server deployed, or App Store archive created. The owner should first compare
+Kitchener–Barrie new generations at full Wander and then Halifax–Squamish through
+Canada; review the displayed roads as well as wait time. The Maritimes Dirt
+quality shortfall and the other limitations below remain open.
+
+Actual app-session measurements on the existing iPhone17 / iOS26.5 simulator,
+UDID `CC6035EE-9C03-48A2-ACBA-DDE3B068642A`, on the M1 host above:
+
+| Workload | First preparation | Repeated | Peak app physical footprint |
+| --- | --- | --- | --- |
+| Kitchener–Barrie, seeds 1/2/3/1 | 23.67 s | 7.29 / 7.37 / 7.36 s | 271 MiB |
+| Halifax–Squamish, seed 1 twice | 118.81 s | 101.37 s | 584 MiB |
+
+Evidence: `simulator-final.xcresult`, `simulator-final.log`, and
+`simulator-final-identity.json` in the ignored evidence directory above. App
+identity is DIRT Dev 2 (45), `com.mayday.dirt.dev`; this native change requires
+a new Xcode Play build. These are Debug app-session times, not host probe times
+or physical-phone claims.
+Ontario retains 77.8/78.6/79.1% dirt, zero repeated roads, distinct new seeds and
+identical frozen-seed geometry after response serialization. Canada retains the
+exact road receipt above. Cold Ontario latency still needs improvement; do not
+claim the older 15-second cold Ontario target is met by this workload.
+
+The owner requested a caveat inside the existing progress animation for long
+searches. It appears immediately for journeys spanning more than two catalog
+regions or at least 1,000 km between rider pins, and after 20 seconds for any
+other still-running search, including with Reduce Motion enabled. These are
+notice triggers, not route limits or precise duration forecasts. Copy: “Longer
+rides can take 10 seconds to over a minute to plan. Any missing or outdated map
+packs need to download first.” The pack statement is conditional: valid installed
+packs are reused, and existing consent/download progress remains unchanged.
+This does not impose a one-minute maximum or authorize automatic downloads.
 
 ### Measurement
 
@@ -1108,11 +1179,9 @@ STEP 2.
 | Yarmouth | 581.9 km / 53.8% | 620.8 km / 57.1% | 546.4 / 47.9 | 457.7 / 0 |
 | north NB | 764.1 km / 64.3% | 781.7 km / 65.5% | 719.3 / 55.7 | 739.3 / 0 |
 
-None of the three reach 70%. Yarmouth cannot on this network: Clean is a 458 km
-0% paved spine, and Dirt at full wander plus the profile extra only reaches
-57.1%. Cape Breton 65.6% and north NB 65.5% are the dirt the connected legal
-graph actually offers on those pins; Clean 0% on both shows pavement was
-available and rejected.
+None of these tested candidates reached 70%. These measurements do not prove
+an upper bound on the dirt available in the connected legal network. They record
+what the then-current search found, not that a better ride is impossible.
 
 | Route | Style | km | dirt % | target | s | peak MB |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
