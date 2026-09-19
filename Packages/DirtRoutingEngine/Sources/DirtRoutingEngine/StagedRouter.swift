@@ -13,10 +13,26 @@ public enum StagedRouter {
     public static let handoverCandidateLimit = 12
 
     /// Preserve structural facts until handover ranking has selected a pin.
-    /// A water-like candidate remains a legal fallback; it is never discarded.
+    /// Water-like and stub candidates remain legal fallbacks; they are never
+    /// discarded — only demoted so giant-component land seams try first.
+    /// `stubOnSearch` = missing from the stage-window giant (hopLooksLive class).
+    /// `stubOnNext` = missing from the next pack giant (onward commitment).
     struct HandoverCandidate {
         let coordinate: Coordinate
         let waterLike: Bool
+        let stubOnSearch: Bool
+        let stubOnNext: Bool
+
+        init(coordinate: Coordinate, waterLike: Bool,
+             stubOnSearch: Bool = false, stubOnNext: Bool = false) {
+            self.coordinate = coordinate
+            self.waterLike = waterLike
+            self.stubOnSearch = stubOnSearch
+            self.stubOnNext = stubOnNext
+        }
+
+        /// Backward-compatible combined demotion used by older call sites/tests.
+        var stubIsland: Bool { stubOnSearch || stubOnNext }
     }
 
     /// Dirt only: leave wall-clock for later pins so one dead seam cannot burn
@@ -72,23 +88,31 @@ public enum StagedRouter {
         }
         var parts: [ComputedRoute] = []
         var cursor = request.start
-        // Two-pack: try each handover pin as a full stage0+stage1 pair so a
-        // pin that is live in the origin half but a stub in the dest half
-        // cannot commit the corridor.
-        if windows.count == 2, let originPack = windows[0].last, let destPack = windows[1].last {
+        // True two-pack halves (on-s|on-n, nb|me as [[nb],[me]]): try each
+        // handover pin as an atomic stage0+stage1 pair so a pin live in one half
+        // but stub in the other cannot commit. Overlapping multi-pack windows
+        // such as [[ns,nb],[nb,me]] also have count==2 — those must use the
+        // multi-pack loop (Providence 20260919 host matrix).
+        if windows.count == 2,
+           windows[0].count == 1, windows[1].count == 1,
+           let originPack = windows[0].last, let destPack = windows[1].last {
             // Same staged-aim contract as multi-pack. Two-pack has no onward seam
             // belt, so chainLocalAim returns the rider destination.
             let toward = try chainLocalAim(windows: windows, stageIndex: 0, next: destPack,
                                            finalDestination: request.end, repository: repository,
                                            currentShared: originPack)
-            let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
-                                              toward: toward, repository: repository)
-            guard !pins.isEmpty else { throw RoutingFailure.noPath }
             let prepareStarted = ContinuousClock.now
             let graphs = try prepared.indexedWindows(windows, repository: repository, budget: budget)
             request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
             let firstGraph = graphs[0]
             let secondGraph = graphs[1]
+            // Rank against the origin-half giant (not solo shared/next packs): coastal
+            // nb↔me proofs can sit in both solo giants yet be islands in [ns]/[nb].
+            let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
+                                              toward: toward, repository: repository,
+                                              searchGraph: firstGraph, budget: budget,
+                                              access: request.access)
+            guard !pins.isEmpty else { throw RoutingFailure.noPath }
             var lastError: Error = RoutingFailure.noPath
             var reach0: EndpointReachability?
             var reach1: EndpointReachability?
@@ -165,6 +189,9 @@ public enum StagedRouter {
         request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
         for (index, window) in windows.enumerated() {
             try budget.check()
+            // Open the stage graph before ranking so stub-island demotion uses the
+            // joined window's giant component (Providence nb↔me class).
+            let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
             let candidates: [Coordinate]
             if index + 1 < windows.count, let next = windows[index + 1].last, let shared = window.last {
                 // Aim intermediate handovers along the pack chain, not at the
@@ -184,14 +211,15 @@ public enum StagedRouter {
                     into: next,
                     from: cursor,
                     toward: toward,
-                    repository: repository
+                    repository: repository,
+                    searchGraph: indexed,
+                    budget: budget,
+                    access: request.access
                 )
             } else {
                 candidates = [request.end]
             }
             guard !candidates.isEmpty else { throw RoutingFailure.noPath }
-            // Open the stage graph once; stub seams must not re-decode a 100MB pack.
-            let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
             // Prefetch the window after next while this stage searches.
             var prefetch: DispatchWorkItem?
             if index + 2 < windows.count {
@@ -324,20 +352,101 @@ public enum StagedRouter {
     }
 
     static func handoverCandidates(from shared: String, into next: String, from origin: Coordinate,
-                                   toward dest: Coordinate, repository: PackRepository) throws -> [Coordinate] {
+                                   toward dest: Coordinate, repository: PackRepository,
+                                   searchGraph: (any RoadGraph)? = nil,
+                                   budget: ComputationBudget = .init(seconds: 120),
+                                   access: AccessPolicy = .init()) throws -> [Coordinate] {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
-        // Keep every seam row; water-like demotion is a rank key, not an exclude.
-        // Grouping by node would collapse diversity on dense borders (nb↔me).
+        // Keep every seam row; water-like / stub demotion is a rank key, not an
+        // exclude. Prefer seams in the *origin's* weak component of the search
+        // window (not the graph-wide giant — NS+NB joins can make an NB-only
+        // island the largest component) and in the next pack's giant.
+        let stubFlags = try stubIslandFlags(
+            origin: origin, shared: shared, next: next, anchors: anchors,
+            repository: repository, searchGraph: searchGraph, budget: budget,
+            access: access)
         let points = anchors.compactMap { row -> HandoverCandidate? in
             guard row.coordinate.count == 2 else { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
             guard point.isValid else { return nil }
-            return .init(coordinate: point, waterLike: isWaterLike(row.edge))
+            let flags = stubFlags[row.osmNodeId] ?? (true, true)
+            return .init(
+                coordinate: point,
+                waterLike: isWaterLike(row.edge),
+                stubOnSearch: flags.onSearch,
+                stubOnNext: flags.onNext
+            )
         }
         return pickHandoverCandidates(from: points, origin: origin, toward: dest,
                                       limit: handoverCandidateLimit)
+    }
+
+    /// Per-OSM-id stub flags for ranking. Search-side stub = not in the origin's
+    /// weak component (aligns with hopLooksLive). Next-side stub = not in next
+    /// pack giant (onward commitment).
+    static func stubIslandFlags(origin: Coordinate, shared: String, next: String,
+                                anchors: [SeamDocument.Anchor],
+                                repository: PackRepository,
+                                searchGraph: (any RoadGraph)?,
+                                budget: ComputationBudget,
+                                access: AccessPolicy) throws -> [String: (onSearch: Bool, onNext: Bool)] {
+        let currentGraph: any RoadGraph
+        if let searchGraph {
+            currentGraph = searchGraph
+        } else {
+            currentGraph = try repository.open(shared, requireSeams: false, budget: budget).graph
+        }
+        let nextPack = try repository.open(next, requireSeams: false, budget: budget).graph
+        let currentIds = WeakComponents.ids(in: currentGraph, allowUnknown: access.allowUnknown)
+        let nextIds = WeakComponents.ids(in: nextPack, allowUnknown: access.allowUnknown)
+        let originComponent = try originWeakComponent(
+            origin: origin, graph: currentGraph, ids: currentIds, access: access, budget: budget)
+            ?? giantComponentId(from: currentIds)
+        let nextGiant = giantComponentId(from: nextIds)
+        let wanted = Set(anchors.map(\.osmNodeId))
+        guard !wanted.isEmpty else { return [:] }
+        let currentNodes = osmNodeIndex(in: currentGraph, wanted: wanted)
+        let nextNodes = osmNodeIndex(in: nextPack, wanted: wanted)
+        var flags: [String: (onSearch: Bool, onNext: Bool)] = [:]
+        for id in wanted {
+            let onSearch = !(currentNodes[id].map { currentIds[$0] == originComponent } ?? false)
+            let onNext = !(nextNodes[id].map { nextIds[$0] == nextGiant } ?? false)
+            flags[id] = (onSearch, onNext)
+        }
+        return flags
+    }
+
+    /// Weak-component id of the best match at `origin`, when matching succeeds.
+    static func originWeakComponent(origin: Coordinate, graph: any RoadGraph, ids: [Int],
+                                    access: AccessPolicy, budget: ComputationBudget) throws -> Int? {
+        let indexed: IndexedGraph
+        if let warm = graph as? IndexedGraph {
+            indexed = warm
+        } else {
+            indexed = try IndexedGraph(graph, budget: budget)
+        }
+        let matcher = RoadMatcher(pack: indexed)
+        let matches = try matcher.matches(at: origin, radius: 2_000, start: true,
+                                          policy: access, intent: nil, budget: budget)
+        guard let match = matches.first else { return nil }
+        return WeakComponents.of(match: match, pack: indexed, ids: ids)
+    }
+
+    static func giantComponentId(from ids: [Int]) -> Int {
+        var sizes: [Int: Int] = [:]
+        for id in ids { sizes[id, default: 0] += 1 }
+        return sizes.max(by: { $0.value < $1.value })?.key ?? 0
+    }
+
+    static func osmNodeIndex(in pack: any RoadGraph, wanted: Set<String>) -> [String: Int] {
+        var found: [String: Int] = [:]
+        for n in 0..<pack.nodeCount {
+            let id = String(pack.osmNodeID(n))
+            if wanted.contains(id) { found[id] = n }
+        }
+        return found
     }
 
     /// Values are from `routing/lib/structure.js:isWaterCrossing`; timed
@@ -426,12 +535,12 @@ public enum StagedRouter {
     /// Geographic "best" alone is not enough — overlap stubs can look perfect
     /// on detour while remaining unreachable in one half, so callers try
     /// several diversified pins. Rank order: land before water-like, then
-    /// interquartile seam belt before lon/lat fringe (replaces NB/ME lon gate),
-    /// then detour.
+    /// giant-component before stub-island, then interquartile seam belt before
+    /// anti-progress lon fringe (replaces NB/ME lon gate), then detour.
     static func pickHandoverCandidates(from points: [Coordinate], origin: Coordinate,
                                        toward dest: Coordinate, limit: Int) -> [Coordinate] {
         pickHandoverCandidates(from: points.map {
-            .init(coordinate: $0, waterLike: false)
+            .init(coordinate: $0, waterLike: false, stubOnSearch: false, stubOnNext: false)
         }, origin: origin, toward: dest, limit: limit)
     }
 
@@ -458,27 +567,30 @@ public enum StagedRouter {
         guard !points.isEmpty, limit > 0 else { return [] }
         let direct = max(1, origin.distance(to: dest))
         let fringe = seamFringeFlags(for: points, toward: dest)
-        let ranked = zip(points, fringe).map { point, isFringe -> (score: Double, point: Coordinate, waterLike: Bool, fringe: Bool) in
+        let ranked = zip(points, fringe).map { point, isFringe -> (
+            score: Double, point: Coordinate, waterLike: Bool,
+            stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool
+        ) in
             let via = origin.distance(to: point.coordinate) + point.coordinate.distance(to: dest)
-            return (via / direct, point.coordinate, point.waterLike, isFringe)
-        }.sorted {
-            if $0.waterLike != $1.waterLike { return !$0.waterLike }
-            if $0.fringe != $1.fringe { return !$0.fringe }
-            return $0.score < $1.score
-        }
+            return (via / direct, point.coordinate, point.waterLike,
+                    point.stubOnSearch, point.stubOnNext, isFringe)
+        }.sorted(by: handoverRankLessThan)
 
-        // Keep the best pin per ~0.4° longitude cell so western stubs cannot
-        // crowd out the connected Hwy 69 / French River band.
-        var byCell: [Int:(score: Double, point: Coordinate, waterLike: Bool, fringe: Bool)] = [:]
+        // Keep the best pin per geographic cell so stub clusters cannot crowd
+        // out usable corridor pins. A longitude-only grid collapses dense
+        // north–south belts (co↔ks ~0.07° lon; nb↔ns only 3 lon cells across
+        // 2°). Use a coarse 2D cell so both axes diversify.
+        var byCell: [Int:(
+            score: Double, point: Coordinate, waterLike: Bool,
+            stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool
+        )] = [:]
         for row in ranked {
-            let cell = Int((row.point.longitude * 2.5).rounded(.towardZero))
+            let lonCell = Int((row.point.longitude * 5.0).rounded(.towardZero))
+            let latCell = Int((row.point.latitude * 5.0).rounded(.towardZero))
+            let cell = lonCell &* 10_000 &+ latCell
             if byCell[cell] == nil { byCell[cell] = row }
         }
-        let diversified = byCell.values.sorted {
-            if $0.waterLike != $1.waterLike { return !$0.waterLike }
-            if $0.fringe != $1.fringe { return !$0.fringe }
-            return $0.score < $1.score
-        }.map(\.point)
+        let diversified = byCell.values.sorted(by: handoverRankLessThan).map(\.point)
         var spaced: [Coordinate] = []
         for point in diversified {
             if spaced.contains(where: { $0.distance(to: point) < 8_000 }) { continue }
@@ -505,6 +617,22 @@ public enum StagedRouter {
 
     static func pickHandover(from points: [Coordinate], origin: Coordinate, toward dest: Coordinate) -> Coordinate? {
         pickHandoverCandidates(from: points, origin: origin, toward: dest, limit: 1).first
+    }
+
+    /// Shared sort key: land → window-giant → next-giant → belt → detour.
+    /// Split search/next stubs so Providence window-live / next-stub pins still
+    /// outrank coastal islands that fail hopLooksLive in [ns,nb].
+    static func handoverRankLessThan(
+        _ a: (score: Double, point: Coordinate, waterLike: Bool,
+              stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool),
+        _ b: (score: Double, point: Coordinate, waterLike: Bool,
+              stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool)
+    ) -> Bool {
+        if a.waterLike != b.waterLike { return !a.waterLike }
+        if a.stubOnSearch != b.stubOnSearch { return !a.stubOnSearch }
+        if a.stubOnNext != b.stubOnNext { return !a.stubOnNext }
+        if a.fringe != b.fringe { return !a.fringe }
+        return a.score < b.score
     }
 
     static func openWindow(_ regions: [String], repository: PackRepository,

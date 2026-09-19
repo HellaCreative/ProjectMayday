@@ -18,6 +18,11 @@ struct StagedRouterTests {
         #expect(StagedRouter.overlappingWindows(["ns", "nb", "qc"]) == [["ns", "nb"], ["nb", "qc"]])
         #expect(StagedRouter.overlappingWindows(["on-s", "on-n"]) == [["on-s"], ["on-n"]])
         #expect(StagedRouter.overlappingWindows(["ns", "nb"]) == [["ns"], ["nb"]])
+        // Three-pack corridors produce two overlapping pair-windows — not the
+        // single-pack half shape used by the atomic two-pack branch.
+        let three = StagedRouter.overlappingWindows(["ns", "nb", "me"])
+        #expect(three == [["ns", "nb"], ["nb", "me"]])
+        #expect(three.allSatisfy { $0.count == 2 })
     }
 
     @Test func handoverDiversifiesAwayFromWesternStubClusters() {
@@ -39,6 +44,54 @@ struct StagedRouterTests {
         #expect(picks.count >= 2)
         #expect(picks.contains(where: { abs($0.longitude - central.longitude) < 0.05 }))
         #expect(picks.contains(where: { abs($0.longitude - east.longitude) < 0.05 }))
+    }
+
+    @Test func handoverNarrowLongitudeBeltDiversifiesByLatitude() {
+        // co↔ks / nb↔ns class: proofs collapse under a longitude-only grid.
+        let origin = Coordinate(longitude: -104.0, latitude: 37.0)
+        let dest = Coordinate(longitude: -95.0, latitude: 39.0)
+        var points: [Coordinate] = []
+        for i in 0..<40 {
+            points.append(.init(longitude: -102.05 - Double(i % 3) * 0.01,
+                                latitude: 37.0 + Double(i) * 0.05))
+        }
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: points, origin: origin, toward: dest, limit: 8)
+        #expect(picks.count >= 4)
+        let lats = picks.map(\.latitude)
+        #expect((lats.max() ?? 0) - (lats.min() ?? 0) > 0.3)
+    }
+
+    @Test func handoverWindowLiveOutranksNextOnlyStub() {
+        let origin = Coordinate(longitude: -63.34, latitude: 44.76)
+        let dest = Coordinate(longitude: -71.41, latitude: 41.82)
+        let windowLive = Coordinate(longitude: -67.68, latitude: 45.62)
+        let windowDead = Coordinate(longitude: -66.98, latitude: 44.85)
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: [
+                .init(coordinate: windowDead, waterLike: false, stubOnSearch: true, stubOnNext: false),
+                .init(coordinate: windowLive, waterLike: false, stubOnSearch: false, stubOnNext: true)
+            ],
+            origin: origin, toward: dest, limit: 8)
+        #expect(picks.first?.longitude == windowLive.longitude)
+    }
+
+    @Test func handoverStubIslandDemotesDisconnectedSeamProofs() {
+        let origin = Coordinate(longitude: -66.1, latitude: 45.3)
+        let dest = Coordinate(longitude: -69.8, latitude: 43.7)
+        let giant = Coordinate(longitude: -67.28, latitude: 45.19)
+        // Better detour than giant, but marked stub-island and far enough in
+        // both lon and lat to survive 2D cell + 8 km spacing as a demoted fallback.
+        let stub = Coordinate(longitude: -67.00, latitude: 44.90)
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: [
+                .init(coordinate: stub, waterLike: false, stubOnSearch: true, stubOnNext: true),
+                .init(coordinate: giant, waterLike: false, stubOnSearch: false, stubOnNext: false)
+            ],
+            origin: origin, toward: dest, limit: 8)
+        #expect(picks.first?.longitude == giant.longitude)
+        #expect(picks.first?.latitude == giant.latitude)
+        #expect(picks.contains(where: { abs($0.longitude - stub.longitude) < 0.01 }))
     }
 
     @Test func handoverStructuralQualityDemotesFerryAndWaterCrossing() {

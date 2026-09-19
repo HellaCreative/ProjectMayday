@@ -34,7 +34,11 @@ guard let seed, zoomArgument == nil || (zoom?.isFinite == true),
 }
 let compact = environment["DIRT_PROBE_COMPACT"] == "1"
 let started = ContinuousClock.now
-let budget = ComputationBudget(seconds: seconds)
+// Continental staged Dirt/Balanced corridors burn >1.6M labels across
+// co↔ks / prairie windows; allow an override or a higher staged default.
+let configuredLabels = environment["DIRT_MAX_LABELS"].flatMap(Int.init)
+let budgetLabels = configuredLabels ?? 1_600_000
+var budget = ComputationBudget(seconds: seconds, maximumLabels: budgetLabels)
 let counter = SearchCounter()
 func elapsed() -> Double {
     let d = started.duration(to: .now).components
@@ -76,6 +80,11 @@ do {
         let start = Coordinate(longitude: lonA, latitude: latA)
         let dest = Coordinate(longitude: lonB, latitude: latB)
         stageLong = fuelUsable == nil && StagedRouter.shouldStage(regionCount: regions.count, start: start, end: dest)
+        if stageLong, configuredLabels == nil {
+            // Host continental matrices (NM→ME class) need headroom beyond the
+            // 1.6M single-search default; keep short probes on the default.
+            budget = ComputationBudget(seconds: seconds, maximumLabels: 5_000_000)
+        }
         if !stageLong {
             let packs = try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
             guard let first = packs.first else { throw RoutingFailure.missingPacks([]) }
