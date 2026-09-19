@@ -272,12 +272,18 @@ simulator timings, not new White measurements. Slow PEI optional exploration
 remains unresolved; percentage-gate removal is not a speed fix.
 
 The repaired DEV stamp is `bridge-waypoint-20260919b`, using the unchanged fresh
-seven-pack release. It requires a new native build. This repair has not replaced
-the owner's physical-device build or changed production. Previous source
-checkpoint `a91e5ac` preserves the installed fresh-seven behavior for rollback;
-the owner’s next acceptance step is Xcode Play DIRT Dev and repeat the bridge
-midpoint and preferred Dirt/Wander rides. Source/binary/settings receipts and
-full route audits are retained beside the test result.
+seven-pack release. At the owner’s explicit request, source `d3457f9` was built,
+verified as development-only, installed and launched on White (iPhone 16,
+iOS 26.6.2) as DIRT Dev 2 (45). The installed binary stamp is
+`bridge-waypoint-20260919b`; its SHA-256 is
+`7682efb30cb1e89419cd0b8161fd206124b82ce402edb5604005d8b9c2c21256`.
+Evidence: `white-build-receipt.json`, `white-install.json` and
+`white-launch.json` beside the test result. Production is unchanged. Previous
+source checkpoint `a91e5ac` preserves the earlier fresh-seven behavior for
+rollback. The owner can now repeat the bridge midpoint and preferred
+Dirt/Wander rides on White; installation is not physical route acceptance.
+Source/binary/settings receipts and full route audits are retained beside the
+test result.
 
 Remaining limits: owner NS–NB Balanced is about 17–19% dirt at the tested
 settings; subsequent owner testing shows higher Wander can increase its dirt
