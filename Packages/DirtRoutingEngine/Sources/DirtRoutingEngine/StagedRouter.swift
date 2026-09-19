@@ -89,14 +89,17 @@ public enum StagedRouter {
             let toward = try chainLocalAim(windows: windows, stageIndex: 0, next: destPack,
                                            finalDestination: request.end, repository: repository,
                                            currentShared: originPack)
-            let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
-                                              toward: toward, repository: repository)
-            guard !pins.isEmpty else { throw RoutingFailure.noPath }
             let prepareStarted = ContinuousClock.now
             let graphs = try prepared.indexedWindows(windows, repository: repository, budget: budget)
             request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
             let firstGraph = graphs[0]
             let secondGraph = graphs[1]
+            // Rank against the origin-half giant (not solo shared/next packs): coastal
+            // nb↔me proofs can sit in both solo giants yet be islands in [ns]/[nb].
+            let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
+                                              toward: toward, repository: repository,
+                                              searchGraph: firstGraph, budget: budget)
+            guard !pins.isEmpty else { throw RoutingFailure.noPath }
             var lastError: Error = RoutingFailure.noPath
             var reach0: EndpointReachability?
             var reach1: EndpointReachability?
@@ -173,6 +176,9 @@ public enum StagedRouter {
         request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
         for (index, window) in windows.enumerated() {
             try budget.check()
+            // Open the stage graph before ranking so stub-island demotion uses the
+            // joined window's giant component (Providence nb↔me class).
+            let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
             let candidates: [Coordinate]
             if index + 1 < windows.count, let next = windows[index + 1].last, let shared = window.last {
                 // Aim intermediate handovers along the pack chain, not at the
@@ -192,14 +198,14 @@ public enum StagedRouter {
                     into: next,
                     from: cursor,
                     toward: toward,
-                    repository: repository
+                    repository: repository,
+                    searchGraph: indexed,
+                    budget: budget
                 )
             } else {
                 candidates = [request.end]
             }
             guard !candidates.isEmpty else { throw RoutingFailure.noPath }
-            // Open the stage graph once; stub seams must not re-decode a 100MB pack.
-            let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
             // Prefetch the window after next while this stage searches.
             var prefetch: DispatchWorkItem?
             if index + 2 < windows.count {
@@ -332,17 +338,20 @@ public enum StagedRouter {
     }
 
     static func handoverCandidates(from shared: String, into next: String, from origin: Coordinate,
-                                   toward dest: Coordinate, repository: PackRepository) throws -> [Coordinate] {
+                                   toward dest: Coordinate, repository: PackRepository,
+                                   searchGraph: (any RoadGraph)? = nil,
+                                   budget: ComputationBudget = .init(seconds: 120)) throws -> [Coordinate] {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
         // Keep every seam row; water-like / stub-island demotion is a rank key,
-        // not an exclude. Grouping by node would collapse diversity on dense
-        // borders (nb↔me). Prefer seams that sit in the largest weak component
-        // of both the shared and next packs — host fabric keeps many ON/MB and
-        // coastal ME proofs on stub islands that pass geodesic ranking then
-        // die in hopLooksLive / onward stages.
-        let stubOsm = try stubIslandOsmNodeIds(shared: shared, next: next, repository: repository)
+        // not an exclude. Prefer seams in the largest weak component of the
+        // *search window* (when provided) and of the next pack — solo-pack
+        // giants still mark coastal nb↔me proofs as "live" while hopLooksLive
+        // rejects them inside [ns,nb].
+        let stubOsm = try stubIslandOsmNodeIds(
+            shared: shared, next: next, anchors: anchors,
+            repository: repository, searchGraph: searchGraph, budget: budget)
         let points = anchors.compactMap { row -> HandoverCandidate? in
             guard row.coordinate.count == 2 else { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
@@ -357,29 +366,33 @@ public enum StagedRouter {
                                       limit: handoverCandidateLimit)
     }
 
-    /// OSM node ids whose seam proof is missing from the giant weak component
-    /// on either side of the handover. Used only as a ranking demotion.
+    /// OSM node ids missing from the giant weak component of the search graph
+    /// (window or shared pack) or of the next pack. Ranking demotion only.
     static func stubIslandOsmNodeIds(shared: String, next: String,
+                                     anchors: [SeamDocument.Anchor],
                                      repository: PackRepository,
-                                     budget: ComputationBudget = .init(seconds: 120)) throws -> Set<String> {
-        let sharedPack = try repository.open(shared, requireSeams: false, budget: budget).graph
+                                     searchGraph: (any RoadGraph)?,
+                                     budget: ComputationBudget) throws -> Set<String> {
+        let currentGraph: any RoadGraph
+        if let searchGraph {
+            currentGraph = searchGraph
+        } else {
+            currentGraph = try repository.open(shared, requireSeams: false, budget: budget).graph
+        }
         let nextPack = try repository.open(next, requireSeams: false, budget: budget).graph
-        let sharedIds = WeakComponents.ids(in: sharedPack, allowUnknown: true)
+        let currentIds = WeakComponents.ids(in: currentGraph, allowUnknown: true)
         let nextIds = WeakComponents.ids(in: nextPack, allowUnknown: true)
-        let sharedGiant = giantComponentId(from: sharedIds)
+        let currentGiant = giantComponentId(from: currentIds)
         let nextGiant = giantComponentId(from: nextIds)
-        let anchors = try repository.loadSeams(shared).neighbors[next]
-            ?? repository.loadSeams(next).neighbors[shared]
-            ?? []
         let wanted = Set(anchors.map(\.osmNodeId))
         guard !wanted.isEmpty else { return [] }
-        let sharedNodes = osmNodeIndex(in: sharedPack, wanted: wanted)
+        let currentNodes = osmNodeIndex(in: currentGraph, wanted: wanted)
         let nextNodes = osmNodeIndex(in: nextPack, wanted: wanted)
         var stubs: Set<String> = []
         for id in wanted {
-            let sharedOk = sharedNodes[id].map { sharedIds[$0] == sharedGiant } ?? false
+            let currentOk = currentNodes[id].map { currentIds[$0] == currentGiant } ?? false
             let nextOk = nextNodes[id].map { nextIds[$0] == nextGiant } ?? false
-            if !(sharedOk && nextOk) { stubs.insert(id) }
+            if !(currentOk && nextOk) { stubs.insert(id) }
         }
         return stubs
     }
