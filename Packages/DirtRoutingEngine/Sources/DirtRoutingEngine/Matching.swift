@@ -103,6 +103,15 @@ public struct RoadMatcher: Sendable {
         let candidateTangent = Self.travelBearing(pack.polyline(candidate.edge), along: candidate.alongMeters, forward: candidateForward)
         for previous in kept where previous.distanceMeters < 80 && previous.edge != candidate.edge {
             guard let previousForward = previous.forward else { continue }
+            // Roads meeting at a source junction are departure alternatives,
+            // not opposite carriageways. The viable road may initially point
+            // away from the destination (a bend, spur or geographic detour).
+            // Keep both and let legal search decide; intent still ranks them.
+            let candidateEnds = [pack.endpoint(candidate.edge, from: true), pack.endpoint(candidate.edge, from: false)]
+            let previousEnds = [pack.endpoint(previous.edge, from: true), pack.endpoint(previous.edge, from: false)]
+            if candidateEnds.contains(where: { a in previousEnds.contains(where: { b in
+                a == b || (pack.osmNodeID(a) != 0 && pack.osmNodeID(a) == pack.osmNodeID(b))
+            }) }) { continue }
             let previousTangent = Self.travelBearing(pack.polyline(previous.edge), along: previous.alongMeters, forward: previousForward)
             guard RoadMatcher.angle(previousTangent, candidateTangent) > 140 else { continue }
             if RoadMatcher.angle(heading, candidateTangent) > 70 && RoadMatcher.angle(heading, previousTangent) < 40 {

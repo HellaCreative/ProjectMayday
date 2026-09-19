@@ -144,6 +144,27 @@ struct PolicyTests {
         })
     }
 
+    @Test func junctionDepartureCanInitiallyHeadAwayFromDestination() throws {
+        // The west-facing spur is a dead end. The only continuous ride leaves
+        // this junction east, then follows the roads around to the destination.
+        let nodes: [Coordinate] = [
+            .init(longitude: 0, latitude: 0),
+            .init(longitude: -0.0004, latitude: 0.0002),
+            .init(longitude: 0.01, latitude: -0.004),
+            .init(longitude: 0.015, latitude: 0.01),
+            .init(longitude: -0.02, latitude: 0.02)]
+        let pack = Line(nodes: nodes, edges: [(0,1),(0,2),(2,3),(3,4)],
+                        surfaces: Array(repeating: "asphalt", count: 4),
+                        roads: Array(repeating: "tertiary", count: 4))
+        let matches = try RoadMatcher(pack: pack).matches(at: nodes[0], radius: 250,
+            start: true, policy: .init(), intent: nodes[0].bearing(to: nodes[4]) * 180 / .pi,
+            budget: .init())
+        #expect(matches.contains { $0.edge == 1 && $0.forward == true })
+        let route = try RoutingEngine(pack: pack).route(.init(start: nodes[0], end: nodes[4], style: .balanced))
+        #expect(route.end.coordinate.distance(to: nodes[4]) < 1)
+        #expect(route.segments.filter { $0.meters > 1 }.map(\.edge) == [1,2,3])
+    }
+
     @Test func arrivalEdgeIdentityIsHonoredAcrossIDFormats() throws {
         let pack = Line(nodes: [.init(longitude: 0,latitude: 0),.init(longitude: 0.01,latitude: 0),.init(longitude: 0.02,latitude: 0)],
                         edges: [(0,1),(1,2)], surfaces: ["asphalt","asphalt"], roads: ["tertiary","tertiary"])

@@ -54,4 +54,25 @@ struct RegionalGraphTests {
             } catch RoutingFailure.noPath { #expect(row.distance == nil) }
         }
     }
+
+    @Test func sharedRoadDistanceConflictIdentifiesDataWithoutJoiningIt() throws {
+        let original = try graph(), fixtures = ReferenceTests()
+        let source = try BinaryFile(url: fixtures.fixture("legal-topology-restrictions.graph.v4.bin"))
+        var bytes = source.data
+        let edge = try #require(original.outgoing(0).first).edge
+        let offset = Int(try source.read(40, as: UInt32.self)) + edge * 4
+        var changed = (UInt32(original.distance(edge)) + 19).littleEndian
+        withUnsafeBytes(of: &changed) { bytes.replaceSubrange(offset..<(offset + 4), with: $0) }
+        let different = try GraphPack(graph: BinaryFile(data: bytes),
+            geometry: BinaryFile(url: fixtures.fixture("legal-topology-restrictions.geometry.v1.bin")), budget: .init())
+        do {
+            _ = try RegionalGraph(graphs: [original, different], documents: documents(original), budget: .init())
+            Issue.record("Conflicting distances for the same shared road must not be joined")
+        } catch RoutingFailure.invalidPack(let detail) {
+            #expect(detail.contains("shared road geometry differs regions=aa,bb"))
+            #expect(detail.contains("way=\(original.osmWayID(edge))"))
+            #expect(detail.contains("from=\(original.osmNodeID(original.endpoint(edge, from: true)))"))
+            #expect(detail.contains("to=\(original.osmNodeID(original.endpoint(edge, from: false)))"))
+        }
+    }
 }

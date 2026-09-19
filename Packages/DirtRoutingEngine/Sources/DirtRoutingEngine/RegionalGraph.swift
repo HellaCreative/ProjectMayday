@@ -308,7 +308,10 @@ public final class RegionalGraph: RoadGraph {
                 let q = owner(first,eb), original = first-eb[q]
                 guard graphs[q].distance(original) == graphs[p].distance(local),
                       graphs[q].polyline(original) == graphs[p].polyline(local) else {
-                    throw RoutingFailure.invalidPack("shared road geometry differs")
+                    throw RoutingFailure.invalidPack(
+                        "shared road geometry differs regions=\(documents[q].regionId),\(documents[p].regionId) " +
+                        "way=\(key.osmWayId) from=\(key.fromOsmNodeId) to=\(key.toOsmNodeId) " +
+                        "meters=\(graphs[q].distance(original)),\(graphs[p].distance(local))")
                 }
                 edgeMap[global] = first
             } else { identities[key] = global }

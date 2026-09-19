@@ -661,6 +661,34 @@ zero repeated road, and retained active-turn safeguards. Retreating the cut alon
 was tested, did not repair this failure, and was removed before this candidate.
 Alaska→BC and reverse BC–Washington limitations remain unresolved.
 
+The same sweep exposed Montana→BC failing after only 32 label pops. The endpoint
+filter mistook roads meeting at a source junction for opposite carriageways and
+removed the legal departure that initially headed away from the destination.
+Source-connected junction alternatives now remain eligible; destination bearing
+still ranks them, and the existing separate-carriageway check remains. A focused
+test failed before the repair and passes afterward. On the exact matrix points,
+Montana→BC now completes in 3.682 s / 192.7 km / 46.7% known dirt with zero
+repeated metres. Reverse retains the identical road hash. With the combined
+handover and matching repairs, Iowa→Illinois also completes (21.525 s / 214.7 km /
+53.3% known dirt), and reverse completes (255.2 km / 62.9% known dirt); both have
+zero repeated metres. These are host continuity results, not full style or phone
+qualification. Unknown surface remains substantial (47.3% Montana–BC; 41.9%
+Iowa→Illinois) and is not counted as known dirt. Evidence:
+`.build/us-routing-20260919/junction-after/`; 117 engine tests pass.
+
+California↔Nevada currently rejects incompatible shared road data in both
+directions and with both California packs. Direct inspection of unchanged
+`fabric-v4-20260917-02` bytes found two conflicting shared roads for ca-n/nv and
+21 for ca-s/nv. For example, way 723270369, nodes 9327727868→89784397, is recorded
+as 183 m in ca-n and 164 m in nv, with the same final source node about 19 m apart.
+Way 14289893, nodes 137180897→7924156554, differs by about 5 m at its first node.
+This is actual source-pack disagreement, not merely a runtime index mismatch.
+The join still rejects it; diagnostics now name both regions and the exact road
+and node identities. No tolerance was increased, connector fabricated, or pack
+changed. Detailed comparisons are in `.build/us-routing-20260919/ca-*-nv-geometry.json`.
+Resolving those pack conflicts remains outstanding and does not justify relaxing
+legal/topological validation for other regions.
+
 Intrastate cardinal/diagonal tests, Hawaii, longer multistate runs, all-style
 qualification, physical-device performance and the secondary acquisition UI
 remain outstanding.
