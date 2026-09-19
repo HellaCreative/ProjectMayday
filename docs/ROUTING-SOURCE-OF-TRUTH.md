@@ -78,6 +78,44 @@ replaces repeated seam-proof scans; the 24,000-proof synthetic check changed fro
 1,148 ms to 22 ms (`seam-proof-before.json` / `seam-proof-after.json`). This is a
 build-tool measurement, not a phone-routing speed claim.
 
+Pack preparation should also reduce repeated phone work where exact reusable
+information can be calculated once by the factory. The current candidate adds
+eight bytes per road to GEOM v1 for the exact matching-grid bounds of its stored
+coordinates. The factory verifies every row; the graph's paired geometry hash
+covers the table. Readers without this extension still read the original shapes.
+This does not select routes, simplify shapes, prune dirt alternatives or weaken
+legal checks. New and legacy matching agree in focused tests; measured route
+preparation, memory and download costs remain required before qualification.
+
+The initial NS host comparison on Apple M1/16 GiB used identical private pack
+bytes for both readers and three process starts per variant: median preparation
+0.209→0.165 s, total 2.317→2.275 s, identical road-sequence hash and 584.665 km
+distance. The table adds 1,766,160 bytes for NS. This is modest preparation
+evidence, not fresh-pack or phone acceptance. QC-s timings were highly variable
+while source extraction ran; they do not establish a performance gain. Raw
+before/after results are in `grid-comparison/` under the evidence directory.
+
+A separate runtime legality correction removes coordinate-only node transfers.
+The former index joined distinct source nodes inside a 2 m coordinate bucket,
+contradicting the source-topology requirement below. A regression test reproduced
+a route over two unconnected roads at one map position before the repair.
+`RegionalGraph` continues to join verified source identities; ordinary indexes
+no longer invent proximity junctions or allocate the whole-network proximity
+table. This can change new route results and must be qualified as a correctness
+change. Two older tests that expected the unsupported transfer now require
+disconnection. The stronger source-identity/seam/turn tests remain passing:
+`engine-verified-junction-tests.log` records 121 passing; the reproducer is
+`unverified-junction-before.log`. Fresh-region route qualification remains open.
+
+The fresh NB input contains 13 footway/cycleway source ways with explicit
+motor-vehicle permission that the former highway-class filter discarded.
+Supplemental footway, cycleway, bridleway and pedestrian ways are now retained
+only when applicable explicit motor permission allows a direction; original
+class, surface and legal access remain separate. Ordinary walking/cycling ways,
+ATV-only permission and explicit motorcycle prohibitions do not become legal
+motorcycle routes. This is a source-coverage correction, not a speed-only change.
+Evidence: `nb-other-paths.opl` and `explicit-motor-path-tests.log` (20 passing).
+
 There is no requirement to use live server routing, keep complete regional
 graphs in a persistent service, publish every experiment, maintain identical
 JavaScript and Swift implementations, or use a particular third-party engine.
@@ -570,11 +608,12 @@ per-request memory, cancellations, and cold behavior on the actual service class
 
 ### Active owner-directed sequence — September 19
 
-**Current priority:** investigate and repair US routing, starting with the owner's
-Texas–Moab failure. Qualify adjoining US states and Canada–US connections in both
-directions, then intrastate cardinal/diagonal and longer multistate journeys.
-The accepted trans-Canada planner ride does not establish US coverage. The pack
-acquisition panel below is a secondary task; it must not displace this testing.
+**Current priority:** qualify the seven fresh Atlantic/Quebec packs described
+in section 1, including bridges, ferries, split-region continuity and measured
+phone preparation costs. Apply the resulting repeatable process to other
+regions only after this set passes. The earlier Texas–Moab failure and broader
+US qualification remain open; the accepted trans-Canada planner ride does not
+establish US coverage.
 
 
 Work in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`. The current task began at
@@ -1588,6 +1627,14 @@ capabilities, paired identities, and compatible source epoch.
 
 Objects: `graph.v4.bin` (DRT4, little-endian magic `0x34545244`, version 4),
 paired `geometry.v1.bin` (GEOM v1), `fuel.v1.json`, and `pack-manifest.v2.json`.
+GEOM v1 flag bit 0 denotes Float64 coordinates (otherwise Float32). Optional
+flag bit 1 adds an exact matching-grid table immediately after the coordinate
+array: four little-endian Int16 values per edge, `xMin,xMax,yMin,yMax`, using
+`floor(storedCoordinate / 0.05)` for longitude/latitude cells. Empty shapes use
+`32767,-32768,32767,-32768`. This version fixes the cell width at 0.05 degrees;
+changing that convention requires a new format identifier. The table and original
+shape bytes share the paired geometry hash. The factory validates every bound
+against the stored coordinates; old readers may ignore the optional table.
 Manifest fields include `schema`, `fabricReleaseId`, `regionId`,
 `capabilities: ["legal-topology.v1"]`, `sourceEpoch`, `timezone`, and graph,
 geometry, fuel entries with `name`, `bytes`, and `sha256`.

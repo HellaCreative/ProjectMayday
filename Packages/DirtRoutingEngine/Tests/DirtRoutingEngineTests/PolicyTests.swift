@@ -173,7 +173,7 @@ struct PolicyTests {
         #expect(pack.edge(matching: [pack.identity(of: 1)]) == 1)
     }
 
-    @Test func coincidentDuplicateNodesKeepABrokenWayConnected() throws {
+    @Test func coincidentDistinctSourceNodesDoNotRepairABrokenWay() throws {
         let pack = Line(
             nodes: [
                 .init(longitude: 0,latitude: 0),
@@ -186,15 +186,15 @@ struct PolicyTests {
             roads: ["track","track"]
         )
         let indexed = try IndexedGraph(pack)
-        #expect(!indexed.coincidentSiblings(1).isEmpty)
-        #expect(indexed.coincidentSiblings(1).contains(2))
+        #expect(indexed.coincidentSiblings(1).isEmpty)
         let start = RoadMatch(edge: 0,coordinate: pack.nodes[0],distanceMeters: 0,alongMeters: 0,
                               geometryMeters: pack.distance(0),forward: true)
         let end = RoadMatch(edge: 1,coordinate: pack.nodes[3],distanceMeters: 0,alongMeters: pack.distance(1),
                             geometryMeters: pack.distance(1),forward: true)
-        let route = try PathSearch(pack: indexed).search(start: start,end: end,policy: .init(style: .dirt),
-                                                        access: .init(),options: .init(),budget: .init())
-        #expect(route.distanceMeters > 0)
+        #expect(throws: RoutingFailure.noPath) {
+            try PathSearch(pack: indexed).search(start: start,end: end,policy: .init(style: .dirt),
+                                                access: .init(),options: .init(),budget: .init())
+        }
     }
 
     @Test func progressRegressionScalesWithWanderNotAFixedFifteenKm() {

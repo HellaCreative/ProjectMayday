@@ -40,22 +40,28 @@ let budgetLabels = configuredLabels ?? 1_600_000
 var budget = ComputationBudget(seconds: seconds, maximumLabels: budgetLabels)
 let counter = SearchCounter()
 let preparedGraphs = PreparedGraphStore()
+var directOpenSeconds = 0.0, directJoinSeconds = 0.0, directIndexSeconds = 0.0
 func elapsed() -> Double {
     let d = started.duration(to: .now).components
     return Double(d.seconds)+Double(d.attoseconds)/1e18
+}
+func measuredPreparation<T>(_ seconds: inout Double, _ work: () throws -> T) rethrows -> T {
+    let began = elapsed()
+    defer { seconds += elapsed() - began }
+    return try work()
 }
 func sha256(_ lines: [String]) -> String {
     var hasher = SHA256()
     for line in lines { hasher.update(data: Data((line + "\n").utf8)) }
     return hasher.finalize().map { String(format: "%02x", $0) }.joined()
 }
-func searchFields(since prepared: Double) -> [String:Any] {
+@MainActor func searchFields(since prepared: Double) -> [String:Any] {
     let pops = counter.pops
     let preparation = preparedGraphs.metrics
     return ["searches":counter.searches,"totalPops":pops,"peakLabels":counter.peakLabels,
             "preparedGraphBuilds":preparation.builds,"preparedGraphHits":preparation.hits,
-            "packOpenSeconds":preparation.openSeconds,"graphJoinSeconds":preparation.joinSeconds,
-            "graphIndexSeconds":preparation.indexSeconds,
+            "packOpenSeconds":preparation.openSeconds + directOpenSeconds,"graphJoinSeconds":preparation.joinSeconds + directJoinSeconds,
+            "graphIndexSeconds":preparation.indexSeconds + directIndexSeconds,
             "searchMilliseconds":counter.searchMilliseconds.rounded(),"stages":counter.stageSummary,
             "microsecondsPerPop": pops > 0 ? ((elapsed()-prepared)*1e6/Double(pops)).rounded() : NSNull()]
 }
@@ -85,9 +91,14 @@ do {
         let dest = Coordinate(longitude: lonB, latitude: latB)
         stageLong = fuelUsable == nil && StagedRouter.shouldStage(regionCount: regions.count, start: start, end: dest)
         if !stageLong {
-            let packs = try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
+            let packs = try measuredPreparation(&directOpenSeconds) {
+                try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
+            }
             guard let first = packs.first else { throw RoutingFailure.missingPacks([]) }
-            let graph: any RoadGraph = packs.count == 1 ? first.graph : try RegionalGraph(packs: packs,budget: budget)
+            let graph = try measuredPreparation(&directJoinSeconds) { () throws -> any RoadGraph in
+                if packs.count == 1 { return first.graph }
+                return try RegionalGraph(packs: packs,budget: budget)
+            }
             identities = packs.map { ["region":$0.manifest.regionId,"graph":$0.graph.graphSHA256,"geometry":$0.graph.geometrySHA256] }
             var seen = Set<String>()
             for item in packs {
@@ -98,12 +109,14 @@ do {
                                               name: station.name,brand: station.brand,address: station.address))
                 }
             }
-            indexed = try IndexedGraph(graph,budget: budget)
+            indexed = try measuredPreparation(&directIndexSeconds) { try IndexedGraph(graph,budget: budget) }
         }
     } else {
-        let pack = try GraphPack(graphURL: URL(fileURLWithPath: arguments[0]),geometryURL: URL(fileURLWithPath: arguments[1]),budget: budget)
+        let pack = try measuredPreparation(&directOpenSeconds) {
+            try GraphPack(graphURL: URL(fileURLWithPath: arguments[0]),geometryURL: URL(fileURLWithPath: arguments[1]),budget: budget)
+        }
         identities = [["region":pack.metadata.regionId ?? "","graph":pack.graphSHA256,"geometry":pack.geometrySHA256]]
-        indexed = try IndexedGraph(pack,budget: budget)
+        indexed = try measuredPreparation(&directIndexSeconds) { try IndexedGraph(pack,budget: budget) }
     }
     prepared = elapsed()
     let allowUnknown = environment["DIRT_ALLOW_UNKNOWN"] == "1"

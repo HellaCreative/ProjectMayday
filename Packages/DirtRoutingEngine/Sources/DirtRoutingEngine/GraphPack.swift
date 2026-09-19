@@ -76,6 +76,7 @@ public final class GraphPack: Sendable {
     let geometryOffsets: MappedColumn<Int32>
     let geometryCoordinatesOffset: Int
     let geometryIsDouble: Bool
+    private let geometryGrid: MappedColumn<Int16>?
     let derivedIDs: Bool
     let idOffsets: MappedColumn<Int32>?
     let idBlobOffset: Int
@@ -158,11 +159,14 @@ public final class GraphPack: Sendable {
               try geometry.read(4,as: UInt16.self) == 1,
               try geometry.read(8,as: UInt32.self) == UInt32(e) else { throw RoutingFailure.invalidPack("geometry header") }
         geometryOffsets = try MappedColumn(file: geometry,offset: 16,count: e+1)
-        geometryIsDouble = try geometry.read(6,as: UInt16.self) & 1 != 0
+        let geometryFlags = try geometry.read(6,as: UInt16.self)
+        geometryIsDouble = geometryFlags & 1 != 0
         let width = geometryIsDouble ? 8 : 4
         geometryCoordinatesOffset = ((16+(e+1)*4+width-1)/width)*width
         let coordinateCount = Int(try geometry.read(12,as: UInt32.self))
         try geometry.range(geometryCoordinatesOffset,coordinateCount,stride: width)
+        geometryGrid = geometryFlags & 2 != 0 ? try MappedColumn(file: geometry,
+            offset: geometryCoordinatesOffset + coordinateCount * width, count: e * 4) : nil
         derivedIDs = flags & 16 != 0
         idOffsets = try derivedIDs ? nil : column(48,e+1,Int32.self)
         idBlobOffset = try offset(52)
@@ -269,6 +273,20 @@ public final class GraphPack: Sendable {
         if crossingSeconds[edge] > 0 { return "ferry" }
         if (attrs[edge] >> 6) & 7 == 4 { return "ferry" }
         return leaf
+    }
+    public func matchingGridBounds(_ edge: Int) throws -> MatchingGridBounds? {
+        guard let grid = geometryGrid else { return try Self.deriveMatchingGridBounds(polyline(edge)) }
+        let x0 = Int(grid[edge * 4]), x1 = Int(grid[edge * 4 + 1])
+        let y0 = Int(grid[edge * 4 + 2]), y1 = Int(grid[edge * 4 + 3])
+        if geometryOffsets[edge] == geometryOffsets[edge + 1] {
+            guard x0 == 32767, x1 == -32768, y0 == 32767, y1 == -32768 else {
+                throw RoutingFailure.invalidPack("empty geometry grid bounds")
+            }
+            return nil
+        }
+        guard x0 >= -3600, x1 <= 3600, y0 >= -1800, y1 <= 1800,
+              x0 <= x1, y0 <= y1 else { throw RoutingFailure.invalidPack("geometry grid bounds") }
+        return MatchingGridBounds(x0: x0, x1: x1, y0: y0, y1: y1)
     }
     public func polyline(_ edge: Int) -> [Coordinate] {
         let start = Int(geometryOffsets[edge]), end = Int(geometryOffsets[edge+1])

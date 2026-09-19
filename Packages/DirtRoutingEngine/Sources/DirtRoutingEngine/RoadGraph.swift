@@ -1,5 +1,12 @@
 import Foundation
 
+/// Exact cell coverage of the stored road geometry. It guides matching only;
+/// it never adds, removes or approves a legal road.
+public struct MatchingGridBounds: Sendable, Equatable {
+    public static let cellDegrees = 0.05
+    public let x0: Int, x1: Int, y0: Int, y1: Int
+}
+
 public struct RoadArc: Sendable {
     public let target: Int
     public let edge: Int
@@ -30,6 +37,7 @@ public protocol RoadGraph: Sendable {
     func roadClass(_ edge: Int) -> String
     func structure(_ edge: Int) -> String
     func polyline(_ edge: Int) -> [Coordinate]
+    func matchingGridBounds(_ edge: Int) throws -> MatchingGridBounds?
     func osmWayID(_ edge: Int) -> Int64
     func osmNodeID(_ node: Int) -> Int64
     func coincidentSiblings(_ node: Int) -> [Int]
@@ -51,11 +59,27 @@ extension GraphPack: RoadGraph {
 }
 
 extension RoadGraph {
+    public func matchingGridBounds(_ edge: Int) throws -> MatchingGridBounds? {
+        try Self.deriveMatchingGridBounds(polyline(edge))
+    }
+    static func deriveMatchingGridBounds(_ shape: [Coordinate]) throws -> MatchingGridBounds? {
+        guard let first = shape.first else { return nil }
+        var west = first.longitude, east = west, south = first.latitude, north = south
+        for p in shape {
+            guard p.isValid else { throw RoutingFailure.invalidPack("invalid indexed geometry") }
+            west = min(west,p.longitude); east = max(east,p.longitude)
+            south = min(south,p.latitude); north = max(north,p.latitude)
+        }
+        return .init(x0: Int(floor(west / MatchingGridBounds.cellDegrees)),
+            x1: Int(floor(east / MatchingGridBounds.cellDegrees)),
+            y0: Int(floor(south / MatchingGridBounds.cellDegrees)),
+            y1: Int(floor(north / MatchingGridBounds.cellDegrees)))
+    }
     public func candidates(near point: Coordinate, radius: Double) -> [Int] { Array(0..<edgeCount) }
     public func osmWayID(_ edge: Int) -> Int64 { Int64(edge) }
     public func osmNodeID(_ node: Int) -> Int64 { Int64(node) }
-    /// Duplicate OSM nodes within 2 m are a zero-cost transfer, matching
-    /// `hop-search.js` `CLEAN_COINCIDENT_NODE_M`. Indexed graphs precompute this.
+    /// Only an underlying graph with independently verified source topology may
+    /// provide aliases. Coordinate proximity never establishes connectivity.
     public func coincidentSiblings(_ node: Int) -> [Int] { [] }
     public func identity(of edge: Int) -> String {
         "\(osmWayID(edge)):\(osmNodeID(endpoint(edge,from: true))):\(osmNodeID(endpoint(edge,from: false)))"

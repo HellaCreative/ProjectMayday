@@ -152,6 +152,7 @@ async function main() {
   fs.writeFileSync(path.join(outDir, "pack-manifest.v2.json"), JSON.stringify(manifest, null, 2) + "\n");
   const report = {
     counts,
+    geometryPreparation: encoded.geometryPreparation,
     rejected: graph.rejected,
     provenance,
     manifest,

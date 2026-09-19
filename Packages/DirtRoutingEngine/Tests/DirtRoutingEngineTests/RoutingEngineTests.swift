@@ -165,8 +165,8 @@ struct RoutingEngineTests {
         #expect(route.distanceMeters > 0)
     }
 
-    @Test func coincidentNodesKeepAPairReachable() throws {
-        // Two roads broken at duplicate nodes 1 and 2: only the zero-length transfer joins them.
+    @Test func coincidentDistinctSourceNodesRemainUnreachable() throws {
+        // Separate source nodes at one position are not evidence of a junction.
         let line = PolicyTests.Line(nodes: [.init(longitude: 0,latitude: 0),.init(longitude: 0.01,latitude: 0),
                                             .init(longitude: 0.01,latitude: 0),.init(longitude: 0.02,latitude: 0)],
                                     edges: [(0,1),(2,3)],surfaces: ["dirt","dirt"],roads: ["track","track"])
@@ -175,7 +175,7 @@ struct RoutingEngineTests {
                               geometryMeters: line.distance(0),forward: true)
         let end = RoadMatch(edge: 1,coordinate: line.nodes[3],distanceMeters: 0,alongMeters: line.distance(1),
                             geometryMeters: line.distance(1),forward: true)
-        #expect(try EndpointReachability(graph: graph,budget: .init()).mayConnect(start: start,end: end,budget: .init()))
+        #expect(try !EndpointReachability(graph: graph,budget: .init()).mayConnect(start: start,end: end,budget: .init()))
     }
 
     @Test func dirtOpeningPrefersArterialProgressOverPavedCollectorU() throws {

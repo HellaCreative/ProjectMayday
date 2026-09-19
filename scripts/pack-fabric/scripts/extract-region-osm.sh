@@ -74,7 +74,7 @@ echo "Clipping $SLUG with ${2:-2000}m halo…"
 osmium extract --polygon "$OUT_DIR/halo.geojson" --strategy smart \
   -S types=multipolygon,restriction --overwrite -o "$CLIPPED" "$PBF"
 
-HIGHWAY_FILTER="motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,living_street,road,service,track,path"
+HIGHWAY_FILTER="motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,living_street,road,service,track,path,footway,cycleway,bridleway,pedestrian"
 
 osmium tags-filter "$CLIPPED" \
   w/highway="$HIGHWAY_FILTER" \

@@ -43,6 +43,21 @@ function packed(osm, provenance = { regionId: "fix", sourceEpoch: "epoch-1" }) {
   return { graph, encoded, pack, geom };
 }
 
+test("explicit motorcycle permission retains supplemental road classes without opening pedestrian-only ways", () => {
+  for (const highway of ["footway", "cycleway", "bridleway", "pedestrian"]) {
+    const build = tags => packed({nodes: [node(1,0,0),node(2,0.001,0)],
+      ways: [way(10,[1,2],{highway,surface:"gravel",...tags})]});
+    const allowed = build({motor_vehicle:"designated"});
+    assert.equal(allowed.graph.edges.length,1);
+    assert.equal(allowed.pack.edgeAccess[0],0);
+    assert.equal(allowed.graph.edges[0].s,1);
+    assert.equal(allowed.graph.edges[0].roadClassLeaf,highway);
+    for(const tags of [{},{access:"yes"},{atv:"yes"},{motor_vehicle:"yes",motorcycle:"no"}]) {
+      assert.equal(build(tags).graph.edges.length,0,JSON.stringify({highway,tags}));
+    }
+  }
+});
+
 test("1. forward, reverse, two-way, motorway, roundabout direction", () => {
   assert.equal(travelDirectionV4({ oneway: "yes" }), "forward");
   assert.equal(travelDirectionV4({ oneway: "-1" }), "reverse");

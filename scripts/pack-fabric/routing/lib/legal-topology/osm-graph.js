@@ -43,7 +43,14 @@ const STRUCTURE_CODE = {
 };
 
 function frozenCostFields(tags, meters) {
-  const classified = classify(tags || {});
+  // The legacy display adapter excludes pedestrian/cycle classes wholesale.
+  // V4 retains a mapped way when motor access is explicitly granted. Use its
+  // path surface costs, while retaining the original leaves and evaluating
+  // legal access/direction separately from the unmodified source tags.
+  const costTags = explicitlyMotorizedSupplemental(tags) ? {
+    ...tags, highway: "path", access: "yes", vehicle: "yes", motor_vehicle: "yes", motorcycle: "yes"
+  } : tags;
+  const classified = classify(costTags || {});
   const leaves = leafFieldsFromProps(tags || {});
   const surfaceClass = classified.ok ? classified.surfaceClass : "unknown";
   const accessClass = classified.ok ? classified.accessClass : "motorized_unknown";
@@ -115,7 +122,17 @@ const KEEP_HIGHWAY = new Set([
 function isRoutableWay(way) {
   const tags = way.tags || {};
   if (String(tags.route || "").toLowerCase() === "ferry") return true;
-  return KEEP_HIGHWAY.has(String(tags.highway || "").toLowerCase());
+  return KEEP_HIGHWAY.has(String(tags.highway || "").toLowerCase()) || explicitlyMotorizedSupplemental(tags);
+}
+
+function explicitlyMotorizedSupplemental(tags = {}) {
+  if (!["footway", "cycleway", "bridleway", "pedestrian"].includes(String(tags.highway || "").toLowerCase())) return false;
+  const positive = ["yes", "designated", "permissive", "official"];
+  const explicit = ["vehicle", "motor_vehicle", "motorcycle"].some(base =>
+    [base, `${base}:forward`, `${base}:backward`].some(key => positive.includes(String(tags[key] || "").toLowerCase().trim())));
+  if (!explicit) return false;
+  const legal = evaluateMotorcycleAccess(tags);
+  return legal.forward.code === 0 || legal.reverse.code === 0;
 }
 
 function nodesForWayEdges(edgeIndexes, edges) {

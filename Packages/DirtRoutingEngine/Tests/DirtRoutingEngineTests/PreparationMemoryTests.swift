@@ -4,6 +4,71 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct PreparationMemoryTests {
+    @Test func unrelatedRoadsAtSameCoordinatesCannotBecomeAJunction() throws {
+        // Distinct source nodes can occupy the same map position at an
+        // overpass, barrier or divided road. Only source topology joins them.
+        let raw = PolicyTests.Line(nodes: [.init(longitude: 0, latitude: 0),
+            .init(longitude: 0.01, latitude: 0), .init(longitude: 0.01, latitude: 0),
+            .init(longitude: 0.02, latitude: 0)], edges: [(0,1),(2,3)],
+            surfaces: ["asphalt", "asphalt"], roads: ["tertiary", "tertiary"])
+        let graph = try IndexedGraph(raw)
+        let start = RoadMatch(edge: 0, coordinate: raw.nodes[0], distanceMeters: 0,
+            alongMeters: 0, geometryMeters: raw.distance(0), forward: true)
+        let end = RoadMatch(edge: 1, coordinate: raw.nodes[3], distanceMeters: 0,
+            alongMeters: raw.distance(1), geometryMeters: raw.distance(1), forward: true)
+        #expect(graph.coincidentSiblings(1).isEmpty)
+        #expect(throws: RoutingFailure.noPath) {
+            try PathSearch(pack: graph).search(start: start, end: end,
+                policy: .init(style: .cleanest), access: .init(), options: .init(), budget: .init())
+        }
+    }
+
+    @Test func preparedGeometryPreservesMatchingAndRejectsDamagedTables() throws {
+        let fixtures = ReferenceTests(), raw = try RegionalGraphTests().graph()
+        let graphFile = try BinaryFile(url: fixtures.fixture("legal-topology-restrictions.graph.v4.bin"))
+        var geometry = try Data(contentsOf: fixtures.fixture("legal-topology-restrictions.geometry.v1.bin"))
+        let tableAt = geometry.count
+        geometry[6] |= 2
+        for edge in 0..<raw.edgeCount {
+            let bounds = try raw.matchingGridBounds(edge)
+            for value in bounds.map({ [$0.x0, $0.x1, $0.y0, $0.y1] }) ?? [32767, -32768, 32767, -32768] {
+                var word = Int16(value).littleEndian
+                withUnsafeBytes(of: &word) { geometry.append(contentsOf: $0) }
+            }
+        }
+        func open(_ bytes: Data, bindHash: Bool = true) throws -> GraphPack {
+            var graph = graphFile.data
+            let hashAt = Int(try graphFile.read(136, as: UInt32.self))
+            if bindHash { graph.replaceSubrange(hashAt..<(hashAt + 32), with: Data(SHA256.hash(data: bytes))) }
+            return try GraphPack(graph: BinaryFile(data: graph), geometry: BinaryFile(data: bytes), budget: .init())
+        }
+        let prepared = try open(geometry)
+        let before = try IndexedGraph(raw), after = try IndexedGraph(prepared)
+        let joined = try RegionalGraph(graphs: [prepared, prepared],
+            documents: RegionalGraphTests().documents(prepared), budget: .init())
+        for edge in 0..<raw.edgeCount {
+            #expect(try prepared.matchingGridBounds(edge) == raw.matchingGridBounds(edge))
+            #expect(try joined.matchingGridBounds(edge + raw.edgeCount) == raw.matchingGridBounds(edge))
+            #expect(prepared.polyline(edge) == raw.polyline(edge))
+            for point in raw.polyline(edge) {
+                #expect(before.candidates(near: point, radius: 2000) == after.candidates(near: point, radius: 2000))
+                for unknown in [false, true] {
+                    let policy = AccessPolicy(allowUnknown: unknown)
+                    let a = try RoadMatcher(pack: before).matches(at: point, radius: 2000, start: true, policy: policy, budget: .init())
+                    let b = try RoadMatcher(pack: after).matches(at: point, radius: 2000, start: true, policy: policy, budget: .init())
+                    #expect(a.map(\.edge) == b.map(\.edge))
+                    #expect(a.map(\.forward) == b.map(\.forward))
+                    #expect(a.map(\.alongMeters) == b.map(\.alongMeters))
+                }
+            }
+        }
+        #expect(throws: RoutingFailure.self) { try open(geometry, bindHash: false) }
+        #expect(throws: RoutingFailure.self) { try open(Data(geometry.dropLast())) }
+        var broken = geometry
+        broken[tableAt] = 255; broken[tableAt + 1] = 127
+        #expect(throws: RoutingFailure.self) { try open(broken).matchingGridBounds(0) }
+    }
+
     @Test func completedStageRenewsItsWindowButAttemptsCannotExtendIt() throws {
         let parent = ComputationBudget(seconds: 1, maximumLabels: 17)
         let attempt = parent.limited(to: 20)

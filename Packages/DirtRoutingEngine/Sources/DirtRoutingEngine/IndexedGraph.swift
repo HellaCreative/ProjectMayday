@@ -7,12 +7,10 @@ public struct IndexedGraph: RoadGraph {
     private struct Cell: Hashable { let x: Int; let y: Int }
     private let cells: [Cell:[Int]]
     private let longEdges: [Int]
-    private let siblings: [Int:[Int]]
     private let weakCache = WeakComponentCache()
     private let arcs: ArcIndex
     let cacheIdentity = UUID().uuidString
-    private static let cellDegrees = 0.05
-    private static let coincidentMeters = 2.0
+    private static let cellDegrees = MatchingGridBounds.cellDegrees
     public init(_ graph: any RoadGraph, maximumEntries: Int = 8_000_000,
                 budget: ComputationBudget = .init(seconds: 60)) throws {
         self.graph = graph
@@ -26,16 +24,8 @@ public struct IndexedGraph: RoadGraph {
             let matchable: (UInt8) -> Bool = { $0 == 0 || $0 == 1 || $0 == 3 || $0 == 4 }
             guard matchable(graph.accessCode(edge, forward: true))
                 || matchable(graph.accessCode(edge, forward: false)) else { continue }
-            let shape = graph.polyline(edge)
-            guard let first = shape.first else { continue }
-            var west = first.longitude, east = west, south = first.latitude, north = south
-            for p in shape {
-                guard p.isValid else { throw RoutingFailure.invalidPack("invalid indexed geometry") }
-                west = min(west,p.longitude); east = max(east,p.longitude)
-                south = min(south,p.latitude); north = max(north,p.latitude)
-            }
-            let x0 = Int(floor(west/Self.cellDegrees)), x1 = Int(floor(east/Self.cellDegrees))
-            let y0 = Int(floor(south/Self.cellDegrees)), y1 = Int(floor(north/Self.cellDegrees))
+            guard let bounds = try graph.matchingGridBounds(edge) else { continue }
+            let (x0,x1,y0,y1) = (bounds.x0,bounds.x1,bounds.y0,bounds.y1)
             let count = (x1-x0+1)*(y1-y0+1)
             // Long roads and antimeridian spans remain exact scan candidates.
             if count > 256 { long.append(edge); continue }
@@ -44,23 +34,8 @@ public struct IndexedGraph: RoadGraph {
             for y in y0...y1 { for x in x0...x1 { index[.init(x:x,y:y),default: []].append(edge) } }
         }
         cells = index; longEdges = long
-        var firstByBucket: [Int:Int] = [:], lists: [Int:[Int]] = [:]
-        let qLat = Self.coincidentMeters / 111_000
-        for node in 0..<graph.nodeCount {
-            if node & 4095 == 0 { try budget.check() }
-            let point = graph.coordinate(node: node)
-            guard point.isValid else { continue }
-            let qLon = Self.coincidentMeters / (111_000 * max(0.2, cos(point.latitude * .pi / 180)))
-            let key = Int((point.longitude / qLon).rounded()) &* 20_000_001 &+ Int((point.latitude / qLat).rounded())
-            if let first = firstByBucket[key] {
-                var existing = [first] + (lists[first] ?? [])
-                for sibling in existing { lists[sibling, default: []].append(node) }
-                lists[node] = existing
-            } else {
-                firstByBucket[key] = node
-            }
-        }
-        siblings = lists
+        // RegionalGraph already joins independently verified source identities.
+        // Nearby coordinates must not invent extra junctions (e.g. overpasses).
         arcs = try ArcIndex(nodeCount: graph.nodeCount, budget: budget) { node in
             graph.outgoing(node).map { arc in
                 arc.meters.isFinite ? arc : RoadArc(target: arc.target, edge: arc.edge,
@@ -107,9 +82,12 @@ public struct IndexedGraph: RoadGraph {
     public func roadClass(_ edge: Int) -> String { graph.roadClass(edge) }
     public func structure(_ edge: Int) -> String { graph.structure(edge) }
     public func polyline(_ edge: Int) -> [Coordinate] { graph.polyline(edge) }
+    public func matchingGridBounds(_ edge: Int) throws -> MatchingGridBounds? {
+        try graph.matchingGridBounds(edge)
+    }
     public func osmWayID(_ edge: Int) -> Int64 { graph.osmWayID(edge) }
     public func osmNodeID(_ node: Int) -> Int64 { graph.osmNodeID(node) }
-    public func coincidentSiblings(_ node: Int) -> [Int] { siblings[node] ?? [] }
+    public func coincidentSiblings(_ node: Int) -> [Int] { graph.coincidentSiblings(node) }
     func weakComponentIDs(allowUnknown: Bool) -> [Int] {
         weakCache.ids(allowUnknown: allowUnknown) {
             WeakComponents.compute(in: graph, allowUnknown: allowUnknown)

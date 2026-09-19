@@ -370,6 +370,9 @@ public final class RegionalGraph: RoadGraph {
     public func roadClass(_ e: Int) -> String { let (g,i) = edge(e); return g.roadClass(i) }
     public func structure(_ e: Int) -> String { let (g,i) = edge(e); return g.structure(i) }
     public func polyline(_ e: Int) -> [Coordinate] { let (g,i) = edge(e); return g.polyline(i) }
+    public func matchingGridBounds(_ e: Int) throws -> MatchingGridBounds? {
+        let (g,i) = edge(e); return try g.matchingGridBounds(i)
+    }
     public func osmWayID(_ e: Int) -> Int64 { let (g,i) = edge(e); return g.osmWayID(i) }
     public func osmNodeID(_ n: Int) -> Int64 {
         let canonical = nodeAliases[n] ?? n

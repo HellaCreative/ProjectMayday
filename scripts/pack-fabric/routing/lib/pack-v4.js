@@ -51,7 +51,7 @@ function assertLegalReader(pack) {
   }
 }
 
-function encodeGeometry(edges) {
+function encodeGeometry(edges, { includeSpatialGrid = true } = {}) {
   const undirectedEdgeCount = edges.length;
   const geomOffsets = new Uint32Array(undirectedEdgeCount + 1);
   const coordChunks = [];
@@ -69,13 +69,32 @@ function encodeGeometry(edges) {
   const geomHeaderSize = 16;
   let geomCoordsAt = geomHeaderSize + geomOffsets.byteLength;
   if (geomCoordsAt % 4 !== 0) geomCoordsAt += 4 - (geomCoordsAt % 4);
-  const geomBuffer = Buffer.alloc(geomCoordsAt + geomCoords.byteLength);
+  const gridAt = geomCoordsAt + geomCoords.byteLength;
+  const geomBuffer = Buffer.alloc(gridAt + (includeSpatialGrid ? undirectedEdgeCount * 8 : 0));
   geomBuffer.writeUInt32LE(GEOM_MAGIC, 0);
   geomBuffer.writeUInt16LE(GEOM_VERSION, 4);
+  // Optional exact preparation table, geometry.v1 flag bit 1. Existing readers
+  // still read the same coordinates; new readers avoid decoding every polyline
+  // just to recover its 0.05-degree matching-grid bounds. Hash covers the table.
+  geomBuffer.writeUInt16LE(includeSpatialGrid ? 2 : 0, 6);
   geomBuffer.writeUInt32LE(undirectedEdgeCount, 8);
   geomBuffer.writeUInt32LE(coordCount, 12);
   Buffer.from(geomOffsets.buffer, geomOffsets.byteOffset, geomOffsets.byteLength).copy(geomBuffer, geomHeaderSize);
   Buffer.from(geomCoords.buffer, geomCoords.byteOffset, geomCoords.byteLength).copy(geomBuffer, geomCoordsAt);
+  if (includeSpatialGrid) {
+    for (let edge = 0; edge < undirectedEdgeCount; edge++) {
+      let x0 = 32767, x1 = -32768, y0 = 32767, y1 = -32768;
+      for (let i = geomOffsets[edge]; i < geomOffsets[edge+1]; i += 2) {
+        const lon = geomCoords[i], lat = geomCoords[i+1];
+        if (!Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lon) > 180 || Math.abs(lat) > 90)
+          throw new Error(`invalid geometry coordinate on edge ${edge}`);
+        // Derive from the stored Float32 values, not higher precision inputs.
+        const x = Math.floor(lon / 0.05), y = Math.floor(lat / 0.05);
+        x0 = Math.min(x0,x); x1 = Math.max(x1,x); y0 = Math.min(y0,y); y1 = Math.max(y1,y);
+      }
+      [x0,x1,y0,y1].forEach((value,i) => geomBuffer.writeInt16LE(value,gridAt + edge*8 + i*2));
+    }
+  }
   return geomBuffer;
 }
 
@@ -751,8 +770,40 @@ function decodeGraphV4(buffer, geometryBuffer) {
 
 function encodeFromOsmGraph(graph, provenance = {}) {
   const geomBuffer = encodeGeometry(graph.edges || []);
+  const geometryPreparation = verifyGeometryGrid(geomBuffer);
   const encoded = encodeGraphV4(graph, provenance, geomBuffer);
-  return { graphBuffer: encoded.graphBuffer, geomBuffer, meta: encoded.meta };
+  return { graphBuffer: encoded.graphBuffer, geomBuffer, meta: encoded.meta, geometryPreparation };
+}
+
+// Factory gate: validate every stored row against the exact shipped coordinates.
+// The phone can trust this hash-bound derived table without decoding every shape.
+function verifyGeometryGrid(bytes) {
+  const geometry = decodeGeometryV1(bytes);
+  if (!(bytes.readUInt16LE(6) & 2)) return { present: false, edges: geometry.edgeCount };
+  const width = bytes.readUInt16LE(6) & 1 ? 8 : 4;
+  const coordsAt = Math.ceil((16 + (geometry.edgeCount + 1) * 4) / width) * width;
+  const tableAt = coordsAt + geometry.coords.length * width;
+  if (bytes.length !== tableAt + geometry.edgeCount * 8) throw new Error("geometry grid size mismatch");
+  for (let edge = 0; edge < geometry.edgeCount; edge++) {
+    const begin = geometry.offsets[edge], end = geometry.offsets[edge + 1];
+    if (begin < 0 || begin > end || end > geometry.coords.length || begin % 2 || end % 2)
+      throw new Error(`geometry offsets invalid on edge ${edge}`);
+    let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity;
+    for (let i = begin; i < end; i += 2) {
+      const x = geometry.coords[i], y = geometry.coords[i + 1];
+      if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 180 || Math.abs(y) > 90)
+        throw new Error(`geometry coordinate invalid on edge ${edge}`);
+      west = Math.min(west, x); east = Math.max(east, x);
+      south = Math.min(south, y); north = Math.max(north, y);
+    }
+    const expected = begin === end ? [32767, -32768, 32767, -32768]
+      : [west, east, south, north].map(value => Math.floor(value / 0.05));
+    for (let i = 0; i < 4; i++) {
+      if (bytes.readInt16LE(tableAt + edge * 8 + i * 2) !== expected[i])
+        throw new Error(`geometry grid differs from stored shape on edge ${edge}`);
+    }
+  }
+  return { present: true, edges: geometry.edgeCount, bytes: geometry.edgeCount * 8 };
 }
 
 function rejectMixedContract(packs) {
@@ -770,6 +821,7 @@ module.exports = {
   FLAG_V4_LEGAL_TOPOLOGY,
   CAPABILITY,
   encodeGeometry,
+  verifyGeometryGrid,
   encodeGraphV4,
   encodeFromOsmGraph,
   compactGraphV4Buffer,
