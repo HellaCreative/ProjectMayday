@@ -126,16 +126,61 @@ public struct RoutingEngine: Sendable {
             return try search.search(start: start,end: end,policy: policy ?? request.profile,access: request.access,options: options,budget: budget)
         }
         if request.profile.style == .cleanest {
+            // Clean is pavement-max on back roads — not an unbounded scenic wander.
+            // Cap each hop to a modest multiple of the pin span so staged Canada
+            // corridors cannot invent a 1.6× continental meander (NS→Regina 011028Z).
+            let span = max(1, request.start.distance(to: request.end))
+            let lengthCap = max(span * 1.50, 80_000)
+            var log: [String] = []
+            func note(_ tag: String, _ route: ComputedRoute) {
+                let quality = RouteQuality(route: route, urbanBoxes: UrbanCores.boxes(in: pack))
+                log.append("\(tag)/\(Int(quality.knownDirtPercent))%/\(Int(route.distanceMeters))m/\(route.poppedLabels)p")
+            }
+            func finish(_ route: ComputedRoute) -> ComputedRoute {
+                var result = route
+                result.searchSummary = log.isEmpty ? nil : log.joined(separator: ",")
+                return result
+            }
+            // Legal shortest baseline: if Clean still returns much more dirt, prefer
+            // the shorter legal path's surface mix over a soft-tax gravel tour.
+            var shortestOpts = request.options
+            shortestOpts.objective = .distance
+            shortestOpts.corridorMeters = .infinity
+            shortestOpts.maximumMeters = .infinity
+            let shortest = try? run(shortestOpts)
+            if let shortest { note("shortest", shortest) }
+
             var clean = request.options
             clean.objective = .profile
             clean.corridorMeters = .infinity
-            clean.maximumMeters = .infinity
+            clean.maximumMeters = lengthCap
             clean.pavedOnly = true
-            do { return try run(clean) } catch RoutingFailure.noPath { }
+            do {
+                let route = try run(clean)
+                note("paved", route)
+                return finish(route)
+            } catch RoutingFailure.noPath { }
             clean.pavedOnly = false
-            do { return try run(clean) } catch RoutingFailure.noPath { }
+            do {
+                let route = try run(clean)
+                note("soft", route)
+                let quality = RouteQuality(route: route, urbanBoxes: UrbanCores.boxes(in: pack))
+                if let shortest {
+                    let shortQuality = RouteQuality(route: shortest, urbanBoxes: UrbanCores.boxes(in: pack))
+                    // Soft fallback found dirt — keep Clean only when it is not a
+                    // meaningfully dirtier tour than the shortest legal path.
+                    if quality.knownDirtPercent >= 10,
+                       shortQuality.knownDirtPercent + 5 < quality.knownDirtPercent {
+                        note("preferShortest", shortest)
+                        return finish(shortest)
+                    }
+                }
+                return finish(route)
+            } catch RoutingFailure.noPath { }
             clean.cityWall = false
-            return try run(clean)
+            let route = try run(clean)
+            note("open", route)
+            return finish(route)
         }
         if request.profile.style == .balanced {
             return try balanced(request, run: run, budget: budget, hasCompass: compass != nil)

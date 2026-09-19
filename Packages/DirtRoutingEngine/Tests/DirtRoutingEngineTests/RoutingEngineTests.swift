@@ -118,6 +118,32 @@ struct RoutingEngineTests {
         let dirtMeters = backRoad.segments.filter { $0.surface == .gravel || $0.surface == .loose }.reduce(0) { $0+$1.meters }
         #expect(dirtMeters / max(1,backRoad.distanceMeters) < 0.05)
         #expect(!backRoad.segments.contains { $0.surface == .loose || $0.surface == .gravel })
+        #expect(backRoad.searchSummary?.contains("paved/") == true)
+        #expect(backRoad.searchSummary?.contains("shortest/") == true)
+    }
+
+    @Test func cleanestCapsLengthAgainstPinSpan() throws {
+        // Long scenic paved loop vs short paved spine. Cap is 1.5× span.
+        let pack = PolicyTests.Line(
+            nodes: [
+                .init(longitude: 0, latitude: 0),
+                .init(longitude: 0.05, latitude: 0),
+                .init(longitude: 0.01, latitude: 0.08),
+                .init(longitude: 0.025, latitude: 0.12),
+                .init(longitude: 0.04, latitude: 0.08)
+            ],
+            edges: [(0,1),(0,2),(2,3),(3,4),(4,1)],
+            surfaces: Array(repeating: "asphalt", count: 5),
+            roads: Array(repeating: "tertiary", count: 5)
+        )
+        let graph = try IndexedGraph(pack)
+        let start = Coordinate(longitude: 0.002, latitude: 0)
+        let end = Coordinate(longitude: 0.048, latitude: 0)
+        var clean = RoutingRequest(start: start, end: end, style: .cleanest)
+        clean.matchRadiusMeters = 2000
+        let route = try RoutingEngine(pack: graph).route(clean, budget: .init(seconds: 20))
+        let span = start.distance(to: end)
+        #expect(route.distanceMeters <= span * 1.50 + 1_000)
     }
 
     @Test func cleanestUsesAHighwayOnlyWhenNoBackRoadConnects() throws {

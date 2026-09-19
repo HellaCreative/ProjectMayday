@@ -154,10 +154,12 @@ public struct ProfilePolicy: Sendable {
             let dirtKm = [150.0,0.05,0.02,0.02,0.9]
             cost = km * (penalizedDirt || unknownPaved ? 150 : dirtKm[min(4,surface)])
         } else if style == .cleanest {
+            // Pavement-max: gravel/loose must lose to a longer paved collector, and
+            // unknown surface must not ride like cheap asphalt (011028Z Clean 24% dirt).
             let tiers = ["collector":0.82,"local_paved":0.95,"arterial":8.0,"service":2.4,
                          "destination":1.15,"trunk":40.0,"motorway":80.0,"adventure":120.0,"unknown":2.2]
-            let families: [Surface:Double] = [.paved:1,.gravel:14,.loose:90,.unknown:1.05]
-            cost = km * tiers[tier,default: 2.2] * families[family,default: 1.05]
+            let families: [Surface:Double] = [.paved:1,.gravel:48,.loose:220,.unknown:12]
+            cost = km * tiers[tier,default: 2.2] * families[family,default: 12]
             let dTo = to.distance(to: end)
             if (tier == "destination" || tier == "service"), dTo > 2500 {
                 cost *= 1 + 2.4 * min(1,(dTo-2500)/8000)
