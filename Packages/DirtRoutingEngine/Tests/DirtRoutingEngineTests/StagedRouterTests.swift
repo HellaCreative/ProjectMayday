@@ -88,6 +88,50 @@ struct StagedRouterTests {
         }
     }
 
+    @Test func sharedInteriorContinuesWhenTheApproachRoadIsLocalToOnePack() throws {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),
+            .init(longitude: 0.01, latitude: 0), .init(longitude: 0.02, latitude: 0),
+            .init(longitude: 0.10, latitude: 0), .init(longitude: 0.11, latitude: 0)]
+        let first = PolicyTests.Line(nodes: nodes, edges: [(0,1),(1,2)],
+            surfaces: ["asphalt", "asphalt"], roads: ["tertiary", "tertiary"])
+        let next = PolicyTests.Line(nodes: nodes, edges: [(3,4),(1,2)],
+            surfaces: ["asphalt", "asphalt"], roads: ["tertiary", "tertiary"])
+        let points = try StagedRouter.sharedHandoverPoints([nodes[1]], first: first,
+            next: next, access: .init(), budget: .init())
+        #expect(points.count == 1)
+        let point = try #require(points.first)
+        #expect(point.longitude > nodes[1].longitude && point.longitude < nodes[2].longitude)
+        var hop = RoutingRequest(start: nodes[0], end: point, style: .balanced)
+        hop.options.requiredArrivalRoads = [next.identity(of: 1)]
+        let approach = try RoutingEngine(pack: first).route(hop)
+        #expect(approach.segments.last?.edge == 1)
+        var tail = RoutingRequest(start: point, end: nodes[2], style: .balanced)
+        tail.options.arrivalEdgeID = first.identity(of: approach.segments.last!.edge)
+        tail.options.continuationForward = approach.segments.last!.forward
+        let onward = try RoutingEngine(pack: next).route(tail)
+        let whole = try StagedRouter.stitch([approach,onward], windows: [["first"],["next"]])
+        #expect(abs(whole.distanceMeters - first.distance(0) - first.distance(1)) < 0.01)
+        #expect(RouteQuality.reriddenMeters(whole.segments) == 0)
+        #expect(whole.end.coordinate == nodes[2])
+    }
+
+    @Test func generatedHandoverActuallyTraversesASharedIncomingRoad() throws {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),
+            .init(longitude: 0.01, latitude: 0), .init(longitude: 0.02, latitude: 0),
+            .init(longitude: 0.01, latitude: 0.01)]
+        let graph = PolicyTests.Line(nodes: nodes, edges: [(0,1),(1,2),(0,3),(3,2)],
+            surfaces: Array(repeating: "asphalt", count: 4), roads: Array(repeating: "tertiary", count: 4))
+        var request = RoutingRequest(start: nodes[0], end: nodes[2], style: .balanced)
+        let original = try RoutingEngine(pack: graph).route(request)
+        #expect(original.segments.last?.edge == 1)
+        request.options.requiredArrivalRoads = [graph.identity(of: 3)]
+        let shared = try RoutingEngine(pack: graph).route(request)
+        #expect(shared.segments.last?.edge == 3)
+        #expect(shared.segments.last!.meters > 100)
+        #expect(shared.end.coordinate == request.end)
+        #expect(request.with(start: request.start, end: nodes[1]).options.requiredArrivalRoads.isEmpty)
+    }
+
     @Test func generatedCutPreservesTravelDirectionOnTheIncomingRoad() throws {
         let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),.init(longitude: 0.02, latitude: 0),
             .init(longitude: 0.01, latitude: 0.02)]

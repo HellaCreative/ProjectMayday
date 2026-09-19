@@ -109,10 +109,12 @@ public enum StagedRouter {
             let secondGraph = graphs[1]
             // Rank against the origin-half giant (not solo shared/next packs): coastal
             // nb↔me proofs can sit in both solo giants yet be islands in [ns]/[nb].
-            let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
+            let anchors = try handoverCandidates(from: originPack, into: destPack, from: cursor,
                                               toward: toward, repository: repository,
                                               searchGraph: firstGraph, budget: budget,
                                               access: request.access)
+            let pins = try sharedHandoverPoints(anchors, first: firstGraph, next: secondGraph,
+                access: request.access, budget: budget)
             guard !pins.isEmpty else { throw RoutingFailure.noPath }
             var lastError: Error = RoutingFailure.noPath
             var incomplete: RoutingFailure?
@@ -142,6 +144,13 @@ public enum StagedRouter {
                     budget, style: request.profile.style, attempt: attempt, candidateCount: pins.count)
                 do {
                     var hop0 = request.with(start: cursor, end: hopEnd)
+                    let sharedMatches = try RoadMatcher(pack: secondGraph).matches(
+                        at: hopEnd, radius: 1, start: true, policy: request.access,
+                        limit: 64, budget: attemptBudget)
+                    hop0.options.requiredArrivalRoads = Set(sharedMatches.filter {
+                        secondGraph.accessCode($0.edge, forward: $0.forward != false) == 0
+                    }.map { secondGraph.identity(of: $0.edge) })
+                    guard !hop0.options.requiredArrivalRoads.isEmpty else { throw RoutingFailure.noMatch }
                     hop0.options.compassMaxRemaining = max(450_000, cursor.distance(to: hopEnd) * 2.5)
                     let started0 = ContinuousClock.now
                     var part0 = try RoutingEngine(pack: firstGraph, compassStore: compassStore)
@@ -341,6 +350,56 @@ public enum StagedRouter {
             }
         }
         return try stitch(parts, windows: windows)
+    }
+
+    /// Cut inside a real shared road, not at its entry junction. At the junction
+    /// a valid approach can still have a local incoming road absent from the next
+    /// pack. A point on the shared geometry gives both stages the same incoming
+    /// identity without manufacturing a connector or moving any rider waypoint.
+    static func sharedHandoverPoints(_ anchors: [Coordinate], first: any RoadGraph,
+                                     next: any RoadGraph, access: AccessPolicy,
+                                     budget: ComputationBudget) throws -> [Coordinate] {
+        var groups: [[Coordinate]] = []
+        var seen = Set<String>()
+        for anchor in anchors {
+            var points: [Coordinate] = []
+            let matches = try RoadMatcher(pack: next).matches(at: anchor, radius: 1,
+                start: true, policy: access, limit: 64, budget: budget)
+            for match in matches where next.accessCode(match.edge, forward: match.forward != false) == 0 {
+                try budget.check()
+                let line = next.polyline(match.edge)
+                guard line.count >= 2 else { continue }
+                let point: Coordinate
+                if match.fraction < 0.001 || match.fraction > 0.999 {
+                    let a = match.fraction < 0.5 ? line[0] : line[line.count-2]
+                    let b = match.fraction < 0.5 ? line[1] : line[line.count-1]
+                    var dx = b.longitude-a.longitude
+                    if dx > 180 { dx -= 360 }; if dx < -180 { dx += 360 }
+                    let lon = (a.longitude + dx/2 + 540).truncatingRemainder(dividingBy: 360)-180
+                    point = .init(longitude: lon, latitude: (a.latitude+b.latitude)/2)
+                } else { point = match.coordinate }
+                let identity = next.identity(of: match.edge)
+                let key = "\(identity):\(point.longitude):\(point.latitude)"
+                guard seen.insert(key).inserted else { continue }
+                let inFirst = try RoadMatcher(pack: first).matches(at: point, radius: 1,
+                    start: false, policy: access, limit: 64, budget: budget)
+                guard inFirst.contains(where: {
+                    first.matches($0.edge, identities: [identity])
+                        && first.accessCode($0.edge, forward: $0.forward != false) == 0
+                }) else { continue }
+                points.append(point)
+            }
+            if !points.isEmpty { groups.append(points) }
+        }
+        // Preserve the existing candidate bound and geographic diversification.
+        var result: [Coordinate] = []
+        for column in 0..<(groups.map(\.count).max() ?? 0) {
+            for group in groups where column < group.count {
+                result.append(group[column])
+                if result.count == handoverCandidateLimit { return result }
+            }
+        }
+        return result
     }
 
     /// A shared incoming road can be only a stub in the next pack. A cut at

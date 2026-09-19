@@ -16,6 +16,9 @@ public struct SearchOptions: Sendable {
     /// Recreational candidate generation only. Ordinary and Loop searches retain
     /// their legal turn-around behavior; final composition also checks all nodes.
     var preventLocalCircuits = false
+    /// Exact source roads permitted for a generated regional handover.
+    /// Rider destinations leave this empty.
+    public var requiredArrivalRoads: Set<String> = []
     public var arrival: SearchArrival?
     public var precedingMeters = 0.0
     public var precedingDirtMeters = 0.0
@@ -441,6 +444,13 @@ public struct PathSearch: Sendable {
             }
             for arc in arcs {
                 let e = arc.edge
+                // Merely touching the endpoint of a shared road from an unrelated
+                // local road cannot supply its incoming-road identity to the next
+                // pack. Require a real traversal, not a zero-metre terminal arc.
+                if arc.target == endNode, arc.meters <= 0.01,
+                   !options.requiredArrivalRoads.isEmpty,
+                   (current.state.incoming < 0 || current.state.incoming >= pack.edgeCount
+                    || !pack.matches(current.state.incoming, identities: options.requiredArrivalRoads)) { continue }
                 if !options.avoidCircuitNodes.isEmpty, arc.target != endNode, options.avoidCircuitNodes.contains(arc.target) { continue }
                 let physicalEdge = pack.restrictionEdge(e)
                 if let previous = current.arc, previous.edge == e, current.state.node < pack.nodeCount { continue }

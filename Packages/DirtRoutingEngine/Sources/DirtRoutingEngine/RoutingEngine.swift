@@ -19,6 +19,7 @@ public struct RoutingRequest: Sendable {
         copy.profile = profile
         copy.access = access
         copy.options = options
+        if end != self.end { copy.options.requiredArrivalRoads = [] }
         copy.matchRadiusMeters = matchRadiusMeters
         copy.mapZoom = mapZoom
         return copy
@@ -68,7 +69,14 @@ public struct RoutingEngine: Sendable {
         if let incoming = request.options.arrivalEdgeID {
             request.options.counter?.recordStage("continuation:\(incoming):forward=\(String(describing: request.options.continuationForward)):matches=\(starts.count):point=\(request.start.longitude),\(request.start.latitude)", since: .now)
         }
-        let ends = try matcher.matches(at: request.end,radius: radius,start: false,policy: request.access,intent: intent+180,budget: budget)
+        let endCandidates = try matcher.matches(at: request.end,
+            radius: request.options.requiredArrivalRoads.isEmpty ? radius : 1,
+            start: false, policy: request.access, intent: intent+180,
+            limit: request.options.requiredArrivalRoads.isEmpty ? 12 : 64, budget: budget)
+        let ends = endCandidates.filter { match in
+            request.options.requiredArrivalRoads.isEmpty || (pack.matches(match.edge, identities: request.options.requiredArrivalRoads)
+                && pack.accessCode(match.edge, forward: match.forward != false) == 0)
+        }
         request.options.counter?.recordStage("match", since: matchStarted)
         guard !starts.isEmpty, !ends.isEmpty else { throw RoutingFailure.noMatch }
         // JS `selectConnectedSnapPair`: score stays on each directed candidate;

@@ -16,7 +16,8 @@ packs, tests, and measured experiments are assets to evaluate, not obligations
 to preserve unsuccessful behavior. The earlier engine replacement is historical;
 the active task does not authorize another rewrite, rebuilding published data,
 reverting the app, or changing its interface beyond the owner-requested progress
-notice and matching Your ride to the existing Fuel Range panel.
+notice, matching Your ride to the existing Fuel Range panel, and the requested
+pack download/update progress window.
 
 There is no requirement to use live server routing, keep complete regional
 graphs in a persistent service, publish every experiment, maintain identical
@@ -644,6 +645,22 @@ Vancouver→Bellingham completes after necessary-city recovery, but its 435.7 km
 limit. Do not report either pair as fully fixed. The generated border inventory
 contains 248 directional requests across 124 paired connections, with de–nj and
 ny–on-s fixture selection unresolved. Generating requests is not running them.
+The first broad Balanced pass is running serially. It exposed Mississippi→Arkansas
+arriving at a shared bridge's entry junction on an incoming local road absent
+from the Arkansas pack. A generated cut now uses the interior of geometry
+represented by both packs, with a real shared incoming-road traversal (a zero-
+metre terminal arc cannot substitute for one). The existing candidate count,
+window budgets, access rules and turn-state safeguards remain in force; rider
+points are unchanged. On the exact matrix endpoints, the repaired direction
+completed in 3.474 s / 229.5 km / 10.6% dirt with zero repeated metres. Reverse
+still completed (269.6 km / 12.3% dirt, zero repeated metres). These results prove
+road continuity only; they do not qualify the Balanced mix. Evidence is
+`.build/us-routing-20260919/shared-interior-after/`; 115 engine tests pass,
+including actual shared-road arrival, conservation of distance across a cut,
+zero repeated road, and retained active-turn safeguards. Retreating the cut alone
+was tested, did not repair this failure, and was removed before this candidate.
+Alaska→BC and reverse BC–Washington limitations remain unresolved.
+
 Intrastate cardinal/diagonal tests, Hawaii, longer multistate runs, all-style
 qualification, physical-device performance and the secondary acquisition UI
 remain outstanding.
