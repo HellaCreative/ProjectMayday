@@ -395,15 +395,21 @@ public enum StagedRouter {
         }, origin: origin, toward: dest, limit: limit)
     }
 
-    /// Pins outside the seam set's longitude IQR are coastal/island or stub
-    /// fringes on long borders. Keep them as fallbacks; never discard.
-    static func seamFringeFlags(for points: [HandoverCandidate]) -> [Bool] {
+    /// Pins on the longitude-IQR fringe *opposite* travel toward `dest` are
+    /// coastal/island or stub fringes (Passamaquoddy when riding west). The
+    /// progress-side fringe stays eligible — western qc-s↔on-n pins must
+    /// remain available when the next aim is on-n↔mb (Winnipeg/BC class).
+    static func seamFringeFlags(for points: [HandoverCandidate], toward dest: Coordinate) -> [Bool] {
         guard points.count >= 8 else { return Array(repeating: false, count: points.count) }
         let lons = points.map(\.coordinate.longitude).sorted()
         let q1Lon = lons[lons.count / 4]
         let q3Lon = lons[(3 * lons.count) / 4]
-        return points.map {
-            $0.coordinate.longitude < q1Lon || $0.coordinate.longitude > q3Lon
+        let mid = (q1Lon + q3Lon) / 2
+        return points.map { point in
+            let lon = point.coordinate.longitude
+            if lon > q3Lon && dest.longitude <= mid { return true }
+            if lon < q1Lon && dest.longitude >= mid { return true }
+            return false
         }
     }
 
@@ -411,7 +417,7 @@ public enum StagedRouter {
                                        toward dest: Coordinate, limit: Int) -> [Coordinate] {
         guard !points.isEmpty, limit > 0 else { return [] }
         let direct = max(1, origin.distance(to: dest))
-        let fringe = seamFringeFlags(for: points)
+        let fringe = seamFringeFlags(for: points, toward: dest)
         let ranked = zip(points, fringe).map { point, isFringe -> (score: Double, point: Coordinate, waterLike: Bool, fringe: Bool) in
             let via = origin.distance(to: point.coordinate) + point.coordinate.distance(to: dest)
             return (via / direct, point.coordinate, point.waterLike, isFringe)

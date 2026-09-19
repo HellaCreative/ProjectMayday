@@ -61,8 +61,7 @@ struct StagedRouterTests {
 
     @Test func handoverCorridorIQRPrefersLandBorderOverIslandApproaches() {
         // Replaces the removed NB/ME lon ≤ -67.05 gate: island approaches sit
-        // on the eastern fringe of the nb↔me seam cloud; land Calais belt is
-        // inside the lon/lat IQR of a realistic border sample.
+        // on the eastern fringe when riding west; land Calais belt stays.
         let origin = Coordinate(longitude: -66.1, latitude: 45.3)
         let dest = Coordinate(longitude: -69.8, latitude: 43.7)
         var points: [StagedRouter.HandoverCandidate] = []
@@ -81,6 +80,32 @@ struct StagedRouterTests {
             from: points, origin: origin, toward: dest, limit: 8)
         #expect(picks.contains(where: { abs($0.longitude - land.longitude) < 0.05 }))
         #expect(picks.first.map { abs($0.longitude - island.longitude) > 0.05 } ?? false)
+    }
+
+    @Test func handoverProgressSideFringeStaysEligibleWhenRidingWest() {
+        // Winnipeg/BC class: western qc-s↔on-n pins are lon-IQR fringe but
+        // must not be demoted when the onward aim is further west.
+        let origin = Coordinate(longitude: -67.2, latitude: 47.5)
+        let towardMB = Coordinate(longitude: -95.0, latitude: 49.5)
+        var points: [StagedRouter.HandoverCandidate] = []
+        for i in 0..<40 {
+            points.append(.init(
+                coordinate: .init(longitude: -76.0 + Double(i % 10) * 0.05,
+                                  latitude: 45.5 + Double(i / 10) * 0.1),
+                waterLike: false))
+        }
+        let western = Coordinate(longitude: -78.5, latitude: 46.0) // progress-side fringe
+        let eastern = Coordinate(longitude: -74.0, latitude: 45.5) // anti-progress fringe
+        points.append(.init(coordinate: western, waterLike: false))
+        points.append(.init(coordinate: eastern, waterLike: false))
+        let flags = StagedRouter.seamFringeFlags(for: points, toward: towardMB)
+        let westFlag = flags[points.count - 2]
+        let eastFlag = flags[points.count - 1]
+        #expect(westFlag == false)
+        #expect(eastFlag == true)
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: points, origin: origin, toward: towardMB, limit: 8)
+        #expect(picks.contains(where: { abs($0.longitude - western.longitude) < 0.05 }))
     }
 
     @Test func handoverStructuralQualityKeepsWaterOnlyFallbacks() {
