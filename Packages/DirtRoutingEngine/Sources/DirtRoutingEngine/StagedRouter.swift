@@ -79,7 +79,8 @@ public enum StagedRouter {
             // Same staged-aim contract as multi-pack. Two-pack has no onward seam
             // belt, so chainLocalAim returns the rider destination.
             let toward = try chainLocalAim(windows: windows, stageIndex: 0, next: destPack,
-                                           finalDestination: request.end, repository: repository)
+                                           finalDestination: request.end, repository: repository,
+                                           currentShared: originPack)
             let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
                                               toward: toward, repository: repository)
             guard !pins.isEmpty else { throw RoutingFailure.noPath }
@@ -175,7 +176,8 @@ public enum StagedRouter {
                     stageIndex: index,
                     next: next,
                     finalDestination: request.end,
-                    repository: repository
+                    repository: repository,
+                    currentShared: shared
                 )
                 candidates = try handoverCandidates(
                     from: shared,
@@ -351,25 +353,63 @@ public enum StagedRouter {
     /// Intermediate hops aim at the next pack's onward seam belt. The final hop
     /// still aims at the rider destination. Keeps Canada↔Canada westbound rides
     /// from poisoning Maritimes/QC handovers with a Rockies geodesic.
+    ///
+    /// When the onward belt is far beyond the *current* seam (Winnipeg/BC class
+    /// at qc-s↔on-n aiming at on-n↔mb), rank against a capped aim just past the
+    /// current belt so western vs eastern pins still differentiate.
+    static let onwardAimCapMeters = 350_000.0
+
     static func chainLocalAim(
         windows: [[String]],
         stageIndex: Int,
         next: String,
         finalDestination: Coordinate,
-        repository: PackRepository
+        repository: PackRepository,
+        currentShared: String? = nil
     ) throws -> Coordinate {
-        guard stageIndex + 2 < windows.count, let following = windows[stageIndex + 2].last else {
-            return finalDestination
+        let raw: Coordinate
+        if stageIndex + 2 < windows.count, let following = windows[stageIndex + 2].last {
+            let anchors = try repository.loadSeams(next).neighbors[following]
+                ?? repository.loadSeams(following).neighbors[next]
+                ?? []
+            let points = anchors.compactMap { row -> Coordinate? in
+                guard row.coordinate.count == 2 else { return nil }
+                let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
+                return point.isValid ? point : nil
+            }
+            raw = centroid(of: points) ?? finalDestination
+        } else {
+            raw = finalDestination
         }
-        let anchors = try repository.loadSeams(next).neighbors[following]
-            ?? repository.loadSeams(following).neighbors[next]
+        guard let shared = currentShared else { return raw }
+        let currentAnchors = try repository.loadSeams(shared).neighbors[next]
+            ?? repository.loadSeams(next).neighbors[shared]
             ?? []
-        let points = anchors.compactMap { row -> Coordinate? in
+        let currentPoints = currentAnchors.compactMap { row -> Coordinate? in
             guard row.coordinate.count == 2 else { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
             return point.isValid ? point : nil
         }
-        return centroid(of: points) ?? finalDestination
+        guard let belt = centroid(of: currentPoints) else { return raw }
+        return cappedAim(from: belt, toward: raw, maxMeters: onwardAimCapMeters)
+    }
+
+    static func cappedAim(from belt: Coordinate, toward far: Coordinate, maxMeters: Double) -> Coordinate {
+        let span = belt.distance(to: far)
+        guard span > maxMeters, span > 0 else { return far }
+        var lo = 0.0, hi = 1.0
+        var best = far
+        for _ in 0..<24 {
+            let mid = (lo + hi) / 2
+            let point = Coordinate(
+                longitude: belt.longitude + (far.longitude - belt.longitude) * mid,
+                latitude: belt.latitude + (far.latitude - belt.latitude) * mid
+            )
+            guard point.isValid else { break }
+            best = point
+            if belt.distance(to: point) > maxMeters { hi = mid } else { lo = mid }
+        }
+        return best
     }
 
     static func centroid(of points: [Coordinate]) -> Coordinate? {

@@ -219,6 +219,17 @@ struct StagedRouterTests {
         #expect(twoPackFinal.latitude == rockies.latitude)
     }
 
+    @Test func cappedAimKeepsLocalDifferentiationOnFarOnwardBelts() {
+        let belt = Coordinate(longitude: -76.0, latitude: 46.0)
+        let far = Coordinate(longitude: -95.0, latitude: 49.5)
+        let capped = StagedRouter.cappedAim(from: belt, toward: far, maxMeters: 350_000)
+        #expect(belt.distance(to: capped) <= 350_000 + 1)
+        #expect(capped.longitude < belt.longitude)
+        #expect(capped.longitude > far.longitude)
+        let near = Coordinate(longitude: -78.0, latitude: 46.2)
+        #expect(StagedRouter.cappedAim(from: belt, toward: near, maxMeters: 350_000).longitude == near.longitude)
+    }
+
     private func writeSeamFixture(root: URL, region: String, neighbors: [String:[Coordinate]]) throws {
         let dir = root.appendingPathComponent(region, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
