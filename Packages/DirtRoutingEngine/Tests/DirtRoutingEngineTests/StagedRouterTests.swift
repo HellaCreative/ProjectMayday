@@ -4,6 +4,42 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct StagedRouterTests {
+    @Test func handoverScreeningConsidersTheLegalDirectionAwayFromTheDestination() throws {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),
+            .init(longitude: 0.01, latitude: 0), .init(longitude: 0, latitude: 0.02),
+            .init(longitude: 0.02, latitude: 0.02)]
+        let graph = try IndexedGraph(PolicyTests.Line(nodes: nodes, edges: [(0,1),(0,2),(2,3)],
+            surfaces: ["asphalt","asphalt","asphalt"], roads: ["tertiary","tertiary","tertiary"]))
+        let origin = Coordinate(longitude: 0.005, latitude: 0)
+        for style: RidingStyle in [.dirt, .balanced, .cleanest] {
+            let request = RoutingRequest(start: origin, end: nodes[3], style: style)
+            var reach: EndpointReachability?
+            #expect(try StagedRouter.hopLooksLive(nodes[3], origin: origin, graph: graph,
+                request: request, budget: .init(), reach: &reach))
+            let route = try RoutingEngine(pack: graph).route(request)
+            #expect(route.end.coordinate.distance(to: nodes[3]) < 1)
+            #expect(route.segments.first?.forward == false)
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_BRIDGE_PACK_ROOT"] != nil))
+    func ownerBridgeMidpointHasAConnectedHandover() throws {
+        let root = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["DIRT_BRIDGE_PACK_ROOT"]))
+        let repository = try PackRepository(installedDirectories: ["ns": root.appendingPathComponent("ns"),
+            "nb": root.appendingPathComponent("nb")])
+        var request = RoutingRequest(start: .init(longitude: -63.340266, latitude: 44.764843),
+            end: .init(longitude: -63.774129, latitude: 46.193790), style: .dirt, seed: 1)
+        request.profile.wander = 0.5
+        request.mapZoom = 9.2
+        let route = try StagedRouter.route(request, repository: repository, regions: ["ns","nb"],
+            budget: .init(seconds: 60))
+        #expect(route.limit == nil)
+        #expect(route.end.coordinate.distance(to: request.end) < 15)
+        #expect(route.segments.last?.edgeID.contains("646650186") == true)
+        #expect(RouteQuality(route: route).reriddenMeters == 0)
+        #expect(route.segments.allSatisfy { $0.access != 2 && $0.access != 5 })
+    }
+
     @Test func cleanHandoverRejectsAnUnknownOnlyApproachWithoutRejectingDirtConnector() throws {
         let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),
             .init(longitude: 0.01, latitude: 0), .init(longitude: 0.0105, latitude: 0),

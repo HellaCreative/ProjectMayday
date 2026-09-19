@@ -43,6 +43,36 @@ struct RideCompositionTests {
         #expect(result.searchSummary?.hasPrefix("composed-dirt") == true)
     }
 
+    @Test func usefulComposedRideBelowSeventyPercentRemainsEligible() throws {
+        // Every north/south connection is paved. East/west dirt can make a
+        // worthwhile detour, but this finite grid cannot reach 70% without loops.
+        var nodes: [Coordinate] = [], edges: [(Int, Int)] = [], surfaces: [String] = []
+        for y in 0..<9 { for x in 0..<9 {
+            nodes.append(.init(longitude: Double(x) * 0.1, latitude: Double(y) * 0.1))
+        } }
+        for y in 0..<9 { for x in 0..<9 {
+            let n = y * 9 + x
+            if x < 8 { edges.append((n, n + 1)); surfaces.append("gravel") }
+            if y < 8 { edges.append((n, n + 9)); surfaces.append("asphalt") }
+        } }
+        let line = PolicyTests.Line(nodes: nodes, edges: edges, surfaces: surfaces,
+            roads: surfaces.map { $0 == "gravel" ? "track" : "tertiary" })
+        let graph = try IndexedGraph(line), engine = RoutingEngine(pack: graph)
+        var request = RoutingRequest(start: nodes[13], end: nodes[67], style: .dirt, seed: 1)
+        let ordinary = try engine.route(request, budget: .init(seconds: 10))
+        request.options.composeDirtRide = true
+        let result = try engine.route(request, budget: .init(seconds: 10))
+        let quality = RouteQuality(route: result)
+        #expect(result.limit == nil)
+        #expect(result.start.coordinate.distance(to: request.start) < 0.1)
+        #expect(result.end.coordinate.distance(to: request.end) < 0.1)
+        #expect(quality.knownDirtPercent > RouteQuality(route: ordinary).knownDirtPercent)
+        #expect(quality.knownDirtPercent < 70)
+        #expect(quality.reriddenMeters == 0)
+        #expect(!RouteQuality.hasClosedRoadCircuit(result.segments, in: graph))
+        #expect(result.searchSummary?.hasPrefix("composed-dirt") == true)
+    }
+
     @Test func seededRidingAreasAreReproducibleAndOfferDifferentDirections() throws {
         var nodes: [Coordinate] = [], edges: [(Int, Int)] = []
         for y in 0..<9 { for x in 0..<9 { nodes.append(.init(longitude: Double(x) * 0.1, latitude: Double(y) * 0.1)) } }

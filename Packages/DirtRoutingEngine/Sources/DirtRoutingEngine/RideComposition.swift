@@ -13,14 +13,26 @@ extension RoutingEngine {
         guard span >= request.profile.minimumUsefulDirtMeters * 4 else { return nil }
         let started = ContinuousClock.now
         defer { request.options.counter?.recordStage("rideComposition", since: started) }
-        var proposals = try ridingAreas(request, start: start, end: end, budget: budget)
-        guard !proposals.isEmpty else { return nil }
-        var reference: ComputedRoute?
+        // Establish the available ride before looking for optional variety. A
+        // percentage is a preference, never proof of disconnection. If the
+        // ordinary search cannot connect, a two-section proposal may still do so.
+        var ordinary = request
+        ordinary.options.composeDirtRide = false
+        let reference: ComputedRoute?
+        do { reference = try self.route(ordinary, start: start, end: end, budget: budget) }
+        catch RoutingFailure.noPath { reference = nil }
+        if let reference, reference.limit != nil { return reference }
+        let referenceQuality = reference.map { RouteQuality(route: $0, urbanBoxes: UrbanCores.boxes(in: pack)) }
         let attemptBudget = budget.limited(to: min(24, budget.remainingSeconds * 0.5))
+        var proposals: [RoadMatch]
+        do { proposals = try ridingAreas(request, start: start, end: end, budget: attemptBudget) }
+        catch RoutingFailure.resourceLimit { return reference }
+        guard !proposals.isEmpty else { return reference }
         for pass in 0..<2 {
         for pin in proposals.prefix(6) {
-            try budget.check()
+            if Task.isCancelled { throw CancellationError() }
             guard attemptBudget.remainingSeconds > 0 else { break }
+            try budget.check()
             let attemptStarted = ContinuousClock.now
             defer { request.options.counter?.recordStage("rideArea:\(pin.coordinate.longitude),\(pin.coordinate.latitude)", since: attemptStarted) }
             do {
@@ -66,10 +78,13 @@ extension RoutingEngine {
                 request.options.counter?.recordStage("rideQuality:dirt=\(quality.knownDirtPercent),repeat=\(Int(quality.reriddenMeters)),return=\(Int(quality.returnMeters)),scrap=\(Int(quality.shortDirtScrapMeters))", since: .now)
                 let closedCircuit = RouteQuality.hasClosedRoadCircuit(result.segments, in: pack)
                 request.options.counter?.recordStage("realCircuit:\(closedCircuit)", since: .now)
-                // Owner's Dirt qualification floor; never buy it with repeated
-                // spurs or a circuit returning to a place already ridden.
-                guard quality.knownDirtPercent >= 70, quality.reriddenMeters == 0,
-                      !closedCircuit, quality.shortDirtScrapMeters == 0 else { continue }
+                // Seek dirt relative to the available ride, with no absolute
+                // percentage floor. Keep seeded variety when the dirt share is
+                // at least as good, without buying it with scraps or circuits.
+                guard quality.reriddenMeters == 0, !closedCircuit,
+                      quality.shortDirtScrapMeters == 0 else { continue }
+                if let referenceQuality,
+                   quality.knownDirtPercent < referenceQuality.knownDirtPercent { continue }
                 result.searchSummary = "composed-dirt/\(Int(quality.knownDirtPercent))%/\(pack.identity(of: pin.edge))"
                 result.maneuvers = NavigationCues.make(route: result, graph: pack, access: request.access, arrival: request.options.arrival)
                 return result
@@ -81,12 +96,7 @@ extension RoutingEngine {
         if pass == 0 {
             // A bay or mountain chain can put the chord far from the useful
             // roads. Recenter the next proposals on the actual connected ride.
-            var ordinary = request
-            ordinary.options.composeDirtRide = false
-            let route = try self.route(ordinary, start: start, end: end, budget: budget)
-            reference = route
-            guard attemptBudget.remainingSeconds > 0, route.limit == nil,
-                  RouteQuality(route: route).knownDirtPercent < 70 else { return route }
+            guard let route = reference, attemptBudget.remainingSeconds > 0 else { return reference }
             var walked = 0.0
             var center = route.end.coordinate
             for segment in route.segments {
@@ -112,7 +122,7 @@ extension RoutingEngine {
         options.composeDirtRide = false
         options.objective = .pavement
         options.preventLocalCircuits = request.profile.style == .dirt
-        options.roadRemaining = try RoadCompass.toward(end: end, pack: pack, budget: budget,
+        options.roadRemaining = try roadCompass(toward: end, budget: budget,
             maxRemaining: options.compassMaxRemaining).remaining
         return try PathSearch(pack: pack).search(start: start, end: end,
             policy: request.profile, access: request.access, options: options, budget: budget)

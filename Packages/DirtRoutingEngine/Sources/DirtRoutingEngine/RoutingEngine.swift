@@ -35,6 +35,20 @@ public struct RoutingEngine: Sendable {
         self.pack = pack
         self.compassStore = compassStore
     }
+    /// Shared by ordinary routing and optional riding-area legs. A destination
+    /// table depends on its exact graph, road position and cap, not the origin.
+    func roadCompass(toward end: RoadMatch, budget: ComputationBudget,
+                     maxRemaining: Double) throws -> RoadCompass {
+        try budget.check()
+        let key = "\(pack.nodeCount):\(pack.edgeCount):\(end.edge):\(end.alongMeters):\(maxRemaining)"
+        if let store = compassStore, let indexed = pack as? IndexedGraph {
+            return .init(remaining: try store.remaining(for: indexed.cacheIdentity + ":" + key) {
+                try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: maxRemaining).remaining
+            })
+        }
+        return try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: maxRemaining)
+    }
+
     struct Candidate {
         let route: ComputedRoute
         let width: Double
@@ -135,15 +149,8 @@ public struct RoutingEngine: Sendable {
         let compass: RoadCompass?
         do {
             // Tables belong to this exact prepared graph, including its local numbering.
-            let cap = request.options.compassMaxRemaining
-            let key = "\(pack.nodeCount):\(pack.edgeCount):\(end.edge):\(end.alongMeters):\(cap)"
-            if let store = compassStore, let indexed = pack as? IndexedGraph {
-                compass = .init(remaining: try store.remaining(for: indexed.cacheIdentity + ":" + key) {
-                    try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: cap).remaining
-                })
-            } else {
-                compass = try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: cap)
-            }
+            compass = try roadCompass(toward: end, budget: budget,
+                maxRemaining: request.options.compassMaxRemaining)
         }
         catch is CancellationError { throw CancellationError() }
         catch { compass = nil }

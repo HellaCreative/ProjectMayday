@@ -224,11 +224,64 @@ DIRT Dev 2 (45), verified as development-only, installed and launched on White
 (iPhone 16, iOS 26.6.2) on September 19. The binary contains stamp
 `fresh-seven-20260919a` and candidate `fabric-v4-20260919-01`. Evidence:
 `white-device-build-receipt.json`, `white-device-install.json` and
-`white-device-launch.json`. Installation and launch succeeded; owner route
-acceptance and fresh pack downloads on the phone remain to be verified.
+`white-device-launch.json`. Installation and launch succeeded. The owner’s subsequent phone log confirms
+fresh downloads and completed routes to PEI, Newfoundland, New Brunswick and
+Quebec, but also a failed Confederation Bridge midpoint and slower calculations
+than the host probes. This is useful physical evidence, not full acceptance.
 
-Remaining limits: owner NS–NB Balanced is only about 17–19% dirt, also below its
-intended mix. Four long NS–QC Balanced/Clean results repeat about 0.66–2.28 km;
+September 19 physical follow-up repair (evidence in
+`.build/bridge-endpoint-20260919`): the exact bridge-midpoint request starts at
+`-63.340266,44.764843` and ends at `-63.774129,46.193790`. Its bridge road
+`646650186` is already present in the immutable NB pack. Staged connectivity
+screening incorrectly rejected a handover using only the first ranked endpoint
+direction. It now rejects only after checking all matched candidate pairs. The
+synthetic dead-end/direction regression fails before and passes after; this is
+a general matching/preflight repair, not a bridge-specific connector or pack edit.
+
+The owner also removed the absolute Dirt percentage qualification floor. Optional
+composition now establishes an ordinary Dirt reference and accepts a useful
+seeded detour below 70% when its dirt share is at least as good and it passes
+the existing no-repeat/no-circuit/no-scrap checks. A focused mixed-surface grid
+reproduces the old cutoff returning a paved ride despite an available dirt detour;
+the repaired version keeps that detour. Ordinary quality-search early exits remain
+hints, not route-failure gates. Balanced prototype changes were discarded and
+its existing selection is unchanged. Exact road-compass reuse is extended to
+optional sections; diagnostics now record the seed and all riding preferences.
+All 127 engine tests pass (`no-floor-engine-tests.log`).
+
+The Apple M1 host PEI replay uses the owner's endpoint
+`-64.402863,46.676426`, seed 1, Wander 50%, Dirt, Unknown off and city/highway
+avoidance on. It remains 486.908 km / 44.8% known dirt with exactly the same road
+sequence: 16.596 s before and 16.545 s after, not a demonstrated speed gain.
+The latter process peaks at 488,030,208 bytes RSS / 408,422,784 bytes footprint.
+The corrected bridge replay completes in 1.352 s / 336.385 km / 55.1% known dirt,
+ending 8.1 m from the requested midpoint. Both full-segment audits have zero
+geometry gaps, prohibited/closed roads or repeated mileage; the bridge route's
+longest permitted uncertain-access connector is 45 m. Packs were not rebuilt.
+
+Final app qualification passes four integrated tests / 24 route calculations
+(`qualified-native.xcresult`) on the one existing iPhone 17 / iOS 26.5 simulator,
+Debug build on Apple M1. This includes bridge traversal and midpoint routing in
+both directions and all styles, PEI first/warm replay, and both owner Cape Breton
+inserted-waypoint itineraries with continuous legs and preserved rider pins.
+Bridge-midpoint Dirt takes 4.840 s forward and 2.789 s reverse; all six midpoint
+style/direction cases have no repeats and finish on the mapped bridge. PEI takes
+34.941 s first / 32.928 s warm, with 1.128 s / 0.003 s preparation and
+18.570 s / 18.421 s measured search; process peak footprint is 372 MB. These are
+simulator timings, not new White measurements. Slow PEI optional exploration
+remains unresolved; percentage-gate removal is not a speed fix.
+
+The repaired DEV stamp is `bridge-waypoint-20260919b`, using the unchanged fresh
+seven-pack release. It requires a new native build. This repair has not replaced
+the owner's physical-device build or changed production. Previous source
+checkpoint `a91e5ac` preserves the installed fresh-seven behavior for rollback;
+the owner’s next acceptance step is Xcode Play DIRT Dev and repeat the bridge
+midpoint and preferred Dirt/Wander rides. Source/binary/settings receipts and
+full route audits are retained beside the test result.
+
+Remaining limits: owner NS–NB Balanced is about 17–19% dirt at the tested
+settings; subsequent owner testing shows higher Wander can increase its dirt
+share. Retain the current profile pending comparable endpoint/seed evidence. Four long NS–QC Balanced/Clean results repeat about 0.66–2.28 km;
 the six inspected shape replays have no repeats, but this is not true of every
 matrix result. The synthetic destination-only parking approach remains unresolved.
 Halifax–PE still selects the ferry in the stated case. These are disclosed route
@@ -286,6 +339,25 @@ not a substitute for fixing regional continuity.
 | Clean | Prefer paved backroads. Do not hunt for dirt; disclose necessary other-surface endpoint access or connections. |
 | Wander | Default to 50%. Continuously adjust willingness to meander and travel farther within the selected style. Full Wander deliberately leans toward broad, substantial coherent dirt detours; the rider can rein it in with the slider. Decreasing Wander limits detour appetite without silently converting Dirt to Balanced or Clean. It is not a guarantee that arbitrary endpoints have a 100% dirt connection. Adjacent Wander values may select the same roads; Wander granularity need not make every tick differ. Route-to-route variety across separate generations is a distinct requirement (see "A different ride every time"). |
 | Allow Unknown | For Dirt and Balanced, off permits only short mapped unknown-motorcycle-access connectors: at most 100 m for an entire continuous uncertain stretch, between through-permitted roads. On also permits longer supported uncertain-access sections. Neither setting overrides known motorcycle prohibitions, barriers, or closures. Clean excludes uncertain motor access. Unknown surface and uncertain motor access remain distinct facts; a short uncertain connector is not proof of permission. |
+
+Owner phone follow-up (September 19): increasing Wander to about 75% produced
+roughly 55–56% dirt in Balanced, and full Wander produced about 61%. The owner
+accepts that reaching more legal dirt can require more wandering. A lower share
+at the default Wander is not, by itself, a profile defect. Preserve the present
+Dirt/Balanced definitions and slider behavior; investigate concrete failures
+before retuning. Exact endpoints and generation seeds for these last observations
+were not provided, so they do not establish identical-request comparisons.
+
+There is no minimum Dirt percentage that makes a connected ride eligible.
+Do not replace the former 70% optional-detour cutoff with a 55% or 60% floor.
+Dirt seeks useful known dirt within the rider’s Wander setting. Optional seeded
+riding-area alternatives are compared with the available ordinary Dirt ride,
+retaining at least its known-dirt share and the existing protections against
+repeated roads, closed circuits and short dirt scraps. If no better eligible
+alternative is proved within the bounded search, retain the completed ordinary
+ride. Percentage-based early exits in ordinary quality exploration are search
+hints, not permission to report disconnection or reject a completed ride.
+Balanced and Clean definitions remain unchanged.
 
 DIRT is a back-roads product. Avoid highways, divided highways, and major
 thoroughfares in every style — Clean included — unless a short unavoidable

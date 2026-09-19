@@ -158,6 +158,10 @@ actor NativeRoutingSession {
         let counter = SearchCounter()
         var request = request
         request.options.counter = counter
+        let identity = "pack request seed=\(request.options.seed) wander=\(request.profile.wander) " +
+            "style=\(request.profile.style.rawValue) unknown=\(request.access.allowUnknown) " +
+            "avoidCities=\(request.options.cityWall) avoidHighways=\(request.profile.avoidMajorHighways)"
+        Task { @MainActor in RoutingDebugLog.shared.event(identity) }
         var prepared = 0, prepareDetail: String?
         do {
             let result: ComputedRoute

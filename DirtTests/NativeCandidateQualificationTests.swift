@@ -216,6 +216,55 @@ struct NativeCandidateQualificationTests {
     }
 
     @Test(.timeLimit(.minutes(3)))
+    func ownerBridgeMidpointCompletesBothDirectionsAndStyles() async throws {
+        let directories = Dictionary(uniqueKeysWithValues: ["ns","nb"].map { ($0, root.appendingPathComponent($0)) })
+        let session = NativeRoutingSession()
+        let owner = Coordinate(longitude: -63.340266, latitude: 44.764843)
+        let bridge = Coordinate(longitude: -63.774129, latitude: 46.193790)
+        for style: RidingStyle in [.dirt, .balanced, .cleanest] {
+            for reverse in [false, true] {
+                var request = RoutingRequest(start: reverse ? bridge : owner, end: reverse ? owner : bridge,
+                    style: style, allowUnknown: false, seed: 1)
+                request.mapZoom = 9.2
+                request.profile.wander = 0.5
+                request.options.cityWall = true
+                request.profile.avoidMajorHighways = true
+                let started = ContinuousClock.now
+                let route = try await session.route(request, directories: directories)
+                #expect(route.limit == nil)
+                #expect(route.start.coordinate.distance(to: request.start) < 250)
+                #expect(route.end.coordinate.distance(to: request.end) < 250)
+                let bridgeSegment = reverse ? route.segments.first : route.segments.last
+                #expect(bridgeSegment?.edgeID.contains("646650186") == true)
+                verifyShortUnknownConnectors(route)
+                #expect(RouteQuality(route: route).reriddenMeters == 0)
+                report("owner-bridge-\(style.rawValue)-reverse\(reverse)", started: started, route: route)
+            }
+        }
+    }
+
+    @Test(.timeLimit(.minutes(3)))
+    func ownerPeiSpeedReplayColdAndWarm() async throws {
+        let directories = Dictionary(uniqueKeysWithValues: ["ns","nb","pe"].map { ($0, root.appendingPathComponent($0)) })
+        let session = NativeRoutingSession()
+        for run in 0...1 {
+            var request = RoutingRequest(start: .init(longitude: -63.340266, latitude: 44.764843),
+                end: .init(longitude: -64.402863, latitude: 46.676426), style: .dirt, allowUnknown: false, seed: 1)
+            request.mapZoom = 10.6
+            request.profile.wander = 0.5
+            request.options.cityWall = true
+            request.profile.avoidMajorHighways = true
+            let started = ContinuousClock.now
+            let route = try await session.route(request, directories: directories)
+            #expect(route.limit == nil)
+            #expect(route.end.coordinate.distance(to: request.end) < 250)
+            verifyShortUnknownConnectors(route)
+            #expect(RouteQuality(route: route).reriddenMeters == 0)
+            report("owner-pei-speed-run\(run)", started: started, route: route)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(3)))
     func ownerCapeBretonInsertedWaypointsContinueAtMatchedRoad() async throws {
         let source = WaypointNativeReplaySource(directories: ["ns": root.appendingPathComponent("ns")])
         let cases: [[RouteCoordinate]] = [

@@ -946,22 +946,27 @@ public enum StagedRouter {
                                          policy: request.access, intent: intent, budget: budget)
         let ends = try matcher.matches(at: hop, radius: radius, start: false,
                                        policy: request.access, intent: intent + 180, budget: budget)
-        guard let start = starts.first, let end = ends.first else { return false }
+        guard !starts.isEmpty, !ends.isEmpty else { return false }
         // Clean cannot use the short uncertain-access connectors permitted by
         // Dirt/Balanced. Do not spend an entire window approaching a border road
         // that is connected only through one of those uncertain roads.
         let clean = request.profile.style == .cleanest
         let components = WeakComponents.ids(in: graph,
             allowUnknown: !clean && request.access.includesUnknownConnectivity)
-        if WeakComponents.of(match: start, pack: graph, ids: components)
-            != WeakComponents.of(match: end, pack: graph, ids: components) {
-            return false
-        }
         let checker = try reach ?? EndpointReachability(graph: graph, budget: budget) { edge in
             !clean || graph.accessCode(edge, forward: true) == 0 || graph.accessCode(edge, forward: false) == 0
         }
         reach = checker
-        return try checker.mayConnect(start: start, end: end, budget: budget)
+        // Intent ranks matches, but the first direction can lead into a dead
+        // end or a clipped overlap. This is a necessary-only preflight: reject
+        // only when every candidate pair the router can try is disconnected.
+        for start in starts {
+            for end in ends where WeakComponents.of(match: start, pack: graph, ids: components)
+                == WeakComponents.of(match: end, pack: graph, ids: components) {
+                if try checker.mayConnect(start: start, end: end, budget: budget) { return true }
+            }
+        }
+        return false
     }
 
     static func knownDirtMeters(_ route: ComputedRoute) -> Double {
