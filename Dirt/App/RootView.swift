@@ -1976,6 +1976,7 @@ struct ToastView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hypeLineIndex = 0
     @State private var elapsedTwentySeconds = false
+    private let waitingAccent = Color(dirtHex: 0xF3CF54)
 
     private var longBuildNotice: String? {
         isBuildingRoute && elapsedTwentySeconds
@@ -2033,7 +2034,9 @@ struct ToastView: View {
                     guard isBuildingRoute else { return }
                     do { try await Task.sleep(for: .seconds(20)) }
                     catch { return }
-                    elapsedTwentySeconds = true
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                        elapsedTwentySeconds = true
+                    }
                 }
                 .task(id: "\(text)-\(rotatesHype)-\(reduceMotion)") {
                     hypeLineIndex = 0
@@ -2059,9 +2062,10 @@ struct ToastView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, progress == nil ? 10 : 12)
-        .background(
+        .background {
             (isSuccess ? DirtTheme.navGreen : DirtTheme.chrome).opacity(0.95)
-        )
+                .overlay(waitingAccent.opacity(longBuildNotice == nil ? 0 : 0.10))
+        }
         .clipShape(
             RoundedRectangle(
                 cornerRadius: progress == nil ? 100 : DirtRadius.card,
@@ -2074,8 +2078,9 @@ struct ToastView: View {
                 style: .continuous
             )
             .stroke(
-                isSuccess ? DirtTheme.navGreen.opacity(0.9) : DirtTheme.chromeBorder,
-                lineWidth: 1
+                longBuildNotice != nil ? waitingAccent
+                    : isSuccess ? DirtTheme.navGreen.opacity(0.9) : DirtTheme.chromeBorder,
+                lineWidth: longBuildNotice == nil ? 1 : 2
             )
         )
         .shadow(color: .black.opacity(0.18), radius: 10, y: 4)

@@ -704,6 +704,10 @@ There is no early display based on route distance or pack count. Exact copy:
 “Longer rides can take 10 seconds to over a minute to plan.” Pack information
 belongs to the existing download notification and is omitted from this caveat.
 This is a waiting-time explanation, not a precise forecast or one-minute limit.
+At the same 20-second threshold, the existing progress card gains a yellow border
+and a subtle yellow surface tint to draw attention to the added text. Earlier
+progress keeps its normal appearance. The transition respects Reduce Motion;
+the text continues to communicate the state without relying on color alone.
 
 ### Measurement
 
