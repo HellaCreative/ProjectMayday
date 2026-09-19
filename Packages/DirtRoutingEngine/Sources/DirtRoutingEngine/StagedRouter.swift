@@ -576,14 +576,18 @@ public enum StagedRouter {
                     point.stubOnSearch, point.stubOnNext, isFringe)
         }.sorted(by: handoverRankLessThan)
 
-        // Keep the best pin per ~0.4° longitude cell so western stubs cannot
-        // crowd out the connected Hwy 69 / French River band.
+        // Keep the best pin per geographic cell so stub clusters cannot crowd
+        // out usable corridor pins. A longitude-only grid collapses dense
+        // north–south belts (co↔ks ~0.07° lon; nb↔ns only 3 lon cells across
+        // 2°). Use a coarse 2D cell so both axes diversify.
         var byCell: [Int:(
             score: Double, point: Coordinate, waterLike: Bool,
             stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool
         )] = [:]
         for row in ranked {
-            let cell = Int((row.point.longitude * 2.5).rounded(.towardZero))
+            let lonCell = Int((row.point.longitude * 5.0).rounded(.towardZero))
+            let latCell = Int((row.point.latitude * 5.0).rounded(.towardZero))
+            let cell = lonCell &* 10_000 &+ latCell
             if byCell[cell] == nil { byCell[cell] = row }
         }
         let diversified = byCell.values.sorted(by: handoverRankLessThan).map(\.point)
