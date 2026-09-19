@@ -200,6 +200,12 @@ do {
         if !compact {
             output["edgeIDs"] = edgeIDs
             output["geometry"] = result.geometry.map { [$0.longitude,$0.latitude] }
+            output["segments"] = result.segments.map { segment -> [String:Any] in
+                ["edgeID":segment.edgeID,"forward":segment.forward,"meters":segment.meters,
+                 "surface":segment.surfaceLeaf,"roadClass":segment.roadClass,
+                 "structure":segment.structure,"access":segment.access,
+                 "geometry":segment.geometry.map { [$0.longitude,$0.latitude] }]
+            }
         }
     } else {
         let result: ComputedRoute
@@ -242,6 +248,12 @@ do {
         if !compact {
             output["edgeIDs"] = edgeIDs
             output["geometry"] = result.geometry.map { [$0.longitude,$0.latitude] }
+            output["segments"] = result.segments.map { segment -> [String:Any] in
+                ["edgeID":segment.edgeID,"forward":segment.forward,"meters":segment.meters,
+                 "surface":segment.surfaceLeaf,"roadClass":segment.roadClass,
+                 "structure":segment.structure,"access":segment.access,
+                 "geometry":segment.geometry.map { [$0.longitude,$0.latitude] }]
+            }
         }
     }
     output.merge(searchFields(since: prepared)) { $1 }

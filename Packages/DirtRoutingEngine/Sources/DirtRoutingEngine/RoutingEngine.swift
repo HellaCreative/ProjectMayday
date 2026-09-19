@@ -196,11 +196,25 @@ public struct RoutingEngine: Sendable {
             clean.corridorMeters = .infinity
             clean.maximumMeters = lengthCap
             clean.pavedOnly = true
-            do {
-                let route = try run(clean)
-                note("paved", route)
-                return finish(route)
-            } catch RoutingFailure.noPath { }
+            // A disconnected paved network cannot produce a paved route. This
+            // optimistic topology check ignores turn/access restrictions, so a
+            // positive result still requires the complete legal search below.
+            // Keep the rider's start/end road exceptions used by PathSearch.
+            let cleanPolicy = request.profile
+            let roadGraph = pack
+            let pavement = try EndpointReachability(graph: pack, budget: budget) { edge in
+                cleanPolicy.cleanEligible(pack: roadGraph, edge: edge, endpoint: false, pavedOnly: true)
+            }
+            let pavedCheckStarted = ContinuousClock.now
+            let pavedConnected = try pavement.mayConnect(start: start, end: end, budget: budget)
+            request.options.counter?.recordStage("pavedConnectivity", since: pavedCheckStarted)
+            if pavedConnected {
+                do {
+                    let route = try run(clean)
+                    note("paved", route)
+                    return finish(route)
+                } catch RoutingFailure.noPath { }
+            } else { log.append("paved-disconnected") }
             clean.pavedOnly = false
             do {
                 let route = try run(clean)

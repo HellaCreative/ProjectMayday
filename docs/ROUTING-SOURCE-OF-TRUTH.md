@@ -141,8 +141,15 @@ the existing 1.5 multiplier and 80 km minimum. Cancellation and resource limits
 in that baseline calculation propagate instead of being swallowed. This is a
 route-selection correction, not a pack change or Dirt retuning. The new obstacle
 regression fails before and passes after the repair; all 122 engine tests pass
-(`clean-detour-before.log`, `clean-detour-engine-tests.log`). Real-route replay
-of the corrected Clean implementation remains required.
+(`clean-detour-before.log`, `clean-detour-engine-tests.log`). On the same fresh inputs and Mac, Clean owner Halifax–St Stephen changed from
+a 60 s timeout to 3.50 s (reverse 60 s timeout to 2.46 s); Cape Breton changed
+from noPath after 21.35 s to completion in 0.75 s. Evidence: `clean-detour-matrix/`
+and the preserved `fresh-other-styles/` results. One NS–QC Clean direction still
+timed out. A necessary-only paved-topology preflight now skips a proven
+disconnected paved search; it preserves endpoint road exceptions and never
+replaces legal search. All 123 engine tests pass (`paved-preflight-engine-tests.log`);
+real-route qualification of that additional optimization is pending. Full probe
+receipts can include each selected road, direction, access, surface and shape.
 
 The fresh NB input contains 13 footway/cycleway source ways with explicit
 motor-vehicle permission that the former highway-class filter discarded.

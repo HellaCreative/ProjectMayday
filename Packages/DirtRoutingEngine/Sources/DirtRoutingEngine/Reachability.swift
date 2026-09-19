@@ -91,14 +91,17 @@ final class WeakComponentCache: @unchecked Sendable {
 final class EndpointReachability {
     private let graph: any RoadGraph
     private let arcs: ArcIndex
+    private let permitsThrough: (Int) -> Bool
     private struct EndKey: Hashable { let edge: Int }
     /// `arrival[arc]`: the end is reachable after arriving along that arc.
     /// `free[node]`: reachable after a coincident-node transfer, when any road may follow.
     private struct Marks { let arrival: [Bool]; let free: [Bool] }
     private var cache: [EndKey: Marks] = [:]
 
-    init(graph: any RoadGraph, budget: ComputationBudget) throws {
+    init(graph: any RoadGraph, budget: ComputationBudget,
+         permitsThrough: @escaping (Int) -> Bool = { _ in true }) throws {
         self.graph = graph
+        self.permitsThrough = permitsThrough
         if let indexed = graph as? IndexedGraph {
             arcs = try indexed.arcIndex(budget: budget)
         } else {
@@ -147,7 +150,10 @@ final class EndpointReachability {
         func markArrivals(at node: Int, except edge: Int?) {
             for slot in Int(arcs.inStart[node])..<Int(arcs.inStart[node + 1]) {
                 let arc = Int(arcs.inArcs[slot])
-                if !arrival[arc], Int(arcs.outEdge[arc]) != edge { arrival[arc] = true; arcQueue.append(Int32(arc)) }
+                let incoming = Int(arcs.outEdge[arc])
+                if !arrival[arc], incoming != edge, permitsThrough(incoming) {
+                    arrival[arc] = true; arcQueue.append(Int32(arc))
+                }
             }
         }
         for node in [graph.endpoint(end.edge, from: true), graph.endpoint(end.edge, from: false)]

@@ -164,6 +164,31 @@ struct RoutingEngineTests {
         #expect(RouteQuality(route: route).reriddenMeters == 0)
     }
 
+    @Test func pavedReachabilityKeepsEndpointExceptionsButRejectsAnInteriorDirtGap() throws {
+        let pack = PolicyTests.Line(
+            nodes: (0...4).map { .init(longitude: Double($0) * 0.01, latitude: 0) },
+            edges: [(0,1),(1,2),(2,3),(3,4)],
+            surfaces: ["dirt","asphalt","asphalt","dirt"],
+            roads: Array(repeating: "tertiary", count: 4))
+        let graph = try IndexedGraph(pack)
+        let start = RoadMatch(edge: 0, coordinate: pack.nodes[0], distanceMeters: 0,
+            alongMeters: 0, geometryMeters: pack.distance(0), forward: true)
+        let end = RoadMatch(edge: 3, coordinate: pack.nodes[4], distanceMeters: 0,
+            alongMeters: pack.distance(3), geometryMeters: pack.distance(3), forward: true)
+        let policy = ProfilePolicy(style: .cleanest)
+        let reachable = try EndpointReachability(graph: graph, budget: .init()) {
+            policy.cleanEligible(pack: graph, edge: $0, endpoint: false, pavedOnly: true)
+        }
+        #expect(try reachable.mayConnect(start: start, end: end, budget: .init()))
+        let disconnected = try EndpointReachability(graph: graph, budget: .init()) { $0 == 1 }
+        #expect(try !disconnected.mayConnect(start: start, end: end, budget: .init()))
+        var request = RoutingRequest(start: start.coordinate, end: end.coordinate, style: .cleanest)
+        request.options.counter = SearchCounter()
+        let route = try RoutingEngine(pack: graph).route(request, start: start, end: end, budget: .init())
+        #expect(route.segments.map(\.edge) == [0,1,2,3])
+        #expect(route.searchSummary?.contains("paved/") == true)
+    }
+
     @Test func cleanestUsesAHighwayOnlyWhenNoBackRoadConnects() throws {
         let pack = PolicyTests.Line(
             nodes: [
