@@ -75,7 +75,7 @@ final class RideBackdropPlayback: ObservableObject {
             fadeStarted = false
             plateOpacity = Self.plateStrength
             player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     guard let self, self.wantsPlay else { return }
                     self.kickPlay()
                 }
@@ -102,20 +102,20 @@ final class RideBackdropPlayback: ObservableObject {
         // first ~1s GOP and never reached the pre-end fade.
         player.automaticallyWaitsToMinimizeStalling = true
 
-        statusObs = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-            Task { @MainActor in
+        statusObs = item.observe(\.status, options: [.initial, .new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
-                if item.status == .readyToPlay {
+                if self.item?.status == .readyToPlay {
                     self.captureDuration()
                     if self.wantsPlay { self.kickPlay() }
                 }
             }
         }
 
-        rateObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
-            Task { @MainActor in
+        rateObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
                 guard let self, self.wantsPlay, !self.fadeStarted else { return }
-                if player.timeControlStatus == .paused {
+                if self.player.timeControlStatus == .paused {
                     self.kickPlay()
                 }
             }
@@ -136,7 +136,7 @@ final class RideBackdropPlayback: ObservableObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.handleEnded()
             }
         }
@@ -146,7 +146,7 @@ final class RideBackdropPlayback: ObservableObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.wantsPlay, !self.fadeStarted else { return }
                 self.kickPlay()
             }
@@ -157,8 +157,9 @@ final class RideBackdropPlayback: ObservableObject {
             object: AVAudioSession.sharedInstance(),
             queue: .main
         ) { [weak self] note in
-            Task { @MainActor in
-                self?.handleInterruption(note)
+            let type = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            Task { @MainActor [weak self] in
+                self?.handleInterruption(type)
             }
         }
 
@@ -180,7 +181,7 @@ final class RideBackdropPlayback: ObservableObject {
     private func scheduleKeepAlive() {
         keepAlive?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.wantsPlay, !self.fadeStarted else { return }
                 self.kickPlay()
                 if self.player.timeControlStatus != .playing {
@@ -193,15 +194,10 @@ final class RideBackdropPlayback: ObservableObject {
     }
 
     private func captureDuration() {
-        let candidates = [
-            item?.duration.seconds,
-            item?.asset.duration.seconds
-        ]
-        for seconds in candidates {
-            if let seconds, seconds.isFinite, seconds >= Self.minimumRealDuration {
-                loadedDuration = seconds
-                return
-            }
+        // Asset duration is loaded asynchronously in boot(); the ready item's
+        // duration is also safe to read without the deprecated synchronous asset API.
+        if let seconds = item?.duration.seconds, seconds.isFinite, seconds >= Self.minimumRealDuration {
+            loadedDuration = seconds
         }
     }
 
@@ -210,9 +206,6 @@ final class RideBackdropPlayback: ObservableObject {
             return loadedDuration
         }
         if let seconds = item?.duration.seconds, seconds.isFinite, seconds >= Self.minimumRealDuration {
-            return seconds
-        }
-        if let seconds = item?.asset.duration.seconds, seconds.isFinite, seconds >= Self.minimumRealDuration {
             return seconds
         }
         return nil
@@ -227,7 +220,7 @@ final class RideBackdropPlayback: ObservableObject {
             forInterval: CMTime(seconds: 0.2, preferredTimescale: 600),
             queue: .main
         ) { [weak self] time in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.tick(time)
             }
         }
@@ -279,9 +272,8 @@ final class RideBackdropPlayback: ObservableObject {
         }
     }
 
-    private func handleInterruption(_ note: Notification) {
+    private func handleInterruption(_ type: UInt?) {
         guard wantsPlay, !fadeStarted else { return }
-        let type = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
         if type == AVAudioSession.InterruptionType.ended.rawValue {
             kickPlay()
             scheduleKeepAlive()

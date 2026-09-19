@@ -19,7 +19,7 @@ struct POIFeature: Sendable {
     /// OSM attraction subclass: beach, waterfall, museum, sculpture, rock, …
     let kind: String?
 
-    init(
+    nonisolated init(
         id: String,
         category: String,
         latitude: Double,

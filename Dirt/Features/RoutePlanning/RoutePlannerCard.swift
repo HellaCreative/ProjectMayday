@@ -684,6 +684,11 @@ struct RoutePlannerCard: View {
     private var loadedTrackCard: some View {
         let dirt = max(0, min(100, planner.aggregateDirtPercent))
         let unknown = planner.aggregateUnknownPercent
+        let distanceText = Text(String(format: "%.1f km", planner.totalMeters / 1000)).foregroundStyle(DirtTheme.ink)
+        let separator = Text("  ·  ").foregroundStyle(DirtTheme.muted)
+        let dirtText = Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix)
+        let pavedText = Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix)
+        let unknownText = Text(unknown > 0 ? "  ·  \(unknown)% unknown" : "").foregroundStyle(DirtTheme.muted)
         return VStack(alignment: .center, spacing: DirtSpace.tight) {
             Text(loadedTrackName)
                 .font(DirtType.rowTitle)
@@ -693,17 +698,7 @@ struct RoutePlannerCard: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity)
 
-            (
-                Text(String(format: "%.1f km", planner.totalMeters / 1000)).foregroundStyle(DirtTheme.ink)
-                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                + Text("\(dirt)% dirt").foregroundStyle(DirtTheme.dirtMix)
-                + Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                + Text("\(planner.aggregatePavedPercent)% paved").foregroundStyle(DirtTheme.pavedMix)
-                + (unknown > 0
-                    ? Text("  ·  ").foregroundStyle(DirtTheme.muted)
-                        + Text("\(unknown)% unknown").foregroundStyle(DirtTheme.muted)
-                    : Text(""))
-            )
+            Text("\(distanceText)\(separator)\(dirtText)\(separator)\(pavedText)\(unknownText)")
             .font(DirtType.metricInline)
             .fontWeight(.bold)
             .multilineTextAlignment(.center)
