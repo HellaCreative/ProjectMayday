@@ -287,7 +287,11 @@ struct DirtTests {
     }
 
     @Test func generatedStyleShowsWaterAndStreetNames() throws {
-        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v6")
+        #expect(MapStyleCatalog.generatedStyleRevision == "osmand-v7")
+        #expect(MapStyleCatalog.isWaterNameLayer("water_polygons_labels-water-name-8"))
+        #expect(MapStyleCatalog.isWaterNameLayer("label-waterway-bottom-12"))
+        #expect(!MapStyleCatalog.isWaterNameLayer("place_labels-city"))
+        #expect(!MapStyleCatalog.isWaterNameLayer("water_polygons_labels-glacier-name-8"))
         for style in [MapStyleID.shortbread, .shortbreadRich] {
             let styleURL = MapStyleCatalog.styleURL(for: style)
             let data = try Data(contentsOf: styleURL)
@@ -301,10 +305,10 @@ struct DirtTests {
             #expect(intZoom(lake["minzoom"]) <= 5)
             let lakePaint = try #require(lake["paint"] as? [String: Any])
             #expect(lakePaint["text-color"] as? String == MapStyleCatalog.lakeLabelBlue)
-            #expect(lakePaint["text-halo-color"] as? String == MapStyleCatalog.lakeLabelHalo)
+            #expect(lakePaint["text-halo-color"] == nil)
+            #expect(numericPaint(lakePaint, "text-halo-width") == 0)
             #expect(lakePaint["text-color"] as? String != "#163a52")
             #expect(lakePaint["text-color"] as? String != "#4f8fb0")
-            #expect(lakePaint["text-halo-color"] as? String != "#f8f4f0")
             let lakeLayout = try #require(lake["layout"] as? [String: Any])
             #expect(lakeLayout["text-font"] as? [String] == ["Noto Sans Bold"])
             #expect(firstTextSize(lake) <= 8)
@@ -312,19 +316,44 @@ struct DirtTests {
                 #expect(firstTextSize(city) >= 14)
                 let cityLayout = try #require(city["layout"] as? [String: Any])
                 #expect(cityLayout["text-font"] as? [String] == ["Noto Sans Bold"])
+                let cityPaint = try #require(city["paint"] as? [String: Any])
+                #expect(cityPaint["text-halo-color"] as? String == "#f4f1ea")
+                #expect(numericPaint(cityPaint, "text-halo-width") > 0)
             }
             if let town = byID.first(where: { $0.key.contains("town") })?.value {
                 #expect(firstTextSize(town) >= 14)
+                let townPaint = try #require(town["paint"] as? [String: Any])
+                #expect(townPaint["text-halo-color"] as? String == "#f4f1ea")
             }
             let river = try #require(byID["label-waterway-bottom-12"])
             #expect(intZoom(river["minzoom"]) <= 10)
+            let riverPaint = try #require(river["paint"] as? [String: Any])
+            #expect(riverPaint["text-color"] as? String == MapStyleCatalog.lakeLabelBlue)
+            #expect(riverPaint["text-halo-color"] == nil)
+            #expect(numericPaint(riverPaint, "text-halo-width") == 0)
             let street = try #require(byID["label-street-centre-12"])
             #expect(intZoom(street["minzoom"]) <= 10)
             let streetPaint = try #require(street["paint"] as? [String: Any])
             #expect(streetPaint["text-color"] as? String == "#1a1f24")
+            #expect(streetPaint["text-halo-color"] as? String == "#f8f4f0")
             #expect(byID["dirt-bound-country"] != nil)
             #expect(byID["dirt-bound-state"] != nil)
         }
+    }
+
+    @Test func waterNamesLayerPrefDefaultsOn() {
+        let ud = UserDefaults.standard
+        let key = "dirt.layers.water-names"
+        let previous = ud.object(forKey: key)
+        ud.removeObject(forKey: key)
+        defer {
+            if let previous {
+                ud.set(previous, forKey: key)
+            } else {
+                ud.removeObject(forKey: key)
+            }
+        }
+        #expect(LayerPrefsSnapshot().showWaterNames == true)
     }
 
     @Test func richSaturationHelperUsesOnePointOneFiveBoost() {
@@ -365,6 +394,13 @@ struct DirtTests {
         if let value = raw as? Double { return Int(value.rounded()) }
         if let value = raw as? NSNumber { return value.intValue }
         return .max
+    }
+
+    private func numericPaint(_ paint: [String: Any], _ key: String) -> Double {
+        if let value = paint[key] as? Double { return value }
+        if let value = paint[key] as? Int { return Double(value) }
+        if let value = paint[key] as? NSNumber { return value.doubleValue }
+        return .nan
     }
 
     private func firstTextSize(_ layer: [String: Any]?) -> Int {

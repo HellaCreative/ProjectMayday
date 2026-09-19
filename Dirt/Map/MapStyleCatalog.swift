@@ -26,7 +26,7 @@ enum MapStyleID: String, CaseIterable, Identifiable, Sendable {
 enum MapStyleCatalog {
     static let preferenceKey = "dirt.map.styleID"
     /// Bump when generated paint/label rules change so a cached JSON cannot linger.
-    static let generatedStyleRevision = "osmand-v6"
+    static let generatedStyleRevision = "osmand-v7"
     /// Natural Earth 50m admin-1 (lakes), US+CA interior borders. Not pack bounds.
     static let admin1OverviewSourceID = "dirt-admin1-overview"
     static let admin1OverviewLayerID = "dirt-bound-state-overview"
@@ -497,23 +497,27 @@ extension MapStyleCatalog {
         layer["paint"] = paint
     }
 
-    /// Lake names must read in sun on saturated green/blue land — Play of
-    /// `osmand-v4` left Kejimkujik as a cream halo. Same paint on Standard and Rich.
+    /// Lake names must read in sun on saturated green/blue land. No halo —
+    /// Play of osmand-v6 called the white outline too busy. Same paint on
+    /// Standard and Rich. City/town halos stay on `retunePlaceLabel`.
     static let lakeLabelBlue = "#0033cc"
-    static let lakeLabelHalo = "#ffffff"
+
+    static func isWaterNameLayer(_ id: String) -> Bool {
+        id.contains("water_polygons_labels-water-name") || id.hasPrefix("label-waterway")
+    }
 
     private static func retuneWaterLabel(_ layer: inout [String: Any]) {
         let id = layer["id"] as? String ?? ""
+        guard isWaterNameLayer(id) else { return }
         let isLake = id.contains("water_polygons_labels-water-name")
-        let isWaterway = id.hasPrefix("label-waterway")
-        guard isLake || isWaterway else { return }
         var layout = layer["layout"] as? [String: Any] ?? [:]
         var paint = layer["paint"] as? [String: Any] ?? [:]
         paint["text-color"] = Self.lakeLabelBlue
-        paint["text-halo-color"] = Self.lakeLabelHalo
-        paint["text-halo-width"] = isLake ? 2.2 : 1.8
-        paint["text-halo-blur"] = 0
         paint["text-opacity"] = 1
+        paint["text-halo-width"] = 0
+        paint["text-halo-blur"] = 0
+        paint["text-halo-opacity"] = 0
+        paint.removeValue(forKey: "text-halo-color")
         layout["text-font"] = ["Noto Sans Bold"]
         if isLake {
             layout["text-size"] = ["stops": Self.lakeLabelSizeStops]

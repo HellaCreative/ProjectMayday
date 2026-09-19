@@ -764,6 +764,9 @@ struct MapLibreMapView: UIViewRepresentable {
             for id in MapAttraction.builtinLayerIDs {
                 style.layer(withIdentifier: id)?.isVisible = !prefs.showAttractions
             }
+            for layer in style.layers where MapStyleCatalog.isWaterNameLayer(layer.identifier) {
+                layer.isVisible = prefs.showWaterNames
+            }
             applyFuelReplacementEmphasis(to: style)
         }
 
