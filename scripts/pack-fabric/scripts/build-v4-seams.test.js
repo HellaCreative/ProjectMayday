@@ -8,6 +8,15 @@ const path = require("node:path");
 const { writeRegionSidecars, selectProofs, parseArgs, uniquePairs } = require("./build-v4-seams");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 
+test("road connectivity metadata distinguishes bridges from timed ferries with missing leaves", () => {
+  const { isRoadConnection } = require("./build-v4-seams");
+  const edge = { accessForward: 0, accessReverse: 0, structureLeaf: "bridge", crossingSeconds: 0 };
+  assert.equal(isRoadConnection({ edge }), true);
+  assert.equal(isRoadConnection({ edge: { ...edge, structureLeaf: "ferry" } }), false);
+  assert.equal(isRoadConnection({ edge: { ...edge, structureLeaf: null, crossingSeconds: 3600 } }), false);
+  assert.equal(isRoadConnection({ edge: { ...edge, accessForward: 2, accessReverse: 2 } }), false);
+});
+
 test("identically labelled shared roads cannot seal with differing length or geometry", () => {
   const { assertSharedRoadGeometry } = require("./build-v4-seams");
   const road = () => ({ manifest: { regionId: "ns" }, pack: {

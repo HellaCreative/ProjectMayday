@@ -110,7 +110,11 @@ public struct RoutingEngine: Sendable {
                     guard possible else { lastFailure = .noPath; continue }
                 }
                 attempted = true
-                do { return try route(request,start: start,end: end,budget: budget) }
+                do {
+                    var result = try route(request,start: start,end: end,budget: budget)
+                    result.qualityUrbanBoxes = UrbanCores.boxes(in: pack)
+                    return result
+                }
                 catch let error as RoutingFailure {
                     if error != .noPath { throw error }
                     lastFailure = error
@@ -324,7 +328,7 @@ public struct RoutingEngine: Sendable {
            let best = candidates.map(\.quality.knownDirtPercent).max(), best < 50, best >= 40 {
             var recovery = request.options
             recovery.objective = .balancedResource; recovery.corridorMeters = base
-            if let primary = chooseDirt(candidates) {
+            if let primary = Self.chooseDirt(candidates) {
                 recovery.maximumMeters = min(cap,max(primary.route.distanceMeters+40_000,primary.route.distanceMeters*1.5))
             }
             let recoveryBudget = budget.limited(to: min(5, budget.remainingSeconds * 0.4))
@@ -349,7 +353,7 @@ public struct RoutingEngine: Sendable {
         }
         let summary = candidateLog.isEmpty ? nil : candidateLog.joined(separator: ",")
         let limitNote = incomplete.map { "comparison incomplete: \($0)" }
-        if let selected = chooseDirt(candidates) {
+        if let selected = Self.chooseDirt(candidates) {
             let repaired = repairLegShape(selected.route, request: request, run: run, policy: request.profile)
             var result = repaired.route.reportingLimit(limitNote)
             let shape = "shape:\(repaired.before)->\(repaired.after)"
@@ -422,18 +426,7 @@ public struct RoutingEngine: Sendable {
             if candidates.contains(where: { $0.width == corridor && $0.quality.knownDirtPercent < 5 }) { break }
             if corridor.isFinite, candidates.contains(where: { (40...60).contains($0.quality.knownDirtPercent) }) { break }
         }
-        let mixed = candidates.filter { inBand($0.quality) }
-        let quartered = candidates.filter { $0.quality.minimumSectionDirtPercent >= 15 }
-        let pool = !mixed.isEmpty ? mixed : (!quartered.isEmpty ? quartered : candidates)
-        let shortestMeters = direct.distanceMeters
-        let selected = pool.min { a, b in
-            func score(_ c: Candidate) -> Double {
-                abs(c.quality.knownDirtPercent - 50)
-                    + max(0, 20 - c.quality.minimumSectionDirtPercent) * 2
-                    + (c.route.distanceMeters - shortestMeters) / 10_000
-            }
-            return score(a) < score(b)
-        } ?? candidates[0]
+        let selected = Self.chooseBalanced(candidates) ?? candidates[0]
         var result = selected.route
         let repaired = repairLegShape(result, request: request, run: run, policy: request.profile)
         result = repaired.route
@@ -461,7 +454,24 @@ public struct RoutingEngine: Sendable {
         } catch { }
         return (route, before.issueCount, before.issueCount)
     }
-    private func chooseDirt(_ candidates: [Candidate]) -> Candidate? {
+    static func chooseBalanced(_ candidates: [Candidate]) -> Candidate? {
+        let mixed = candidates.filter {
+            (45...55).contains($0.quality.knownDirtPercent)
+                && $0.quality.minimumSectionDirtPercent >= 20 && $0.quality.urbanMeters <= 100
+        }
+        let quartered = candidates.filter { $0.quality.minimumSectionDirtPercent >= 15 }
+        let pool = !mixed.isEmpty ? mixed : (!quartered.isEmpty ? quartered : candidates)
+        let shortestMeters = candidates.map(\.route.distanceMeters).min() ?? 0
+        return pool.min { a, b in
+            func score(_ c: Candidate) -> Double {
+                abs(c.quality.knownDirtPercent - 50)
+                    + max(0, 20 - c.quality.minimumSectionDirtPercent) * 2
+                    + (c.route.distanceMeters - shortestMeters) / 10_000
+            }
+            return score(a) < score(b)
+        }
+    }
+    static func chooseDirt(_ candidates: [Candidate]) -> Candidate? {
         let coherent = candidates.filter { $0.quality.backwardMeters <= max(5000,$0.quality.totalMeters*0.08) }
         let best = candidates.map(\.quality.knownDirtPercent).max() ?? 0
         let bestCoherent = coherent.map(\.quality.knownDirtPercent).max() ?? -.infinity

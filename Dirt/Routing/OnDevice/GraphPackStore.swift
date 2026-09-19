@@ -129,6 +129,7 @@ final class GraphPackStore {
     private var lastAutoDownloadRegionId: String?
     private var publishedIds: Set<String> = ["ns"] // known live until manifest loads
     private var catalogIdentityLoaded = false
+    @ObservationIgnored private var catalogRoadNeighbors: [String:Set<String>] = [:]
     private var manifestFilesByRegion: [String: [PackManifest.File]] = [:]
     @ObservationIgnored private var navigationRegionRequirementCache = NavigationRegionRequirementCache()
 
@@ -284,6 +285,7 @@ final class GraphPackStore {
             }
             let manifest = try JSONDecoder().decode(PackManifest.self, from: data)
             lastManifestVersion = manifest.version
+            catalogRoadNeighbors = (manifest.roadNeighbors ?? [:]).mapValues { Set($0) }
             manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
                 ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
             })
@@ -370,7 +372,7 @@ final class GraphPackStore {
     /// Geographic primaries/paths remapped onto ids present in the loaded catalog.
     /// Prefer published halves (`on-s`/`on-n`); fall back to legacy parent (`on`).
     func requiredCatalogRoutingRegions(for points: [CLLocationCoordinate2D]) -> [String] {
-        Self.requiredCatalogRoutingRegions(for: points, published: publishedIds)
+        Self.requiredCatalogRoutingRegions(for: points, published: publishedIds, roadNeighbors: catalogRoadNeighbors)
     }
 
     /// Corridor packs using only published catalog ids. Avoids geographic BFS
@@ -379,7 +381,8 @@ final class GraphPackStore {
     /// published half that owns the pin (`on-n` at Kenora).
     static func requiredCatalogRoutingRegions(
         for points: [CLLocationCoordinate2D],
-        published: Set<String>
+        published: Set<String>,
+        roadNeighbors: [String:Set<String>] = [:]
     ) -> [String] {
         var ends: [String] = []
         for point in points {
@@ -407,6 +410,16 @@ final class GraphPackStore {
             }
             for id in path where !ordered.contains(id) {
                 ordered.append(id)
+            }
+            // The catalog carries a compact summary derived from verified seams.
+            // Acquire the bridge/land alternative as well as a direct ferry, so
+            // storage-region hop count cannot remove that option before search.
+            let roadAllowed = isCanadianRegion(a) && isCanadianRegion(b)
+                ? allowed.intersection(canadianRegionIds) : allowed
+            let roads = roadNeighbors.filter { roadAllowed.contains($0.key) }
+                .mapValues { $0.intersection(roadAllowed) }
+            if let roadPath = try? RegionConnectivity(neighbors: roads).chain(from: a, to: b) {
+                for id in roadPath where !ordered.contains(id) { ordered.append(id) }
             }
         }
         return ordered
@@ -474,7 +487,7 @@ final class GraphPackStore {
     /// parent is the only published catalog entry (monolithic `on` while code
     /// prefers `on-s`/`on-n`). When the fabric ships halves only, a parent id
     /// (`on`) resolves to the half that owns `coordinate` (`on-n` / `on-s`).
-    nonisolated static func resolveCatalogRegionId(
+    static func resolveCatalogRegionId(
         _ regionID: String,
         published: Set<String>,
         coordinate: CLLocationCoordinate2D? = nil
@@ -497,7 +510,7 @@ final class GraphPackStore {
     }
 
     /// Picks the published shard for a split province/state family.
-    nonisolated static func preferredPublishedHalf(
+    static func preferredPublishedHalf(
         forFamily family: String,
         coordinate: CLLocationCoordinate2D,
         published: Set<String>
@@ -530,7 +543,7 @@ final class GraphPackStore {
     /// Split parents (`on`/`qc`/`ca`/`nl`) are aliases on half-only fabrics — either
     /// mapped via `coordinate` or dropped when a sibling half is already present —
     /// never hard-failed as "unpublished".
-    nonisolated static func remapGeographicRegionIds(
+    static func remapGeographicRegionIds(
         _ geographic: [String],
         coordinate: CLLocationCoordinate2D?,
         published: Set<String>
@@ -1693,8 +1706,8 @@ final class GraphPackStore {
         if maxLat >= 44.5, minLat <= 48.2, maxLon >= -69.3, minLon <= -63.8 { ids.append("nb") }
         if maxLat >= 45.8, minLat <= 47.2, maxLon >= -64.6, minLon <= -61.9 { ids.append("pe") }
         if maxLat >= 46.5, minLat <= 60.5, maxLon >= -67.9, minLon <= -52.5 { ids.append("nl") }
-        if maxLat >= 46.5, minLat <= 52.0, maxLon >= -59.0, minLon <= -52.5 { ids.append("nl-island") }
-        if maxLat >= 51.2, minLat <= 60.5, maxLon >= -67.9, minLon <= -55.5 { ids.append("nl-lab") }
+        if maxLat >= 46.4, minLat <= 52.1, maxLon >= -59.5, minLon <= -52.3 { ids.append("nl-island") }
+        if maxLat >= 51.2, minLat <= 60.5, maxLon >= -67.9, minLon <= -55.2 { ids.append("nl-lab") }
         if maxLat >= 44.9, minLat <= 49.0, maxLon >= -79.8, minLon <= -57.0 { ids.append("qc-s") }
         if maxLat >= 49.0, minLat <= 62.7, maxLon >= -79.8, minLon <= -57.0 { ids.append("qc-n") }
         if maxLat >= 44.9, minLat <= 62.7, maxLon >= -79.8, minLon <= -57.0 { ids.append("qc") }
@@ -1752,8 +1765,9 @@ final class GraphPackStore {
         coordinate.latitude >= 37.0 ? "ca-n" : "ca-s"
     }
 
-    nonisolated static func newfoundlandHalf(for coordinate: CLLocationCoordinate2D) -> String {
-        coordinate.longitude <= -56.8 ? "nl-lab" : "nl-island"
+    static func newfoundlandHalf(for coordinate: CLLocationCoordinate2D) -> String {
+        RegionPolygons.contains("nl-lab", longitude: coordinate.longitude, latitude: coordinate.latitude)
+            ? "nl-lab" : "nl-island"
     }
 
     /// Distinct province/state families for endpoints (not internal shard ids).
@@ -1984,8 +1998,8 @@ final class GraphPackStore {
         case "nb": return (-69.3, 44.5, -63.8, 48.2)
         case "pe": return (-64.6, 45.8, -61.9, 47.2)
         case "nl": return (-67.9, 46.5, -52.5, 60.5)
-        case "nl-island": return (-59.0, 46.5, -52.5, 52.0)
-        case "nl-lab": return (-67.9, 51.2, -55.5, 60.5)
+        case "nl-island": return (-59.5, 46.4, -52.3, 52.1)
+        case "nl-lab": return (-67.9, 51.2, -55.2, 60.5)
         case "qc", "qc-s", "qc-n":
             if id == "qc-s" { return (-79.8, 44.9, -57.0, 49.0) }
             if id == "qc-n" { return (-79.8, 49.0, -57.0, 62.7) }
@@ -2011,8 +2025,8 @@ final class GraphPackStore {
         case "nb": return (-63.8 - -69.3) * (48.2 - 44.5)
         case "pe": return (-61.9 - -64.6) * (47.2 - 45.8)
         case "nl": return (-52.5 - -67.9) * (60.5 - 46.5)
-        case "nl-island": return (-52.5 - -59.0) * (52.0 - 46.5)
-        case "nl-lab": return (-55.5 - -67.9) * (60.5 - 51.2)
+        case "nl-island": return (-52.3 - -59.5) * (52.1 - 46.4)
+        case "nl-lab": return (-55.2 - -67.9) * (60.5 - 51.2)
         case "qc-s": return (-57.0 - -79.8) * (49.0 - 44.9)
         case "qc-n": return (-57.0 - -79.8) * (62.7 - 49.0)
         case "qc": return (-57.0 - -79.8) * (62.7 - 44.9)
@@ -2208,6 +2222,7 @@ private enum PackIntegrityError: LocalizedError {
 private struct PackManifest: Decodable, Sendable {
     var version: String
     var regions: [Region]
+    var roadNeighbors: [String:[String]]?
 
     struct Region: Decodable, Sendable {
         var id: String

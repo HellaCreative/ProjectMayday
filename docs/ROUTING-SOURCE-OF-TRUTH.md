@@ -50,6 +50,34 @@ pointing DEV to it. Tell the owner when to build DIRT Dev in Xcode; the owner
 performs physical-device acceptance. Initial work/evidence directory:
 `.build/fresh-fabric-20260919`. No fresh candidate is qualified or published yet.
 
+The fresh inputs come from `canada-260918.osm.pbf`, OSM timestamp
+`2026-09-18T20:21:10Z`, SHA-256
+`8190d82b9f4872504581006345663b6323bb8f4deba50fab84c2f6fd4ad4a08b`.
+The old Newfoundland longitude split put western island towns in Labrador.
+Its replacement uses Labrador's OSM administrative relation `9610205` within
+province relation `391196`; the island is the remaining province geometry.
+The generation recipe records the boundary input hash separately from the road
+source hash. Known-place checks cover both sides, including Port aux Basques,
+Corner Brook, St Anthony, Red Bay and Happy Valley–Goose Bay.
+
+PEI diagnosis: the old packs already contain Confederation Bridge way
+`646650186`. Fewest-region acquisition and staged chain selection could exclude
+NB and retain only NS–PE ferry travel. New candidates carry verified road-neighbor
+metadata so acquisition retains both road/bridge and ferry alternatives. Staged
+alternatives share a bounded comparison window and are compared using riding
+style; neither pack count nor a blanket bridge-first rule selects the result.
+This is a deliberate regional route-selection correction. It still requires
+actual fresh-pack bridge/ferry replays before qualification. It is not an
+exhaustive search of every possible administrative chain.
+
+Focused evidence in the directory above: `engine-connection-selection-tests.log`
+(119 passing), `acquisition-tests-2.xcresult` (33 passing on the single existing
+simulator), and `seam-geography-tests.log` (30 passing). These do not establish
+fresh-pack ride quality or physical-device acceptance. An exact membership index
+replaces repeated seam-proof scans; the 24,000-proof synthetic check changed from
+1,148 ms to 22 ms (`seam-proof-before.json` / `seam-proof-after.json`). This is a
+build-tool measurement, not a phone-routing speed claim.
+
 There is no requirement to use live server routing, keep complete regional
 graphs in a persistent service, publish every experiment, maintain identical
 JavaScript and Swift implementations, or use a particular third-party engine.

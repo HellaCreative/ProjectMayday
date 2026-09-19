@@ -7,6 +7,7 @@
 // without rescanning two full regional graphs for every proof. Weak references
 // release the cached rows with the pair and keep continent builds memory-safe.
 const seamCandidateCache = new WeakMap();
+const seamProofIdentities = new WeakMap();
 
 function haversineMeters(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
@@ -157,11 +158,14 @@ function assertSeamLegal(left, right, candidate) {
     throw new Error("seam is not legal-topology proven");
   }
   if (Number(candidate.coordinateGapMeters) > 2) throw new Error("seam coordinate mismatch");
-  const reproved = seamCandidates(left, right).some((row) =>
-    row.osmNodeId === candidate.osmNodeId &&
-    row.osmWayId === candidate.osmWayId &&
-    edgeProofKey(row.edge) === edgeProofKey(candidate.edge)
-  );
+  const rows = seamCandidates(left, right);
+  const identity = row => `${row.osmNodeId}|${row.osmWayId}|${edgeProofKey(row.edge)}`;
+  let identities = seamProofIdentities.get(rows);
+  if (!identities) {
+    identities = new Set(rows.map(identity));
+    seamProofIdentities.set(rows, identities);
+  }
+  const reproved = identities.has(identity(candidate));
   if (!reproved) throw new Error("seam proof does not match both packs");
   return true;
 }

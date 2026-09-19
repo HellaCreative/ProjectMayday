@@ -638,6 +638,29 @@ struct PackFirstRoutingTests {
         #expect(catalog.contains("wa"))
     }
 
+    @Test func PEIBridgeAlternativeRequiresNBDespiteADirectFerry() {
+        let halifax = CLLocationCoordinate2D(latitude: 44.696743, longitude: -63.485973)
+        let charlottetown = CLLocationCoordinate2D(latitude: 46.2382, longitude: -63.1311)
+        let roads: [String:Set<String>] = ["ns":["nb"], "nb":["ns","pe"], "pe":["nb"]]
+        for points in [[halifax, charlottetown], [charlottetown, halifax]] {
+            let required = GraphPackStore.requiredCatalogRoutingRegions(for: points,
+                published: ["ns","nb","pe"], roadNeighbors: roads)
+            #expect(Set(required) == ["ns","nb","pe"])
+        }
+    }
+
+    @Test func NewfoundlandIslandAndLabradorFollowAdministrativeGeography() {
+        for (longitude, latitude, expected) in [
+            (-59.137,47.57,"nl-island"), (-57.95,48.95,"nl-island"),
+            (-52.713,47.56,"nl-island"), (-55.59,51.37,"nl-island"),
+            (-54.285,49.715,"nl-island"), (-56.43,51.73,"nl-lab"), (-60.33,53.30,"nl-lab")
+        ] {
+            let point = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            #expect(GraphPackStore.primaryRegionId(containing: point) == expected)
+            #expect(GraphPackStore.resolveCatalogRegionId("nl", published: ["nl-island","nl-lab"], coordinate: point) == expected)
+        }
+    }
+
     @Test func halfOnlyFabricUsesPublishedShardsForCrossOntarioCorridor() {
         let toronto = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
         let kenora = CLLocationCoordinate2D(latitude: 49.8114, longitude: -94.4781)

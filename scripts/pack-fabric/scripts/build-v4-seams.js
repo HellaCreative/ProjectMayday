@@ -203,6 +203,12 @@ function publicRow(row, localEdgeId, remoteEdgeId) {
   };
 }
 
+function isRoadConnection(row) {
+  const edge = row.edge;
+  return !!edge && edge.structureLeaf !== "ferry" && !(Number(edge.crossingSeconds) > 0) &&
+    [edge.accessForward, edge.accessReverse].some(code => code === 0 || code === 1);
+}
+
 function writeSeamSidecar(file, sidecar) {
   // Compact streamed write — pretty-printed CA-scale neighbor arrays exceed
   // JSON.stringify string limits the same way checkpoints do.
@@ -216,6 +222,7 @@ function writeSeamSidecar(file, sidecar) {
     ws(`,"fabricReleaseId":${JSON.stringify(sidecar.fabricReleaseId)}`);
     ws(`,"sourceEpoch":${JSON.stringify(sidecar.sourceEpoch)}`);
     ws(`,"regionId":${JSON.stringify(sidecar.regionId)}`);
+    ws(`,"roadNeighbors":${JSON.stringify(sidecar.roadNeighbors)}`);
     ws(`,"neighbors":{`);
     const neighborIds = Object.keys(sidecar.neighbors || {}).sort();
     for (let n = 0; n < neighborIds.length; n += 1) {
@@ -255,6 +262,8 @@ function writeRegionSidecars(root, doc) {
       fabricReleaseId: doc.fabricReleaseId,
       sourceEpoch: doc.sourceEpoch,
       regionId: id,
+      roadNeighbors: Object.entries(doc.regions[id].neighbors)
+        .filter(([, rows]) => rows.some(isRoadConnection)).map(([neighbor]) => neighbor).sort(),
       neighbors: doc.regions[id].neighbors
     };
     writeSeamSidecar(seamPath, sidecar);
@@ -336,7 +345,9 @@ function main() {
     doc.regions[rightId].neighbors[leftId] = proofs.map((row) =>
       publicRow(row, `${row.edge.osmWayId}:${row.edge.fromOsmNodeId}:${row.edge.toOsmNodeId}`, `${row.edge.osmWayId}:${row.edge.fromOsmNodeId}:${row.edge.toOsmNodeId}`)
     );
-    doc.pairs.push({ left: leftId, right: rightId, proofs: proofs.length });
+    doc.pairs.push({ left: leftId, right: rightId, proofs: proofs.length,
+      roadProofs: proofs.filter(isRoadConnection).length,
+      ferryProofs: proofs.filter(row => !isRoadConnection(row)).length });
     console.log(`${leftId}/${rightId}: ${proofs.length} legal seams (${index}/${pairs.length})`);
     writeCheckpoint(options.output, doc);
     // Bound memory to the current pair; pack reads are deterministic and the
@@ -365,6 +376,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  isRoadConnection,
   assertSharedRoadGeometry,
   assertNeighborCoverage,
   main,

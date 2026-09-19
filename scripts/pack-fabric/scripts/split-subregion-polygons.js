@@ -8,9 +8,8 @@
  *   node scripts/pack-fabric/scripts/split-subregion-polygons.js \
  *     --parent on --south on-s --north on-n --cut-lat 46.0
  *
- * Longitude recipe (Newfoundland island / Labrador):
- *   node scripts/pack-fabric/scripts/split-subregion-polygons.js \
- *     --parent nl --east nl-island --west nl-lab --cut-lon -56.8
+ * Island/mainland administrative divisions use split-admin-subregion.js;
+ * a longitude cut would divide Newfoundland itself, not separate Labrador.
  *
  * Pure Node clip (no ogr2ogr) so the factory still runs when Homebrew GDAL
  * dylibs are broken. Writes clip GeoJSON + updates region-polygons.v1.json
@@ -49,11 +48,12 @@ function parseArgs(argv) {
     else throw new Error(`unknown argument ${value}`);
   }
   const latMode = Number.isFinite(opts.cutLat);
+  if (opts.parent === "nl") throw new Error("Newfoundland/Labrador requires its administrative boundary, not a band split");
   const lonMode = Number.isFinite(opts.cutLon);
   if (!opts.parent || latMode === lonMode) {
     throw new Error(
       "Usage: split-subregion-polygons.js --parent on --south on-s --north on-n --cut-lat 46.0 [--overlap-deg 0.25]\n" +
-        "   or: split-subregion-polygons.js --parent nl --east nl-island --west nl-lab --cut-lon -56.8 [--overlap-deg 0.25]"
+        "For geographic administrative splits use split-admin-subregion.js instead."
     );
   }
   if (latMode && (!opts.south || !opts.north)) {

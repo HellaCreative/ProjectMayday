@@ -73,8 +73,10 @@ enum RegionPolygons {
         }
         let nlHalves = hits.filter { $0 == "nl-island" || $0 == "nl-lab" }
         if !nlHalves.isEmpty {
-            if lon <= -56.8, nlHalves.contains("nl-lab") { return "nl-lab" }
-            if lon > -56.8, nlHalves.contains("nl-island") { return "nl-island" }
+            // These follow Labrador's administrative boundary, not a meridian
+            // that incorrectly assigns western Newfoundland to Labrador.
+            if nlHalves.contains("nl-lab") { return "nl-lab" }
+            if nlHalves.contains("nl-island") { return "nl-island" }
             return nlHalves[0]
         }
         hits.sort { (bboxes[$0]?.area ?? .infinity) < (bboxes[$1]?.area ?? .infinity) }

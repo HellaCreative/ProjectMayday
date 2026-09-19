@@ -7,6 +7,20 @@ const {
   seamCorridor
 } = require("./region-polygons");
 
+test("western Newfoundland stays on the island; Labrador follows its OSM boundary", () => {
+  const { newfoundlandHalfForPoint } = require("../regional/select");
+  for (const [lon,lat,expected] of [
+    [-59.137,47.57,"nl-island"],[-57.95,48.95,"nl-island"],[-52.713,47.56,"nl-island"],
+    [-55.59,51.37,"nl-island"],[-54.285,49.715,"nl-island"],[-56.43,51.73,"nl-lab"],[-60.33,53.30,"nl-lab"]
+  ]) {
+    assert.equal(polygonOwner(lon,lat),expected);
+    assert.equal(newfoundlandHalfForPoint(lon,lat),expected);
+  }
+  assert.throws(() => require("../../scripts/split-subregion-polygons").parseArgs([
+    "--parent","nl","--east","nl-island","--west","nl-lab","--cut-lon","-56.8"
+  ]), /administrative boundary/);
+});
+
 test("admin polygons own Atlantic and Ontario pins without stealing neighbours", () => {
   assert.equal(polygonOwner(-63.5752, 44.6488), "ns");
   assert.equal(polygonOwner(-64.213, 45.833), "ns");
@@ -14,17 +28,17 @@ test("admin polygons own Atlantic and Ontario pins without stealing neighbours",
   assert.equal(polygonOwner(-63.1316, 46.2382), "pe");
   assert.equal(polygonOwner(-63.696, 46.254), "pe");
   assert.equal(polygonOwner(-63.814, 46.162), "nb");
-  assert.equal(polygonOwner(-54.6103, 48.9544), "nl");
-  assert.equal(polygonOwner(-52.7126, 47.5615), "nl");
-  assert.equal(polygonOwner(-66.9114, 52.9463), "nl");
-  assert.equal(polygonOwner(-71.2075, 46.8139), "qc");
-  assert.equal(polygonOwner(-73.5673, 45.5017), "qc");
-  assert.equal(polygonOwner(-57.132, 51.426), "qc");
-  assert.equal(polygonOwner(-75.6972, 45.4215), "on");
-  assert.equal(polygonOwner(-79.3832, 43.6532), "on");
+  assert.equal(polygonOwner(-54.6103, 48.9544), "nl-island");
+  assert.equal(polygonOwner(-52.7126, 47.5615), "nl-island");
+  assert.equal(polygonOwner(-66.9114, 52.9463), "nl-lab");
+  assert.equal(polygonOwner(-71.2075, 46.8139), "qc-s");
+  assert.equal(polygonOwner(-73.5673, 45.5017), "qc-s");
+  assert.equal(polygonOwner(-57.132, 51.426), "qc-n");
+  assert.equal(polygonOwner(-75.6972, 45.4215), "on-s");
+  assert.equal(polygonOwner(-79.3832, 43.6532), "on-s");
   assert.equal(polygonOwner(-97.1385, 49.8954), "mb");
   assert.equal(polygonOwner(-99.95, 49.8483), "mb");
-  assert.equal(polygonOwner(-94.4897, 49.767), "on");
+  assert.equal(polygonOwner(-94.4897, 49.767), "on-n");
   assert.equal(polygonOwner(-104.6189, 50.4452), "sk");
   assert.equal(polygonOwner(-106.67, 52.1332), "sk");
   assert.equal(polygonOwner(-114.0719, 51.0447), "ab");
@@ -50,7 +64,7 @@ test("admin polygons own Atlantic and Ontario pins without stealing neighbours",
   assert.equal(polygonOwner(-84.7147, 44.6611), "mi");
   assert.equal(polygonOwner(-88.569, 47.1211), "mi");
   assert.equal(polygonOwner(-84.5555, 42.7325), "mi");
-  assert.equal(polygonOwner(-83.0364, 42.3143), "on");
+  assert.equal(polygonOwner(-83.0364, 42.3143), "on-s");
   assert.equal(polygonOwner(-93.265, 44.9778), "mn");
   assert.equal(polygonOwner(-92.1005, 46.7867), "mn");
   assert.equal(polygonOwner(-100.7837, 46.8083), "nd");

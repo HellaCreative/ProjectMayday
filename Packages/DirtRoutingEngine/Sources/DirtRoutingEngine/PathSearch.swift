@@ -128,6 +128,8 @@ public struct RouteSegment: Sendable {
 
 public struct ComputedRoute: Sendable {
     public var maneuvers: [NavigationCue] = []
+    // Small scoring metadata survives release of the detailed stage graph.
+    var qualityUrbanBoxes: [GeographicBox] = []
     public let start: RoadMatch
     public let end: RoadMatch
     public let segments: [RouteSegment]

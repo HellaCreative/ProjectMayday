@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { regionsForRoute } = require("./merge");
 const { phoneGraphFileNameForRegion } = require("../lib/v3-regions");
-const { maritimesOwner } = require("../lib/region-polygons");
+const { maritimesOwner, pointInRegionPolygon } = require("../lib/region-polygons");
 
 const REGIONS_DIR = path.join(__dirname, "..", "data", "regions");
 const LEGACY_GRAPH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
@@ -74,8 +74,8 @@ const REGION_BBOX = {
   nb: [-69.3, 44.5, -63.8, 48.2],
   // NL island / Labrador — ownership cut lon -56.8° (Strait of Belle Isle).
   nl: [-67.9, 46.5, -52.5, 60.5],
-  "nl-island": [-59.0, 46.5, -52.5, 52.0],
-  "nl-lab": [-67.9, 51.2, -55.5, 60.5],
+  "nl-island": [-59.5, 46.4, -52.3, 52.1],
+  "nl-lab": [-67.9, 51.2, -55.2, 60.5],
   // Quebec South / North — cut at 49.0°N (Saguenay south vs Nord-du-Québec).
   qc: [-79.8, 44.9, -57.0, 62.7],
   "qc-s": [-79.8, 44.9, -57.0, 49.0],
@@ -153,7 +153,7 @@ function californiaHalfForPoint(lon, lat) {
 }
 
 function newfoundlandHalfForPoint(lon, lat) {
-  return lon <= -56.8 ? "nl-lab" : "nl-island";
+  return pointInRegionPolygon("nl-lab", lon, lat) ? "nl-lab" : "nl-island";
 }
 
 function bboxArea(bbox) {

@@ -81,10 +81,77 @@ public enum StagedRouter {
         let endRegion = try containingRegion(request.end, regions: unique, repository: repository,
                                              budget: budget, prepared: prepared, access: request.access, start: false)
         let neighbors = try neighborMap(unique, repository: repository)
-        let chain = try RegionConnectivity(neighbors: neighbors).chain(from: startRegion, to: endRegion)
+        var roads: [String:Set<String>] = [:]
+        for id in unique {
+            try budget.check()
+            if let roadNeighbors = try repository.roadNeighborIDs(id) {
+                roads[id] = roadNeighbors.intersection(Set(unique))
+            }
+        }
+        let chains = try RegionConnectivity(neighbors: neighbors).chains(from: startRegion, to: endRegion,
+                                                                          roadNeighbors: roads)
+        if chains.count == 1 {
+            return try routeChain(request, chain: chains[0], repository: repository, budget: budget,
+                prepared: prepared, compassStore: compassStore, renewAfterCommittedStage: renewAfterCommittedStage)
+        }
+        var candidates: [ComputedRoute] = []
+        var outcomes: [String] = []
+        var incomplete: RoutingFailure?
+        // These are alternatives, not committed stages. Share the existing
+        // window rather than resetting its deadline for each possible journey.
+        for (index, chain) in chains.enumerated() {
+            let comparisonBudget = budget.limited(to: budget.remainingSeconds / Double(chains.count - index))
+            do {
+                let candidate = try routeChain(request, chain: chain, repository: repository, budget: comparisonBudget,
+                    prepared: prepared, compassStore: compassStore,
+                    renewAfterCommittedStage: false)
+                candidates.append(candidate)
+                outcomes.append("\(chain.joined(separator: "+")):\(Int(candidate.distanceMeters))m")
+            } catch RoutingFailure.noPath {
+                outcomes.append("\(chain.joined(separator: "+")):noPath")
+            } catch let failure as RoutingFailure {
+                switch failure {
+                case .resourceLimit:
+                    incomplete = failure
+                    outcomes.append("\(chain.joined(separator: "+")):\(failure)")
+                default: throw failure
+                }
+            }
+        }
+        if var selected = selectConnectionRoute(candidates, style: request.profile.style) {
+            selected.searchSummary = "connections[\(outcomes.joined(separator: ","))];" + (selected.searchSummary ?? "")
+            return selected.reportingLimit(incomplete.map { "connection comparison incomplete: \($0)" })
+        }
+        if let incomplete { throw incomplete }
+        throw RoutingFailure.noPath
+    }
+
+    /// Apply the same ride-quality selection to complete connection alternatives.
+    /// No pack count or preference for a named bridge/ferry enters this ranking.
+    static func selectConnectionRoute(_ routes: [ComputedRoute], style: RidingStyle) -> ComputedRoute? {
+        let candidates = routes.map { route in
+            RoutingEngine.Candidate(route: route, width: .infinity,
+                quality: RouteQuality(route: route, urbanBoxes: route.qualityUrbanBoxes))
+        }
+        switch style {
+        case .dirt: return RoutingEngine.chooseDirt(candidates)?.route
+        case .balanced: return RoutingEngine.chooseBalanced(candidates)?.route
+        case .cleanest:
+            return candidates.min { a, b in
+                let unpavedA = a.quality.totalMeters > 0 ? 1 - a.quality.pavedMeters / a.quality.totalMeters : 0
+                let unpavedB = b.quality.totalMeters > 0 ? 1 - b.quality.pavedMeters / b.quality.totalMeters : 0
+                if abs(unpavedA - unpavedB) > 0.05 { return unpavedA < unpavedB }
+                return a.route.searchCost < b.route.searchCost
+            }?.route
+        }
+    }
+
+    private static func routeChain(_ request: RoutingRequest, chain: [String], repository: PackRepository,
+                                   budget: ComputationBudget, prepared: PreparedGraphStore,
+                                   compassStore: RoadCompassStore?, renewAfterCommittedStage: Bool) throws -> ComputedRoute {
         let windows = overlappingWindows(chain)
         guard windows.count >= 2 else {
-            return try routeWindow(windows.first ?? unique, request: request, repository: repository,
+            return try routeWindow(windows.first ?? chain, request: request, repository: repository,
                                    budget: budget, prepared: prepared, compassStore: compassStore)
         }
         var parts: [ComputedRoute] = []
@@ -459,6 +526,7 @@ public enum StagedRouter {
             distanceMeters: prefix.reduce(0) { $0+$1.meters }, searchCost: route.searchCost,
             poppedLabels: route.poppedLabels, arrivalRestrictions: active)
         result.searchSummary = "handover-before-final-road[\(route.searchSummary ?? "-")]"
+        result.qualityUrbanBoxes = route.qualityUrbanBoxes
         result.maneuvers = NavigationCues.make(route: result, graph: graph, access: request.access,
                                              arrival: request.options.arrival)
         return result
@@ -917,6 +985,7 @@ public enum StagedRouter {
             "stage:\(window.joined(separator: "+"))[\(part.searchSummary ?? "-")]"
         }
         combined.searchSummary = labels.joined(separator: ",")
+        combined.qualityUrbanBoxes = parts.flatMap(\.qualityUrbanBoxes)
         return combined
     }
 }

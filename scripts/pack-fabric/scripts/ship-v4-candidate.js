@@ -120,6 +120,9 @@ function verifyLocalCandidate(options) {
     version: options.candidate,
     fabricReleaseId: options.candidate,
     sourceEpoch: release.sourceEpoch,
+    roadNeighbors: Object.fromEntries(expectedIds.map(id => [id,
+      topology.pairs.filter(pair => pair.roadProofs > 0 && [pair.left, pair.right].includes(id))
+        .map(pair => pair.left === id ? pair.right : pair.left).sort()])),
     regions: []
   };
   const riderCatalog = {

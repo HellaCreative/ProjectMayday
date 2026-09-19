@@ -253,6 +253,16 @@ public struct PackRepository: Sendable {
             try JSONDecoder().decode(SeamNeighborNames.self, from: seamBytes(region)).ids
         }
     }
+    func roadNeighborIDs(_ region: String) throws -> Set<String>? {
+        struct Summary: Decodable { let roadNeighbors: [String]? }
+        let key = try preparationIdentity([region]) + "|roads"
+        // Older sidecars have no transport summary; do not invent one from
+        // geographic region names. Fresh sidecars bind it to verified bytes.
+        return try Self.inputs.neighborIDs(key) {
+            let summary = try JSONDecoder().decode(Summary.self, from: seamBytes(region))
+            return Set(summary.roadNeighbors ?? [])
+        }
+    }
     func loadSeams(_ region: String) throws -> SeamDocument {
         let key = try preparationIdentity([region])
         return try Self.inputs.document(key) {
@@ -269,6 +279,18 @@ public struct PackRepository: Sendable {
 public struct RegionConnectivity: Sendable {
     public let neighbors: [String:Set<String>]
     public init(neighbors: [String:Set<String>]) { self.neighbors = neighbors }
+    /// Keep the ordinary connection as an alternative, but never let a ferry
+    /// erase an available land/bridge corridor just because it crosses fewer packs.
+    public func chains(from start: String, to end: String,
+                       roadNeighbors: [String:Set<String>]) throws -> [[String]] {
+        let ordinary = try chain(from: start, to: end)
+        let roads = roadNeighbors.map { (key, value) in (key, value.intersection(neighbors[key] ?? [])) }
+        if let land = try? RegionConnectivity(neighbors: Dictionary(uniqueKeysWithValues: roads))
+            .chain(from: start, to: end), land != ordinary {
+            return [land, ordinary]
+        }
+        return [ordinary]
+    }
     /// Returns the intermediate downloads as well as endpoint regions. A complete
     /// geographic search may request an alternate chain through the same interface.
     public func chain(from start: String,to end: String) throws -> [String] {
