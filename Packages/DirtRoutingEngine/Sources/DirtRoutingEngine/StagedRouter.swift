@@ -326,25 +326,15 @@ public enum StagedRouter {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
-        // Group by seam node so a land-backed crossing demotes ferry proofs at
-        // the same pin rather than competing as duplicate coordinates.
-        var groups: [String: HandoverCandidate] = [:]
-        for row in anchors {
-            guard row.coordinate.count == 2 else { continue }
+        // Keep every seam row; water-like demotion is a rank key, not an exclude.
+        // Grouping by node would collapse diversity on dense borders (nb↔me).
+        let points = anchors.compactMap { row -> HandoverCandidate? in
+            guard row.coordinate.count == 2 else { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
-            guard point.isValid else { continue }
-            let key = row.osmNodeId.isEmpty
-                ? String(format: "%.5f,%.5f", point.longitude, point.latitude)
-                : row.osmNodeId
-            let water = isWaterLike(row.edge)
-            if let existing = groups[key] {
-                groups[key] = .init(coordinate: existing.coordinate,
-                                    waterLike: existing.waterLike && water)
-            } else {
-                groups[key] = .init(coordinate: point, waterLike: water)
-            }
+            guard point.isValid else { return nil }
+            return .init(coordinate: point, waterLike: isWaterLike(row.edge))
         }
-        return pickHandoverCandidates(from: Array(groups.values), origin: origin, toward: dest,
+        return pickHandoverCandidates(from: points, origin: origin, toward: dest,
                                       limit: handoverCandidateLimit)
     }
 
@@ -395,7 +385,9 @@ public enum StagedRouter {
     /// all-pairs spacing scan on that set blows the wall clock before search.
     /// Geographic "best" alone is not enough — overlap stubs can look perfect
     /// on detour while remaining unreachable in one half, so callers try
-    /// several diversified pins. Land-backed groups rank before water-like.
+    /// several diversified pins. Rank order: land before water-like, then
+    /// interquartile seam belt before lon/lat fringe (replaces NB/ME lon gate),
+    /// then detour.
     static func pickHandoverCandidates(from points: [Coordinate], origin: Coordinate,
                                        toward dest: Coordinate, limit: Int) -> [Coordinate] {
         pickHandoverCandidates(from: points.map {
@@ -403,27 +395,42 @@ public enum StagedRouter {
         }, origin: origin, toward: dest, limit: limit)
     }
 
+    /// Pins outside the seam set's longitude IQR are coastal/island or stub
+    /// fringes on long borders. Keep them as fallbacks; never discard.
+    static func seamFringeFlags(for points: [HandoverCandidate]) -> [Bool] {
+        guard points.count >= 8 else { return Array(repeating: false, count: points.count) }
+        let lons = points.map(\.coordinate.longitude).sorted()
+        let q1Lon = lons[lons.count / 4]
+        let q3Lon = lons[(3 * lons.count) / 4]
+        return points.map {
+            $0.coordinate.longitude < q1Lon || $0.coordinate.longitude > q3Lon
+        }
+    }
+
     static func pickHandoverCandidates(from points: [HandoverCandidate], origin: Coordinate,
                                        toward dest: Coordinate, limit: Int) -> [Coordinate] {
         guard !points.isEmpty, limit > 0 else { return [] }
         let direct = max(1, origin.distance(to: dest))
-        let ranked = points.map { point -> (score: Double, point: Coordinate, waterLike: Bool) in
+        let fringe = seamFringeFlags(for: points)
+        let ranked = zip(points, fringe).map { point, isFringe -> (score: Double, point: Coordinate, waterLike: Bool, fringe: Bool) in
             let via = origin.distance(to: point.coordinate) + point.coordinate.distance(to: dest)
-            return (via / direct, point.coordinate, point.waterLike)
+            return (via / direct, point.coordinate, point.waterLike, isFringe)
         }.sorted {
             if $0.waterLike != $1.waterLike { return !$0.waterLike }
+            if $0.fringe != $1.fringe { return !$0.fringe }
             return $0.score < $1.score
         }
 
         // Keep the best pin per ~0.4° longitude cell so western stubs cannot
         // crowd out the connected Hwy 69 / French River band.
-        var byCell: [Int:(score: Double, point: Coordinate, waterLike: Bool)] = [:]
+        var byCell: [Int:(score: Double, point: Coordinate, waterLike: Bool, fringe: Bool)] = [:]
         for row in ranked {
             let cell = Int((row.point.longitude * 2.5).rounded(.towardZero))
             if byCell[cell] == nil { byCell[cell] = row }
         }
         let diversified = byCell.values.sorted {
             if $0.waterLike != $1.waterLike { return !$0.waterLike }
+            if $0.fringe != $1.fringe { return !$0.fringe }
             return $0.score < $1.score
         }.map(\.point)
         var spaced: [Coordinate] = []

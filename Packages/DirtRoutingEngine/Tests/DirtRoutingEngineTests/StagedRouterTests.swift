@@ -59,6 +59,30 @@ struct StagedRouterTests {
         #expect(picks.first?.latitude == land.latitude)
     }
 
+    @Test func handoverCorridorIQRPrefersLandBorderOverIslandApproaches() {
+        // Replaces the removed NB/ME lon ≤ -67.05 gate: island approaches sit
+        // on the eastern fringe of the nb↔me seam cloud; land Calais belt is
+        // inside the lon/lat IQR of a realistic border sample.
+        let origin = Coordinate(longitude: -66.1, latitude: 45.3)
+        let dest = Coordinate(longitude: -69.8, latitude: 43.7)
+        var points: [StagedRouter.HandoverCandidate] = []
+        // Dense land belt (IQR bulk).
+        for i in 0..<40 {
+            points.append(.init(
+                coordinate: .init(longitude: -67.40 + Double(i % 10) * 0.02,
+                                  latitude: 45.10 + Double(i / 10) * 0.03),
+                waterLike: false))
+        }
+        let land = Coordinate(longitude: -67.28, latitude: 45.19)
+        let island = Coordinate(longitude: -66.96, latitude: 44.91)
+        points.append(.init(coordinate: land, waterLike: false))
+        points.append(.init(coordinate: island, waterLike: false))
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: points, origin: origin, toward: dest, limit: 8)
+        #expect(picks.contains(where: { abs($0.longitude - land.longitude) < 0.05 }))
+        #expect(picks.first.map { abs($0.longitude - island.longitude) > 0.05 } ?? false)
+    }
+
     @Test func handoverStructuralQualityKeepsWaterOnlyFallbacks() {
         let origin = Coordinate(longitude: -66.1, latitude: 45.3)
         let dest = Coordinate(longitude: -69.8, latitude: 43.7)
