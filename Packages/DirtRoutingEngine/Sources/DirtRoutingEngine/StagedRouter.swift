@@ -106,7 +106,8 @@ public enum StagedRouter {
             // nb↔me proofs can sit in both solo giants yet be islands in [ns]/[nb].
             let pins = try handoverCandidates(from: originPack, into: destPack, from: cursor,
                                               toward: toward, repository: repository,
-                                              searchGraph: firstGraph, budget: budget)
+                                              searchGraph: firstGraph, budget: budget,
+                                              access: request.access)
             guard !pins.isEmpty else { throw RoutingFailure.noPath }
             var lastError: Error = RoutingFailure.noPath
             var reach0: EndpointReachability?
@@ -208,7 +209,8 @@ public enum StagedRouter {
                     toward: toward,
                     repository: repository,
                     searchGraph: indexed,
-                    budget: budget
+                    budget: budget,
+                    access: request.access
                 )
             } else {
                 candidates = [request.end]
@@ -348,18 +350,19 @@ public enum StagedRouter {
     static func handoverCandidates(from shared: String, into next: String, from origin: Coordinate,
                                    toward dest: Coordinate, repository: PackRepository,
                                    searchGraph: (any RoadGraph)? = nil,
-                                   budget: ComputationBudget = .init(seconds: 120)) throws -> [Coordinate] {
+                                   budget: ComputationBudget = .init(seconds: 120),
+                                   access: AccessPolicy = .init()) throws -> [Coordinate] {
         let anchors = try repository.loadSeams(shared).neighbors[next]
             ?? repository.loadSeams(next).neighbors[shared]
             ?? []
-        // Keep every seam row; water-like / stub-island demotion is a rank key,
-        // not an exclude. Prefer seams in the largest weak component of the
-        // *search window* (when provided) and of the next pack — solo-pack
-        // giants still mark coastal nb↔me proofs as "live" while hopLooksLive
-        // rejects them inside [ns,nb].
+        // Keep every seam row; water-like / stub demotion is a rank key, not an
+        // exclude. Prefer seams in the *origin's* weak component of the search
+        // window (not the graph-wide giant — NS+NB joins can make an NB-only
+        // island the largest component) and in the next pack's giant.
         let stubFlags = try stubIslandFlags(
-            shared: shared, next: next, anchors: anchors,
-            repository: repository, searchGraph: searchGraph, budget: budget)
+            origin: origin, shared: shared, next: next, anchors: anchors,
+            repository: repository, searchGraph: searchGraph, budget: budget,
+            access: access)
         let points = anchors.compactMap { row -> HandoverCandidate? in
             guard row.coordinate.count == 2 else { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
@@ -376,12 +379,15 @@ public enum StagedRouter {
                                       limit: handoverCandidateLimit)
     }
 
-    /// Per-OSM-id stub flags for ranking. Missing from a graph counts as stub.
-    static func stubIslandFlags(shared: String, next: String,
+    /// Per-OSM-id stub flags for ranking. Search-side stub = not in the origin's
+    /// weak component (aligns with hopLooksLive). Next-side stub = not in next
+    /// pack giant (onward commitment).
+    static func stubIslandFlags(origin: Coordinate, shared: String, next: String,
                                 anchors: [SeamDocument.Anchor],
                                 repository: PackRepository,
                                 searchGraph: (any RoadGraph)?,
-                                budget: ComputationBudget) throws -> [String: (onSearch: Bool, onNext: Bool)] {
+                                budget: ComputationBudget,
+                                access: AccessPolicy) throws -> [String: (onSearch: Bool, onNext: Bool)] {
         let currentGraph: any RoadGraph
         if let searchGraph {
             currentGraph = searchGraph
@@ -389,9 +395,11 @@ public enum StagedRouter {
             currentGraph = try repository.open(shared, requireSeams: false, budget: budget).graph
         }
         let nextPack = try repository.open(next, requireSeams: false, budget: budget).graph
-        let currentIds = WeakComponents.ids(in: currentGraph, allowUnknown: true)
-        let nextIds = WeakComponents.ids(in: nextPack, allowUnknown: true)
-        let currentGiant = giantComponentId(from: currentIds)
+        let currentIds = WeakComponents.ids(in: currentGraph, allowUnknown: access.allowUnknown)
+        let nextIds = WeakComponents.ids(in: nextPack, allowUnknown: access.allowUnknown)
+        let originComponent = try originWeakComponent(
+            origin: origin, graph: currentGraph, ids: currentIds, access: access, budget: budget)
+            ?? giantComponentId(from: currentIds)
         let nextGiant = giantComponentId(from: nextIds)
         let wanted = Set(anchors.map(\.osmNodeId))
         guard !wanted.isEmpty else { return [:] }
@@ -399,11 +407,27 @@ public enum StagedRouter {
         let nextNodes = osmNodeIndex(in: nextPack, wanted: wanted)
         var flags: [String: (onSearch: Bool, onNext: Bool)] = [:]
         for id in wanted {
-            let onSearch = !(currentNodes[id].map { currentIds[$0] == currentGiant } ?? false)
+            let onSearch = !(currentNodes[id].map { currentIds[$0] == originComponent } ?? false)
             let onNext = !(nextNodes[id].map { nextIds[$0] == nextGiant } ?? false)
             flags[id] = (onSearch, onNext)
         }
         return flags
+    }
+
+    /// Weak-component id of the best match at `origin`, when matching succeeds.
+    static func originWeakComponent(origin: Coordinate, graph: any RoadGraph, ids: [Int],
+                                    access: AccessPolicy, budget: ComputationBudget) throws -> Int? {
+        let indexed: IndexedGraph
+        if let warm = graph as? IndexedGraph {
+            indexed = warm
+        } else {
+            indexed = try IndexedGraph(graph, budget: budget)
+        }
+        let matcher = RoadMatcher(pack: indexed)
+        let matches = try matcher.matches(at: origin, radius: 2_000, start: true,
+                                          policy: access, intent: nil, budget: budget)
+        guard let match = matches.first else { return nil }
+        return WeakComponents.of(match: match, pack: indexed, ids: ids)
     }
 
     static func giantComponentId(from ids: [Int]) -> Int {
