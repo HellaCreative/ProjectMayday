@@ -1,11 +1,13 @@
 import Foundation
 import CryptoKit
+import CoreLocation
 import Testing
 import DirtRoutingEngine
 @testable import Dirt
 
 /// Opt-in qualification through the same session and response conversion used by
-/// the app. Reads immutable host fixtures; never installs into the rider's cache.
+/// the app. Reads immutable host fixtures unless the separate download opt-in
+/// enables verification of the published candidate in the test app's pack cache.
 @MainActor
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_CANDIDATE"] == "1"))
 struct NativeCandidateQualificationTests {
@@ -15,6 +17,68 @@ struct NativeCandidateQualificationTests {
         }
         return URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("scripts/pack-fabric/routing/candidates/fabric-v4-20260917-02/packs")
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_DOWNLOADS"] == "1"),
+          .timeLimit(.minutes(5)))
+    func publishedCandidateInstallsVerifiesAndRoutesThroughTheApp() async throws {
+        let expected = try #require(ProcessInfo.processInfo.environment["DIRT_QUALIFY_FABRIC"])
+        #expect(AppConfig.v4CandidateReleaseId == expected)
+        let store = GraphPackStore()
+        await store.refreshCatalog()
+        #expect(store.lastManifestVersion == expected)
+        let islandTrip = [CLLocationCoordinate2D(latitude: 44.696743, longitude: -63.485973),
+                          CLLocationCoordinate2D(latitude: 46.2382, longitude: -63.1316)]
+        #expect(Set(store.requiredCatalogRoutingRegions(for: islandTrip)) == ["ns", "nb", "pe"])
+        let startedInstall = ContinuousClock.now
+        try await store.installVerifiedPacks(["pe", "nb"], replaceInstalled: true)
+        for id in ["pe", "nb"] {
+            #expect(store.hasCompleteNativePack(id))
+            #expect(store.packRevisionState(id) == .current)
+        }
+        let points = [CLLocationCoordinate2D(latitude: 46.1636391, longitude: -63.8150711),
+                      CLLocationCoordinate2D(latitude: 46.2202911, longitude: -63.740036)]
+        let directories = try store.routingDirectories(for: points)
+        #expect(Set(directories.keys) == ["nb", "pe"])
+        let repository = try PackRepository(installedDirectories: directories)
+        for id in directories.keys {
+            #expect(try repository.open(id, requireSeams: true).manifest.fabricReleaseId == expected)
+        }
+        let identities = ["pe", "nb"].map { store.installedPackIdentity(regionId: $0) }
+        try await store.installVerifiedPacks(["pe", "nb"], replaceInstalled: false)
+        #expect(identities == ["pe", "nb"].map { store.installedPackIdentity(regionId: $0) })
+        let request = RoutingRequest(start: .init(longitude: points[0].longitude, latitude: points[0].latitude),
+            end: .init(longitude: points[1].longitude, latitude: points[1].latitude), style: .cleanest, seed: 1)
+        let route = try await NativeRoutingSession().route(request, directories: directories)
+        #expect(route.limit == nil)
+        #expect(route.end.coordinate.distance(to: request.end) <= 250)
+        #expect(route.segments.contains { $0.edgeID.hasPrefix("646650186:") || $0.edgeID.hasPrefix("w646650186:") })
+        #expect(route.segments.allSatisfy { $0.structure != "ferry" && $0.access == 0 })
+        report("published-download-verify-reuse-bridge", started: startedInstall, route: route)
+    }
+
+    @Test(.timeLimit(.minutes(3)))
+    func southernQuebecColdAndWarmRemainWithinAppLimits() async throws {
+        let directories = ["qc-s": root.appendingPathComponent("qc-s")]
+        let session = NativeRoutingSession()
+        var firstRoads: [String]?
+        for run in 0...1 {
+            var request = RoutingRequest(start: .init(longitude: -73.5673, latitude: 45.5017),
+                end: .init(longitude: -71.2075, latitude: 46.8139), style: .dirt, allowUnknown: false, seed: 1)
+            request.profile.wander = 0.5
+            request.profile.avoidMajorHighways = true
+            request.options.cityWall = true
+            let started = ContinuousClock.now
+            let route = try await session.route(request, directories: directories)
+            #expect(route.limit == nil)
+            #expect(route.end.coordinate.distance(to: request.end) <= 250)
+            verifyShortUnknownConnectors(route)
+            #expect(RouteQuality(route: route).reriddenMeters == 0)
+            #expect(ProcessMemory.megabytes().peak < 1_300)
+            let roads = route.segments.map(\.edgeID)
+            if let firstRoads { #expect(roads == firstRoads) } else { firstRoads = roads }
+            report("qc-s-dirt-run\(run)", started: started, route: route)
+        }
     }
 
     @Test(.timeLimit(.minutes(3)))

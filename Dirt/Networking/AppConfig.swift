@@ -132,13 +132,13 @@ enum AppConfig {
     }
 
     #if DIRT_DEVELOPMENT
-    /// Full national DEV candidate with ON/QC/CA/NL splits. Production keeps
-    /// its approved release bytes. Never pin a partial-only catalog again.
+    /// Owner-authorized fresh seven-region Atlantic/Quebec DEV qualification.
+    /// This catalog is intentionally regional; production keeps its approved bytes.
     nonisolated static let v4ConnectionRevision = v4CandidateReleaseId
     nonisolated static var v4ConnectionBaseURL: URL {
         v4CandidateBaseURL
     }
-    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260917-02"
+    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260919-01"
     nonisolated static var v4CandidateBaseURL: URL {
         packCDNBaseURL.appendingPathComponent("v4/candidates/\(v4CandidateReleaseId)")
     }

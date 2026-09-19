@@ -48,7 +48,8 @@ DEV candidate. Preserve the existing release for rollback and leave production
 unchanged. Qualify the seven-region catalog and app acquisition path before
 pointing DEV to it. Tell the owner when to build DIRT Dev in Xcode; the owner
 performs physical-device acceptance. Initial work/evidence directory:
-`.build/fresh-fabric-20260919`. No fresh candidate is qualified or published yet.
+`.build/fresh-fabric-20260919`. The fresh immutable DEV candidate is now published
+and verified; physical-device and riding-quality acceptance remain open.
 
 The fresh inputs come from `canada-260918.osm.pbf`, OSM timestamp
 `2026-09-18T20:21:10Z`, SHA-256
@@ -66,8 +67,8 @@ NB and retain only NS–PE ferry travel. New candidates carry verified road-neig
 metadata so acquisition retains both road/bridge and ferry alternatives. Staged
 alternatives share a bounded comparison window and are compared using riding
 style; neither pack count nor a blanket bridge-first rule selects the result.
-This is a deliberate regional route-selection correction. It still requires
-actual fresh-pack bridge/ferry replays before qualification. It is not an
+This is a deliberate regional route-selection correction. Fresh-pack bridge and
+ferry replays now complete in both directions. It is not an
 exhaustive search of every possible administrative chain.
 
 Focused evidence in the directory above: `engine-connection-selection-tests.log`
@@ -84,8 +85,8 @@ eight bytes per road to GEOM v1 for the exact matching-grid bounds of its stored
 coordinates. The factory verifies every row; the graph's paired geometry hash
 covers the table. Readers without this extension still read the original shapes.
 This does not select routes, simplify shapes, prune dirt alternatives or weaken
-legal checks. New and legacy matching agree in focused tests; measured route
-preparation, memory and download costs remain required before qualification.
+legal checks. New and legacy matching agree in focused tests; measured costs
+and the limited observed preparation gain are recorded below.
 
 The initial NS host comparison on Apple M1/16 GiB used identical private pack
 bytes for both readers and three process starts per variant: median preparation
@@ -105,7 +106,7 @@ table. This can change new route results and must be qualified as a correctness
 change. Two older tests that expected the unsupported transfer now require
 disconnection. The stronger source-identity/seam/turn tests remain passing:
 `engine-verified-junction-tests.log` records 121 passing; the reproducer is
-`unverified-junction-before.log`. Fresh-region route qualification remains open.
+`unverified-junction-before.log`. Fresh-region road-completion results follow below.
 App acquisition still passes all 33 checks (`prepared-candidate-app-tests.xcresult`).
 The native qualification suite accepts an explicit `DIRT_QUALIFY_PACK_ROOT` and
 `DIRT_QUALIFY_FABRIC`, so fresh data can be tested without overwriting old fixtures.
@@ -117,9 +118,12 @@ Evidence: `fresh-bridge-native-3.xcresult`; first use was about 0.87–0.90 s,
 warm repeats 0.003–0.006 s, peak simulator footprint 109 MB. Earlier filtered
 attempts ran zero tests and are not passes. Physical-device acceptance remains open.
 
-All seven fresh packs are built and locally sealed as `fabric-v4-20260919-01`
-(factory `a3144fb`); publication and DEV activation remain pending integrated
-qualification. All exact geometry-grid rows verified, all nine neighboring pairs
+All seven fresh packs are built, sealed and published as the immutable DEV
+candidate `fabric-v4-20260919-01` (factory `a3144fb`). Publication verified all
+54 objects and reports `productionUntouched: true` (`dev-publication.log`).
+DEV now points to this seven-region candidate; the published app-installer
+verification passes as recorded below. All exact geometry-grid rows verified,
+all nine neighboring pairs
 have source-proven seam records, and each region has fresh fuel and separate
 Rider Services extracts. These checks alone do not prove complete journeys.
 Evidence: `pack-feature-inventory.json`, `factory-build.log` and the sealed local
@@ -148,7 +152,8 @@ and the preserved `fresh-other-styles/` results. One NS–QC Clean direction sti
 timed out. A necessary-only paved-topology preflight now skips a proven
 disconnected paved search; it preserves endpoint road exceptions and never
 replaces legal search. All 123 engine tests pass (`paved-preflight-engine-tests.log`);
-real-route qualification of that additional optimization is pending. Full probe
+real-route qualification preserves the selected Clean roads while avoiding the
+failed search work (`paved-preflight-matrix/`). Full probe
 receipts can include each selected road, direction, access, surface and shape.
 
 The remaining forward NS–QC Clean timeout was traced to handover coordinate
@@ -159,7 +164,8 @@ Clean handover screening now uses known-access components and filters uncertain
 through approaches; Dirt/Balanced retain their existing connector possibility.
 The focused regression fails before and passes after; all 124 engine tests pass
 (`clean-handover-before.log`, `clean-handover-engine-tests.log`). Exact real-route
-replay is still required. Diagnostic stage receipts now name handover coordinates.
+replay now completes forward NS–QC Clean in 8.85 s instead of the 60 s timeout
+(`final-clean-matrix/`). Diagnostic stage receipts now name handover coordinates.
 
 Selected full-segment fresh-data replays (`selected-shapes/`) have continuous
 joins, zero prohibited/conditional-closed segments and zero repeated mileage.
@@ -168,7 +174,58 @@ Unknown off and 68.9% on; off's longest uncertain connector is 100 m, on's is
 15.23 km. These are not 70–80% Dirt acceptance. Halifax–PE still chooses the ferry
 at Wander 0.5, despite separately verified bridge availability. QC split traversal
 is 71.7% dirt; source connectivity and riding-quality outcomes remain distinct.
-No pack publication or DEV pin is implied by these receipts.
+These shape receipts establish the inspected roads, not universal ride quality.
+
+The combined host matrix now records **87/87 road completions**: 29 journeys
+in Dirt, Balanced and Clean, using the same seven immutable fresh packs, fuel
+outside routing, Wander 0.5, Unknown off, city/highway avoidance on and seed 1.
+Evidence: `combined-connectivity-results.json`, with per-case pack hashes, source
+and binary receipts. Dirt/Balanced use their unchanged earlier engine revision;
+Clean was rerun at `2ae51ca`. This is not a claim that all 87 were rerun on one
+binary. Original failures and corrected synthetic fixtures remain available.
+The Apple M1 / 16 GiB host peak was 643.0 MiB footprint and 889.7 MiB RSS.
+Runs start a new process; the OS file cache was not flushed.
+
+The final local app run (`final-native-local.xcresult`) passes 36 tests on the
+single existing iPhone 17 / iOS 26.5 simulator: acquisition policy, 12 bridge
+calculations, owner Halifax–St Stephen with Unknown off/on, and both owner
+Cape Breton inserted-waypoint cases with continuous legs and preserved pins.
+Owner NS–NB takes 10.609 s / 8.383 s for off/on, with peak footprints 163/188 MB;
+these are different settings, not a cold/warm comparison. No physical device was
+installed or accepted during this work.
+
+Southern Quebec Montreal–Quebec app-session replay also passes cold and warm
+with identical selected roads, no repeated mileage, no reported limit and
+uncertain connectors within the allowed 100 m cap (`qc-native.xcresult`). On the same M1 host's iPhone
+17 / iOS 26.5 Debug simulator, totals are 55.757 / 44.863 s; cold preparation is
+11.109 s and peak footprints are 342 / 426 MB. This satisfies completion and the
+current resource ceiling, not the desired everyday speed or Dirt quality: the
+397 km ride remains 47.1% meaningful dirt. Simulator timing is not phone timing.
+
+The actual `GraphPackStore` CDN acquisition test also passes
+(`published-native.xcresult`): refreshed seven-region catalog, NS–PE acquisition
+including NB's road alternative, verified NB/PE downloads, current-release
+identities, reuse without replacement, and a completed 8.552 km bridge route
+using those downloaded files. Installation/verification/reuse plus routing took
+7.627 s on this connection; the route itself took 0.904 s, peak footprint 130 MB.
+This is an app-path test, not a claim about every network or the physical phone.
+The final simulator build passes (`published-native-build.log`). The new native
+build is required for exact-grid preparation and runtime legality/search fixes;
+main's DIRT Dev stamp is `fresh-seven-20260919a`. Source identity is recorded in
+`final-native-source-receipt.json`, with the candidate patch hashes. Production
+still points to its unchanged `fabric-v4-20260909-02` release. The owner can now
+Xcode Play DIRT Dev and accept the fresh pack updates for physical testing.
+
+Remaining limits: owner NS–NB Balanced is only about 17–19% dirt, also below its
+intended mix. Four long NS–QC Balanced/Clean results repeat about 0.66–2.28 km;
+the six inspected shape replays have no repeats, but this is not true of every
+matrix result. The synthetic destination-only parking approach remains unresolved.
+Halifax–PE still selects the ferry in the stated case. These are disclosed route
+quality/access limitations, not a reason to claim all packs or all routing are
+finished. The seven-region candidate is for owner testing; other regions must
+not be mixed into this release. Recovery is the previous immutable candidate
+`fabric-v4-20260917-02` and pre-factory source checkpoint
+`77e3fb67ef973a3e4be1b5c24ce079fa23e0553f`.
 
 The fresh NB input contains 13 footway/cycleway source ways with explicit
 motor-vehicle permission that the former highway-class filter discarded.
