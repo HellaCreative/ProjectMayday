@@ -735,6 +735,39 @@ acceptance and allocation-peak instrumentation are not established by host or
 simulator checks. No phone build, pack publication, server deployment or archive
 has been performed by this follow-up.
 
+September 19 waypoint-editing repair (owner phone log exported at 18:13:44Z):
+a confirmed insertion correctly created one intermediate rider point, but the
+next rider leg sent its unsnapped coordinate alongside the previous leg's exact
+incoming road. The stricter continuation matcher rejected that mismatch. The
+planner then mistook the completed prefix for the final destination and moved
+the destination onto the intermediate point. This produced the apparent duplicate
+and lost destination visible in the owner log.
+
+The builder now carries the actual reached coordinate together with the incoming
+road/restriction state; rider waypoint identity and requested coordinates remain
+unchanged. Missing arrival metadata clears the previous leg's metadata instead
+of leaking it forward. Destination pin synchronization requires the current
+final rider leg to be built and to end at that destination, never a partial
+prefix or generated stop. No matching tolerance, routing preferences, pack data,
+or map gesture design changed.
+
+Verification: 60 planner/builder/reducer tests pass, including repeated placement
+confirmation, insert/move/delete, continuous snapped departures, and preserving
+the final destination after an onward failure. A separate native app-path test
+replays both owner insertions through `ItineraryBuilder`, `NativeRoutingAdapter`
+and `NativeRoutingSession` on immutable fabric-02 NS data: both complete, and each
+incoming route endpoint equals the onward route start. Exact coordinates live in
+`ownerCapeBretonInsertedWaypointsContinueAtMatchedRoad`; replay seed is 1 (the
+phone log does not record its seed), Wander 100%, Unknown off, city/highway
+avoidance on, fuel excluded, map zoom 8.1/8.2. That test passes in 46.62 s total
+on the existing serial iPhone17/iOS26.5 simulator on the M1 host. Evidence:
+`.build/waypoint-repair-20260919.xcresult` and
+`.build/waypoint-native-replay-20260919.xcresult` with matching build/test logs.
+These verify planner actions and real routing, not physical touch gestures on
+the phone. Final DIRT Dev build succeeds. New native build required; stamp
+`waypoint-continuity-20260919c`.
+Pre-repair checkpoint: `87f9ba5`. Phone acceptance remains the next owner step.
+
 The owner requested a caveat inside the existing progress animation only after
 a route has been building for 20 seconds, including with Reduce Motion enabled.
 There is no early display based on route distance or pack count. Exact copy:

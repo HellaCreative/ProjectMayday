@@ -2832,8 +2832,15 @@ final class RoutePlannerModel {
     /// Move the destination pin to the snapped road without rebuilding.
     /// `apply(.move)` would start another search; this only updates the visible pin.
     private func syncSnappedDestinationPin(from result: BuiltItinerary) {
-        guard errorMessage == nil,
+        // A built prefix ends at an intermediate waypoint, not the rider's
+        // destination. Errors are projected after this call, so errorMessage
+        // cannot establish completion.
+        guard result.generation == itinerary.generation,
+              let finalRiderLeg = itinerary.legs.last,
+              result.riderLegStatus[finalRiderLeg.id] == .built,
               let lastLeg = result.legs.last,
+              lastLeg.riderLegID == finalRiderLeg.id,
+              lastLeg.endsAtFuelStop == nil,
               let snapped = lastLeg.response.coordinates.last
         else { return }
         let snappedCoord = snapped

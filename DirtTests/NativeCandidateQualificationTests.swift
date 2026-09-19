@@ -110,6 +110,48 @@ struct NativeCandidateQualificationTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(3)))
+    func ownerCapeBretonInsertedWaypointsContinueAtMatchedRoad() async throws {
+        let source = WaypointNativeReplaySource(directories: ["ns": root.appendingPathComponent("ns")])
+        let cases: [[RouteCoordinate]] = [
+            [.init(longitude: -63.340242, latitude: 44.764801),
+             .init(longitude: -61.32647093974907, latitude: 45.77566149968744),
+             .init(longitude: -60.474758, latitude: 46.986049)],
+            [.init(longitude: -63.340206, latitude: 44.764840),
+             .init(longitude: -60.43133042857463, latitude: 46.509154854013474),
+             .init(longitude: -60.339340, latitude: 46.814511)]
+        ]
+        for (index, points) in cases.enumerated() {
+            let itinerary = reduce(RiderItinerary(), .replaceAll(waypoints: points, profile: .dirt,
+                allowUnknown: false, avoidMotorways: true, preferBackRoads: false)).itinerary
+            let builder = ItineraryBuilder()
+            builder.mapZoom = index == 0 ? 8.1 : 8.2
+            source.requests.removeAll()
+            let result = await RidePreferenceContext.$current.withValue(
+                .init(wander: 1, avoidCities: true, avoidHighways: true)) {
+                await RoutingSessionContext.$seed.withValue(1) {
+                    await builder.build(itinerary, from: 0, reuse: nil, fuel: .routeOnly,
+                        source: .fixed(source), onProgress: { _ in })
+                }
+            }
+            #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+            #expect(result.legs.count == 2)
+            #expect(itinerary.waypoints.map(\.coordinate) == points)
+            let first = try #require(result.legs.first)
+            let last = try #require(result.legs.last)
+            let end = try #require(last.response.coordinates.last)
+            #expect(Coordinate(longitude: end.longitude, latitude: end.latitude).distance(
+                to: .init(longitude: points[2].longitude, latitude: points[2].latitude)) < 250)
+            #expect(first.response.coordinates.last == last.response.coordinates.first)
+            #expect(source.requests.count == 2)
+            let continuation = try #require(source.requests.last)
+            #expect(continuation.options?.arrivalEdgeId == first.response.arrivalEdgeId)
+            #expect(continuation.locations.first?.latitude == first.response.coordinates.last?.latitude)
+            #expect(continuation.locations.first?.longitude == first.response.coordinates.last?.longitude)
+            print("WAYPOINT owner-case=\(index+1) complete=\(result.legs.count == 2) continuous=\(first.response.coordinates.last == last.response.coordinates.first)")
+        }
+    }
+
     // Audit the returned itinerary, including joins, independently of search labels.
     private func verifyShortUnknownConnectors(_ route: ComputedRoute) {
         var run = 0.0
@@ -135,4 +177,23 @@ struct NativeCandidateQualificationTests {
         let q = RouteQuality(route: route)
         print("CANDIDATE \(name) seconds=\(seconds) km=\(route.distanceMeters/1000) dirt=\(q.knownDirtPercent) repeatM=\(q.reriddenMeters) nearbyReturnM=\(q.returnMeters) peakFootprintMB=\(ProcessMemory.megabytes().peak)")
     }
+}
+
+@MainActor
+private final class WaypointNativeReplaySource: RoutingSource {
+    let name = "pack-waypoint-replay"
+    let directories: [String: URL]
+    let session = NativeRoutingSession()
+    var requests: [RouteRequest] = []
+    init(directories: [String: URL]) { self.directories = directories }
+    func route(_ request: RouteRequest) async throws -> RouteResponse {
+        requests.append(request)
+        let native = try NativeRoutingAdapter.request(request)
+        let route = try await session.route(native, directories: directories)
+        return NativeRoutingAdapter.response(route, style: native.profile.style)
+    }
+    func fuelChain(_ request: FuelChainRequest) async throws -> FuelChainResponse {
+        throw RoutingFailure.unsupported("Fuel must not participate in waypoint editing")
+    }
+    func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? { nil }
 }

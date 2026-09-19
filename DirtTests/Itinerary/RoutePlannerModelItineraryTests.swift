@@ -541,6 +541,88 @@ struct RoutePlannerModelItineraryTests {
         #expect(!source.routeRequests.isEmpty)
     }
 
+    @Test func failedContinuationKeepsDestinationAndInsertedPinCanBeDeleted() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        let start = point(0), destination = point(1), inserted = point(0.5)
+        let snapped = RouteCoordinate(longitude: inserted.longitude + 0.0002, latitude: inserted.latitude)
+        source.routeHandler = { req in
+            let (a, b) = try requestEndpoints(req)
+            if req.options?.arrivalEdgeId != nil {
+                #expect(a == snapped)
+                throw RoutingError.server("scripted onward failure")
+            }
+            return plannerRoadResponse(from: a, to: b == inserted ? snapped : b)
+        }
+        model.apply(.replaceAll(waypoints: [start, destination], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+        await model.waitForCanonicalBuildForTesting()
+        let originalDestinationID = try #require(model.itinerary.waypoints.last?.id)
+        model.handleRouteTap(start.locationCoordinate, source: "longPress")
+        model.moveWaypoint(markerID: "waypoint-draft", to: inserted.locationCoordinate)
+        model.confirmWaypointPlacement()
+        model.confirmWaypointPlacement() // A repeated callback must not insert twice.
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.mode == .plan)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, inserted, destination])
+        #expect(model.itinerary.waypoints.last?.id == originalDestinationID)
+        #expect(model.built?.legs.count == 1)
+        #expect(model.stages.count == 2)
+        #expect(model.stages[1].error != nil)
+        #expect(map.plannerMarkers.filter { $0.id.hasPrefix("wp:") }.count == 3)
+        #expect(!map.plannerMarkers.contains { $0.id == "waypoint-draft" })
+        model.deleteStage(at: 0)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, destination])
+        #expect(model.itinerary.waypoints.last?.id == originalDestinationID)
+        #expect(model.stages.count == 1)
+        #expect(model.stages[0].error == nil)
+        #expect(map.plannerMarkers.filter { $0.id.hasPrefix("wp:") }.count == 2)
+    }
+
+    @Test func insertedWaypointMoveAndDeleteKeepOneIdentityAndContinuousRoads() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        let start = point(0), destination = point(1)
+        source.routeHandler = { req in
+            let (a, b) = try requestEndpoints(req)
+            let matched = b == destination ? b : RouteCoordinate(longitude: b.longitude + 0.0002, latitude: b.latitude)
+            return plannerRoadResponse(from: a, to: matched)
+        }
+        model.apply(.replaceAll(waypoints: [start, destination], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "fromHere")
+        await model.waitForCanonicalBuildForTesting()
+        model.handleRouteTap(start.locationCoordinate, source: "longPress")
+        model.moveWaypoint(markerID: "waypoint-draft", to: point(0.4).locationCoordinate)
+        model.keepMovingWaypoint()
+        model.moveWaypoint(markerID: "waypoint-draft", to: point(0.5).locationCoordinate)
+        model.confirmWaypointPlacement()
+        await model.waitForCanonicalBuildForTesting()
+        let id = model.itinerary.waypoints[1].id
+        for coordinate in [point(0.6), point(0.7)] {
+            model.moveWaypoint(markerID: "wp:\(id.uuidString)", to: coordinate.locationCoordinate)
+            model.confirmWaypointPlacement()
+            await model.waitForCanonicalBuildForTesting()
+            #expect(model.itinerary.waypoints.count == 3)
+            #expect(model.itinerary.waypoints[1].id == id)
+            #expect(model.itinerary.waypoints[1].coordinate == coordinate)
+            #expect(model.itinerary.waypoints.last?.coordinate == destination)
+            let built = try #require(model.built)
+            #expect(built.legs.count == 2)
+            #expect(built.legs[0].response.coordinates.last == built.legs[1].response.coordinates.first)
+        }
+        model.deleteStage(at: 0)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, destination])
+    }
+
     @Test func existingWaypointMoveWaitsForYesAndNoAllowsRefinement() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
@@ -742,6 +824,7 @@ private final class PlannerFakeRoutingSource: RoutingSource {
     var fuelStops: [FuelChainStop] = []
     var stationCandidates: [FuelStationCandidate] = []
     var routeError: Error?
+    var routeHandler: ((RouteRequest) async throws -> RouteResponse)?
     var fuelChainError: Error?
 
     init(name: String = "live") {
@@ -750,6 +833,7 @@ private final class PlannerFakeRoutingSource: RoutingSource {
 
     func route(_ req: RouteRequest) async throws -> RouteResponse {
         routeRequests.append(req)
+        if let routeHandler { return try await routeHandler(req) }
         if let routeError { throw routeError }
         let endpoints = try requestEndpoints(req)
         let meters = distanceOverrides[key(endpoints.0, endpoints.1)] ?? 100_000
@@ -853,4 +937,13 @@ private func fuelStop(
         id: id, latitude: point.latitude, longitude: point.longitude,
         name: name ?? id, brand: nil, address: nil, graphMeters: nil
     )
+}
+
+@MainActor
+private func plannerRoadResponse(from: RouteCoordinate, to: RouteCoordinate) -> RouteResponse {
+    RouteResponse(status: "complete", error: nil, message: nil, distanceMeters: 100_000,
+        estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
+        geometry: [from, to], segments: nil, stats: .init(dirtPercent: 80, pavedPercent: 20),
+        maneuvers: nil, warnings: nil, dirtPercentValue: nil, pavedPercentValue: nil,
+        arrivalEdgeId: "reached-road")
 }

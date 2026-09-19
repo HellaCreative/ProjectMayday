@@ -11,7 +11,7 @@ final class RoutingDebugLog {
 
     /// Device logs must prove which pack/corridor binary ran. Bump with each
     /// #34 corridor fix; Play cards quote this stamp.
-    static let diagnosticStamp = "broad-wander-connectors-20260919b"
+    static let diagnosticStamp = "waypoint-continuity-20260919c"
 
     private let maxEntries = 1_200
     private var entries: [String] = []

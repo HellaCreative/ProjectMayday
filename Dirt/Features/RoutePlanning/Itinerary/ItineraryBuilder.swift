@@ -2535,7 +2535,9 @@ private func routeRequest(
             departingFrom: departureID,
             effectiveProfile: profile
         ),
-        from: itinerary.waypoints[legIndex].coordinate,
+        // Continue at the actual reached road position, not the unsnapped
+        // rider pin. Keep the original waypoint as rider intent.
+        from: history.arrivalCoordinate ?? itinerary.waypoints[legIndex].coordinate,
         to: itinerary.waypoints[legIndex + 1].coordinate,
         avoidEdgeIDs: itinerary.impassableEdgeIDs,
         maxPathMeters: maxPathMeters,
@@ -2610,6 +2612,7 @@ private struct EdgeHistory: Equatable {
     private var recent: [Entry] = []
     private var recentMeters = 0.0
     private(set) var arrivalEdgeID: String?
+    private(set) var arrivalCoordinate: RouteCoordinate?
     private(set) var arrivalRestrictions: [RouteArrivalRestriction] = []
 
     var edgeIDs: [String] { recent.map(\.id) }
@@ -2621,6 +2624,11 @@ private struct EdgeHistory: Equatable {
     }
 
     mutating func append(_ response: RouteResponse) {
+        arrivalCoordinate = response.coordinates.last
+        // Arrival belongs to this response, even when it has no edge metadata;
+        // never carry an older leg's incoming edge into a new road position.
+        arrivalEdgeID = response.arrivalEdgeId ?? response.segments?.last?.edgeId
+        arrivalRestrictions = response.arrivalRestrictions ?? []
         for segment in response.segments ?? [] {
             guard let id = segment.edgeId, !id.isEmpty else { continue }
             if let duplicate = recent.firstIndex(where: { $0.id == id }) {
@@ -2629,8 +2637,6 @@ private struct EdgeHistory: Equatable {
             let meters = max(1, segment.distanceMeters ?? 0)
             recent.append(Entry(id: id, meters: meters))
             recentMeters += meters
-            arrivalEdgeID = id
-            arrivalRestrictions = response.arrivalRestrictions ?? []
             while recent.count > 1,
                   (recent.count > Self.recentEdgeLimit
                     || recentMeters > Self.recentMeterLimit) {
