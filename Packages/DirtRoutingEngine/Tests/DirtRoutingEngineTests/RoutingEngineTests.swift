@@ -146,6 +146,24 @@ struct RoutingEngineTests {
         #expect(route.distanceMeters <= span * 1.50 + 1_000)
     }
 
+    @Test func cleanestAllowsTheNecessaryRoadDetourAroundAnObstacle() throws {
+        // Nearby pins on opposite sides of a bay; the only legal connection
+        // goes around it. A distance cap based on the chord cannot reach B.
+        let pack = PolicyTests.Line(
+            nodes: [.init(longitude: 0, latitude: 0), .init(longitude: 0, latitude: 0.5),
+                    .init(longitude: 0.1, latitude: 0.5), .init(longitude: 0.1, latitude: 0)],
+            edges: [(0,1),(1,2),(2,3)], surfaces: Array(repeating: "asphalt", count: 3),
+            roads: Array(repeating: "tertiary", count: 3))
+        let graph = try IndexedGraph(pack)
+        let request = RoutingRequest(start: .init(longitude: 0, latitude: 0.001),
+                                     end: .init(longitude: 0.1, latitude: 0.001), style: .cleanest)
+        let route = try RoutingEngine(pack: graph).route(request, budget: .init(seconds: 5))
+        #expect(route.distanceMeters > 100_000)
+        #expect(route.end.coordinate.distance(to: request.end) < 1)
+        #expect(route.segments.allSatisfy { $0.surface == .paved })
+        #expect(RouteQuality(route: route).reriddenMeters == 0)
+    }
+
     @Test func cleanestUsesAHighwayOnlyWhenNoBackRoadConnects() throws {
         let pack = PolicyTests.Line(
             nodes: [

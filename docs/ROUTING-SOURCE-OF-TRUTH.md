@@ -110,8 +110,39 @@ App acquisition still passes all 33 checks (`prepared-candidate-app-tests.xcresu
 The native qualification suite accepts an explicit `DIRT_QUALIFY_PACK_ROOT` and
 `DIRT_QUALIFY_FABRIC`, so fresh data can be tested without overwriting old fixtures.
 Its bridge replay checks both directions and all three styles through the app's
-native session and response/save decoding. It has compiled; it has not yet run
-against the fresh release.
+native session and response/save decoding. The fresh-release simulator replay passed 12 calculations (both directions,
+Dirt/Balanced/Clean, initial and warm repeats) plus response/save decoding, with
+bridge way `646650186`, no ferry, no repeated roads and endpoints within 250 m.
+Evidence: `fresh-bridge-native-3.xcresult`; first use was about 0.87–0.90 s,
+warm repeats 0.003–0.006 s, peak simulator footprint 109 MB. Earlier filtered
+attempts ran zero tests and are not passes. Physical-device acceptance remains open.
+
+All seven fresh packs are built and locally sealed as `fabric-v4-20260919-01`
+(factory `a3144fb`); publication and DEV activation remain pending integrated
+qualification. All exact geometry-grid rows verified, all nine neighboring pairs
+have source-proven seam records, and each region has fresh fuel and separate
+Rider Services extracts. These checks alone do not prove complete journeys.
+Evidence: `pack-feature-inventory.json`, `factory-build.log` and the sealed local
+release under `scripts/pack-fabric/routing/candidates/`.
+
+The initial fresh Dirt matrix records 29 exact requests, hardware, settings,
+pack hashes, time and process peak memory in `fresh-dirt-matrix/`. It includes
+failures; it is not an acceptance certificate. Synthetic PEI and Newfoundland
+ferry endpoints were 507 m and 542 m from a through-permitted road, outside the
+250 m matching radius. Corrected fixture replays retain the original failures;
+owner coordinates and the matching radius are unchanged. The NB–QC synthetic
+endpoint matched a destination-only parking aisle; its multi-edge access is a
+separate endpoint-access limitation, not evidence that the border is disconnected.
+
+Qualification also reproduced Clean rejecting a legal paved detour around an
+obstacle because its length cap used the straight-line pin span. The cap now
+uses the greater of that span and the shortest legal road distance, retaining
+the existing 1.5 multiplier and 80 km minimum. Cancellation and resource limits
+in that baseline calculation propagate instead of being swallowed. This is a
+route-selection correction, not a pack change or Dirt retuning. The new obstacle
+regression fails before and passes after the repair; all 122 engine tests pass
+(`clean-detour-before.log`, `clean-detour-engine-tests.log`). Real-route replay
+of the corrected Clean implementation remains required.
 
 The fresh NB input contains 13 footway/cycleway source ways with explicit
 motor-vehicle permission that the former highway-class filter discarded.

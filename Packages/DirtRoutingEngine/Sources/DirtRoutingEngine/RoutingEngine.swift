@@ -166,10 +166,9 @@ public struct RoutingEngine: Sendable {
         }
         if request.profile.style == .cleanest {
             // Clean is pavement-max on back roads — not an unbounded scenic wander.
-            // Cap each hop to a modest multiple of the pin span so staged Canada
-            // corridors cannot invent a 1.6× continental meander (NS→Regina 011028Z).
+            // Bound gratuitous detours, while allowing the necessary road distance
+            // around water and other obstacles that the straight-line span misses.
             let span = max(1, request.start.distance(to: request.end))
-            let lengthCap = max(span * 1.50, 80_000)
             var log: [String] = []
             func note(_ tag: String, _ route: ComputedRoute) {
                 let quality = RouteQuality(route: route, urbanBoxes: UrbanCores.boxes(in: pack))
@@ -186,8 +185,11 @@ public struct RoutingEngine: Sendable {
             shortestOpts.objective = .distance
             shortestOpts.corridorMeters = .infinity
             shortestOpts.maximumMeters = .infinity
-            let shortest = try? run(shortestOpts)
+            let shortest: ComputedRoute?
+            do { shortest = try run(shortestOpts) }
+            catch RoutingFailure.noPath { shortest = nil }
             if let shortest { note("shortest", shortest) }
+            let lengthCap = max(max(span, shortest?.distanceMeters ?? 0) * 1.50, 80_000)
 
             var clean = request.options
             clean.objective = .profile
