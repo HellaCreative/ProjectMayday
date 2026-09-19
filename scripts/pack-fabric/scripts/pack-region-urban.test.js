@@ -8,6 +8,21 @@ const {
 } = require("./pack-region-urban");
 const { boxIntersectsPackBbox } = require("../routing/lib/pack-v2");
 
+test("fresh split-region urban extraction carries its source identity and rural towns", async t => {
+  const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "urban-source-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const input = path.join(dir, "places.geojsonseq"), output = path.join(dir, "urban.json");
+  fs.writeFileSync(input, JSON.stringify({ type: "Feature", geometry: { type: "Point", coordinates: [-63, 48] },
+    properties: { place: "town", name: "Rural test", population: "1000", "@id": "node/42" } }) + "\n");
+  const sourceIdentity = { sha256: "a".repeat(64), osmTimestamp: "2026-09-18T00:00:00Z" };
+  await require("./pack-region-urban").build("qc-n", "quebec-north", { input, output, sourceIdentity });
+  const result = JSON.parse(fs.readFileSync(output));
+  assert.deepEqual(result.sourceIdentity, sourceIdentity);
+  assert.equal(result.cores.length, 0);
+  assert.equal(result.settlements[0].name, "Rural test");
+});
+
 test("small OSM towns are settlement avoidance, not hard urban walls", () => {
   assert.equal(qualifiesAsUrbanCore("town", 12_421), false);
   assert.ok(settlementRadiusKm("town", 12_421) >= 1.2);

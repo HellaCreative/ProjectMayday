@@ -86,6 +86,7 @@ osmium export "$CANDIDATES" \
 
 RIDER_SERVICES_REGION_ID="$REGION_ID" \
 RIDER_SERVICES_SOURCE_UPDATED_AT="$SOURCE_UPDATED_AT" \
+RIDER_SERVICES_SOURCE_SHA256="${LOCK_SHA:-}" \
 node "$ROOT/scripts/pack-fabric/scripts/build-rider-services-pack.js" \
   "$SEQUENCE" \
   "$RIDER_OUT"
@@ -94,6 +95,7 @@ if [ "$MODE" = "with-fuel" ]; then
   FUEL_V1_OUT="$FUEL_OUT" \
   FUEL_REGION_ID="$REGION_ID" \
   FUEL_SOURCE_UPDATED_AT="$SOURCE_UPDATED_AT" \
+  FUEL_SOURCE_SHA256="${LOCK_SHA:-}" \
   node "$ROOT/scripts/pack-fabric/scripts/build-fuel-pack.js" "$SEQUENCE" "$OUT_DIR/fuel-chunks"
 fi
 

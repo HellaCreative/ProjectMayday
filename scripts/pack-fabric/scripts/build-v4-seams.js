@@ -121,7 +121,26 @@ function loadPack(root, id) {
     }
   }
   const geometry = fs.readFileSync(geometryPath);
-  return { manifest, pack: decodeGraphV4(fs.readFileSync(graphPath), geometry) };
+  return { manifest, pack: decodeGraphV4(fs.readFileSync(graphPath), geometry),
+    geometry: require("../routing/lib/pack-v4").decodeGeometryV1(geometry) };
+}
+
+// The phone rejects different geometry for one shared source road. Make that a
+// build failure instead of letting a candidate pass on matching labels alone.
+function assertSharedRoadGeometry(left, right) {
+  const key = (p, e) => `${p.osmWayIds[e]}:${p.osmNodeIds[p.edgeFrom[e]]}:${p.osmNodeIds[p.edgeTo[e]]}`;
+  const indices = new Map();
+  for (let e = 0; e < left.pack.edgeCount; e++) indices.set(key(left.pack, e), e);
+  let shared = 0;
+  for (let e = 0; e < right.pack.edgeCount; e++) {
+    const k = key(right.pack, e), other = indices.get(k);
+    if (other === undefined) continue;
+    shared++;
+    if (left.pack.edgeMeters[other] !== right.pack.edgeMeters[e] ||
+        JSON.stringify(left.geometry.polyline(other)) !== JSON.stringify(right.geometry.polyline(e)))
+      throw new Error(`shared road geometry mismatch ${left.manifest.regionId}/${right.manifest.regionId} ${k}`);
+  }
+  return shared;
 }
 
 function uniquePairs(regions = null) {
@@ -307,6 +326,7 @@ function main() {
     }
     if (doc.sourceEpoch == null) doc.sourceEpoch = left.manifest.sourceEpoch;
     if (doc.sourceEpoch !== left.manifest.sourceEpoch) throw new Error("fabric mixes source epochs");
+    assertSharedRoadGeometry(left, right);
     const proofs = selectProofs(seamCandidates(left.pack, right.pack));
     if (!proofs.length) throw new Error(`no legal V4 seam for ${leftId}/${rightId}`);
     for (const proof of proofs) assertSeamLegal(left.pack, right.pack, proof);
@@ -323,6 +343,7 @@ function main() {
     // factory values safety over retaining continent-sized binary buffers.
     cache.delete(leftId);
     cache.delete(rightId);
+    if (global.gc) global.gc();
   }
   if (doc.pairs.length !== pairs.length) {
     throw new Error(`topology incomplete: ${doc.pairs.length}/${pairs.length} pairs`);
@@ -344,6 +365,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertSharedRoadGeometry,
   assertNeighborCoverage,
   main,
   parseArgs,

@@ -257,6 +257,7 @@ if (v1Out) {
     generatedAt: manifest.generatedAt,
     source: "openstreetmap",
     sourceUpdatedAt: process.env.FUEL_SOURCE_UPDATED_AT || null,
+    sourceSha256: process.env.FUEL_SOURCE_SHA256 || null,
     license: manifest.license,
     stations: allPois
   };

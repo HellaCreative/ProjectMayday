@@ -15,6 +15,7 @@ const { OSM_REGION, catalogRegionIds } = require("../routing/registry/geofabrik"
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 const { validateGeometry } = require("./prepare-v4-polygons");
 const { clipGeojsonPath } = require("./fetch-admin-polygon");
+const { readTopologySealMetaSync } = require("./topology-meta");
 
 const FABRIC = path.join(__dirname, "..");
 const DIRT = path.resolve(FABRIC, "../..");
@@ -84,9 +85,12 @@ function assertDiskSpace(at, id) {
   }
 }
 
-function run(command, args, env, { attempts = 1 } = {}) {
+function run(command, args, env, { attempts = 1, measurements = null } = {}) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const result = spawnSync(command, args, { cwd: DIRT, stdio: "inherit", env: { ...process.env, ...env } });
+    const measured = measurements && process.platform === "darwin";
+    const result = spawnSync(measured ? "/usr/bin/time" : command,
+      measured ? ["-l", "-o", `${measurements}.attempt-${attempt}.txt`, command, ...args] : args,
+      { cwd: DIRT, stdio: "inherit", env: { ...process.env, ...env } });
     if (result.status === 0) return;
     if (attempt < attempts) {
       console.warn(`${path.basename(args[0] || command)} failed; retrying (${attempt + 1}/${attempts})`);
@@ -134,6 +138,14 @@ function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factor
   if (!report.provenance || report.provenance.sourceEpoch !== lock.fabricEpoch) {
     throw new Error(`${id}: legal-topology provenance mismatch`);
   }
+  const source = lock.regions[id];
+  for (const key of ["sourceSha256", "sourceBytes", "osmTimestamp"]) {
+    if (report.provenance[key] !== source[key]) throw new Error(`${id}: actual source ${key} differs from lock`);
+  }
+  if (!Array.isArray(report.provenance.urbanCores) || !Array.isArray(report.provenance.settlements) ||
+      report.provenance.urbanSourceIdentity?.sha256 !== source.sourceSha256) {
+    throw new Error(`${id}: missing source-locked city/town data`);
+  }
   if (factoryCommit && report.provenance.factoryCommit !== factoryCommit) {
     throw new Error(`${id}: pack was built by a different factory commit`);
   }
@@ -148,10 +160,10 @@ function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factor
       throw new Error(`${id}: Rider Services has no ${category} data`);
     }
   }
-  const source = lock.regions[id];
   if (rider.sourceUpdatedAt !== source.osmTimestamp) {
     throw new Error(`${id}: Rider Services was not built from the locked source`);
   }
+  if (rider.sourceSha256 !== source.sourceSha256) throw new Error(`${id}: Rider Services source hash mismatch`);
 
   const fuel = readJSON(path.join(dir, "fuel.v1.json"));
   if (fuel.schema !== "fuel.v1" || fuel.regionId !== id || !Array.isArray(fuel.stations) || !fuel.stations.length) {
@@ -160,6 +172,7 @@ function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factor
   if (fuel.sourceUpdatedAt !== source.osmTimestamp) {
     throw new Error(`${id}: fuel was not built from the locked source`);
   }
+  if (fuel.sourceSha256 !== source.sourceSha256) throw new Error(`${id}: fuel source hash mismatch`);
 
   return {
     id,
@@ -227,6 +240,8 @@ function main() {
     fs.mkdirSync(dir, { recursive: true });
   }
   const progressFile = path.join(options.root, "progress.json");
+  const measurements = path.join(options.root, "measurements");
+  fs.mkdirSync(measurements, { recursive: true });
   const factoryCommit = gitHead();
   let records = [];
   for (let index = 0; index < options.regions.length; index += 1) {
@@ -246,7 +261,7 @@ function main() {
         OSM_SERVICE_WORK_ROOT: paths.serviceRoot,
         RIDER_SERVICES_V1_OUT: riderOut,
         FUEL_V1_OUT: fuelOut
-      }, { attempts: 3 });
+      }, { attempts: 3, measurements: path.join(measurements, `${id}-services`) });
       run(process.execPath, [
         `--max-old-space-size=${graphHeapMiB()}`,
         "--expose-gc",
@@ -258,7 +273,7 @@ function main() {
         DIRT_V4_PACK_ROOT: paths.packRoot,
         DIRT_V4_FUEL_PATH: fuelOut,
         OSM_LEGAL_ROOT: paths.legalRoot
-      }, { attempts: 2 });
+      }, { attempts: 2, measurements: path.join(measurements, `${id}-graph`) });
       record = verifyRegion(paths, id, options.releaseId, lock, { factoryCommit });
       safeCleanWork(paths, source);
       console.log(`[${index + 1}/${options.regions.length}] sealed ${id}`);
@@ -276,10 +291,12 @@ function main() {
 
   const isFullFabric = sameRegions(options.regions, ALL_REGIONS);
   let topology = null;
-  if (isFullFabric) {
+  if (options.regions.length > 1) {
     const topologyFile = path.join(options.root, "cross-pack-topology.v2.json");
-    run(process.execPath, [path.join(__dirname, "build-v4-seams.js"), "--root", paths.packRoot, "--output", topologyFile], {});
-    const topologyDoc = readJSON(topologyFile);
+    run(process.execPath, ["--expose-gc", path.join(__dirname, "build-v4-seams.js"), "--root", paths.packRoot,
+      "--output", topologyFile, "--regions", options.regions.join(",")], {},
+      { measurements: path.join(measurements, "seams") });
+    const topologyDoc = readTopologySealMetaSync(topologyFile);
     if (topologyDoc.sourceEpoch !== lock.fabricEpoch || !Array.isArray(topologyDoc.pairs) || !topologyDoc.pairs.length) {
       throw new Error("full seam topology is incomplete");
     }
@@ -304,7 +321,7 @@ function main() {
     regions: records
   };
   const sealedSourceLock = path.join(options.root, "source-lock.json");
-  fs.copyFileSync(options.sourceLock, sealedSourceLock);
+  if (path.resolve(options.sourceLock) !== path.resolve(sealedSourceLock)) fs.copyFileSync(options.sourceLock, sealedSourceLock);
   release.sourceLock = fileIdentity(sealedSourceLock);
   writeJSON(path.join(options.root, "release.json"), release);
   console.log(JSON.stringify({

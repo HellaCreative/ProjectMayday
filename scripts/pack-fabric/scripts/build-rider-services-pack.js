@@ -139,6 +139,7 @@ function buildPack(text, options = {}) {
     generatedAt,
     source: "openstreetmap",
     sourceUpdatedAt,
+    sourceSha256: options.sourceSha256 || null,
     license: "Open Database License (ODbL)",
     attribution: "© OpenStreetMap contributors",
     bounds,
@@ -160,7 +161,8 @@ function main() {
   const pack = buildPack(fs.readFileSync(inputPath, "utf8"), {
     regionId,
     generatedAt: process.env.RIDER_SERVICES_GENERATED_AT,
-    sourceUpdatedAt: process.env.RIDER_SERVICES_SOURCE_UPDATED_AT
+    sourceUpdatedAt: process.env.RIDER_SERVICES_SOURCE_UPDATED_AT,
+    sourceSha256: process.env.RIDER_SERVICES_SOURCE_SHA256
   });
   if (!pack.elements.length) throw new Error(`No Rider Services features produced for '${regionId}'`);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });

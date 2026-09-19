@@ -14,10 +14,41 @@ Richard's current instructions take precedence over this document.
 The current native engine is the implementation being improved. Existing code,
 packs, tests, and measured experiments are assets to evaluate, not obligations
 to preserve unsuccessful behavior. The earlier engine replacement is historical;
-the active task does not authorize another rewrite, rebuilding published data,
-reverting the app, or changing its interface beyond the owner-requested progress
+the active task does not authorize another engine rewrite, reverting the app,
+or changing its interface beyond the owner-requested progress
 notice, matching Your ride to the existing Fuel Range panel, and the requested
 pack download/update progress window.
+
+### Fresh regional build qualification (owner authorization, September 19)
+
+Build and qualify seven fresh packs first: `ns`, `nb`, `pe`, `nl-island`,
+`nl-lab`, `qc-s`, `qc-n`. Preserve the split geography concept, not old pack
+bytes. Derive all seven from one dated OSM source with a recorded hash; never
+relabel older regional data as the new source epoch. The candidate is explicitly
+limited to these seven regions, not a complete continental fabric. Do not mix
+old regions into it to make a full catalog. Other regions follow only after this
+process is qualified.
+
+Every region, including small provinces, receives the same source, feature,
+connectivity, actual-route and memory checks. Test legal road crossings in both
+permitted directions, internal split crossings, ferries, and the Confederation
+Bridge between NB and PEI. A ferry-only PEI result does not qualify the bridge.
+Preserve ramps, overpasses/grade separation, tunnels, surfaces, directed access,
+barriers and turn restrictions. Never fabricate connectivity where source data
+does not establish it; missing data and defects must be diagnosed and repaired.
+
+Fuel remains `fuel.v1.json` in each routing-pack download for offline advisory,
+map and notification use; it does not steer route generation. Fresh campground,
+lodging and liquor data remain in the independent Rider Services catalog and
+cannot block navigation. Map presentation layers remain separate.
+
+The owner authorizes autonomous implementation, fresh source acquisition,
+building, documenting evidence, testing, repair and publication to an immutable
+DEV candidate. Preserve the existing release for rollback and leave production
+unchanged. Qualify the seven-region catalog and app acquisition path before
+pointing DEV to it. Tell the owner when to build DIRT Dev in Xcode; the owner
+performs physical-device acceptance. Initial work/evidence directory:
+`.build/fresh-fabric-20260919`. No fresh candidate is qualified or published yet.
 
 There is no requirement to use live server routing, keep complete regional
 graphs in a persistent service, publish every experiment, maintain identical
@@ -527,10 +558,11 @@ as a side effect. Preserve the accepted app foundation and current main fixes.
 Fuel remains advisory only, outside route generation. Historical fuel-chain
 measurements below do not authorize restoring that planner.
 
-Use immutable `fabric-v4-20260917-02` packs and verified seams v2 for current
-qualification. Historical packs and JavaScript measurements are comparison assets,
-not substitutes for current native/app tests. The existing Swift routing engine
-is the implementation being improved; do not restart it or restore an older app.
+For the September 19 rebuild, use the seven fresh regions authorized in section
+1 for candidate qualification. Immutable `fabric-v4-20260917-02` remains the
+comparison and rollback release; its mixed source dates do not qualify fresh
+data. The existing Swift routing engine remains in place; do not restart it or
+restore an older app.
 
 Correct JavaScript defects and improve efficiency where justified. Record and
 test deliberate behavioral changes rather than describing different behavior as

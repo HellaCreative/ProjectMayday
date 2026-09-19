@@ -8,6 +8,21 @@ const path = require("node:path");
 const { writeRegionSidecars, selectProofs, parseArgs, uniquePairs } = require("./build-v4-seams");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 
+test("identically labelled shared roads cannot seal with differing length or geometry", () => {
+  const { assertSharedRoadGeometry } = require("./build-v4-seams");
+  const road = () => ({ manifest: { regionId: "ns" }, pack: {
+    edgeCount: 1, osmWayIds: ["10"], osmNodeIds: ["1", "2"], edgeFrom: [0], edgeTo: [1], edgeMeters: [100]
+  }, geometry: { polyline: () => [[-63, 45], [-63.001, 45]] } });
+  const a = road(), b = road();
+  b.manifest.regionId = "nb";
+  assert.equal(assertSharedRoadGeometry(a, b), 1);
+  b.pack.edgeMeters[0] = 101;
+  assert.throws(() => assertSharedRoadGeometry(a, b), /geometry mismatch ns\/nb/);
+  b.pack.edgeMeters[0] = 100;
+  b.geometry.polyline = () => [[-63, 45], [-63.002, 45]];
+  assert.throws(() => assertSharedRoadGeometry(a, b), /geometry mismatch/);
+});
+
 function stagedManifest(regionId) {
   return {
     schema: "pack-manifest.v2",

@@ -71,7 +71,8 @@ ogr2ogr -f GeoJSON "$OUT_DIR/halo.geojson" "$POLY" \
 ogrinfo -ro -so "$OUT_DIR/halo.geojson" halo >/dev/null
 
 echo "Clipping $SLUG with ${2:-2000}m halo…"
-osmium extract --polygon "$OUT_DIR/halo.geojson" --strategy smart --overwrite -o "$CLIPPED" "$PBF"
+osmium extract --polygon "$OUT_DIR/halo.geojson" --strategy smart \
+  -S types=multipolygon,restriction --overwrite -o "$CLIPPED" "$PBF"
 
 HIGHWAY_FILTER="motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,living_street,road,service,track,path"
 
@@ -131,6 +132,10 @@ if lock_path:
     raise SystemExit("source lock missing region $ID")
   if expected.get("sourceSha256") != h or expected.get("osmTimestamp") != ts or expected.get("sourceBytes") != pbf.stat().st_size:
     raise SystemExit("source identity does not match lock for $ID")
+  record["sourceUrl"] = expected["sourceUrl"]
+  if lock.get("commonSource"):
+    record["commonSource"] = lock["commonSource"]
+    record["sourceExtraction"] = expected.get("extraction")
 pathlib.Path("$OUT_DIR/provenance.v1.json").write_text(json.dumps(record, indent=2) + "\n")
 print(json.dumps(record, indent=2))
 PY

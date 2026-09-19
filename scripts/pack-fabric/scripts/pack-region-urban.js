@@ -82,12 +82,12 @@ function box(center, radius, name, place, population, sourceId) {
   };
 }
 
-async function build(id, requestedSlug) {
+async function build(id, requestedSlug, options = {}) {
   const slug = String(requestedSlug || SLUGS[id] || "").toLowerCase();
   if (!slug) {
     throw new Error("Usage: pack-region-urban.js <region-code> [geofabrik-slug]");
   }
-  const input = path.join(FABRIC, "data-raw", "osm-urban", slug, "places.geojsonseq");
+  const input = options.input || path.join(FABRIC, "data-raw", "osm-urban", slug, "places.geojsonseq");
   if (!fs.existsSync(input)) throw new Error(`Missing ${input}`);
   const byName = new Map();
   const settlementsByName = new Map();
@@ -125,8 +125,10 @@ async function build(id, requestedSlug) {
   const settlements = [...settlementsByName.values()]
     .filter((row) => !byName.has(row.name.toLowerCase()))
     .sort((a, b) => b.population - a.population || a.name.localeCompare(b.name));
-  if (!cores.length) throw new Error(`${id}: OSM place extract produced no urban cores`);
-  const output = path.join(FABRIC, "routing", "data", "regions", id, "urban-cores.v1.json");
+  // An empty urban layer is valid in a sparsely populated region, but only when
+  // the caller supplies the identity of the source that was actually examined.
+  if (!cores.length && !options.sourceIdentity) throw new Error(`${id}: OSM place extract produced no urban cores`);
+  const output = options.output || path.join(FABRIC, "routing", "data", "regions", id, "urban-cores.v1.json");
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(
     output,
@@ -135,6 +137,7 @@ async function build(id, requestedSlug) {
       regionId: id,
       generatedAt: new Date().toISOString(),
       source: "OpenStreetMap place=city|town",
+      sourceIdentity: options.sourceIdentity || null,
       method: "population-scaled-core-radius",
       cores,
       settlements

@@ -16,6 +16,7 @@ const net = require("net");
 const { OSM_REGION } = require("../routing/registry/geofabrik");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 const { readTopologySealMetaSync } = require("./topology-meta");
+const { verifyRegion } = require("./build-v4-fabric");
 
 const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
@@ -91,6 +92,12 @@ function readJSON(file) {
 
 function verifyLocalCandidate(options) {
   const release = readJSON(path.join(options.root, "release.json"));
+  const lockFile = path.join(options.root, "source-lock.json");
+  const lockIdentity = identity(lockFile);
+  if (!release.sourceLock || lockIdentity.sha256 !== release.sourceLock.sha256 ||
+      lockIdentity.bytes !== release.sourceLock.bytes) die("sealed source lock changed");
+  const lock = readJSON(lockFile);
+  if (lock.fabricEpoch !== release.sourceEpoch) die("source lock epoch mismatch");
   const expectedIds = options.regions || require("../routing/registry/geofabrik").catalogRegionIds();
   const actualIds = (release.regions || []).map((row) => row.id).sort();
   const expectedStatus = options.regions ? "local-partial-candidate" : "local-candidate-sealed";
@@ -123,6 +130,8 @@ function verifyLocalCandidate(options) {
   };
   const uploads = [];
   for (const id of expectedIds) {
+    verifyRegion({ packRoot: path.join(options.root, "packs"), riderRoot: path.join(options.root, "rider-services") },
+      id, options.candidate, lock, { requireSeams: true, factoryCommit: release.factoryCommit });
     const releaseRegion = release.regions.find((row) => row.id === id);
     const dir = path.join(options.root, "packs", id);
     const manifest = readJSON(path.join(dir, "pack-manifest.v2.json"));
@@ -154,6 +163,8 @@ function verifyLocalCandidate(options) {
       die(`${id}: Rider Services identity mismatch`);
     }
     const riderIdentity = identity(riderPath);
+    if (riderIdentity.sha256 !== releaseRegion.riderServices.sha256 ||
+        riderIdentity.bytes !== releaseRegion.riderServices.bytes) die(`${id}: Rider Services differs from sealed release`);
     const riderFile = {
       ...riderIdentity,
       name: `rider-services.v1.${riderIdentity.sha256.slice(0, 12)}.json`

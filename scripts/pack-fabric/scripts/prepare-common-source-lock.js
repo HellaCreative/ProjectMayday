@@ -1,0 +1,116 @@
+#!/usr/bin/env node
+"use strict";
+
+// Derive regional inputs from one immutable PBF. No independently dated regional
+// downloads, and no release-label rewriting of previously encoded graph bytes.
+const fs = require("node:fs");
+const path = require("node:path");
+const crypto = require("node:crypto");
+const { spawnSync } = require("node:child_process");
+const { geofabrikSource } = require("../routing/registry/geofabrik");
+const { bufferProjection } = require("../routing/registry/timezones");
+const { clipGeojsonPath } = require("./fetch-admin-polygon");
+const { validateGeometry } = require("./prepare-v4-polygons");
+
+function hashFile(file, algorithm = "sha256") {
+  const h = crypto.createHash(algorithm), fd = fs.openSync(file, "r");
+  const buffer = Buffer.allocUnsafe(8 * 1024 * 1024);
+  try {
+    for (;;) {
+      const n = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (!n) break;
+      h.update(buffer.subarray(0, n));
+    }
+  } finally { fs.closeSync(fd); }
+  return h.digest("hex");
+}
+function run(command, args, log) {
+  const fd = log ? fs.openSync(log, "a") : null;
+  try {
+    const r = spawnSync(command, args, { encoding: "utf8", stdio: log ? ["ignore", fd, fd] : "pipe" });
+    if (r.error || r.status !== 0) throw new Error(`${command} failed: ${r.error || r.stderr || log}`);
+    return String(r.stdout || "").trim();
+  } finally { if (fd !== null) fs.closeSync(fd); }
+}
+function save(file, doc) {
+  fs.writeFileSync(file + ".tmp", JSON.stringify(doc, null, 2) + "\n");
+  fs.renameSync(file + ".tmp", file);
+}
+function parseArgs(args) {
+  const o = { regions: [] };
+  const flags = { "--source": "source", "--url": "url", "--md5": "md5", "--output": "output" };
+  for (let i = 0; i < args.length; i++) {
+    if (flags[args[i]]) {
+      const key = flags[args[i]];
+      if (!args[i + 1] || args[i + 1].startsWith("--")) throw new Error(`missing ${args[i]}`);
+      o[key] = args[++i];
+    } else if (args[i].startsWith("-")) throw new Error(`unknown argument ${args[i]}`);
+    else o.regions.push(args[i]);
+  }
+  if (!o.source || !o.url || !/^[a-f0-9]{32}$/.test(o.md5 || "") || !o.output || !o.regions.length)
+    throw new Error("require --source PBF --url dated-URL --md5 expected --output lock.json region...");
+  o.regions = [...new Set(o.regions)].sort();
+  o.regions.forEach(geofabrikSource);
+  return o;
+}
+function main(args = process.argv.slice(2)) {
+  const o = parseArgs(args), source = path.resolve(o.source), output = path.resolve(o.output);
+  const root = path.join(path.dirname(output), "regional-sources");
+  fs.mkdirSync(root, { recursive: true });
+  if (hashFile(source, "md5") !== o.md5) throw new Error("download does not match publisher MD5");
+  const timestamp = run("osmium", ["fileinfo", "-g", "header.option.osmosis_replication_timestamp", source]);
+  if (!Number.isFinite(Date.parse(timestamp))) throw new Error("source has no valid OSM timestamp");
+  const parent = { sourceUrl: o.url, sourceBytes: fs.statSync(source).size,
+    sourceSha256: hashFile(source), osmTimestamp: timestamp, publisherMD5: o.md5 };
+  const epoch = `osm-${timestamp.replace(/[-:]/g, "")}-${parent.sourceSha256.slice(0, 16)}`;
+  const partial = output + ".partial";
+  const doc = fs.existsSync(partial) ? JSON.parse(fs.readFileSync(partial)) : {
+    schema: "dirt-osm-source-lock.partial.v1", fabricEpoch: epoch,
+    capturedAt: new Date().toISOString(), commonSource: parent, regions: {}
+  };
+  if (doc.fabricEpoch !== epoch) throw new Error("resume parent source changed; use a new output directory");
+  const tool = run("osmium", ["--version"]).split("\n")[0];
+  for (const id of o.regions) {
+    const region = geofabrikSource(id), polygon = clipGeojsonPath(id);
+    if (!polygon) throw new Error(`${id}: missing polygon`);
+    validateGeometry(polygon, id);
+    const dir = path.join(root, id);
+    fs.mkdirSync(dir, { recursive: true });
+    const pbf = path.join(dir, "source.osm.pbf"), halo = path.join(dir, "halo.geojson");
+    const recipe = { version: 1, parentSha256: parent.sourceSha256,
+      polygonSha256: hashFile(polygon), haloMeters: 2000,
+      strategy: "smart", completeRelationTypes: "multipolygon,restriction", tool };
+    const old = doc.regions[id];
+    if (old) {
+      if (JSON.stringify(old.extraction) !== JSON.stringify(recipe) ||
+          !fs.existsSync(pbf) || hashFile(pbf) !== old.sourceSha256)
+        throw new Error(`${id}: resumed source or extraction recipe changed`);
+      console.log(`${id}: verified regional source (resume)`);
+      continue;
+    }
+    if (fs.existsSync(halo)) fs.unlinkSync(halo);
+    const layer = path.basename(polygon, ".geojson").replace(/'/g, "''");
+    run("ogr2ogr", ["-f", "GeoJSON", halo, polygon, "-dialect", "sqlite", "-sql",
+      `SELECT ST_Transform(ST_Buffer(ST_Transform(geometry, ${bufferProjection(id, region.country)}), 2000), 4326) AS geometry FROM '${layer}'`, "-nln", "halo"]);
+    console.log(`${id}: extracting from ${timestamp}`);
+    const started = Date.now();
+    run("/usr/bin/time", ["-l", "osmium", "extract", "--polygon", halo, "--strategy", "smart",
+      "-S", recipe.completeRelationTypes && `types=${recipe.completeRelationTypes}`,
+      "--output-header", `osmosis_replication_timestamp=${timestamp}`,
+      "--overwrite", "-o", pbf, source], path.join(dir, "extract.log"));
+    doc.regions[id] = { sourceUrl: o.url, sourceBytes: fs.statSync(pbf).size,
+      sourceSha256: hashFile(pbf), osmTimestamp: timestamp, cachedPath: pbf,
+      extraction: recipe, elapsedMs: Date.now() - started };
+    save(partial, doc);
+  }
+  doc.regions = Object.fromEntries(o.regions.map(id => [id, doc.regions[id]]));
+  doc.regionCount = o.regions.length;
+  doc.schema = "dirt-osm-source-lock.v1";
+  doc.maxTimestampSkewHours = 0;
+  save(output, doc);
+  console.log(`locked ${doc.regionCount} regions from ${epoch}`);
+}
+if (require.main === module) {
+  try { main(); } catch (e) { console.error(e); process.exitCode = 1; }
+}
+module.exports = { main, parseArgs, hashFile };

@@ -16,6 +16,7 @@ const { encodeFromOsmGraph, sha256 } = require("../routing/lib/pack-v4");
 const { buildPackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 const { geofabrikSource } = require("../routing/registry/geofabrik");
 const { regionTimezone } = require("../routing/registry/timezones");
+const { build: buildUrban } = require("./pack-region-urban");
 
 const FABRIC = path.join(__dirname, "..");
 const DIRT = path.join(FABRIC, "../..");
@@ -81,12 +82,21 @@ async function main() {
   provenance.sourceLock = sourceLock ? path.basename(sourceLock.path) : null;
   provenance.regionId = regionId;
   provenance.timezone = timezone;
-  const urbanPath = path.join(FABRIC, "routing", "data", "regions", regionId, "urban-cores.v1.json");
-  if (fs.existsSync(urbanPath)) {
-    const sidecar = JSON.parse(fs.readFileSync(urbanPath, "utf8"));
-    provenance.urbanCores = sidecar.cores || sidecar.urbanCores || null;
-    provenance.settlements = sidecar.settlements || null;
+  const urbanPath = path.join(legalDir, "urban-cores.v1.json");
+  const urbanPbf = path.join(legalDir, "places.osm.pbf");
+  const urbanSequence = path.join(legalDir, "places.geojsonseq");
+  for (const args of [
+    ["tags-filter", path.join(legalDir, "admin-halo.osm.pbf"), "nwr/place=city,town", "-o", urbanPbf, "--overwrite"],
+    ["export", urbanPbf, "--add-unique-id=type_id", "-a", "type,id,timestamp", "-f", "geojsonseq", "-o", urbanSequence, "--overwrite"]
+  ]) {
+    if (spawnSync("osmium", args, { stdio: "inherit" }).status !== 0) throw new Error(`${regionId}: urban extraction failed`);
   }
+  await buildUrban(regionId, source.slug, { input: urbanSequence, output: urbanPath,
+    sourceIdentity: { sha256: provenance.sourceSha256, osmTimestamp: provenance.osmTimestamp } });
+  const urban = JSON.parse(fs.readFileSync(urbanPath, "utf8"));
+  provenance.urbanCores = urban.cores;
+  provenance.settlements = urban.settlements;
+  provenance.urbanSourceIdentity = urban.sourceIdentity;
 
   const osm = await parseOplFile(oplPath, { packedNodes: true });
   console.warn(
