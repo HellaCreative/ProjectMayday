@@ -34,12 +34,12 @@ guard let seed, zoomArgument == nil || (zoom?.isFinite == true),
 }
 let compact = environment["DIRT_PROBE_COMPACT"] == "1"
 let started = ContinuousClock.now
-// Continental staged Dirt/Balanced corridors burn >1.6M labels across
-// co↔ks / prairie windows; allow an override or a higher staged default.
+// Default to the phone label limit; explicit overrides are experiments only.
 let configuredLabels = environment["DIRT_MAX_LABELS"].flatMap(Int.init)
 let budgetLabels = configuredLabels ?? 1_600_000
 var budget = ComputationBudget(seconds: seconds, maximumLabels: budgetLabels)
 let counter = SearchCounter()
+let preparedGraphs = PreparedGraphStore()
 func elapsed() -> Double {
     let d = started.duration(to: .now).components
     return Double(d.seconds)+Double(d.attoseconds)/1e18
@@ -51,7 +51,11 @@ func sha256(_ lines: [String]) -> String {
 }
 func searchFields(since prepared: Double) -> [String:Any] {
     let pops = counter.pops
+    let preparation = preparedGraphs.metrics
     return ["searches":counter.searches,"totalPops":pops,"peakLabels":counter.peakLabels,
+            "preparedGraphBuilds":preparation.builds,"preparedGraphHits":preparation.hits,
+            "packOpenSeconds":preparation.openSeconds,"graphJoinSeconds":preparation.joinSeconds,
+            "graphIndexSeconds":preparation.indexSeconds,
             "searchMilliseconds":counter.searchMilliseconds.rounded(),"stages":counter.stageSummary,
             "microsecondsPerPop": pops > 0 ? ((elapsed()-prepared)*1e6/Double(pops)).rounded() : NSNull()]
 }
@@ -80,11 +84,6 @@ do {
         let start = Coordinate(longitude: lonA, latitude: latA)
         let dest = Coordinate(longitude: lonB, latitude: latB)
         stageLong = fuelUsable == nil && StagedRouter.shouldStage(regionCount: regions.count, start: start, end: dest)
-        if stageLong, configuredLabels == nil {
-            // Host continental matrices (NM→ME class) need headroom beyond the
-            // 1.6M single-search default; keep short probes on the default.
-            budget = ComputationBudget(seconds: seconds, maximumLabels: 5_000_000)
-        }
         if !stageLong {
             let packs = try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }
             guard let first = packs.first else { throw RoutingFailure.missingPacks([]) }
@@ -116,7 +115,9 @@ do {
     if let wander = environment["DIRT_WANDER"].flatMap(Double.init), wander.isFinite {
         request.profile.wander = min(1, max(0, wander))
     }
+    request.profile.preferBackRoads = style == .cleanest
     request.mapZoom = zoom
+    request.options.cityWall = environment["DIRT_NO_CITY_WALL"] != "1"
     request.options.counter = counter
     request.options.arrivalEdgeID = environment["DIRT_ARRIVAL_EDGE"]
     if let path = environment["DIRT_PRIOR_EDGES"] {
@@ -125,7 +126,10 @@ do {
     }
     var output: [String:Any] = ["seconds":0,"prepareSeconds":prepared,"packIdentities":identities,"seed":seed,
         "mapZoom":zoom as Any? ?? NSNull(),"allowUnknown":request.access.allowUnknown,
-        "requestedStart":[lonA,latA],"requestedEnd":[lonB,latB]]
+        "requestedStart":[lonA,latA],"requestedEnd":[lonB,latB],
+        "style":style.rawValue,"wander":request.profile.wander,
+        "avoidHighways":request.profile.avoidMajorHighways,"avoidCities":request.options.cityWall,
+        "maximumLabels":budgetLabels,"windowSeconds":seconds,"renewsAfterCommittedStage":stageLong]
     if let fuelUsable, let fuelFirst {
         var fuel = FuelRequirements(usableRangeMeters: fuelUsable, firstLegMaxMeters: fuelFirst)
         fuel.ensureDestinationEscape = environment["DIRT_FUEL_ESCAPE"] != "0"
@@ -189,12 +193,13 @@ do {
         if stageLong, let packRepository {
             // Mirror NativeRoutingSession: one prepared store + one compass store
             // across staged windows so prepare and compass are not rebuilt per hop.
-            let preparedGraphs = PreparedGraphStore()
             let compassStore = RoadCompassStore()
             result = try StagedRouter.route(request, repository: packRepository, regions: regionList,
                                            budget: budget, prepared: preparedGraphs,
-                                           compassStore: compassStore)
+                                           compassStore: compassStore, renewAfterCommittedStage: true)
         } else if let indexed {
+            // Mirror the app’s non-staged recreational composition as well.
+            request.options.composeDirtRide = true
             // The app keeps one compass store per routing session; mirror it.
             result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore()).route(request,budget: budget)
         } else {

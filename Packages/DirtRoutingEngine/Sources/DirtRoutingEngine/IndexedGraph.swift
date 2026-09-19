@@ -19,6 +19,13 @@ public struct IndexedGraph: RoadGraph {
         var index: [Cell:[Int]] = [:], long: [Int] = [], entries = 0
         for edge in 0..<graph.edgeCount {
             if edge & 255 == 0 { try budget.check() }
+            // Endpoint matching rejects every other access code in all modes.
+            // Do not spend geometry-index space on roads that cannot be matched
+            // in either direction. The underlying graph and restrictions remain
+            // intact; unknown, destination and customer access stay discoverable.
+            let matchable: (UInt8) -> Bool = { $0 == 0 || $0 == 1 || $0 == 3 || $0 == 4 }
+            guard matchable(graph.accessCode(edge, forward: true))
+                || matchable(graph.accessCode(edge, forward: false)) else { continue }
             let shape = graph.polyline(edge)
             guard let first = shape.first else { continue }
             var west = first.longitude, east = west, south = first.latitude, north = south

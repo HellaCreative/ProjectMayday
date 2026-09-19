@@ -111,10 +111,15 @@ public final class RegionalGraph: RoadGraph {
         // province nodes merely to find a handful of border anchors.
         for (i,graph) in graphs.enumerated() {
             let wanted = Set(documents[i].neighbors.filter { regionIndices[$0.key] != nil }.values.flatMap { $0.map(\.osmNodeId) })
+            let wantedNodes = Set(wanted.compactMap(Int64.init))
             var found: [String:Int] = [:]
             for n in 0..<graph.nodeCount {
                 if n & 4095 == 0 { try budget.check() }
-                let id = String(graph.osmNodeID(n))
+                let nodeID = graph.osmNodeID(n)
+                // Most nodes are nowhere near a seam. Test their numeric source
+                // identity before allocating a string for a recorded anchor.
+                guard wantedNodes.contains(nodeID) else { continue }
+                let id = String(nodeID)
                 if wanted.contains(id) {
                     guard found[id] == nil else { throw RoutingFailure.invalidPack("ambiguous seam node") }
                     found[id] = n

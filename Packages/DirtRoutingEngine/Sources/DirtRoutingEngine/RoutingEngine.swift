@@ -139,7 +139,18 @@ public struct RoutingEngine: Sendable {
         func run(_ options: SearchOptions, policy: ProfilePolicy? = nil) throws -> ComputedRoute {
             var options = options
             options.roadRemaining = compass?.remaining
-            return try search.search(start: start,end: end,policy: policy ?? request.profile,access: request.access,options: options,budget: budget)
+            do {
+                return try search.search(start: start,end: end,policy: policy ?? request.profile,access: request.access,options: options,budget: budget)
+            } catch RoutingFailure.noPath where options.cityWall {
+                // Avoid cities is a preference, not a legal closure. If exclusion
+                // disconnects the rider's points, retain the urban cost penalty
+                // while permitting a necessary crossing. Never retry a resource
+                // limit as if it proved that cities were the obstacle.
+                options.cityWall = false
+                let began = ContinuousClock.now
+                defer { options.counter?.recordStage("necessaryCityConnection", since: began) }
+                return try search.search(start: start,end: end,policy: policy ?? request.profile,access: request.access,options: options,budget: budget)
+            }
         }
         if request.profile.style == .cleanest {
             // Clean is pavement-max on back roads — not an unbounded scenic wander.

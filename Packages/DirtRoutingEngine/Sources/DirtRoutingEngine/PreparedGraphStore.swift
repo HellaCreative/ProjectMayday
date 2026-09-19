@@ -155,27 +155,28 @@ public final class PreparedGraphStore: @unchecked Sendable {
 
     private func build(regions: [String], repository: PackRepository,
                               budget: ComputationBudget) throws -> IndexedGraph {
-        let started = ContinuousClock.now
-        func seconds(_ a: ContinuousClock.Instant, _ b: ContinuousClock.Instant) -> Double {
-            let d = a.duration(to: b).components
-            return Double(d.seconds) + Double(d.attoseconds) / 1e18
+        func measured<T>(_ field: WritableKeyPath<Metrics, Double>,
+                         _ work: () throws -> T) rethrows -> T {
+            let started = ContinuousClock.now
+            defer {
+                let d = started.duration(to: .now).components
+                lock.lock()
+                measurements[keyPath: field] += Double(d.seconds) + Double(d.attoseconds) / 1e18
+                lock.unlock()
+            }
+            return try work()
         }
-        let packs = try regions.map {
-            try repository.open($0, requireSeams: regions.count > 1, budget: budget)
+        // Include failed preparation in each phase's elapsed time.
+        let packs = try measured(\.openSeconds) {
+            try regions.map { try repository.open($0, requireSeams: regions.count > 1, budget: budget) }
         }
-        let opened = ContinuousClock.now
         guard let first = packs.first else { throw RoutingFailure.missingPacks(regions) }
-        let graph: any RoadGraph = packs.count == 1
-            ? first.graph
-            : try RegionalGraph(packs: packs, budget: budget)
-        let joined = ContinuousClock.now
-        let indexed = try IndexedGraph(graph, budget: budget)
-        let finished = ContinuousClock.now
+        let graph: any RoadGraph = try measured(\.joinSeconds) { () throws -> any RoadGraph in
+            packs.count == 1 ? first.graph : try RegionalGraph(packs: packs, budget: budget)
+        }
+        let indexed = try measured(\.indexSeconds) { try IndexedGraph(graph, budget: budget) }
         lock.lock()
         measurements.builds += 1
-        measurements.openSeconds += seconds(started, opened)
-        measurements.joinSeconds += seconds(opened, joined)
-        measurements.indexSeconds += seconds(joined, finished)
         lock.unlock()
         return indexed
     }

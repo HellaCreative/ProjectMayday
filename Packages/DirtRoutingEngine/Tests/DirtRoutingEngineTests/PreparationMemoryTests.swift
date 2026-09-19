@@ -47,6 +47,34 @@ struct PreparationMemoryTests {
         }
     }
 
+    @Test func spatialIndexPreservesAllSupportedAccessMatches() throws {
+        let nodes = [Coordinate(longitude: 0.001, latitude: 0.001),
+                     Coordinate(longitude: 0.002, latitude: 0.001)]
+        for code: UInt8 in [0, 1, 2, 3, 4, 5] {
+            let raw = PolicyTests.Line(nodes: nodes, edges: [(0, 1)],
+                surfaces: ["gravel"], roads: ["track"], access: code)
+            let forbidden = code == 2 || code == 5
+            // Forbidden roads use no lookup slots even with a zero-entry budget.
+            let indexed = try IndexedGraph(raw, maximumEntries: forbidden ? 0 : 1)
+            #expect(indexed.edgeCount == raw.edgeCount)
+            #expect(indexed.outgoing(0).map(\.edge) == raw.outgoing(0).map(\.edge))
+            for unknown in [false, true] {
+                for customer in [false, true] {
+                    let policy = AccessPolicy(allowUnknown: unknown,
+                        startIsCustomer: customer, endIsCustomer: customer)
+                    for start in [false, true] {
+                        let expected = try RoadMatcher(pack: raw).matches(at: nodes[0],
+                            radius: 50, start: start, policy: policy, budget: .init())
+                        let actual = try RoadMatcher(pack: indexed).matches(at: nodes[0],
+                            radius: 50, start: start, policy: policy, budget: .init())
+                        #expect(actual.map(\.edge) == expected.map(\.edge))
+                        #expect(actual.map(\.forward) == expected.map(\.forward))
+                    }
+                }
+            }
+        }
+    }
+
     @Test func warmPreparationIsBoundedAndRevalidatesChangedBytes() throws {
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)

@@ -11,7 +11,7 @@ struct PolicyTests {
         var access: UInt8 = 0
         var nodeCount: Int { nodes.count }
         var edgeCount: Int { edges.count }
-        var urbanCores: [GeographicBox] { [] }
+        var urbanCores: [GeographicBox] = []
         var restrictionIndex: RestrictionIndex { .init([]) }
         func coordinate(node: Int) -> Coordinate { nodes[node] }
         func outgoing(_ node: Int) -> [RoadArc] {
@@ -32,6 +32,47 @@ struct PolicyTests {
         func roadClass(_ edge: Int) -> String { roads[edge] }
         func structure(_ edge: Int) -> String { "" }
         func polyline(_ edge: Int) -> [Coordinate] { [nodes[edges[edge].0],nodes[edges[edge].1]] }
+    }
+
+    @Test func necessaryCityConnectionPreservesStyleAndAccess() throws {
+        let nodes = (0...3).map { Coordinate(longitude: Double($0) * 0.02, latitude: 0) }
+        let city = GeographicBox(minLat: -0.005, maxLat: 0.005,
+                                 minLon: 0.025, maxLon: 0.035, name: "required crossing")
+        var graph = Line(nodes: nodes, edges: [(0,1),(1,2),(2,3)],
+                         surfaces: ["asphalt", "asphalt", "asphalt"],
+                         roads: ["tertiary", "tertiary", "tertiary"], urbanCores: [city])
+        for style: RidingStyle in [.dirt, .balanced, .cleanest] {
+            var request = RoutingRequest(start: nodes[0], end: nodes[3], style: style)
+            request.options.counter = SearchCounter()
+            let route = try RoutingEngine(pack: graph).route(request)
+            #expect(route.end.coordinate.distance(to: nodes[3]) < 1)
+            #expect(Set(route.segments.map(\.edge)) == Set([0,1,2]))
+            #expect(request.options.counter!.stageSummary.contains("necessaryCityConnection"))
+        }
+        graph.access = 2
+        #expect(throws: RoutingFailure.noMatch) {
+            try RoutingEngine(pack: graph).route(.init(start: nodes[0], end: nodes[3],
+                                                       style: .balanced, allowUnknown: true))
+        }
+    }
+
+    @Test func cityAvoidanceKeepsAnAvailableBypass() throws {
+        let nodes = [Coordinate(longitude: 0, latitude: 0),
+                     .init(longitude: 0.02, latitude: 0),
+                     .init(longitude: 0.04, latitude: 0),
+                     .init(longitude: 0.06, latitude: 0),
+                     .init(longitude: 0.02, latitude: 0.015),
+                     .init(longitude: 0.04, latitude: 0.015)]
+        let graph = Line(nodes: nodes, edges: [(0,1),(1,2),(2,3),(1,4),(4,5),(5,2)],
+                         surfaces: Array(repeating: "asphalt", count: 6),
+                         roads: Array(repeating: "tertiary", count: 6), urbanCores: [
+                            .init(minLat: -0.005, maxLat: 0.005, minLon: 0.025,
+                                  maxLon: 0.035, name: "avoidable town")])
+        var request = RoutingRequest(start: nodes[0], end: nodes[3], style: .balanced)
+        request.options.counter = SearchCounter()
+        let route = try RoutingEngine(pack: graph).route(request)
+        #expect(!route.segments.contains { $0.edge == 1 })
+        #expect(!request.options.counter!.stageSummary.contains("necessaryCityConnection"))
     }
 
     @Test func wanderSoftensDirtAwayCostWithoutChangingSurfaceWeights() {

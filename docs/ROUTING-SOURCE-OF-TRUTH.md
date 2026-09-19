@@ -258,7 +258,13 @@ required intermediate region: a Nova Scotia → New Brunswick → Quebec journey
 downloads all three; an eight-state chain downloads all eight. Once those packs
 are on the device the rider may create unlimited routes within them with no
 further server dependency — that is the point of downloading. Include
-intermediate regions when needed, show download size/progress, support decline,
+intermediate regions when needed. Present missing packs in a download window and
+outdated packs in the same window labelled Update packs. List every required
+pack with its own orange progress bar. After all required packs are installed and
+verified, enable **Begin Route Search**; that explicit action closes the window
+and begins calculation. Do not start the route timer or search while acquiring
+packs. Preserve the existing informed choice to keep compatible installed packs.
+This panel is owner-requested and not yet implemented/qualified. Support decline,
 cancellation, retry, and reuse. Preserve the rider's pins and settings. Declining
 or missing data pauses local calculation; it must not trigger a hidden live
 fallback, run an empty graph, or report "no path."
@@ -504,6 +510,13 @@ per-request memory, cancellations, and cold behavior on the actual service class
 
 ### Active owner-directed sequence — September 19
 
+**Current priority:** investigate and repair US routing, starting with the owner's
+Texas–Moab failure. Qualify adjoining US states and Canada–US connections in both
+directions, then intrastate cardinal/diagonal and longer multistate journeys.
+The accepted trans-Canada planner ride does not establish US coverage. The pack
+acquisition panel below is a secondary task; it must not displace this testing.
+
+
 Work in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`. The current task began at
 `5383862` on `cursor/stub-island-seam-rank-f339`. Implement and qualify reduced
 memory, faster route generation, broader Wander and meaningful route variety,
@@ -596,6 +609,45 @@ that guesses here can lose work or bloat the checkout.
 ## 8. Current implementation and evidence
 
 ### Current implementation and qualification — September 19
+
+US qualification is **in progress, not accepted**. The owner Texas–Moab request
+in `dirt-app-debug-2026-09-19T183900Z.txt` used Balanced, Unknown off,
+`[-99.013625,30.528910]` → `[-109.528104,38.615266]`, packs tx/nm/az/ut.
+Its 111-second acquisition finished before calculation began. The phone then
+failed preparing the road index, with zero searches. Seed and Wander were not
+recorded; host replays explicitly use seed 1 and Wander 50%, not an invented
+exact seed match.
+
+Current repairs omit roads unmatchable in both directions from the endpoint
+lookup index (underlying legal topology remains intact), and compare numeric
+source-node identities before allocating strings during regional joining.
+Necessary city connections retry after an actual no-path result using the
+existing urban penalty and the same time/memory budget; explicit access rules
+remain enforced. Time/label limits never trigger that fallback or become proof
+of disconnection. New tests cover required city crossings, a usable bypass,
+prohibited access, and spatial-index matching parity across access modes.
+
+The local probe now uses the app's 1.6-million-label limit, renews a window only
+after a committed stage, and enables the app's non-staged ride composition.
+Preparation phase totals remain visible on failure. The serial matrix scripts
+retain settings, source/executable identity, immutable pack manifests, route
+quality fields and process memory measurements. These are host tests, not device
+acceptance. Xcode background work affected cold timings and prevents describing
+this batch as an isolated performance qualification.
+
+Evidence: `.build/us-routing-20260919/`. Initial tx↔nm, az↔ut and nb↔me host
+Balanced smoke tests completed. Corrected me↔nh endpoints also completed;
+original arbitrary points included isolated source roads. The owner Texas replay
+gets past the old road-index-capacity error but still times out in preparation.
+Vancouver→Bellingham completes after necessary-city recovery, but its 435.7 km /
+37.1% dirt result is not quality-qualified. The reverse still exceeds the label
+limit. Do not report either pair as fully fixed. The generated border inventory
+contains 248 directional requests across 124 paired connections, with de–nj and
+ny–on-s fixture selection unresolved. Generating requests is not running them.
+Intrastate cardinal/diagonal tests, Hawaii, longer multistate runs, all-style
+qualification, physical-device performance and the secondary acquisition UI
+remain outstanding.
+
 
 Owner authorization: implement and qualify speed, memory and useful ride variety,
 then prepare main for the owner's Xcode Play build. Everyday one/two-region rides
