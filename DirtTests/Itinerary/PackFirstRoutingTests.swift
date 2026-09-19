@@ -121,6 +121,176 @@ struct PackFirstRoutingTests {
         )
     }
 
+    @Test func resolveCatalogRegionIdMapsParentToPublishedHalf() {
+        let kenora = CLLocationCoordinate2D(latitude: 49.797954, longitude: -94.662943)
+        let toronto = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+        let published: Set<String> = ["on-s", "on-n", "qc-s", "qc-n"]
+        #expect(
+            GraphPackStore.resolveCatalogRegionId(
+                "on",
+                published: published,
+                coordinate: kenora
+            ) == "on-n"
+        )
+        #expect(
+            GraphPackStore.resolveCatalogRegionId(
+                "on",
+                published: published,
+                coordinate: toronto
+            ) == "on-s"
+        )
+        // Without a coordinate, parent stays unresolved on half-only fabrics.
+        #expect(
+            GraphPackStore.resolveCatalogRegionId("on", published: published) == nil
+        )
+    }
+
+    @Test func halfOnlyFabricResolvesParentPrimaryAtKenora() {
+        let nearHalifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
+        let kenora = CLLocationCoordinate2D(latitude: 49.797954, longitude: -94.662943)
+        let published: Set<String> = [
+            "ns", "nb", "pe", "qc-s", "qc-n", "on-s", "on-n", "mb"
+        ]
+        // Force the parent id through resolve even if polygons already return on-n.
+        #expect(
+            GraphPackStore.resolveCatalogRegionId(
+                "on",
+                published: published,
+                coordinate: kenora
+            ) == "on-n"
+        )
+        let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [nearHalifax, kenora],
+            published: published
+        )
+        #expect(catalog.contains("ns"))
+        #expect(catalog.contains("on-n"))
+        #expect(catalog.contains("nb"))
+        #expect(catalog.contains("qc-s") || catalog.contains("qc-n"))
+        #expect(!catalog.contains("on"))
+        #expect(!catalog.contains("qc"))
+
+        let coverage = FakePackCoverage(installed: ["ns", "nb", "qc-s"], published: published)
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [nearHalifax, kenora],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected on-n download consent after NS/NB/QC installed, got \(decision)")
+            return
+        }
+        #expect(prompt.regionIDs.contains("on-n"))
+        #expect(!prompt.regionIDs.contains("on"))
+    }
+
+    @Test func halfOnlyFabricMapsAllSplitParentsToPublishedHalves() {
+        let published = fabricV4_20260917_02PublishedIds
+        let samples: [(String, CLLocationCoordinate2D, String)] = [
+            ("on", CLLocationCoordinate2D(latitude: 49.80, longitude: -94.66), "on-n"),
+            ("on", CLLocationCoordinate2D(latitude: 43.65, longitude: -79.38), "on-s"),
+            ("qc", CLLocationCoordinate2D(latitude: 45.50, longitude: -73.57), "qc-s"),
+            ("qc", CLLocationCoordinate2D(latitude: 58.10, longitude: -68.40), "qc-n"),
+            ("ca", CLLocationCoordinate2D(latitude: 32.83, longitude: -117.27), "ca-s"),
+            ("ca", CLLocationCoordinate2D(latitude: 40.80, longitude: -124.16), "ca-n"),
+            ("nl", CLLocationCoordinate2D(latitude: 47.56, longitude: -52.71), "nl-island"),
+            ("nl", CLLocationCoordinate2D(latitude: 53.30, longitude: -60.33), "nl-lab")
+        ]
+        for (parent, coordinate, half) in samples {
+            #expect(
+                GraphPackStore.resolveCatalogRegionId(
+                    parent,
+                    published: published,
+                    coordinate: coordinate
+                ) == half,
+                "\(parent) @ \(coordinate.latitude),\(coordinate.longitude)"
+            )
+            #expect(published.contains(half))
+            #expect(!published.contains(parent))
+        }
+    }
+
+    @Test func halfOnlyFabricCorridorsForQC_CA_NLNeverUseParents() {
+        let published = fabricV4_20260917_02PublishedIds
+        let corridors: [([CLLocationCoordinate2D], Set<String>, Set<String>)] = [
+            (
+                [
+                    CLLocationCoordinate2D(latitude: 44.65, longitude: -63.57), // ns
+                    CLLocationCoordinate2D(latitude: 58.10, longitude: -68.40)  // qc-n
+                ],
+                ["ns", "qc-n"],
+                ["qc", "on", "nl"]
+            ),
+            (
+                [
+                    CLLocationCoordinate2D(latitude: 45.50, longitude: -73.57), // qc-s
+                    CLLocationCoordinate2D(latitude: 47.56, longitude: -52.71)  // nl-island
+                ],
+                ["qc-s", "nl-island"],
+                ["qc", "nl", "on"]
+            ),
+            (
+                [
+                    CLLocationCoordinate2D(latitude: 32.83, longitude: -117.27), // ca-s
+                    CLLocationCoordinate2D(latitude: 40.80, longitude: -124.16)  // ca-n
+                ],
+                ["ca-s", "ca-n"],
+                ["ca"]
+            ),
+            (
+                [
+                    CLLocationCoordinate2D(latitude: 36.17, longitude: -115.14), // nv
+                    CLLocationCoordinate2D(latitude: 32.83, longitude: -117.27)  // ca-s
+                ],
+                ["nv", "ca-s"],
+                ["ca"]
+            )
+        ]
+        for (points, mustContain, mustExclude) in corridors {
+            let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+                for: points,
+                published: published
+            )
+            #expect(!catalog.isEmpty)
+            for id in mustContain { #expect(catalog.contains(id), "missing \(id) in \(catalog)") }
+            for id in mustExclude { #expect(!catalog.contains(id), "parent \(id) leaked in \(catalog)") }
+
+            let decision = PackAcquisitionEvaluator.decide(
+                coordinates: points,
+                registry: FakePackCoverage(installed: [], published: published),
+                declinedDownloads: [],
+                declinedUpdates: [],
+                protectInstalledRevisions: false
+            )
+            guard case .requestConsent(let prompt) = decision else {
+                Issue.record("expected download consent for \(points), got \(decision)")
+                continue
+            }
+            for id in mustExclude {
+                #expect(!prompt.regionIDs.contains(id))
+            }
+        }
+    }
+
+    @Test func remapGeographicRegionIdsDropsCoveringParentsOnHalfOnlyFabric() {
+        let published = fabricV4_20260917_02PublishedIds
+        let kenora = CLLocationCoordinate2D(latitude: 49.80, longitude: -94.66)
+        // Covering bboxes emit both halves and legacy parents.
+        let geographic = ["on-n", "on", "mb", "qc", "qc-n"]
+        let remapped = GraphPackStore.remapGeographicRegionIds(
+            geographic,
+            coordinate: kenora,
+            published: published
+        )
+        #expect(remapped.needed.contains("on-n"))
+        #expect(remapped.needed.contains("mb"))
+        #expect(!remapped.needed.contains("on"))
+        #expect(!remapped.needed.contains("qc"))
+        #expect(remapped.unpublished.isEmpty)
+    }
+
     @Test func onlinePlanningWaitsForPackConsentThenResumesTheSamePins() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
@@ -342,9 +512,216 @@ struct PackFirstRoutingTests {
             )
         ])
         #expect(rows.map(\.id) == ["ns", "pe"])
+        #expect(rows.map(\.id) == rows.map { $0.id.lowercased() })
         #expect(rows.allSatisfy { $0.canDelete && $0.canDownload == false })
         #expect(rows.first { $0.id == "pe" }?.revisionState == .stale)
         #expect(rows.first { $0.id == "pe" }?.revisionLabel.contains("installed") == true)
+    }
+
+    @Test func decliningDownloadOnlyBlocksUntilPinsChange() {
+        let coverage = FakePackCoverage(installed: [], published: ["ns"])
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        let decision = coordinator.evaluate(
+            coordinates: [halifax.locationCoordinate, sydney.locationCoordinate],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent = decision else {
+            Issue.record("expected download consent, got \(decision)")
+            return
+        }
+        coordinator.declineConsent()
+        #expect(coordinator.declinedDownloads.contains("ns"))
+
+        // New pin set (replaceAll/clear) forgets "Not now".
+        coordinator.clearDownloadDeclines()
+        #expect(coordinator.declinedDownloads.isEmpty)
+
+        let again = coordinator.evaluate(
+            coordinates: [halifax.locationCoordinate, sydney.locationCoordinate],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = again else {
+            Issue.record("expected download consent after clear, got \(again)")
+            return
+        }
+        #expect(prompt.regionIDs == ["ns"])
+    }
+
+    @Test func deletingPackClearsDownloadDecline() {
+        let coverage = FakePackCoverage(installed: [], published: ["ns", "nb"])
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        _ = coordinator.evaluate(
+            coordinates: [halifax.locationCoordinate, fredericton.locationCoordinate],
+            protectInstalledRevisions: false
+        )
+        coordinator.declineConsent()
+        #expect(coordinator.declinedDownloads.contains("ns"))
+        #expect(coordinator.declinedDownloads.contains("nb"))
+
+        coordinator.notePackRemoved("ns")
+        #expect(!coordinator.declinedDownloads.contains("ns"))
+        #expect(coordinator.declinedDownloads.contains("nb"))
+    }
+
+    @Test func catalogRefreshPreservesInFlightVerifiedRegions() {
+        let busy = Set(["nb", "qc"])
+        let scanned = Set(["ns"])
+        let live = Set(["nb", "pe"])
+        let merged = GraphPackStore.mergeVerifiedRegions(
+            scanned: scanned,
+            live: live,
+            managementInFlight: busy
+        )
+        #expect(merged == Set(["ns", "nb"]))
+    }
+
+    @Test func canadaToCanadaCorridorPrefersCanadianProvincesOverUS() {
+        let nearHalifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
+        // Whistler / Duffey Lake area — same west pin Richard used.
+        let nearWhistler = CLLocationCoordinate2D(latitude: 50.3463, longitude: -122.8234)
+        let published = fabricV4_20260917_02PublishedIds
+
+        let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [nearHalifax, nearWhistler],
+            published: published
+        )
+        #expect(catalog.contains("ns"))
+        #expect(catalog.contains("bc"))
+        #expect(catalog.contains("mb"))
+        #expect(catalog.contains("sk"))
+        #expect(catalog.contains("ab"))
+        #expect(!catalog.contains("nd"))
+        #expect(!catalog.contains("mt"))
+        #expect(!catalog.contains("mn"))
+        #expect(!catalog.contains("wa"))
+        #expect(!catalog.contains("on"))
+        #expect(!catalog.contains("qc"))
+
+        let path = GraphPackStore.preferredCorridorPath(
+            from: "ns",
+            to: "bc",
+            allowedRegionIds: published
+        )
+        #expect(path == ["ns", "nb", "qc-s", "on-n", "mb", "sk", "ab", "bc"])
+
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [nearHalifax, nearWhistler],
+            registry: FakePackCoverage(
+                installed: ["ns", "nb", "qc-s", "on-n"],
+                published: published
+            ),
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected Canadian corridor download consent, got \(decision)")
+            return
+        }
+        #expect(prompt.regionIDs.contains("bc"))
+        #expect(prompt.regionIDs.contains("mb"))
+        #expect(prompt.regionIDs.contains("sk"))
+        #expect(prompt.regionIDs.contains("ab"))
+        #expect(!prompt.regionIDs.contains("nd"))
+        #expect(!prompt.regionIDs.contains("mt"))
+    }
+
+    @Test func crossBorderCorridorMayStillUseUSNeighbours() {
+        let vancouver = CLLocationCoordinate2D(latitude: 49.28, longitude: -123.12)
+        let seattle = CLLocationCoordinate2D(latitude: 47.61, longitude: -122.33)
+        let published = fabricV4_20260917_02PublishedIds
+        let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [vancouver, seattle],
+            published: published
+        )
+        #expect(catalog.contains("bc"))
+        #expect(catalog.contains("wa"))
+    }
+
+    @Test func halfOnlyFabricUsesPublishedShardsForCrossOntarioCorridor() {
+        let toronto = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+        let kenora = CLLocationCoordinate2D(latitude: 49.8114, longitude: -94.4781)
+        let published: Set<String> = [
+            "ns", "nb", "pe", "qc-s", "qc-n", "on-s", "on-n", "mb"
+        ]
+        let path = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [toronto, kenora],
+            published: published
+        )
+        #expect(path == ["on-s", "on-n"])
+        #expect(!path.contains("on"))
+        #expect(!path.contains("qc"))
+
+        let coverage = FakePackCoverage(installed: [], published: published)
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [toronto, kenora],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected on-s/on-n download consent, got \(decision)")
+            return
+        }
+        #expect(prompt.kind == .download)
+        #expect(prompt.regionIDs == ["on-s", "on-n"])
+    }
+
+    @Test func halfOnlyFabricDoesNotBlockNSToKenoraOnParentQCHop() {
+        // From Here GPS in NS → Kenora. Geographic BFS used to hop ns→nb→qc→on-n
+        // and then mark `qc` unpublished when only qc-s/qc-n ship.
+        let nearHalifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
+        let kenora = CLLocationCoordinate2D(latitude: 49.8114, longitude: -94.4781)
+        let published: Set<String> = [
+            "ns", "nb", "pe", "qc-s", "qc-n", "on-s", "on-n", "mb"
+        ]
+        let geographic = GraphPackStore.requiredRoutingRegions(for: [nearHalifax, kenora])
+        #expect(geographic.contains("qc") || geographic.contains("on"))
+
+        let catalog = GraphPackStore.requiredCatalogRoutingRegions(
+            for: [nearHalifax, kenora],
+            published: published
+        )
+        #expect(catalog.contains("ns"))
+        #expect(catalog.contains("nb"))
+        #expect(catalog.contains("on-n"))
+        #expect(catalog.contains("qc-s") || catalog.contains("qc-n"))
+        #expect(!catalog.contains("qc"))
+        #expect(!catalog.contains("on"))
+
+        let coverage = FakePackCoverage(installed: ["ns", "nb", "qc-s"], published: published)
+        let decision = PackAcquisitionEvaluator.decide(
+            coordinates: [nearHalifax, kenora],
+            registry: coverage,
+            declinedDownloads: [],
+            declinedUpdates: [],
+            protectInstalledRevisions: false
+        )
+        guard case .requestConsent(let prompt) = decision else {
+            Issue.record("expected download consent for remaining ON/QC shards, got \(decision)")
+            return
+        }
+        #expect(prompt.kind == .download)
+        #expect(prompt.regionIDs.contains("on-n"))
+        #expect(!prompt.regionIDs.contains("qc"))
+    }
+
+    @Test func replaceInstalledFailsClosedWhenRegionMissingFromCatalog() {
+        #expect(
+            GraphPackStore.shouldReplaceInstalledRevision(
+                hasChecksumValidInstalledRevision: true,
+                replaceInstalled: true,
+                protectInstalledRevisions: false
+            )
+        )
+        #expect(
+            GraphPackStore.shouldReplaceInstalledRevision(
+                hasChecksumValidInstalledRevision: true,
+                replaceInstalled: true,
+                protectInstalledRevisions: true
+            ) == false
+        )
     }
 
     @Test func packDeletionRemovesOldAndCurrentRevisionsOnlyForRequestedRegion() throws {
@@ -468,6 +845,15 @@ private func nsRequest() -> RouteRequest {
     )
 }
 
+/// Published ids for Dev fabric-v4-20260917-02 (no parent on/qc/ca/nl).
+private let fabricV4_20260917_02PublishedIds: Set<String> = [
+    "ab", "ak", "al", "ar", "az", "bc", "ca-n", "ca-s", "co", "ct", "de", "fl", "ga", "hi",
+    "ia", "id", "il", "in", "ks", "ky", "la", "ma", "mb", "md", "me", "mi", "mn", "mo", "ms",
+    "mt", "nb", "nc", "nd", "ne", "nh", "nj", "nl-island", "nl-lab", "nm", "ns", "nt", "nu",
+    "nv", "ny", "oh", "ok", "on-n", "on-s", "or", "pa", "pe", "qc-n", "qc-s", "ri", "sc",
+    "sd", "sk", "tn", "tx", "ut", "va", "vt", "wa", "wi", "wv", "wy", "yt"
+]
+
 @MainActor
 private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
     var installed: Set<String>
@@ -498,6 +884,10 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
 
     func resolveCatalogRegionId(_ regionID: String) -> String? {
         GraphPackStore.resolveCatalogRegionId(regionID, published: published)
+    }
+
+    func requiredCatalogRoutingRegions(for coordinates: [CLLocationCoordinate2D]) -> [String] {
+        GraphPackStore.requiredCatalogRoutingRegions(for: coordinates, published: published)
     }
 
     func packRevisionState(_ regionID: String) -> PackRevisionState {

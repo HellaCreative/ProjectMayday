@@ -122,7 +122,7 @@ actor NativeRoutingSession {
     private var cachedKey: String?
     private var cachedGraph: IndexedGraph?
     private var cachedFuel: [DirtRoutingEngine.FuelStation] = []
-    private let compassStore = RoadCompassStore()
+    private let compassStore = RoadCompassStore(capacity: 8)
     private let preparedGraphs = PreparedGraphStore()
     /// Returns the prepared graph and, when this call built it, how long opening packs,
     /// joining regions, indexing and decoding fuel took.
@@ -140,12 +140,9 @@ actor NativeRoutingSession {
         guard installed.first != nil else { throw RoutingFailure.missingPacks(regions) }
         let joinedMs = elapsedMs(from: started)
         let indexed: IndexedGraph
-        if regions.count == 1 {
-            indexed = try preparedGraphs.indexed(regions, repository: repository, budget: budget)
-        } else {
-            let graph: any RoadGraph = try RegionalGraph(packs: installed, budget: budget)
-            indexed = try IndexedGraph(graph, budget: budget)
-        }
+        // Always go through the session PreparedGraphStore so multi-pack joins
+        // and later staged hops share the same IndexedGraph identity.
+        indexed = try preparedGraphs.indexed(regions, repository: repository, budget: budget)
         let indexedMs = elapsedMs(from: started)
         var fuel: [String:DirtRoutingEngine.FuelStation] = [:]
         for item in installed {
@@ -198,7 +195,7 @@ actor NativeRoutingSession {
                 prepareDetail = "staged:\(directories.keys.sorted().joined(separator: ","))"
                 result = try StagedRouter.route(request, repository: repository,
                                                 regions: Array(directories.keys), budget: budget,
-                                                prepared: preparedGraphs)
+                                                prepared: preparedGraphs, compassStore: compassStore)
             } else {
                 let preparation = try prepare(directories,budget: budget)
                 prepared = elapsedMs(from: started); prepareDetail = preparation.detail

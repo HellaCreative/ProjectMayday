@@ -116,6 +116,11 @@ final class GraphPackStore {
     /// Fired when a quiet pack finishes — unused after waypoint-driven acquisition.
     var onQuietPackReady: ((String) -> Void)?
 
+    /// Fired after an installed pack is removed from disk (Layers Delete).
+    /// Route planning uses this to forget a prior "Not now" so route-touch
+    /// download can ask again.
+    var onPackRemoved: ((String) -> Void)?
+
     private var task: Task<Void, Never>?
     private var downloadTasks: [String: Task<Void, Never>] = [:]
     /// Region ids started by auto-download (cancelled on End Nav).
@@ -299,9 +304,18 @@ final class GraphPackStore {
                 }
             }
             publishedIds = published
-            verifiedInstalledRegionIds = await Self.verifyInstalledRegions(
+            let verified = await Self.verifyInstalledRegions(
                 manifest: manifest,
                 cacheRoot: cacheRoot
+            )
+            // Layers Update holds managementInFlight across download + the
+            // post-install current-revision check. A catalog scan that started
+            // before the new bytes landed must not wipe that verified insert or
+            // the Update button fails with a false checksum mismatch.
+            verifiedInstalledRegionIds = Self.mergeVerifiedRegions(
+                scanned: verified,
+                live: verifiedInstalledRegionIds,
+                managementInFlight: managementInFlight
             )
             applyCatalog(published: published, sizes: sizes)
             refreshInstalledFromDisk()
@@ -309,6 +323,17 @@ final class GraphPackStore {
             applyCatalog(published: publishedIds, sizes: [:])
             refreshInstalledFromDisk()
         }
+    }
+
+    /// Keeps in-flight Update/Delete verified inserts when a concurrent catalog
+    /// scan captured disk state from before those bytes landed.
+    nonisolated static func mergeVerifiedRegions(
+        scanned: Set<String>,
+        live: Set<String>,
+        managementInFlight: Set<String>
+    ) -> Set<String> {
+        guard !managementInFlight.isEmpty else { return scanned }
+        return scanned.union(live.intersection(managementInFlight))
     }
 
     /// Avoid hammering the CDN on every Start Nav tap.
@@ -345,31 +370,185 @@ final class GraphPackStore {
     /// Geographic primaries/paths remapped onto ids present in the loaded catalog.
     /// Prefer published halves (`on-s`/`on-n`); fall back to legacy parent (`on`).
     func requiredCatalogRoutingRegions(for points: [CLLocationCoordinate2D]) -> [String] {
-        var ordered: [String] = []
-        for id in Self.requiredRoutingRegions(for: points) {
-            guard let resolved = resolveCatalogRegionId(id), !ordered.contains(resolved) else { continue }
-            ordered.append(resolved)
+        Self.requiredCatalogRoutingRegions(for: points, published: publishedIds)
+    }
+
+    /// Corridor packs using only published catalog ids. Avoids geographic BFS
+    /// hopping through unpublished parents (`qc` / `on`) when the fabric ships
+    /// halves only. Endpoint primaries that are parents (`on`) map onto the
+    /// published half that owns the pin (`on-n` at Kenora).
+    static func requiredCatalogRoutingRegions(
+        for points: [CLLocationCoordinate2D],
+        published: Set<String>
+    ) -> [String] {
+        var ends: [String] = []
+        for point in points {
+            guard let id = primaryRegionId(containing: point) else { continue }
+            guard let resolved = resolveCatalogRegionId(
+                id,
+                published: published,
+                coordinate: point
+            ) else {
+                return []
+            }
+            if !ends.contains(resolved) { ends.append(resolved) }
+        }
+        guard !ends.isEmpty else { return [] }
+
+        var ordered = ends
+        let allowed = pathAllowedRegionIds(published: published)
+        for (a, b) in zip(ends, ends.dropFirst()) {
+            guard let path = preferredCorridorPath(
+                from: a,
+                to: b,
+                allowedRegionIds: allowed
+            ) else {
+                continue
+            }
+            for id in path where !ordered.contains(id) {
+                ordered.append(id)
+            }
         }
         return ordered
     }
+
+    /// When halves are published, drop the monolithic parent from corridor search
+    /// so BFS cannot prefer alphabetically-earlier `qc` over `qc-s`.
+    nonisolated static func pathAllowedRegionIds(published: Set<String>) -> Set<String> {
+        var allowed = published
+        for parent in splitParentRegionIds where published.contains(parent) {
+            if familyHasPublishedHalf(parent, published: published) {
+                allowed.remove(parent)
+            }
+        }
+        return allowed
+    }
+
+    /// Canadian provinces/territories and their published halves. Used to keep
+    /// Canada↔Canada corridors on the Canadian network when a published path exists.
+    nonisolated static let canadianRegionIds: Set<String> = [
+        "ns", "nb", "pe", "nl", "nl-island", "nl-lab",
+        "qc", "qc-s", "qc-n", "on", "on-s", "on-n",
+        "mb", "sk", "ab", "bc", "yt", "nt", "nu"
+    ]
+
+    nonisolated static func isCanadianRegion(_ regionID: String) -> Bool {
+        canadianRegionIds.contains(regionID.lowercased())
+    }
+
+    /// Canada↔Canada corridors prefer a published Canadian-only path so equal-hop
+    /// BFS cannot slip through ND/MT (or other US borders) alphabetically.
+    /// Cross-border rides still use the full adjacency graph.
+    nonisolated static func preferredCorridorPath(
+        from: String,
+        to: String,
+        allowedRegionIds: Set<String>
+    ) -> [String]? {
+        let start = from.lowercased()
+        let end = to.lowercased()
+        if isCanadianRegion(start), isCanadianRegion(end) {
+            let canadianOnly = allowedRegionIds.intersection(canadianRegionIds)
+            if let path = shortestRegionPath(from: start, to: end, allowedRegionIds: canadianOnly) {
+                return path
+            }
+        }
+        return shortestRegionPath(from: start, to: end, allowedRegionIds: allowedRegionIds)
+    }
+
+    /// Split-province parents that `fabric-v4-20260917-02` replaces with halves.
+    nonisolated static let splitParentRegionIds: Set<String> = ["on", "qc", "ca", "nl"]
 
     /// Maps a geographic region id onto a catalog id that is actually published.
     func resolveCatalogRegionId(_ regionID: String) -> String? {
         Self.resolveCatalogRegionId(regionID, published: publishedIds)
     }
 
+    func resolveCatalogRegionId(
+        _ regionID: String,
+        coordinate: CLLocationCoordinate2D
+    ) -> String? {
+        Self.resolveCatalogRegionId(regionID, published: publishedIds, coordinate: coordinate)
+    }
+
     /// Prefer an exact published id; otherwise the province/state parent when that
     /// parent is the only published catalog entry (monolithic `on` while code
-    /// prefers `on-s`/`on-n`).
+    /// prefers `on-s`/`on-n`). When the fabric ships halves only, a parent id
+    /// (`on`) resolves to the half that owns `coordinate` (`on-n` / `on-s`).
     nonisolated static func resolveCatalogRegionId(
         _ regionID: String,
-        published: Set<String>
+        published: Set<String>,
+        coordinate: CLLocationCoordinate2D? = nil
     ) -> String? {
         let id = regionID.lowercased()
         if published.contains(id) { return id }
         let family = provinceFamily(id)
+        // Half → legacy parent (monolithic fabric).
         if family != id, published.contains(family) { return family }
+        // Parent → published half (half-only fabric).
+        if family == id, let coordinate,
+           let half = preferredPublishedHalf(
+            forFamily: family,
+            coordinate: coordinate,
+            published: published
+           ) {
+            return half
+        }
         return nil
+    }
+
+    /// Picks the published shard for a split province/state family.
+    nonisolated static func preferredPublishedHalf(
+        forFamily family: String,
+        coordinate: CLLocationCoordinate2D,
+        published: Set<String>
+    ) -> String? {
+        let preferred: String?
+        switch family {
+        case "on": preferred = ontarioHalf(for: coordinate)
+        case "qc": preferred = quebecHalf(for: coordinate)
+        case "ca": preferred = californiaHalf(for: coordinate)
+        case "nl": preferred = newfoundlandHalf(for: coordinate)
+        default: preferred = nil
+        }
+        if let preferred, published.contains(preferred) { return preferred }
+        let shards = published
+            .filter { $0 != family && provinceFamily($0) == family }
+            .sorted()
+        return shards.first
+    }
+
+    /// True when `published` contains at least one shard of this parent family.
+    nonisolated static func familyHasPublishedHalf(
+        _ regionID: String,
+        published: Set<String>
+    ) -> Bool {
+        let family = provinceFamily(regionID)
+        return published.contains { $0 != family && provinceFamily($0) == family }
+    }
+
+    /// Remap bbox/primary geographic ids onto published catalog ids.
+    /// Split parents (`on`/`qc`/`ca`/`nl`) are aliases on half-only fabrics — either
+    /// mapped via `coordinate` or dropped when a sibling half is already present —
+    /// never hard-failed as "unpublished".
+    nonisolated static func remapGeographicRegionIds(
+        _ geographic: [String],
+        coordinate: CLLocationCoordinate2D?,
+        published: Set<String>
+    ) -> (needed: [String], unpublished: [String]) {
+        var needed: [String] = []
+        var unpublished: [String] = []
+        for raw in geographic {
+            let id = raw.lowercased()
+            if let resolved = resolveCatalogRegionId(id, published: published, coordinate: coordinate) {
+                if !needed.contains(resolved) { needed.append(resolved) }
+                continue
+            }
+            if splitParentRegionIds.contains(id), familyHasPublishedHalf(id, published: published) {
+                continue
+            }
+            if !unpublished.contains(id) { unpublished.append(id) }
+        }
+        return (needed, unpublished)
     }
 
     /// Decoded pack for an installed region (active pack if it matches).
@@ -386,10 +565,10 @@ final class GraphPackStore {
     }
 
     func isInstalled(_ regionId: String) -> Bool {
-        let id = regionId.lowercased()
-        if findGraphFileURL(regionId: id) != nil { return true }
-        if activePack?.metadata.regionId?.lowercased() == id { return true }
-        return loadedRegionIds.contains { $0.lowercased() == id }
+        // Disk is the only authority. A decoded activePack or a stale
+        // loadedRegionIds entry must not survive Layers Delete and block
+        // route-touch re-download.
+        findGraphFileURL(regionId: regionId.lowercased()) != nil
     }
 
     /// Absolute path of the on-disk graph when present (any manifest version folder).
@@ -458,7 +637,10 @@ final class GraphPackStore {
                 )
             }
             if replaceInstalled || !hadInstalled {
-                guard packRevisionState(id) == .current else {
+                // Re-assert after a possible concurrent catalog refresh. The
+                // download already matched catalog identity before publish.
+                verifiedInstalledRegionIds.insert(id)
+                guard hasCompleteNativePack(id) else {
                     throw PackAcquisitionError.checksumMismatch(regionID: id)
                 }
             } else if !isInstalled(id) {
@@ -609,6 +791,7 @@ final class GraphPackStore {
             phase = .idle
         }
         refreshInstalledFromDisk()
+        onPackRemoved?(id)
     }
 
     static func removeInstalledRevisions(regionID: String, cacheRoot: URL) throws {
@@ -628,14 +811,17 @@ final class GraphPackStore {
 
     func updateRegion(_ regionId: String) async throws {
         // Navigation pins its installed revision for the duration of the ride.
+        let id = regionId.lowercased()
         guard !protectInstalledRevisions else {
             throw NSError(domain: "DIRT.Packs", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "End navigation before updating this pack."])
         }
-        guard managementInFlight.insert(regionId).inserted else { throw CocoaError(.fileLocking) }
-        defer { managementInFlight.remove(regionId) }
-        if let pending = downloadTasks[regionId] { await pending.value }
-        try await installVerifiedPacks([regionId], replaceInstalled: true)
+        guard managementInFlight.insert(id).inserted else { throw CocoaError(.fileLocking) }
+        defer { managementInFlight.remove(id) }
+        if let pending = downloadTasks[id] {
+            await pending.value
+        }
+        try await installVerifiedPacks([id], replaceInstalled: true)
     }
 
     /// Start Nav: prepare only the province/state containing the rider's start.
@@ -665,15 +851,15 @@ final class GraphPackStore {
                 let primaryRegions = Self.regionIds(containingAny: route)
                 return primaryRegions.isEmpty ? Self.regionIds(covering: route) : primaryRegions
             }
-            var needed: [String] = []
-            var unpublished: [String] = []
-            for id in geographic {
-                if let resolved = self.resolveCatalogRegionId(id) {
-                    if !needed.contains(resolved) { needed.append(resolved) }
-                } else {
-                    unpublished.append(id)
-                }
-            }
+            // Covering bboxes still emit legacy parents (`on`/`qc`/`ca`/`nl`).
+            // Remap with the rider coordinate so half-only fabrics never fail closed.
+            let remapped = Self.remapGeographicRegionIds(
+                geographic,
+                coordinate: coordinate,
+                published: self.publishedIds
+            )
+            let needed = remapped.needed
+            let unpublished = remapped.unpublished
             guard !needed.isEmpty else {
                 let names = (unpublished.isEmpty ? geographic : unpublished)
                     .map { self.displayTitle(forRegionId: $0) }.joined(separator: ", ")
@@ -749,7 +935,12 @@ final class GraphPackStore {
     /// Repeated GPS fixes in the same region are a no-op.
     func prepareCurrentNavigationRegionIfNeeded(at coordinate: CLLocationCoordinate2D) {
         guard let geographic = Self.primaryRegionId(containing: coordinate) else { return }
-        let catalogID = resolveCatalogRegionId(geographic) ?? geographic
+        guard let catalogID = resolveCatalogRegionId(geographic, coordinate: coordinate) else {
+            RoutingDebugLog.shared.event(
+                "navigation routing pack region skipped reason=unpublished geographic=\(geographic)"
+            )
+            return
+        }
         guard let id = NavigationRoutingPackScope.regionTransition(
             currentRegionID: catalogID,
             lastPreparedRegionID: lastAutoDownloadRegionId
@@ -814,7 +1005,7 @@ final class GraphPackStore {
 
     /// Deterministic adjacency-only path. A point-corner or bbox overlap can
     /// never enter this traversal because it is absent from the registry.
-    static func shortestRegionPath(
+    nonisolated static func shortestRegionPath(
         from: String,
         to: String,
         allowedRegionIds: Set<String>
@@ -839,7 +1030,7 @@ final class GraphPackStore {
         return nil
     }
 
-    private static let roadReachableNeighbours: [String: Set<String>] = [
+    private nonisolated static let roadReachableNeighbours: [String: Set<String>] = [
         "bc": ["ab", "yt", "nt", "ak", "wa", "id", "mt"],
         "ab": ["bc", "sk", "nt", "mt"],
         "sk": ["ab", "mb", "mt", "nd"],
@@ -1343,13 +1534,19 @@ final class GraphPackStore {
                 applyCatalog(published: published, sizes: sizes)
             }
 
-            guard let region = manifest.regions.first(where: { $0.id.lowercased() == regionId }),
+            let normalizedRegionId = regionId.lowercased()
+            guard let region = manifest.regions.first(where: { $0.id.lowercased() == normalizedRegionId }),
                   Self.regionHasPhoneGraph(region)
             else {
-                setInstall(regionId, .unavailable)
+                setInstall(normalizedRegionId, .unavailable)
                 if asNavigationPrep {
-                    phase = .skipped("No pack published for \(regionId)")
+                    phase = .skipped("No pack published for \(normalizedRegionId)")
                     progress = 1
+                }
+                // Manual Update must fail closed — a silent return left Layers
+                // looking like the button did nothing.
+                if replaceInstalled {
+                    throw PackAcquisitionError.unavailable(regionID: normalizedRegionId)
                 }
                 return
             }
@@ -1543,19 +1740,19 @@ final class GraphPackStore {
         return id
     }
 
-    static func ontarioHalf(for coordinate: CLLocationCoordinate2D) -> String {
+    nonisolated static func ontarioHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.latitude >= 46.0 ? "on-n" : "on-s"
     }
 
-    static func quebecHalf(for coordinate: CLLocationCoordinate2D) -> String {
+    nonisolated static func quebecHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.latitude >= 49.0 ? "qc-n" : "qc-s"
     }
 
-    static func californiaHalf(for coordinate: CLLocationCoordinate2D) -> String {
+    nonisolated static func californiaHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.latitude >= 37.0 ? "ca-n" : "ca-s"
     }
 
-    static func newfoundlandHalf(for coordinate: CLLocationCoordinate2D) -> String {
+    nonisolated static func newfoundlandHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.longitude <= -56.8 ? "nl-lab" : "nl-island"
     }
 
@@ -1899,8 +2096,10 @@ final class GraphPackStore {
         let primaries = points.compactMap { primaryRegionId(containing: $0) }
         var result: [String] = []
         for id in primaries where !result.contains(id) { result.append(id) }
-        for (a,b) in zip(primaries,primaries.dropFirst()) {
-            for id in shortestRegionPath(from: a,to: b,allowedRegionIds: Set(roadReachableNeighbours.keys)) ?? [] where !result.contains(id) {
+        let allowed = Set(roadReachableNeighbours.keys)
+        for (a, b) in zip(primaries, primaries.dropFirst()) {
+            for id in preferredCorridorPath(from: a, to: b, allowedRegionIds: allowed) ?? []
+            where !result.contains(id) {
                 result.append(id)
             }
         }

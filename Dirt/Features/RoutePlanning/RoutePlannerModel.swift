@@ -796,6 +796,9 @@ final class RoutePlannerModel {
         switch action {
         case .replaceAll, .clear:
             routingSessionSeed = UInt64.random(in: 1...9_007_199_254_740_991)
+            // A prior "Not now" must not permanently block route-touch download
+            // after the rider changes pins or wipes packs.
+            packAcquisition.clearDownloadDeclines()
         default:
             break
         }
@@ -900,6 +903,10 @@ final class RoutePlannerModel {
         resumePendingPackBuild()
     }
 
+    func notePackRemoved(_ regionID: String) {
+        packAcquisition.notePackRemoved(regionID)
+    }
+
     private func resumePendingPackBuild() {
         guard let pending = pendingPackBuild else { return }
         pendingPackBuild = nil
@@ -932,19 +939,45 @@ final class RoutePlannerModel {
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
+            let coords = requested.waypoints.map(\.coordinate.locationCoordinate)
+            let primaries = coords.compactMap { GraphPackStore.primaryRegionId(containing: $0) }
+            let geographic = GraphPackStore.requiredRoutingRegions(for: coords)
+            let catalog = self.graphPacks.requiredCatalogRoutingRegions(for: coords)
+            #if DIRT_DEVELOPMENT
+            let fabric = AppConfig.v4CandidateReleaseId
+            #else
+            let fabric = "production"
+            #endif
+            RoutingDebugLog.shared.event(
+                "pack acquisition begin stamp=\(RoutingDebugLog.diagnosticStamp) " +
+                    "fabric=\(fabric) primaries=\(primaries.joined(separator: ",")) " +
+                    "geographic=\(geographic.joined(separator: ",")) " +
+                    "catalog=\(catalog.joined(separator: ","))"
+            )
             let acquisition = self.packAcquisition.evaluate(
-                coordinates: requested.waypoints.map(\.coordinate.locationCoordinate),
+                coordinates: coords,
                 protectInstalledRevisions: self.graphPacks.protectInstalledRevisions)
             switch acquisition {
-            case .requestConsent:
+            case .requestConsent(let prompt):
+                RoutingDebugLog.shared.event(
+                    "pack consent requested kind=\(prompt.kind == .update ? "update" : "download") " +
+                        "regions=\(prompt.regionIDs.joined(separator: ","))"
+                )
                 self.pendingPackBuild = (from: legIndex,through: throughLegIndex,reuse: reuse,replanFromStationID: replanFromStationID)
                 self.isRouting = false; self.isAssemblingRoute = false; self.toast = nil
                 return
             case .unavailable(let warning):
+                RoutingDebugLog.shared.event(
+                    "pack acquisition unavailable reason=\(warning.reason == .declinedDownload ? "declined" : "missing") " +
+                        "regions=\(warning.regionIDs.joined(separator: ","))"
+                )
                 self.isRouting = false; self.isAssemblingRoute = false
                 self.errorMessage = warning.message; self.toast = nil
                 return
-            case .useInstalledPacks: break
+            case .useInstalledPacks:
+                RoutingDebugLog.shared.event(
+                    "pack acquisition useInstalled catalog=\(catalog.joined(separator: ","))"
+                )
             }
 
             self.itineraryBuilder.mapZoom = self.mapState.mapZoom
@@ -3473,6 +3506,7 @@ final class RoutePlannerModel {
         let coords = allCoordinates
         guard coords.count > 1 else {
             navigation.cancelPrefetch()
+            graphPacks.protectInstalledRevisions = false
             mapState.unlockRouteEditingAfterPrepCancel()
             return
         }
@@ -3519,6 +3553,10 @@ final class RoutePlannerModel {
         navigationStartTask = nil
         offline.cancelPrep()
         graphPacks.cancel()
+        // Start Nav pins installed revisions; cancelling prep must release that
+        // pin or Layers Update/Delete keep throwing with no visible progress.
+        graphPacks.protectInstalledRevisions = false
+        graphPacks.cancelQuietDownloads()
         navigation.cancelPrefetch()
         activeGroupTracking = nil
         groupFollowerStoppedSince = nil

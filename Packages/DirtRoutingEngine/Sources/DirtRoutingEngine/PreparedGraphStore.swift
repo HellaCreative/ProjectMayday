@@ -4,33 +4,83 @@ import Foundation
 /// Staged hops and later legs reuse the same IndexedGraph instead of re-hashing
 /// and re-indexing a pack that is already resident.
 public final class PreparedGraphStore: @unchecked Sendable {
+    /// Peak parallel prepare slots. Phone RSS is the real limit on multi-hop.
+    public static let maxConcurrentPrepares = 2
+
     private let lock = NSLock()
     private var graphs: [String: IndexedGraph] = [:]
+    /// Keys currently building — waiters block on the condition instead of double-building.
+    private var inflight: Set<String> = []
+    private let gate = NSCondition()
 
     public init() {}
 
-    public func indexed(_ regions: [String], repository: PackRepository,
-                        budget: ComputationBudget) throws -> IndexedGraph {
-        let key = regions.sorted().joined(separator: "+")
-        lock.lock()
-        if let hit = graphs[key] {
-            lock.unlock()
-            return hit
-        }
-        lock.unlock()
-        let built = try Self.build(regions: regions, repository: repository, budget: budget)
-        lock.lock()
-        graphs[key] = built
-        lock.unlock()
-        return built
+    public func key(for regions: [String]) -> String {
+        regions.sorted().joined(separator: "+")
     }
 
-    /// Open and index independent windows concurrently when there are two or more.
+    /// Return a warm graph without building. Used by containingRegion so bbox
+    /// checks can skip a cold open when a prior hop already indexed the pack.
+    public func peek(_ regions: [String]) -> IndexedGraph? {
+        let key = key(for: regions)
+        lock.lock(); defer { lock.unlock() }
+        return graphs[key]
+    }
+
+    public func indexed(_ regions: [String], repository: PackRepository,
+                        budget: ComputationBudget) throws -> IndexedGraph {
+        let key = key(for: regions)
+        while true {
+            lock.lock()
+            if let hit = graphs[key] {
+                lock.unlock()
+                return hit
+            }
+            if inflight.contains(key) {
+                lock.unlock()
+                gate.lock()
+                while true {
+                    lock.lock()
+                    let ready = graphs[key]
+                    let waiting = inflight.contains(key)
+                    lock.unlock()
+                    if let ready { gate.unlock(); return ready }
+                    if !waiting { break }
+                    gate.wait()
+                }
+                gate.unlock()
+                continue
+            }
+            inflight.insert(key)
+            lock.unlock()
+            break
+        }
+        do {
+            let built = try Self.build(regions: regions, repository: repository, budget: budget)
+            lock.lock()
+            graphs[key] = built
+            inflight.remove(key)
+            lock.unlock()
+            gate.lock(); gate.broadcast(); gate.unlock()
+            return built
+        } catch {
+            lock.lock()
+            inflight.remove(key)
+            lock.unlock()
+            gate.lock(); gate.broadcast(); gate.unlock()
+            throw error
+        }
+    }
+
+    /// Open and index windows with bounded concurrency (default 2).
     public func indexedWindows(_ windows: [[String]], repository: PackRepository,
-                               budget: ComputationBudget) throws -> [IndexedGraph] {
+                               budget: ComputationBudget,
+                               maxConcurrent: Int = PreparedGraphStore.maxConcurrentPrepares) throws -> [IndexedGraph] {
+        guard !windows.isEmpty else { return [] }
         guard windows.count >= 2 else {
             return try windows.map { try indexed($0, repository: repository, budget: budget) }
         }
+        let limit = max(1, maxConcurrent)
         final class Slot: @unchecked Sendable {
             let lock = NSLock()
             var results: [IndexedGraph?]
@@ -43,16 +93,18 @@ public final class PreparedGraphStore: @unchecked Sendable {
         let slot = Slot(count: windows.count)
         let group = DispatchGroup()
         let queue = DispatchQueue(label: "dirt.prepared-graph", attributes: .concurrent)
+        let tickets = DispatchSemaphore(value: limit)
         for (index, window) in windows.enumerated() {
             group.enter()
             queue.async {
+                tickets.wait()
+                defer { tickets.signal(); group.leave() }
                 do {
                     let graph = try self.indexed(window, repository: repository, budget: budget)
                     slot.lock.lock(); slot.results[index] = graph; slot.lock.unlock()
                 } catch {
                     slot.lock.lock(); slot.errors[index] = error; slot.lock.unlock()
                 }
-                group.leave()
             }
         }
         group.wait()
@@ -61,6 +113,17 @@ public final class PreparedGraphStore: @unchecked Sendable {
             guard let graph else { throw RoutingFailure.invalidRequest("prepared window missing") }
             return graph
         }
+    }
+
+    /// Kick off the next window on a background queue; safe to ignore the handle.
+    @discardableResult
+    public func prefetch(_ regions: [String], repository: PackRepository,
+                         budget: ComputationBudget) -> DispatchWorkItem {
+        let work = DispatchWorkItem { [weak self] in
+            _ = try? self?.indexed(regions, repository: repository, budget: budget)
+        }
+        DispatchQueue.global(qos: .userInitiated).async(execute: work)
+        return work
     }
 
     private static func build(regions: [String], repository: PackRepository,

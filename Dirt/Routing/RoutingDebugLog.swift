@@ -9,6 +9,10 @@ import UIKit
 final class RoutingDebugLog {
     static let shared = RoutingDebugLog()
 
+    /// Device logs must prove which pack/corridor binary ran. Bump with each
+    /// #34 corridor fix; Play cards quote this stamp.
+    static let diagnosticStamp = "layers-canada-corridor-20260919a"
+
     private let maxEntries = 1_200
     private var entries: [String] = []
     private let startedAt = Date()
@@ -21,11 +25,18 @@ final class RoutingDebugLog {
         let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         let device = UIDevice.current
         let memoryMB = ProcessInfo.processInfo.physicalMemory / 1_048_576
+        #if DIRT_DEVELOPMENT
+        let fabric = AppConfig.v4CandidateReleaseId
+        #else
+        let fabric = "production"
+        #endif
         let header = [
             "DIRT app diagnostic log",
             "started \(iso(startedAt))",
             "exported \(iso(Date()))",
             "app \(version) (\(build))",
+            "stamp \(Self.diagnosticStamp)",
+            "fabric \(fabric)",
             "device \(device.model) · iOS \(device.systemVersion) · memory \(memoryMB)MB",
             "locale \(Locale.current.identifier) · timezone \(TimeZone.current.identifier)",
             "fuel notifications=\(FuelRangePrefs.notificationsEnabled ? 1 : 0) range=\(Int(FuelRangePrefs.kilometers))km reserve=\(Int(FuelRangePrefs.reservePercent))% last=\(Int(FuelRangePrefs.lastEnabledKilometers))km",
