@@ -15,7 +15,8 @@ The current native engine is the implementation being improved. Existing code,
 packs, tests, and measured experiments are assets to evaluate, not obligations
 to preserve unsuccessful behavior. The earlier engine replacement is historical;
 the active task does not authorize another rewrite, rebuilding published data,
-reverting the app, or changing its interface beyond the owner-requested progress notice.
+reverting the app, or changing its interface beyond the owner-requested progress
+notice and matching Your ride to the existing Fuel Range panel.
 
 There is no requirement to use live server routing, keep complete regional
 graphs in a persistent service, publish every experiment, maintain identical
@@ -781,6 +782,25 @@ required for these default changes. The DIRT Dev build and all five focused
 `RidePreferencesTests` pass on the existing serial iPhone17/iOS26.5 simulator,
 including native defaults for all three styles and explicit saved-setting
 overrides. Evidence: `.build/ride-defaults-20260919b.xcresult`.
+
+The owner also requested that **Your ride** use the existing **Fuel Range**
+floating map panel presentation: same top entrance, placement, material, rounded
+border, shadow, compact header and Done action. The two panels now share their
+surface styling and presentation host; opening either closes the other. Your
+ride groups Wander and the two avoidance switches without nested cards. Done
+applies the draft once; closing via the settings button or switching to Fuel
+Range discards uncommitted edits. Removed the obsolete waypoint/fuel-road caveat
+and the obsolete online-planning/fuel-stages introduction. Reduced Motion uses a
+fade instead of the slide. Routing selection and defaults are unchanged.
+
+Verification: DIRT Dev simulator build succeeds (`.build/ride-panel-20260919.log`).
+On the existing iPhone17/iOS26.5 simulator, inspected both panels in portrait,
+opened/switched/closed them, changed a switch, applied with Done, reopened and
+verified the value, then restored it. The default 50% Wander and both avoidance
+switches on are visible. No obsolete copy remains. Landscape reflow could not be
+verified: the simulator rotated its display but the app stayed in its portrait
+layout. Large Dynamic Type and VoiceOver interaction remain unverified. A new
+native build is required; no physical-device installation was performed.
 
 The owner requested a caveat inside the existing progress animation only after
 a route has been building for 20 seconds, including with Reduce Motion enabled.

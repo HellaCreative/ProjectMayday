@@ -1,70 +1,79 @@
 import SwiftUI
 
+/// The same floating map panel used by the fuel controls. Changes are committed
+/// together on Done so adjusting several controls rebuilds the ride only once.
 struct RidePreferencesSheet: View {
-    let initial: RidePreferences
     let onApply: (RidePreferences) -> Void
-    @Environment(\.dismiss) private var dismiss
     @State private var draft: RidePreferences
 
     init(initial: RidePreferences, onApply: @escaping (RidePreferences) -> Void) {
-        self.initial = initial
         self.onApply = onApply
         _draft = State(initialValue: initial)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            DirtSheetHeader(title: "Your ride", onClose: { dismiss() })
-            ScrollView {
-                VStack(alignment: .leading, spacing: DirtSpace.group) {
-                    VStack(alignment: .leading, spacing: DirtSpace.tight) {
-                        Text("Shape the journey")
-                            .font(DirtType.title).foregroundStyle(DirtTheme.ink)
-                        Text("These choices apply to the whole route, including the roads between fuel stops. Custom choices currently need online planning.")
-                            .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-                    }
-                    VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                        HStack {
-                            Text("Ride wander").font(DirtType.rowTitle)
-                            Spacer()
-                            Text("\(Int(draft.wander * 100))%")
-                                .font(DirtType.metricInline).foregroundStyle(DirtTheme.muted)
-                                .accessibilityHidden(true)
-                        }
-                        Slider(value: $draft.wander, in: 0...1, step: 0.05)
-                            .tint(DirtTheme.orange)
-                            .accessibilityLabel("Ride wander")
-                            .accessibilityValue("\(Int(draft.wander * 100)) percent")
-                        HStack {
-                            Text("More direct")
-                            Spacer()
-                            Text("More exploring")
-                        }.font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-                    }
-                    .padding(DirtSpace.row)
-                    .dirtGroupingSurface()
-                    VStack(spacing: DirtSpace.row) {
-                        Toggle("Avoid cities and towns", isOn: $draft.avoidCities)
-                        Divider()
-                        Toggle("Avoid highways", isOn: $draft.avoidHighways)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "slider.horizontal.3")
+                    .foregroundStyle(DirtTheme.orange)
+                    .accessibilityHidden(true)
+                Text("Your ride")
                     .font(DirtType.rowTitle)
-                    .tint(DirtTheme.orange)
-                    .padding(DirtSpace.row)
-                    .dirtGroupingSurface()
-                    Text("A road may still be needed to reach a waypoint or a fuel stop.")
-                        .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-                }.padding(DirtSpace.group)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.ink)
+                Spacer(minLength: 0)
+                Button("Done") { onApply(draft.normalized) }
+                    .font(DirtType.chip)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.orange)
+                    .frame(minHeight: DirtHit.min)
             }
-            Button {
-                onApply(draft.normalized)
-                dismiss()
-            } label: {
-                Text("Apply to route").frame(maxWidth: .infinity)
+
+            VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                Text("Ride wander")
+                    .font(DirtType.rowTitle)
+                HStack(spacing: DirtSpace.inner) {
+                    Text("\(Int(draft.wander * 100))%")
+                        .font(DirtType.metricInline)
+                        .foregroundStyle(DirtTheme.ink)
+                        .monospacedDigit()
+                        .frame(minWidth: 56, alignment: .leading)
+                        .accessibilityHidden(true)
+                    Slider(value: $draft.wander, in: 0...1, step: 0.05)
+                        .tint(DirtTheme.orange)
+                        .accessibilityLabel("Ride wander")
+                        .accessibilityValue("\(Int(draft.wander * 100)) percent")
+                }
+                HStack {
+                    Text("More direct")
+                    Spacer()
+                    Text("More exploring")
+                }
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
             }
-            .buttonStyle(DirtCTAStyle.brand())
-            .padding(DirtSpace.group)
+
+            Toggle("Avoid cities and towns", isOn: $draft.avoidCities)
+            Toggle("Avoid highways", isOn: $draft.avoidHighways)
         }
-        .background(DirtTheme.sheetMaterial)
+        .font(DirtType.rowTitle)
+        .foregroundStyle(DirtTheme.ink)
+        .tint(DirtTheme.orange)
+        .modifier(RouteControlsPanelStyle())
+    }
+}
+
+/// One surface treatment for both map control panels.
+struct RouteControlsPanelStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(14)
+            .frame(maxWidth: 420)
+            .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(DirtTheme.hairline, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
     }
 }
