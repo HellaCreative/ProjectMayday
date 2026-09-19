@@ -151,6 +151,25 @@ replaces legal search. All 123 engine tests pass (`paved-preflight-engine-tests.
 real-route qualification of that additional optimization is pending. Full probe
 receipts can include each selected road, direction, access, surface and shape.
 
+The remaining forward NS–QC Clean timeout was traced to handover coordinate
+`-68.99962615966797,47.31006622314453`: permitted road `33207610` reaches the
+network only through uncertain-access road `1422399785`. The generic optimistic
+connectivity check included unknown connectors, although Clean cannot use them.
+Clean handover screening now uses known-access components and filters uncertain
+through approaches; Dirt/Balanced retain their existing connector possibility.
+The focused regression fails before and passes after; all 124 engine tests pass
+(`clean-handover-before.log`, `clean-handover-engine-tests.log`). Exact real-route
+replay is still required. Diagnostic stage receipts now name handover coordinates.
+
+Selected full-segment fresh-data replays (`selected-shapes/`) have continuous
+joins, zero prohibited/conditional-closed segments and zero repeated mileage.
+At Wander 1, owner Halifax–St Stephen remains 56.8% meaningful known dirt with
+Unknown off and 68.9% on; off's longest uncertain connector is 100 m, on's is
+15.23 km. These are not 70–80% Dirt acceptance. Halifax–PE still chooses the ferry
+at Wander 0.5, despite separately verified bridge availability. QC split traversal
+is 71.7% dirt; source connectivity and riding-quality outcomes remain distinct.
+No pack publication or DEV pin is implied by these receipts.
+
 The fresh NB input contains 13 footway/cycleway source ways with explicit
 motor-vehicle permission that the former highway-class filter discarded.
 Supplemental footway, cycleway, bridleway and pedestrian ways are now retained

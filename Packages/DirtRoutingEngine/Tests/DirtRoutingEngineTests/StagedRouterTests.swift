@@ -4,6 +4,23 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct StagedRouterTests {
+    @Test func cleanHandoverRejectsAnUnknownOnlyApproachWithoutRejectingDirtConnector() throws {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),
+            .init(longitude: 0.01, latitude: 0), .init(longitude: 0.0105, latitude: 0),
+            .init(longitude: 0.02, latitude: 0)]
+        let line = PolicyTests.Line(nodes: nodes, edges: [(0,1),(1,2),(2,3)],
+            surfaces: ["asphalt","gravel","gravel"], roads: ["tertiary","track","track"],
+            edgeAccess: [0,1,0])
+        let graph = try IndexedGraph(line)
+        for style: RidingStyle in [.cleanest, .dirt] {
+            let request = RoutingRequest(start: nodes[0], end: nodes[3], style: style)
+            var reach: EndpointReachability?
+            let live = try StagedRouter.hopLooksLive(nodes[3], origin: nodes[0], graph: graph,
+                request: request, budget: .init(), reach: &reach)
+            #expect(live == (style == .dirt))
+        }
+    }
+
     @Test func joinedStagesCannotEraseAnIncompleteSearch() throws {
         let match = RoadMatch(edge: 0, coordinate: .init(longitude: -63.5, latitude: 44.7),
                               distanceMeters: 0, alongMeters: 0, geometryMeters: 0)
