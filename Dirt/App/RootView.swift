@@ -1091,8 +1091,7 @@ struct RootView: View {
             }
 
             if let progress = app.planner.activeRouteProgressMessage {
-                ToastView(text: progress, isBuildingRoute: true,
-                          longBuildExpected: app.planner.longRouteBuildExpected)
+                ToastView(text: progress, isBuildingRoute: true)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
@@ -1115,8 +1114,7 @@ struct RootView: View {
     private var landscapeMapStatusStack: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let progress = app.planner.activeRouteProgressMessage {
-                ToastView(text: progress, isBuildingRoute: true,
-                          longBuildExpected: app.planner.longRouteBuildExpected)
+                ToastView(text: progress, isBuildingRoute: true)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
@@ -1974,14 +1972,13 @@ private struct KeepAwakeLifecycle: ViewModifier {
 struct ToastView: View {
     let text: String
     var isBuildingRoute = false
-    var longBuildExpected = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hypeLineIndex = 0
     @State private var elapsedTwentySeconds = false
 
     private var longBuildNotice: String? {
-        isBuildingRoute && (longBuildExpected || elapsedTwentySeconds)
+        isBuildingRoute && elapsedTwentySeconds
             ? RoutePlannerModel.longRouteBuildNotice : nil
     }
 

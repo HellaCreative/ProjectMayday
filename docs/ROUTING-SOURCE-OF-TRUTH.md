@@ -698,15 +698,12 @@ identical frozen-seed geometry after response serialization. Canada retains the
 exact road receipt above. Cold Ontario latency still needs improvement; do not
 claim the older 15-second cold Ontario target is met by this workload.
 
-The owner requested a caveat inside the existing progress animation for long
-searches. It appears immediately for journeys spanning more than two catalog
-regions or at least 1,000 km between rider pins, and after 20 seconds for any
-other still-running search, including with Reduce Motion enabled. These are
-notice triggers, not route limits or precise duration forecasts. Copy: “Longer
-rides can take 10 seconds to over a minute to plan. Any missing or outdated map
-packs need to download first.” The pack statement is conditional: valid installed
-packs are reused, and existing consent/download progress remains unchanged.
-This does not impose a one-minute maximum or authorize automatic downloads.
+The owner requested a caveat inside the existing progress animation only after
+a route has been building for 20 seconds, including with Reduce Motion enabled.
+There is no early display based on route distance or pack count. Exact copy:
+“Longer rides can take 10 seconds to over a minute to plan.” Pack information
+belongs to the existing download notification and is omitted from this caveat.
+This is a waiting-time explanation, not a precise forecast or one-minute limit.
 
 ### Measurement
 

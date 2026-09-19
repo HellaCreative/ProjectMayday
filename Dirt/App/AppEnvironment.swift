@@ -249,10 +249,9 @@ final class AppEnvironment {
         }
         // Stable visual fixture for the route-progress notice. It exercises
         // the shipping view without starting routing or changing rider data.
-        if let fixture = ProcessInfo.processInfo.environment["DIRT_UI_TEST_ROUTE_PROGRESS"],
-           ["craft", "long-craft"].contains(fixture) {
+        if ProcessInfo.processInfo.environment["DIRT_UI_TEST_ROUTE_PROGRESS"] == "craft" {
             planner.installRouteProgressFixtureForTesting(
-                RoutePlannerModel.craftingRouteToast, longBuild: fixture == "long-craft"
+                RoutePlannerModel.craftingRouteToast
             )
         }
         if ProcessInfo.processInfo.environment["DIRT_UI_TEST_FERRY"] == "1" {

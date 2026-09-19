@@ -133,19 +133,26 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
-    func testLongRouteProgressExplainsWaitAndConditionalPackDownload() throws {
+    func testLongRouteProgressAppearsOnlyAfterWaitingAndOmitsPackCopy() throws {
         let app = XCUIApplication()
-        app.launchEnvironment["DIRT_UI_TEST_ROUTE_PROGRESS"] = "long-craft"
+        app.launchEnvironment["DIRT_UI_TEST_ROUTE_PROGRESS"] = "craft"
         app.launch()
         skipOnboardingIfPresented(in: app)
         let progress = app.descendants(matching: .any)["route-progress-toast"]
         XCTAssertTrue(progress.waitForExistence(timeout: 8))
+        let notice = NSPredicate(format: "value CONTAINS %@", "10 seconds to over a minute")
+        let earlyNotice = XCTNSPredicateExpectation(predicate: notice, object: progress)
+        earlyNotice.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [earlyNotice], timeout: 10), .completed)
+        let delayedNotice = XCTNSPredicateExpectation(predicate: notice, object: progress)
+        XCTAssertEqual(XCTWaiter.wait(for: [delayedNotice], timeout: 15), .completed)
         let value = progress.value as? String ?? ""
         XCTAssertTrue(value.contains("10 seconds to over a minute"))
-        XCTAssertTrue(value.contains("Any missing or outdated map packs"))
+        XCTAssertFalse(value.localizedCaseInsensitiveContains("pack"))
+        XCTAssertFalse(value.localizedCaseInsensitiveContains("download"))
         XCTAssertLessThan(progress.frame.maxY, app.windows.firstMatch.frame.maxY)
         let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Long Route Progress — Time and Packs"
+        attachment.name = "Long Route Progress — After Twenty Seconds"
         attachment.lifetime = .keepAlways
         add(attachment)
     }
