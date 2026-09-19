@@ -542,20 +542,6 @@ struct NavBottomPanel: View {
         }
     }
 
-    @ViewBuilder
-    private func tripStatBoxes(compact: Bool) -> some View {
-        NavStatBox(
-            label: "destination km",
-            value: String(format: "%.1f", nav.remainingMeters / 1000),
-            compact: compact
-        )
-        NavStatBox(
-            label: "climb:m",
-            value: NavTripFormat.climbMeters(nav.climbMeters),
-            compact: compact
-        )
-    }
-
     // MARK: Prefetch (legacy phase — copy matches OfflineMapPrepOverlay)
 
     private var prefetchCard: some View {

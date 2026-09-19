@@ -11,6 +11,18 @@ public final class PreparedGraphStore: @unchecked Sendable {
     private var graphs: [String: IndexedGraph] = [:]
     private var recency: [String] = []
     private let capacity: Int
+    public struct Metrics: Sendable {
+        public var builds = 0
+        public var hits = 0
+        public var openSeconds = 0.0
+        public var joinSeconds = 0.0
+        public var indexSeconds = 0.0
+    }
+    private var measurements = Metrics()
+    public var metrics: Metrics {
+        lock.lock(); defer { lock.unlock() }
+        return measurements
+    }
     /// Keys currently building — waiters block on the condition instead of double-building.
     private var inflight: Set<String> = []
     private let gate = NSCondition()
@@ -36,6 +48,7 @@ public final class PreparedGraphStore: @unchecked Sendable {
             try budget.check()
             lock.lock()
             if let hit = graphs[key] {
+                measurements.hits += 1
                 recency.removeAll { $0 == key }; recency.append(key)
                 lock.unlock()
                 return hit
@@ -62,7 +75,7 @@ public final class PreparedGraphStore: @unchecked Sendable {
             break
         }
         do {
-            let built = try Self.build(regions: regions, repository: repository, budget: budget)
+            let built = try build(regions: regions, repository: repository, budget: budget)
             lock.lock()
             graphs[key] = built
             recency.removeAll { $0 == key }; recency.append(key)
@@ -117,7 +130,11 @@ public final class PreparedGraphStore: @unchecked Sendable {
                 }
             }
         }
-        group.wait()
+        // Dispatch workers share cancellation with the caller. Polling here
+        // propagates a cancelled Swift task instead of waiting a full deadline.
+        defer { group.wait() }
+        while group.wait(timeout: .now() + 0.05) == .timedOut { try budget.check() }
+        try budget.check()
         if let error = slot.errors.compactMap({ $0 }).first { throw error }
         return try slot.results.map { graph in
             guard let graph else { throw RoutingFailure.invalidRequest("prepared window missing") }
@@ -136,15 +153,30 @@ public final class PreparedGraphStore: @unchecked Sendable {
         return work
     }
 
-    private static func build(regions: [String], repository: PackRepository,
+    private func build(regions: [String], repository: PackRepository,
                               budget: ComputationBudget) throws -> IndexedGraph {
+        let started = ContinuousClock.now
+        func seconds(_ a: ContinuousClock.Instant, _ b: ContinuousClock.Instant) -> Double {
+            let d = a.duration(to: b).components
+            return Double(d.seconds) + Double(d.attoseconds) / 1e18
+        }
         let packs = try regions.map {
             try repository.open($0, requireSeams: regions.count > 1, budget: budget)
         }
+        let opened = ContinuousClock.now
         guard let first = packs.first else { throw RoutingFailure.missingPacks(regions) }
         let graph: any RoadGraph = packs.count == 1
             ? first.graph
             : try RegionalGraph(packs: packs, budget: budget)
-        return try IndexedGraph(graph, budget: budget)
+        let joined = ContinuousClock.now
+        let indexed = try IndexedGraph(graph, budget: budget)
+        let finished = ContinuousClock.now
+        lock.lock()
+        measurements.builds += 1
+        measurements.openSeconds += seconds(started, opened)
+        measurements.joinSeconds += seconds(opened, joined)
+        measurements.indexSeconds += seconds(joined, finished)
+        lock.unlock()
+        return indexed
     }
 }

@@ -1,8 +1,25 @@
 import Foundation
+import CryptoKit
 import Testing
 @testable import DirtRoutingEngine
 
 struct StagedRouterTests {
+    @Test func joinedStagesCannotEraseAnIncompleteSearch() throws {
+        let match = RoadMatch(edge: 0, coordinate: .init(longitude: -63.5, latitude: 44.7),
+                              distanceMeters: 0, alongMeters: 0, geometryMeters: 0)
+        let complete = ComputedRoute(start: match, end: match, segments: [],
+            distanceMeters: 0, searchCost: 0, poppedLabels: 0, arrivalRestrictions: [])
+        for reason in ["time", "labels"] {
+            let incomplete = complete.reportingLimit(reason)
+            for parts in [[incomplete, complete], [complete, incomplete]] {
+                #expect(throws: RoutingFailure.resourceLimit(reason)) {
+                    try StagedRouter.stitch(parts, windows: [["ns"], ["nb"]])
+                }
+            }
+        }
+        #expect(try StagedRouter.stitch([complete, complete], windows: [["ns"], ["nb"]]).limit == nil)
+    }
+
     private var portersLake: Coordinate { .init(longitude: -63.34024797349485, latitude: 44.764804567541226) }
     private var gaspe: Coordinate { .init(longitude: -64.273363, latitude: 48.922934) }
     private var dartmouth: Coordinate { .init(longitude: -63.57, latitude: 44.67) }
@@ -283,6 +300,19 @@ struct StagedRouterTests {
         #expect(StagedRouter.cappedAim(from: belt, toward: near, maxMeters: 350_000).longitude == near.longitude)
     }
 
+    @Test func compactNeighborLookupAndWarmSeamsRejectChangedArtifacts() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeSeamFixture(root: root, region: "aa", neighbors: ["bb": [.init(longitude: 1, latitude: 2)]])
+        let repository = try PackRepository(installedDirectories: ["aa": root.appendingPathComponent("aa")])
+        #expect(try repository.seamNeighborIDs("aa") == ["bb"])
+        #expect(try repository.loadSeams("aa").neighbors["bb"]?.count == 1)
+        #expect(try repository.loadSeams("aa").neighbors["bb"]?.count == 1)
+        try Data("{}".utf8).write(to: root.appendingPathComponent("aa/cross-pack-seams.v2.json"), options: .atomic)
+        #expect(throws: RoutingFailure.self) { try repository.loadSeams("aa") }
+        #expect(throws: RoutingFailure.self) { try repository.seamNeighborIDs("aa") }
+    }
+
     private func writeSeamFixture(root: URL, region: String, neighbors: [String:[Coordinate]]) throws {
         let dir = root.appendingPathComponent(region, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -317,6 +347,14 @@ struct StagedRouterTests {
         ]
         let data = try JSONSerialization.data(withJSONObject: doc)
         try data.write(to: dir.appendingPathComponent("cross-pack-seams.v2.json"))
+        let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        func artifact(_ name: String) -> [String: Any] { ["name": name, "bytes": data.count, "sha256": hash] }
+        let manifest: [String: Any] = ["schema": "pack-manifest.v2", "fabricReleaseId": "fixture",
+            "regionId": region, "sourceEpoch": "fixture", "timezone": "America/Halifax",
+            "capabilities": ["legal-topology.v1", "cross-pack-seams.v2"],
+            "graph": artifact("graph.v4.bin"), "geometry": artifact("geometry.v1.bin"),
+            "fuel": artifact("fuel.v1.json"), "seams": artifact("cross-pack-seams.v2.json")]
+        try JSONSerialization.data(withJSONObject: manifest).write(to: dir.appendingPathComponent("pack-manifest.v2.json"))
     }
 
     @Test func compassCapDoesNotChangeAnUncappedTableOnATinyGraph() throws {

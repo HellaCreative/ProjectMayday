@@ -73,12 +73,13 @@ public enum StagedRouter {
     public static func route(_ request: RoutingRequest, repository: PackRepository,
                              regions: [String], budget: ComputationBudget,
                              prepared: PreparedGraphStore = PreparedGraphStore(),
-                             compassStore: RoadCompassStore? = nil) throws -> ComputedRoute {
+                             compassStore: RoadCompassStore? = nil,
+                             renewAfterCommittedStage: Bool = false) throws -> ComputedRoute {
         let unique = Array(Set(regions)).sorted()
         let startRegion = try containingRegion(request.start, regions: unique, repository: repository,
-                                               budget: budget, prepared: prepared)
+                                               budget: budget, prepared: prepared, access: request.access, start: true)
         let endRegion = try containingRegion(request.end, regions: unique, repository: repository,
-                                             budget: budget, prepared: prepared)
+                                             budget: budget, prepared: prepared, access: request.access, start: false)
         let neighbors = try neighborMap(unique, repository: repository)
         let chain = try RegionConnectivity(neighbors: neighbors).chain(from: startRegion, to: endRegion)
         let windows = overlappingWindows(chain)
@@ -114,6 +115,7 @@ public enum StagedRouter {
                                               access: request.access)
             guard !pins.isEmpty else { throw RoutingFailure.noPath }
             var lastError: Error = RoutingFailure.noPath
+            var incomplete: RoutingFailure?
             var reach0: EndpointReachability?
             var reach1: EndpointReachability?
             for (attempt, hopEnd) in pins.enumerated() {
@@ -144,6 +146,7 @@ public enum StagedRouter {
                     let started0 = ContinuousClock.now
                     let part0 = try RoutingEngine(pack: firstGraph, compassStore: compassStore)
                         .route(hop0, budget: attemptBudget)
+                    if let limit = part0.limit { throw RoutingFailure.resourceLimit(limit) }
                     hop0.options.counter?.recordStage("stage0:\(windows[0].joined(separator: ","))", since: started0)
                     if attempt > 0 {
                         hop0.options.counter?.recordStage("handoverRetry:\(attempt)", since: started0)
@@ -156,13 +159,18 @@ public enum StagedRouter {
                     hop1.options.compassMaxRemaining = max(450_000, part0.end.coordinate.distance(to: request.end) * 2.5)
                     hop1.options.precedingMeters = part0.distanceMeters
                     hop1.options.precedingDirtMeters = knownDirtMeters(part0)
-                    hop1.options.arrivalEdgeID = part0.segments.last?.edgeID
+                    // Local array numbering belongs to the originating pack.
+                    // Carry original topology identity into the next window.
+                    hop1.options.arrivalEdgeID = part0.segments.last.map { firstGraph.identity(of: $0.edge) }
+                    guard part0.arrivalRestrictions.isEmpty else {
+                        throw RoutingFailure.unsupported("Active turn sequence requires a continuous regional search")
+                    }
                     hop1.options.counter = request.options.counter
                     let started1 = ContinuousClock.now
                     let part1 = try RoutingEngine(pack: secondGraph, compassStore: compassStore)
                         .route(hop1, budget: attemptBudget)
                     hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
-                    return stitch([part0, part1], windows: windows)
+                    return try stitch([part0, part1], windows: windows)
                 } catch RoutingFailure.noPath {
                     lastError = RoutingFailure.noPath
                     continue
@@ -172,11 +180,12 @@ public enum StagedRouter {
                 } catch let RoutingFailure.resourceLimit(kind) where kind == "labels" || kind == "time" {
                     // Providence Dirt (012024Z) burned 60s on a dead nb→me pin;
                     // try the next diversified handover instead of aborting.
+                    incomplete = RoutingFailure.resourceLimit(kind)
                     lastError = RoutingFailure.resourceLimit(kind)
                     continue
                 }
             }
-            throw lastError
+            throw incomplete ?? lastError
         }
         // Multi-pack (NS→NB→QC class): warm the first window, then prefetch the
         // next while searching so later hops hit the store without loading every
@@ -187,7 +196,10 @@ public enum StagedRouter {
             _ = try prepared.indexed(windows[1], repository: repository, budget: budget)
         }
         request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
+        var stageBudget = budget
+        var incomingIdentity: String?
         for (index, window) in windows.enumerated() {
+            let budget = stageBudget
             try budget.check()
             // Open the stage graph before ranking so stub-island demotion uses the
             // joined window's giant component (Providence nb↔me class).
@@ -228,6 +240,7 @@ public enum StagedRouter {
             }
             defer { prefetch?.wait() }
             var lastError: Error = RoutingFailure.noPath
+            var incomplete: RoutingFailure?
             var advanced = false
             var reach: EndpointReachability?
             for (attempt, hopEnd) in candidates.enumerated() {
@@ -257,7 +270,10 @@ public enum StagedRouter {
                 if let previous = parts.last {
                     hop.options.precedingMeters = parts.reduce(0) { $0 + $1.distanceMeters }
                     hop.options.precedingDirtMeters = parts.reduce(0) { $0 + knownDirtMeters($1) }
-                    hop.options.arrivalEdgeID = previous.segments.last?.edgeID
+                    hop.options.arrivalEdgeID = incomingIdentity
+                    guard previous.arrivalRestrictions.isEmpty else {
+                        throw RoutingFailure.unsupported("Active turn sequence requires a continuous regional search")
+                    }
                 }
                 let started = ContinuousClock.now
                 do {
@@ -272,6 +288,8 @@ public enum StagedRouter {
                         hop.options.counter?.recordStage(
                             "handoverSlice:\(attempt):\(Int(sliceSeconds.rounded()))s", since: started)
                     }
+                    guard part.limit == nil else { throw RoutingFailure.resourceLimit(part.limit!) }
+                    incomingIdentity = part.segments.last.map { indexed.identity(of: $0.edge) }
                     parts.append(part)
                     cursor = part.end.coordinate
                     advanced = true
@@ -285,20 +303,26 @@ public enum StagedRouter {
                 } catch let RoutingFailure.resourceLimit(kind) where kind == "labels" || kind == "time" {
                     // Overlap stubs / long Dirt hops can burn labels or the wall
                     // clock on a dead pin — keep walking the diversified list.
+                    incomplete = RoutingFailure.resourceLimit(kind)
                     lastError = RoutingFailure.resourceLimit(kind)
                     continue
                 }
             }
-            if !advanced { throw lastError }
+            if !advanced { throw incomplete ?? lastError }
+            prefetch?.wait()
+            prefetch = nil // DispatchWorkItem permits only one successful wait.
+            if renewAfterCommittedStage, index + 1 < windows.count {
+                stageBudget = try budget.afterCommittedStage()
+            }
         }
-        return stitch(parts, windows: windows)
+        return try stitch(parts, windows: windows)
     }
 
     static func neighborMap(_ regions: [String], repository: PackRepository) throws -> [String:Set<String>] {
         let wanted = Set(regions)
         var map: [String:Set<String>] = [:]
         for id in regions {
-            let present = Set(try repository.loadSeams(id).neighbors.keys).intersection(wanted)
+            let present = try repository.seamNeighborIDs(id).intersection(wanted)
             map[id, default: []].formUnion(present)
             for neighbor in present { map[neighbor, default: []].insert(id) }
         }
@@ -307,19 +331,29 @@ public enum StagedRouter {
 
     static func containingRegion(_ point: Coordinate, regions: [String], repository: PackRepository,
                                  budget: ComputationBudget,
-                                 prepared: PreparedGraphStore = PreparedGraphStore()) throws -> String {
+                                 prepared: PreparedGraphStore = PreparedGraphStore(),
+                                 access: AccessPolicy = .init(), start: Bool = true) throws -> String {
         let ranked = regions.sorted { repository.graphBytes($0) < repository.graphBytes($1) }
-        for (index, id) in ranked.enumerated() {
+        var contained: [String] = []
+        for id in ranked {
             try budget.check()
-            if index == ranked.count - 1 { return id }
-            // Warm IndexedGraph beats a cold open when a prior hop already prepared it.
-            if let warm = try prepared.peek([id], repository: repository), sampledBox(warm).contains(point) {
-                return id
-            }
-            let pack = try repository.open(id, requireSeams: false, budget: budget)
-            if sampledBox(pack.graph).contains(point) { return id }
+            if try repository.planningEnvelope(id, budget: budget).contains(point) { contained.append(id) }
         }
-        throw RoutingFailure.noMatch
+        if contained.count == 1 { return contained[0] }
+        // Boxes are only a shortlist. Overlap must be resolved by real road
+        // matching, never by pack size or an arbitrary last-region fallback.
+        var best: (region: String, distance: Double)?
+        for id in contained.isEmpty ? ranked : contained {
+            let graph = try prepared.indexed([id], repository: repository, budget: budget)
+            let matches = try RoadMatcher(pack: graph).matches(at: point, radius: 2_000,
+                start: start, policy: access, intent: nil, budget: budget)
+            if let match = matches.min(by: { $0.distanceMeters < $1.distanceMeters }),
+               best == nil || match.distanceMeters < best!.distance {
+                best = (id, match.distanceMeters)
+            }
+        }
+        guard let best else { throw RoutingFailure.noMatch }
+        return best.region
     }
 
     static func sampledBox(_ pack: GraphPack) -> GeographicBox {
@@ -687,7 +721,9 @@ public enum StagedRouter {
             .reduce(0) { $0 + $1.meters }
     }
 
-    static func stitch(_ parts: [ComputedRoute], windows: [[String]]) -> ComputedRoute {
+    static func stitch(_ parts: [ComputedRoute], windows: [[String]]) throws -> ComputedRoute {
+        // Joining stages must never erase an incomplete search outcome.
+        if let limit = parts.compactMap(\.limit).first { throw RoutingFailure.resourceLimit(limit) }
         guard let first = parts.first, let last = parts.last else {
             return ComputedRoute(start: RoadMatch(edge: 0, coordinate: .init(longitude: 0, latitude: 0),
                                                   distanceMeters: 0, alongMeters: 0, geometryMeters: 0),

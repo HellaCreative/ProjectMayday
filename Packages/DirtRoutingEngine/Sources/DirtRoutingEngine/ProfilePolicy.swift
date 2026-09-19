@@ -34,11 +34,13 @@ public struct ProfilePolicy: Sendable {
     public init(style: RidingStyle) { self.style = style }
     public var appetite: Double { min(1, max(0, wander.isFinite ? wander : 1)) }
     public static func family(_ leaf: String) -> Surface {
-        switch leaf.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        switch leaf {
         case "asphalt","paved","concrete","chipseal","paving_stones","cobblestone","sett","brick","metal","wood": return .paved
         case "gravel","compacted","fine_gravel","pebblestone","unpaved": return .gravel
         case "dirt","ground","earth","grass","mud","sand","rock","natural","woodchips": return .loose
-        default: return .unknown
+        default:
+            let normalized = leaf.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return normalized == leaf ? .unknown : family(normalized)
         }
     }
     public static func tier(_ road: String) -> String {
@@ -151,46 +153,36 @@ public struct ProfilePolicy: Sendable {
             // Gravel/loose must stay nearly free so extra coherent dirt does
             // not lose to a shorter paved spine. JS 0.5–0.7/km plus steep
             // away priced those meanders out (section 2).
-            let dirtKm = [150.0,0.05,0.02,0.02,0.9]
-            cost = km * (penalizedDirt || unknownPaved ? 150 : dirtKm[min(4,surface)])
+            cost = km * (penalizedDirt || unknownPaved ? 150 : Self.dirtKm[min(4,surface)])
         } else if style == .cleanest {
             // Pavement-max: gravel/loose must lose to a longer paved collector, and
             // unknown surface must not ride like cheap asphalt (011028Z Clean 24% dirt).
-            let tiers = ["collector":0.82,"local_paved":0.95,"arterial":8.0,"service":2.4,
-                         "destination":1.15,"trunk":40.0,"motorway":80.0,"adventure":120.0,"unknown":2.2]
-            let families: [Surface:Double] = [.paved:1,.gravel:48,.loose:220,.unknown:12]
-            cost = km * tiers[tier,default: 2.2] * families[family,default: 12]
+            cost = km * Self.cleanTiers[tier,default: 2.2] * Self.cleanFamilies[family,default: 12]
             let dTo = to.distance(to: end)
             if (tier == "destination" || tier == "service"), dTo > 2500 {
                 cost *= 1 + 2.4 * min(1,(dTo-2500)/8000)
             }
         } else {
             let mix = min(1, max(0, balancedDirtPreference.isFinite ? balancedDirtPreference : 0.5))
-            let dirtWeights = [16.0,0.1624,0.0456,0.0168,0.154]
-            let avoid = [1.05, 1.25, 1.30, 1.25, 1.10]
-            let mid = [1.42, 0.98, 0.92, 0.88, 0.96]
-            let prefer = [8.0, 0.08, 0.05, 0.05, 0.70]
-            func lerp(_ a: [Double], _ b: [Double], _ t: Double) -> [Double] {
-                zip(a, b).map { $0 + ($1 - $0) * t }
+            let index = min(4, surface)
+            func balancedWeight(_ index: Int) -> Double {
+                let a = mix <= 0.5 ? Self.balancedAvoid[index] : Self.balancedMid[index]
+                let b = mix <= 0.5 ? Self.balancedMid[index] : Self.balancedPrefer[index]
+                let t = mix <= 0.5 ? mix * 2 : (mix - 0.5) * 2
+                return a + (b - a) * t
             }
-            let balancedWeights = mix <= 0.5 ? lerp(avoid, mid, mix * 2) : lerp(mid, prefer, (mix - 0.5) * 2)
-            let weights = style == .dirt ? dirtWeights : balancedWeights
-            let dirtRoads = ["freeway":14.0,"arterial":9.5,"collector":2.4,"ramp":12,"local":0.78,
-                             "service":1.4,"resource":0.4,"recreation":0.38,"track":0.3,"double_track":0.3,"unknown":0.95]
-            let balancedRoads = ["freeway":3.2,"arterial":2.4,"collector":1.08,"ramp":2.8,"local":1,
-                                 "service":1.15,"resource":0.92,"recreation":0.9,"track":0.92,"double_track":0.92,"unknown":1]
-            var surfaceCost = weights[min(4,surface)]
+            var surfaceCost = style == .dirt ? Self.dirtWeights[index] : balancedWeight(index)
             if surface == 4 && ["freeway","arterial","ramp","collector","local","service"].contains(coarse) {
-                surfaceCost = weights[0]
+                surfaceCost = style == .dirt ? Self.dirtWeights[0] : balancedWeight(0)
             }
-            var roadFactor = (style == .dirt ? dirtRoads : balancedRoads)[coarse,default: 1]
+            var roadFactor = (style == .dirt ? Self.dirtRoads : Self.balancedRoads)[coarse,default: 1]
             // Same early-opening relief as the ×8 arterial table below: do not
             // make Trunk/Hwy class roads 4–9× a paved collector before any dirt.
             if style == .dirt,
                !achievedMeaningfulDirt,
                riddenMetersBeforeArc < (earlyOpeningWindowMeters.isFinite ? max(0, earlyOpeningWindowMeters) : 12_000),
                coarse == "arterial" || coarse == "trunk" {
-                roadFactor = dirtRoads["collector",default: 2.4]
+                roadFactor = Self.dirtRoads["collector",default: 2.4]
             }
             cost = km * surfaceCost * roadFactor
         }
@@ -209,9 +201,9 @@ public struct ProfilePolicy: Sendable {
                 && riddenMetersBeforeArc < (earlyOpeningWindowMeters.isFinite ? max(0, earlyOpeningWindowMeters) : 12_000)
             let factor: Double
             if openingRelief {
-                factor = ["motorway":40.0][tier,default: 1]
+                factor = tier == "motorway" ? 40 : 1
             } else {
-                factor = ["motorway":40.0,"trunk":18.0,"arterial":8.0][tier,default: 1]
+                factor = tier == "motorway" ? 40 : tier == "trunk" ? 18 : tier == "arterial" ? 8 : 1
             }
             cost *= factor
         }
@@ -388,6 +380,19 @@ public struct ProfilePolicy: Sendable {
             return 0
         }
     }
+    // Immutable scoring tables are shared, not allocated for each examined arc.
+    private static let dirtKm = [150.0,0.05,0.02,0.02,0.9]
+    private static let cleanTiers = ["collector":0.82,"local_paved":0.95,"arterial":8.0,"service":2.4,
+        "destination":1.15,"trunk":40.0,"motorway":80.0,"adventure":120.0,"unknown":2.2]
+    private static let cleanFamilies: [Surface: Double] = [.paved:1,.gravel:48,.loose:220,.unknown:12]
+    private static let dirtWeights = [16.0,0.1624,0.0456,0.0168,0.154]
+    private static let balancedAvoid = [1.05,1.25,1.30,1.25,1.10]
+    private static let balancedMid = [1.42,0.98,0.92,0.88,0.96]
+    private static let balancedPrefer = [8.0,0.08,0.05,0.05,0.70]
+    private static let dirtRoads = ["freeway":14.0,"arterial":9.5,"collector":2.4,"ramp":12,"local":0.78,
+        "service":1.4,"resource":0.4,"recreation":0.38,"track":0.3,"double_track":0.3,"unknown":0.95]
+    private static let balancedRoads = ["freeway":3.2,"arterial":2.4,"collector":1.08,"ramp":2.8,"local":1.0,
+        "service":1.15,"resource":0.92,"recreation":0.9,"track":0.92,"double_track":0.92,"unknown":1]
     // Ordinals come from pack-v2.js, not from display classifications.
     static let roadNames = ["unknown","freeway","arterial","collector","local","service","resource","recreation","track","double_track","ramp"]
 }

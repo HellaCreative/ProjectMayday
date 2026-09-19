@@ -71,12 +71,89 @@ final class VerifiedPackReceipts: @unchecked Sendable {
     }
 }
 
+/// Compact connectivity preparation survives eviction of detailed road data.
+private final class PlanningEnvelopeCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [(String, GeographicBox)] = []
+    func value(for key: String, build: () throws -> GeographicBox) rethrows -> GeographicBox {
+        lock.lock()
+        if let index = entries.firstIndex(where: { $0.0 == key }) {
+            let hit = entries.remove(at: index); entries.append(hit)
+            lock.unlock(); return hit.1
+        }
+        lock.unlock()
+        let value = try build()
+        lock.lock(); defer { lock.unlock() }
+        entries.append((key, value))
+        if entries.count > 128 { entries.removeFirst(entries.count - 128) }
+        return value
+    }
+}
+
+/// Small bounded decoded sidecars; full road data is only weakly referenced.
+private final class RoutingInputCache: @unchecked Sendable {
+    struct WeakGraph { weak var value: GraphPack? }
+    private let lock = NSLock()
+    private var graphs: [String: WeakGraph] = [:]
+    private var seams: [(String, SeamDocument)] = []
+    private var neighbors: [(String, Set<String>)] = []
+    func graph(_ key: String) -> GraphPack? {
+        lock.lock(); defer { lock.unlock() }
+        return graphs[key]?.value
+    }
+    func remember(_ graph: GraphPack, key: String) {
+        lock.lock(); defer { lock.unlock() }
+        graphs = graphs.filter { $0.value.value != nil }
+        graphs[key] = WeakGraph(value: graph)
+    }
+    func document(_ key: String, build: () throws -> SeamDocument) rethrows -> SeamDocument {
+        lock.lock()
+        if let i = seams.firstIndex(where: { $0.0 == key }) {
+            let hit = seams.remove(at: i); seams.append(hit); lock.unlock(); return hit.1
+        }
+        lock.unlock()
+        let document = try build()
+        lock.lock(); defer { lock.unlock() }
+        seams.append((key, document))
+        if seams.count > 2 { seams.removeFirst(seams.count - 2) }
+        return document
+    }
+    func neighborIDs(_ key: String, build: () throws -> Set<String>) rethrows -> Set<String> {
+        lock.lock()
+        if let hit = neighbors.first(where: { $0.0 == key }) { lock.unlock(); return hit.1 }
+        lock.unlock()
+        let ids = try build()
+        lock.lock(); defer { lock.unlock() }
+        neighbors.append((key, ids))
+        if neighbors.count > 128 { neighbors.removeFirst(neighbors.count - 128) }
+        return ids
+    }
+}
+
+private struct SeamNeighborNames: Decodable {
+    struct Key: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+    enum Field: String, CodingKey { case neighbors }
+    let ids: Set<String>
+    init(from decoder: Decoder) throws {
+        let root = try decoder.container(keyedBy: Field.self)
+        let neighbors = try root.nestedContainer(keyedBy: Key.self, forKey: .neighbors)
+        ids = Set(neighbors.allKeys.map(\.stringValue))
+    }
+}
+
 /// Explicit local inputs. The acquisition UI supplies directories after installation;
 /// missing data is returned as data demand, never translated into a server request.
 public struct PackRepository: Sendable {
     private let directories: [String:URL]
     /// Manifest sha256 receipts already fully validated in this process.
     private static let verified = VerifiedPackReceipts()
+    private static let envelopes = PlanningEnvelopeCache()
+    private static let inputs = RoutingInputCache()
 
     public init(installedDirectories: [String:URL]) throws {
         guard installedDirectories.values.allSatisfy(\.isFileURL) else { throw RoutingFailure.invalidPack("local directories required") }
@@ -110,6 +187,13 @@ public struct PackRepository: Sendable {
         catch { throw RoutingFailure.invalidPack("manifest unreadable: \(region)") }
         try manifest.validate(requireSeams: requireSeams)
         guard manifest.regionId == region else { throw RoutingFailure.invalidPack("wrong region") }
+        let identity = try preparationIdentity([region])
+        if let graph = Self.inputs.graph(identity) {
+            let fuel = try Data(contentsOf: root.appendingPathComponent(manifest.fuel.name), options: .mappedIfSafe)
+            let seams = try manifest.seams.map { try Data(contentsOf: root.appendingPathComponent($0.name), options: .mappedIfSafe) }
+            try budget.check()
+            return .init(manifest: manifest, graph: graph, fuelData: fuel, seamsData: seams)
+        }
         let receipt = "\(region)|\(manifest.graph.sha256)|\(manifest.geometry.sha256)|\(manifest.fuel.sha256)"
         let alreadyVerified = Self.verified.contains(receipt)
         func verifiedArtifact(_ artifact: PackManifest.Artifact) throws -> BinaryFile {
@@ -130,13 +214,50 @@ public struct PackRepository: Sendable {
         let fuel = try verifiedArtifact(manifest.fuel).data
         let seams = try manifest.seams.map { try verifiedArtifact($0).data }
         Self.verified.insert(receipt)
+        Self.inputs.remember(graph, key: identity)
         return .init(manifest: manifest,graph: graph,fuelData: fuel,seamsData: seams)
     }
-    func loadSeams(_ region: String) throws -> SeamDocument {
+    func planningEnvelope(_ region: String, budget: ComputationBudget) throws -> GeographicBox {
+        try budget.check()
+        let identity = try preparationIdentity([region])
+        return try Self.envelopes.value(for: identity) {
+            guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
+            let manifest = try JSONDecoder().decode(PackManifest.self,
+                from: Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json")))
+            try manifest.validate()
+            guard manifest.regionId == region else { throw RoutingFailure.invalidPack("wrong region") }
+            let graph = try BinaryFile(url: root.appendingPathComponent(manifest.graph.name))
+            guard graph.data.count == manifest.graph.bytes, graph.sha256 == manifest.graph.sha256 else {
+                throw RoutingFailure.invalidPack("planning graph identity mismatch")
+            }
+            return try GraphPack.nodeBounds(graph, budget: budget)
+        }
+    }
+    private func seamBytes(_ region: String) throws -> Data {
         guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
-        let url = root.appendingPathComponent("cross-pack-seams.v2.json")
-        do { return try JSONDecoder().decode(SeamDocument.self, from: Data(contentsOf: url)) }
-        catch { throw RoutingFailure.invalidPack("seam unreadable: \(region)") }
+        let manifest = try JSONDecoder().decode(PackManifest.self,
+            from: Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json")))
+        try manifest.validate(requireSeams: true)
+        guard manifest.regionId == region, let artifact = manifest.seams else {
+            throw RoutingFailure.invalidPack("seam manifest identity")
+        }
+        let file = try BinaryFile(url: root.appendingPathComponent(artifact.name))
+        guard file.data.count == artifact.bytes, file.sha256 == artifact.sha256 else {
+            throw RoutingFailure.invalidPack("seam artifact identity mismatch")
+        }
+        return file.data
+    }
+    func seamNeighborIDs(_ region: String) throws -> Set<String> {
+        let key = try preparationIdentity([region])
+        return try Self.inputs.neighborIDs(key) {
+            try JSONDecoder().decode(SeamNeighborNames.self, from: seamBytes(region)).ids
+        }
+    }
+    func loadSeams(_ region: String) throws -> SeamDocument {
+        let key = try preparationIdentity([region])
+        return try Self.inputs.document(key) {
+            try JSONDecoder().decode(SeamDocument.self, from: seamBytes(region))
+        }
     }
     func graphBytes(_ region: String) -> Int {
         guard let root = directories[region] else { return .max }

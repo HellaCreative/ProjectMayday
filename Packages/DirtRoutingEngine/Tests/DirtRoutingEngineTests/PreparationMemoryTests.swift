@@ -4,8 +4,32 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct PreparationMemoryTests {
+    @Test func completedStageRenewsItsWindowButAttemptsCannotExtendIt() throws {
+        let parent = ComputationBudget(seconds: 1, maximumLabels: 17)
+        let attempt = parent.limited(to: 20)
+        #expect(attempt.deadline == parent.deadline)
+        let committed = try parent.afterCommittedStage()
+        #expect(committed.deadline >= parent.deadline)
+        #expect(committed.maximumLabels == parent.maximumLabels)
+    }
+
+    @Test func cancellationReachesChildBudgetsAndPreventsRenewal() async throws {
+        let parent = ComputationBudget(seconds: 30)
+        let child = parent.limited(to: 5)
+        let task = Task {
+            while !Task.isCancelled { await Task.yield() }
+            #expect(throws: CancellationError.self) { try parent.check() }
+        }
+        task.cancel()
+        await task.value
+        #expect(throws: CancellationError.self) { try child.check() }
+        #expect(throws: CancellationError.self) { try parent.afterCommittedStage() }
+    }
+
     @Test func compactConnectionsPreserveOrderDistancesAndReverseGuidance() throws {
         let raw = try RegionalGraphTests().graph()
+        let envelope = try GraphPack.nodeBounds(BinaryFile(url: ReferenceTests().fixture("legal-topology-restrictions.graph.v4.bin")), budget: .init())
+        for node in 0..<raw.nodeCount { #expect(envelope.contains(raw.coordinate(node: node))) }
         let indexed = try IndexedGraph(raw)
         for node in 0..<raw.nodeCount {
             let original = raw.outgoing(node), compact = indexed.outgoing(node)
@@ -60,6 +84,8 @@ struct PreparationMemoryTests {
         #expect(try store.peek(["cc"], repository: repository) != nil)
         // A still-live route owner retains its graph safely after cache eviction.
         #expect(a.edgeCount > 0)
+        let envelope = try repository.planningEnvelope("cc", budget: .init())
+        #expect(envelope.contains(a.coordinate(node: 0)))
         let changed = roots["cc"]!.appendingPathComponent("fuel.v1.json")
         try Data("[]".utf8).write(to: changed, options: .atomic)
         #expect(try store.peek(["cc"], repository: repository) == nil)

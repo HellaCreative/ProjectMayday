@@ -166,10 +166,15 @@ actor NativeRoutingSession {
                 prepareDetail = "staged:\(directories.keys.sorted().joined(separator: ","))"
                 result = try StagedRouter.route(request, repository: repository,
                                                 regions: Array(directories.keys), budget: budget,
-                                                prepared: preparedGraphs, compassStore: compassStore)
+                                                prepared: preparedGraphs, compassStore: compassStore,
+                                                renewAfterCommittedStage: true)
             } else {
                 let preparation = try prepare(directories,budget: budget)
                 prepared = elapsedMs(from: started); prepareDetail = preparation.detail
+                // New recreational generations may explore another riding area.
+                // Loop uses its own planner; staged country windows keep their
+                // independently qualified route selection.
+                request.options.composeDirtRide = true
                 result = try RoutingEngine(pack: preparation.graph, compassStore: compassStore).route(request,budget: budget)
             }
             log("pack route",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,

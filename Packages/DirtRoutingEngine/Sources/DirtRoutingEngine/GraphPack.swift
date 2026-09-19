@@ -80,6 +80,28 @@ public final class GraphPack: Sendable {
     let idOffsets: MappedColumn<Int32>?
     let idBlobOffset: Int
 
+    /// Planning envelope only. Reads graph node columns without opening road
+    /// geometry or preparing legal search state. Matching still proves the road.
+    static func nodeBounds(_ file: BinaryFile, budget: ComputationBudget) throws -> GeographicBox {
+        guard try file.read(0, as: UInt32.self) == 0x34545244,
+              try file.read(4, as: UInt16.self) == 4,
+              try file.read(20, as: UInt32.self) == 140 else { throw RoutingFailure.invalidPack("V4 header required") }
+        let count = Int(try file.read(8, as: UInt32.self))
+        let offset = Int(try file.read(44, as: UInt32.self))
+        guard count > 0, offset >= 140 else { throw RoutingFailure.invalidPack("empty node envelope") }
+        let column = try MappedColumn(file: file, offset: offset, count: count * 2) as MappedColumn<UInt32>
+        var west = 180.0, east = -180.0, south = 90.0, north = -90.0
+        for node in 0..<count {
+            if node & 4095 == 0 { try budget.check() }
+            let point = Coordinate(longitude: Double(Float(bitPattern: column[node * 2])),
+                                   latitude: Double(Float(bitPattern: column[node * 2 + 1])))
+            guard point.isValid else { throw RoutingFailure.invalidPack("node envelope coordinate") }
+            west = min(west, point.longitude); east = max(east, point.longitude)
+            south = min(south, point.latitude); north = max(north, point.latitude)
+        }
+        return .init(minLat: south, maxLat: north, minLon: west, maxLon: east, name: nil)
+    }
+
     public convenience init(graphURL: URL, geometryURL: URL, budget: ComputationBudget = .init(seconds: 60)) throws {
         try self.init(graph: BinaryFile(url: graphURL), geometry: BinaryFile(url: geometryURL), budget: budget)
     }

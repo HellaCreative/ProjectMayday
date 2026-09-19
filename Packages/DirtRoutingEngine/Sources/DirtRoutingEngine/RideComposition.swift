@@ -6,15 +6,18 @@ import Foundation
 extension RoutingEngine {
     func composedDirtRide(_ request: RoutingRequest, start: RoadMatch, end: RoadMatch,
                           budget: ComputationBudget) throws -> ComputedRoute? {
-        guard request.options.composeDirtRide, request.profile.style == .dirt,
+        guard request.options.composeDirtRide, request.profile.style == .dirt, request.profile.appetite > 0,
               request.options.extentCenter == nil, request.options.maximumMeters == .infinity,
               request.options.additionalEnds.isEmpty, !request.options.collectEveryGoal else { return nil }
         let span = start.coordinate.distance(to: end.coordinate)
         guard span >= request.profile.minimumUsefulDirtMeters * 4 else { return nil }
         let started = ContinuousClock.now
         defer { request.options.counter?.recordStage("rideComposition", since: started) }
-        let proposals = try ridingAreas(request, start: start, end: end, budget: budget)
+        var proposals = try ridingAreas(request, start: start, end: end, budget: budget)
+        guard !proposals.isEmpty else { return nil }
+        var reference: ComputedRoute?
         let attemptBudget = budget.limited(to: min(24, budget.remainingSeconds * 0.5))
+        for pass in 0..<2 {
         for pin in proposals.prefix(2) {
             try budget.check()
             guard attemptBudget.remainingSeconds > 0 else { break }
@@ -24,7 +27,7 @@ extension RoutingEngine {
                 var firstRequest = request.with(start: start.coordinate, end: pin.coordinate)
                 firstRequest.options.composeDirtRide = false
                 firstRequest.access.endIsCustomer = false
-                let first = try route(firstRequest, start: start, end: pin, budget: attemptBudget)
+                let first = try rideSection(firstRequest, start: start, end: pin, budget: attemptBudget)
                 guard first.limit == nil, let last = first.segments.last else { continue }
                 let incoming = try exactContinuation(first)
                 var secondRequest = request.with(start: first.end.coordinate, end: end.coordinate)
@@ -36,7 +39,8 @@ extension RoutingEngine {
                 secondRequest.options.precedingMeters += first.distanceMeters
                 secondRequest.options.precedingDirtMeters += first.segments.filter { $0.surface == .gravel || $0.surface == .loose }.reduce(0) { $0 + $1.meters }
                 secondRequest.options.priorEdges.formUnion(first.segments.map(\.edgeID))
-                let second = try route(secondRequest, start: incoming, end: end, budget: attemptBudget)
+                secondRequest.options.avoidEdges.formUnion(first.segments.map(\.edgeID))
+                let second = try rideSection(secondRequest, start: incoming, end: end, budget: attemptBudget)
                 guard second.limit == nil else { continue }
                 var result = ComputedRoute(start: first.start, end: second.end,
                     segments: first.segments + second.segments,
@@ -58,16 +62,52 @@ extension RoutingEngine {
             catch RoutingFailure.noMatch { continue }
             catch RoutingFailure.resourceLimit { continue }
         }
-        return nil
+        if pass == 0 {
+            // A bay or mountain chain can put the chord far from the useful
+            // roads. Recenter the next proposals on the actual connected ride.
+            var ordinary = request
+            ordinary.options.composeDirtRide = false
+            let route = try self.route(ordinary, start: start, end: end, budget: budget)
+            reference = route
+            guard attemptBudget.remainingSeconds > 0, route.limit == nil,
+                  RouteQuality(route: route).knownDirtPercent < 70 else { return route }
+            var walked = 0.0
+            var center = route.end.coordinate
+            for segment in route.segments {
+                walked += segment.meters
+                if walked >= route.distanceMeters / 2, !segment.geometry.isEmpty {
+                    center = segment.geometry[segment.geometry.count / 2]
+                    break
+                }
+            }
+            do { proposals = try ridingAreas(request, start: start, end: end, center: center, budget: attemptBudget) }
+            catch RoutingFailure.resourceLimit { return route }
+        }
+        }
+        return reference
+    }
+
+    /// One normal Dirt search per section. A rejected proposal does not launch
+    /// the ordinary router's several recovery/quality searches: qualify the
+    /// complete joined ride, then fall back to the ordinary router if needed.
+    private func rideSection(_ request: RoutingRequest, start: RoadMatch, end: RoadMatch,
+                             budget: ComputationBudget) throws -> ComputedRoute {
+        var options = request.options
+        options.composeDirtRide = false
+        options.objective = .pavement
+        options.roadRemaining = try RoadCompass.toward(end: end, pack: pack, budget: budget,
+            maxRemaining: options.compassMaxRemaining).remaining
+        return try PathSearch(pack: pack).search(start: start, end: end,
+            policy: request.profile, access: request.access, options: options, budget: budget)
     }
 
     /// Seed varies the area explored, not its road scores. Wander expands the
     /// area continuously. Final feasibility always comes from routed roads.
     func ridingAreas(_ request: RoutingRequest, start: RoadMatch, end: RoadMatch,
-                     budget: ComputationBudget) throws -> [RoadMatch] {
+                     center: Coordinate? = nil, budget: ComputationBudget) throws -> [RoadMatch] {
         let a = start.coordinate, b = end.coordinate
         let span = a.distance(to: b), bearing = a.bearing(to: b)
-        let reach = min(120_000, span * (0.08 + 0.65 * request.profile.appetite))
+        let reach = min(120_000, span * (0.08 + 0.50 * request.profile.appetite))
         let urban = UrbanCores.boxes(in: pack)
         let components = WeakComponents.ids(in: pack, allowUnknown: request.access.allowUnknown)
         let originComponent = WeakComponents.of(match: start, pack: pack, ids: components)
@@ -85,7 +125,7 @@ extension RoutingEngine {
         for side in [firstSide, -firstSide] {
             try budget.check()
             let fraction = 0.40 + unit() * 0.20
-            let middle = Coordinate(longitude: a.longitude + (b.longitude - a.longitude) * fraction,
+            let middle = center ?? Coordinate(longitude: a.longitude + (b.longitude - a.longitude) * fraction,
                                     latitude: a.latitude + (b.latitude - a.latitude) * fraction)
             let radius = reach * (0.65 + unit() * 0.35)
             let angle = bearing + side * .pi / 2

@@ -21,6 +21,28 @@ struct RideCompositionTests {
         #expect(abs(incoming.alongMeters - line.distance(0)) < 0.01)
     }
 
+    @Test func composedRideRetainsEndpointsAndDoesNotRepeatASection() throws {
+        var nodes: [Coordinate] = [], edges: [(Int, Int)] = []
+        for y in 0..<9 { for x in 0..<9 { nodes.append(.init(longitude: Double(x) * 0.1, latitude: Double(y) * 0.1)) } }
+        for y in 0..<9 { for x in 0..<9 {
+            let n = y * 9 + x
+            if x < 8 { edges.append((n, n + 1)) }
+            if y < 8 { edges.append((n, n + 9)) }
+        } }
+        let line = PolicyTests.Line(nodes: nodes, edges: edges, surfaces: Array(repeating: "gravel", count: edges.count),
+                                    roads: Array(repeating: "track", count: edges.count))
+        let engine = RoutingEngine(pack: try IndexedGraph(line))
+        var request = RoutingRequest(start: nodes[13], end: nodes[67], style: .dirt, seed: 1)
+        request.options.composeDirtRide = true
+        let result = try engine.route(request, budget: .init(seconds: 10))
+        #expect(result.start.coordinate.distance(to: request.start) < 0.1)
+        #expect(result.end.coordinate.distance(to: request.end) < 0.1)
+        #expect(result.limit == nil)
+        #expect(RouteQuality(route: result).reriddenMeters == 0)
+        #expect(RouteQuality(route: result).knownDirtPercent == 100)
+        #expect(result.searchSummary?.hasPrefix("composed-dirt") == true)
+    }
+
     @Test func seededRidingAreasAreReproducibleAndOfferDifferentDirections() throws {
         var nodes: [Coordinate] = [], edges: [(Int, Int)] = []
         for y in 0..<9 { for x in 0..<9 { nodes.append(.init(longitude: Double(x) * 0.1, latitude: Double(y) * 0.1)) } }

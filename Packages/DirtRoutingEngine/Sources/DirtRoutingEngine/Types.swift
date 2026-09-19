@@ -42,27 +42,54 @@ public enum RoutingFailure: Error, Equatable, Sendable {
 public enum RidingStyle: String, Codable, Sendable { case dirt, balanced, cleanest }
 public enum Surface: String, Codable, Sendable { case paved, gravel, loose, unknown }
 
-/// One absolute monotonic deadline covers preparation and every search attempt.
-/// Cancellation is checked by the worker, independent of the application's UI task.
+/// Cancellation shared with bounded preparation workers, which run outside the
+/// calling Swift task. A cancelled calculation can never renew its deadline.
+private final class CalculationCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    func check() throws {
+        lock.lock()
+        if Task.isCancelled { cancelled = true }
+        let stopped = cancelled
+        lock.unlock()
+        if stopped { throw CancellationError() }
+    }
+}
+
+/// One absolute monotonic deadline covers preparation and every attempt in a
+/// window. Only a completed, committed stage may start another window.
 public struct ComputationBudget: Sendable {
     let deadline: ContinuousClock.Instant
     public let maximumLabels: Int
+    private let windowSeconds: Double
+    private let cancellation: CalculationCancellation
     public init(seconds: Double = 18, maximumLabels: Int = 1_600_000) {
-        deadline = ContinuousClock.now.advanced(by: .seconds(max(0, seconds)))
+        let seconds = seconds.isFinite ? max(0, seconds) : 18
+        deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
         self.maximumLabels = max(1, maximumLabels)
+        windowSeconds = seconds
+        cancellation = CalculationCancellation()
     }
     public var remainingSeconds: Double {
         let d = ContinuousClock.now.duration(to: deadline).components
         return max(0,Double(d.seconds)+Double(d.attoseconds)/1e18)
     }
     public func limited(to seconds: Double) -> Self {
-        .init(deadline: min(deadline,ContinuousClock.now.advanced(by: .seconds(max(0,seconds)))),maximumLabels: maximumLabels)
+        .init(deadline: min(deadline,ContinuousClock.now.advanced(by: .seconds(max(0,seconds)))),
+              maximumLabels: maximumLabels, windowSeconds: windowSeconds, cancellation: cancellation)
     }
-    private init(deadline: ContinuousClock.Instant,maximumLabels: Int) {
+    func afterCommittedStage() throws -> Self {
+        try cancellation.check()
+        return .init(deadline: .now.advanced(by: .seconds(windowSeconds)),
+                     maximumLabels: maximumLabels, windowSeconds: windowSeconds, cancellation: cancellation)
+    }
+    private init(deadline: ContinuousClock.Instant, maximumLabels: Int,
+                 windowSeconds: Double, cancellation: CalculationCancellation) {
         self.deadline = deadline; self.maximumLabels = maximumLabels
+        self.windowSeconds = windowSeconds; self.cancellation = cancellation
     }
     func check() throws {
-        try Task.checkCancellation()
+        try cancellation.check()
         guard ContinuousClock.now < deadline else { throw RoutingFailure.resourceLimit("time") }
     }
 }
