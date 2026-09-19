@@ -88,10 +88,14 @@ public enum StagedRouter {
         }
         var parts: [ComputedRoute] = []
         var cursor = request.start
-        // Two-pack: try each handover pin as a full stage0+stage1 pair so a
-        // pin that is live in the origin half but a stub in the dest half
-        // cannot commit the corridor.
-        if windows.count == 2, let originPack = windows[0].last, let destPack = windows[1].last {
+        // True two-pack halves (on-s|on-n, nb|me as [[nb],[me]]): try each
+        // handover pin as an atomic stage0+stage1 pair so a pin live in one half
+        // but stub in the other cannot commit. Overlapping multi-pack windows
+        // such as [[ns,nb],[nb,me]] also have count==2 — those must use the
+        // multi-pack loop (Providence 20260919 host matrix).
+        if windows.count == 2,
+           windows[0].count == 1, windows[1].count == 1,
+           let originPack = windows[0].last, let destPack = windows[1].last {
             // Same staged-aim contract as multi-pack. Two-pack has no onward seam
             // belt, so chainLocalAim returns the rider destination.
             let toward = try chainLocalAim(windows: windows, stageIndex: 0, next: destPack,

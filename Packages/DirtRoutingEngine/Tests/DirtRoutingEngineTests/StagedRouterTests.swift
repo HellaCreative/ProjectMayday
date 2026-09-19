@@ -18,6 +18,11 @@ struct StagedRouterTests {
         #expect(StagedRouter.overlappingWindows(["ns", "nb", "qc"]) == [["ns", "nb"], ["nb", "qc"]])
         #expect(StagedRouter.overlappingWindows(["on-s", "on-n"]) == [["on-s"], ["on-n"]])
         #expect(StagedRouter.overlappingWindows(["ns", "nb"]) == [["ns"], ["nb"]])
+        // Three-pack corridors produce two overlapping pair-windows — not the
+        // single-pack half shape used by the atomic two-pack branch.
+        let three = StagedRouter.overlappingWindows(["ns", "nb", "me"])
+        #expect(three == [["ns", "nb"], ["nb", "me"]])
+        #expect(three.allSatisfy { $0.count == 2 })
     }
 
     @Test func handoverDiversifiesAwayFromWesternStubClusters() {
