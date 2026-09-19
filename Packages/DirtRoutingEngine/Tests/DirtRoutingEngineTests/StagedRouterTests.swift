@@ -41,6 +41,100 @@ struct StagedRouterTests {
         #expect(picks.contains(where: { abs($0.longitude - east.longitude) < 0.05 }))
     }
 
+    @Test func chainLocalAimUsesNextPackSeamNotFinalDestination() throws {
+        // Early NS→west hops must aim at the next onward seam belt, not Whistler.
+        // Same eastern half set already clears NS→Winnipeg; dest-biased ranking
+        // is what kills nb→qc-s when the rider pin is in BC.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("staged-chain-aim-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        // Stage0 next=qc-s; following window ends at on-n — aim qc-s↔on-n.
+        try writeSeamFixture(
+            root: root, region: "qc-s",
+            neighbors: ["on-n": [
+                Coordinate(longitude: -75.0, latitude: 45.5),
+                Coordinate(longitude: -75.2, latitude: 45.4),
+                Coordinate(longitude: -74.8, latitude: 45.6)
+            ]]
+        )
+        // West of Winnipeg: stage on-n+mb into sk aims at sk↔ab (~-110), not BC.
+        try writeSeamFixture(
+            root: root, region: "sk",
+            neighbors: ["ab": [
+                Coordinate(longitude: -110.0, latitude: 50.5),
+                Coordinate(longitude: -110.2, latitude: 51.0),
+                Coordinate(longitude: -109.8, latitude: 49.8)
+            ]]
+        )
+        let repo = try PackRepository(installedDirectories: [
+            "qc-s": root.appendingPathComponent("qc-s"),
+            "sk": root.appendingPathComponent("sk")
+        ])
+        let rockies = Coordinate(longitude: -122.9, latitude: 50.5)
+        // Mirrors NS→BC overlapping windows once catalog has sk/ab/bc.
+        let windows = [["ns", "nb"], ["nb", "qc-s"], ["qc-s", "on-n"], ["on-n", "mb"],
+                       ["mb", "sk"], ["sk", "ab"], ["ab", "bc"]]
+        let early = try StagedRouter.chainLocalAim(
+            windows: windows, stageIndex: 0, next: "qc-s",
+            finalDestination: rockies, repository: repo
+        )
+        #expect(abs(early.longitude - (-75.0)) < 0.2)
+        #expect(abs(early.longitude - rockies.longitude) > 40)
+
+        // Call site: stageIndex 3 window [on-n,mb], next=windows[4].last=sk.
+        let prairie = try StagedRouter.chainLocalAim(
+            windows: windows, stageIndex: 3, next: "sk",
+            finalDestination: rockies, repository: repo
+        )
+        #expect(abs(prairie.longitude - (-110.0)) < 0.2)
+        #expect(abs(prairie.longitude - rockies.longitude) > 10)
+
+        // Penultimate stage has no following window — keep the rider destination.
+        let last = try StagedRouter.chainLocalAim(
+            windows: windows, stageIndex: 5, next: "bc",
+            finalDestination: rockies, repository: repo
+        )
+        #expect(last.longitude == rockies.longitude)
+        #expect(last.latitude == rockies.latitude)
+    }
+
+    private func writeSeamFixture(root: URL, region: String, neighbors: [String:[Coordinate]]) throws {
+        let dir = root.appendingPathComponent(region, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var neighborJSON: [String:Any] = [:]
+        for (id, points) in neighbors {
+            neighborJSON[id] = points.enumerated().map { index, point in
+                [
+                    "coordinate": [point.longitude, point.latitude],
+                    "gapMeters": 0,
+                    "osmNodeId": "\(region)-\(id)-\(index)",
+                    "osmWayId": "way-\(index)",
+                    "proof": "test",
+                    "barrierDecision": 0,
+                    "edge": [
+                        "osmWayId": "way-\(index)",
+                        "fromOsmNodeId": "a\(index)",
+                        "toOsmNodeId": "b\(index)",
+                        "accessForward": 1,
+                        "accessReverse": 1,
+                        "layer": 0,
+                        "structureLeaf": NSNull()
+                    ]
+                ] as [String:Any]
+            }
+        }
+        let doc: [String:Any] = [
+            "schemaVersion": "dirt-cross-pack-seams.v2",
+            "fabricReleaseId": "fixture",
+            "sourceEpoch": "fixture",
+            "regionId": region,
+            "neighbors": neighborJSON
+        ]
+        let data = try JSONSerialization.data(withJSONObject: doc)
+        try data.write(to: dir.appendingPathComponent("cross-pack-seams.v2.json"))
+    }
+
     @Test func compassCapDoesNotChangeAnUncappedTableOnATinyGraph() throws {
         let nodes = (0...4).map { Coordinate(longitude: Double($0) * 0.01, latitude: 0) }
         let graph = try IndexedGraph(PolicyTests.Line(nodes: nodes, edges: (0..<4).map { ($0, $0 + 1) },

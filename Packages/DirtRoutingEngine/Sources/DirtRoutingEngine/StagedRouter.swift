@@ -121,8 +121,24 @@ public enum StagedRouter {
             try budget.check()
             let candidates: [Coordinate]
             if index + 1 < windows.count, let next = windows[index + 1].last, let shared = window.last {
-                candidates = try handoverCandidates(from: shared, into: next, from: cursor,
-                                                    toward: request.end, repository: repository)
+                // Aim intermediate handovers along the pack chain, not at the
+                // ultimate destination. NS→BC otherwise ranks nb→qc-s pins toward
+                // Whistler and burns the candidate list on western stubs before
+                // the search ever reaches Manitoba / SK / AB.
+                let toward = try chainLocalAim(
+                    windows: windows,
+                    stageIndex: index,
+                    next: next,
+                    finalDestination: request.end,
+                    repository: repository
+                )
+                candidates = try handoverCandidates(
+                    from: shared,
+                    into: next,
+                    from: cursor,
+                    toward: toward,
+                    repository: repository
+                )
             } else {
                 candidates = [request.end]
             }
@@ -261,6 +277,38 @@ public enum StagedRouter {
         }
         return pickHandoverCandidates(from: points, origin: origin, toward: dest,
                                       limit: handoverCandidateLimit)
+    }
+
+    /// Intermediate hops aim at the next pack's onward seam belt. The final hop
+    /// still aims at the rider destination. Keeps Canada↔Canada westbound rides
+    /// from poisoning Maritimes/QC handovers with a Rockies geodesic.
+    static func chainLocalAim(
+        windows: [[String]],
+        stageIndex: Int,
+        next: String,
+        finalDestination: Coordinate,
+        repository: PackRepository
+    ) throws -> Coordinate {
+        guard stageIndex + 2 < windows.count, let following = windows[stageIndex + 2].last else {
+            return finalDestination
+        }
+        let anchors = try repository.loadSeams(next).neighbors[following]
+            ?? repository.loadSeams(following).neighbors[next]
+            ?? []
+        let points = anchors.compactMap { row -> Coordinate? in
+            guard row.coordinate.count == 2 else { return nil }
+            let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
+            return point.isValid ? point : nil
+        }
+        return centroid(of: points) ?? finalDestination
+    }
+
+    static func centroid(of points: [Coordinate]) -> Coordinate? {
+        guard !points.isEmpty else { return nil }
+        let lon = points.map(\.longitude).reduce(0, +) / Double(points.count)
+        let lat = points.map(\.latitude).reduce(0, +) / Double(points.count)
+        let point = Coordinate(longitude: lon, latitude: lat)
+        return point.isValid ? point : nil
     }
 
     /// Corridor-ranked, longitude-diversified seam pins. Must stay O(n):
