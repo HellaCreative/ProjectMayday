@@ -697,6 +697,20 @@ prove every connection broken; the conflicting road bytes above do prove these
 California–Nevada failures. `.build/us-routing-20260919/pack-source-dates.json`
 records timestamps and source/graph/geometry hashes for every region. No source
 data or distributed artifacts were rebuilt or replaced.
+The same read-only shared-road audit found conflicts for me–qc-s (one road),
+mi–on-n (three), mi–on-s (two), mn–on-n (one), and ny–qc-s (one). Some differences
+are internal geometry with unchanged endpoint identity/rounded distance; they
+still fail the current exact alias contract and are not silently ignored. Five
+other mixed-date US boundary pairs had no conflicts in this audit, reinforcing
+that a timestamp difference alone is not proof of failure.
+
+All eight September 16 split packs also omit `urbanCores` and `settlements` in
+their graph metadata. In particular, California has no applicable entries in
+the engine's existing Canadian-only fallback city list, so route completion
+cannot qualify Avoid cities there. Canadian fallback coverage is only the
+existing named cities, not a substitute for complete metadata. Evidence:
+`.build/us-routing-20260919/pack-city-metadata.json`. Do not add location-specific
+rescue boxes to conceal this missing pack information.
 
 Intrastate cardinal/diagonal tests, Hawaii, longer multistate runs, all-style
 qualification, physical-device performance and the secondary acquisition UI
