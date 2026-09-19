@@ -50,13 +50,29 @@ struct StagedRouterTests {
         let stub = Coordinate(longitude: -67.10, latitude: 45.05)
         let picks = StagedRouter.pickHandoverCandidates(
             from: [
-                .init(coordinate: stub, waterLike: false, stubIsland: true),
-                .init(coordinate: giant, waterLike: false, stubIsland: false)
+                .init(coordinate: stub, waterLike: false, stubOnSearch: true, stubOnNext: true),
+                .init(coordinate: giant, waterLike: false, stubOnSearch: false, stubOnNext: false)
             ],
             origin: origin, toward: dest, limit: 8)
         #expect(picks.first?.longitude == giant.longitude)
         #expect(picks.first?.latitude == giant.latitude)
         #expect(picks.contains(where: { abs($0.longitude - stub.longitude) < 0.01 }))
+    }
+
+    @Test func handoverWindowLiveOutranksNextOnlyStub() {
+        // Providence class: pin live in [ns,nb] but stub on me still beats a
+        // dual-pack island that fails hopLooksLive in the search window.
+        let origin = Coordinate(longitude: -63.34, latitude: 44.76)
+        let dest = Coordinate(longitude: -71.41, latitude: 41.82)
+        let windowLive = Coordinate(longitude: -67.68, latitude: 45.62)
+        let windowDead = Coordinate(longitude: -66.98, latitude: 44.85)
+        let picks = StagedRouter.pickHandoverCandidates(
+            from: [
+                .init(coordinate: windowDead, waterLike: false, stubOnSearch: true, stubOnNext: false),
+                .init(coordinate: windowLive, waterLike: false, stubOnSearch: false, stubOnNext: true)
+            ],
+            origin: origin, toward: dest, limit: 8)
+        #expect(picks.first?.longitude == windowLive.longitude)
     }
 
     @Test func handoverStructuralQualityDemotesFerryAndWaterCrossing() {

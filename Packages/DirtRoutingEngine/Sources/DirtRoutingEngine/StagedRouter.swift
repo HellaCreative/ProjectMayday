@@ -13,18 +13,26 @@ public enum StagedRouter {
     public static let handoverCandidateLimit = 12
 
     /// Preserve structural facts until handover ranking has selected a pin.
-    /// Water-like and stub-island candidates remain legal fallbacks; they are
-    /// never discarded — only demoted so giant-component land seams try first.
+    /// Water-like and stub candidates remain legal fallbacks; they are never
+    /// discarded — only demoted so giant-component land seams try first.
+    /// `stubOnSearch` = missing from the stage-window giant (hopLooksLive class).
+    /// `stubOnNext` = missing from the next pack giant (onward commitment).
     struct HandoverCandidate {
         let coordinate: Coordinate
         let waterLike: Bool
-        let stubIsland: Bool
+        let stubOnSearch: Bool
+        let stubOnNext: Bool
 
-        init(coordinate: Coordinate, waterLike: Bool, stubIsland: Bool = false) {
+        init(coordinate: Coordinate, waterLike: Bool,
+             stubOnSearch: Bool = false, stubOnNext: Bool = false) {
             self.coordinate = coordinate
             self.waterLike = waterLike
-            self.stubIsland = stubIsland
+            self.stubOnSearch = stubOnSearch
+            self.stubOnNext = stubOnNext
         }
+
+        /// Backward-compatible combined demotion used by older call sites/tests.
+        var stubIsland: Bool { stubOnSearch || stubOnNext }
     }
 
     /// Dirt only: leave wall-clock for later pins so one dead seam cannot burn
@@ -349,30 +357,31 @@ public enum StagedRouter {
         // *search window* (when provided) and of the next pack — solo-pack
         // giants still mark coastal nb↔me proofs as "live" while hopLooksLive
         // rejects them inside [ns,nb].
-        let stubOsm = try stubIslandOsmNodeIds(
+        let stubFlags = try stubIslandFlags(
             shared: shared, next: next, anchors: anchors,
             repository: repository, searchGraph: searchGraph, budget: budget)
         let points = anchors.compactMap { row -> HandoverCandidate? in
             guard row.coordinate.count == 2 else { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
             guard point.isValid else { return nil }
+            let flags = stubFlags[row.osmNodeId] ?? (true, true)
             return .init(
                 coordinate: point,
                 waterLike: isWaterLike(row.edge),
-                stubIsland: stubOsm.contains(row.osmNodeId)
+                stubOnSearch: flags.onSearch,
+                stubOnNext: flags.onNext
             )
         }
         return pickHandoverCandidates(from: points, origin: origin, toward: dest,
                                       limit: handoverCandidateLimit)
     }
 
-    /// OSM node ids missing from the giant weak component of the search graph
-    /// (window or shared pack) or of the next pack. Ranking demotion only.
-    static func stubIslandOsmNodeIds(shared: String, next: String,
-                                     anchors: [SeamDocument.Anchor],
-                                     repository: PackRepository,
-                                     searchGraph: (any RoadGraph)?,
-                                     budget: ComputationBudget) throws -> Set<String> {
+    /// Per-OSM-id stub flags for ranking. Missing from a graph counts as stub.
+    static func stubIslandFlags(shared: String, next: String,
+                                anchors: [SeamDocument.Anchor],
+                                repository: PackRepository,
+                                searchGraph: (any RoadGraph)?,
+                                budget: ComputationBudget) throws -> [String: (onSearch: Bool, onNext: Bool)] {
         let currentGraph: any RoadGraph
         if let searchGraph {
             currentGraph = searchGraph
@@ -385,16 +394,16 @@ public enum StagedRouter {
         let currentGiant = giantComponentId(from: currentIds)
         let nextGiant = giantComponentId(from: nextIds)
         let wanted = Set(anchors.map(\.osmNodeId))
-        guard !wanted.isEmpty else { return [] }
+        guard !wanted.isEmpty else { return [:] }
         let currentNodes = osmNodeIndex(in: currentGraph, wanted: wanted)
         let nextNodes = osmNodeIndex(in: nextPack, wanted: wanted)
-        var stubs: Set<String> = []
+        var flags: [String: (onSearch: Bool, onNext: Bool)] = [:]
         for id in wanted {
-            let currentOk = currentNodes[id].map { currentIds[$0] == currentGiant } ?? false
-            let nextOk = nextNodes[id].map { nextIds[$0] == nextGiant } ?? false
-            if !(currentOk && nextOk) { stubs.insert(id) }
+            let onSearch = !(currentNodes[id].map { currentIds[$0] == currentGiant } ?? false)
+            let onNext = !(nextNodes[id].map { nextIds[$0] == nextGiant } ?? false)
+            flags[id] = (onSearch, onNext)
         }
-        return stubs
+        return flags
     }
 
     static func giantComponentId(from ids: [Int]) -> Int {
@@ -503,7 +512,7 @@ public enum StagedRouter {
     static func pickHandoverCandidates(from points: [Coordinate], origin: Coordinate,
                                        toward dest: Coordinate, limit: Int) -> [Coordinate] {
         pickHandoverCandidates(from: points.map {
-            .init(coordinate: $0, waterLike: false, stubIsland: false)
+            .init(coordinate: $0, waterLike: false, stubOnSearch: false, stubOnNext: false)
         }, origin: origin, toward: dest, limit: limit)
     }
 
@@ -531,16 +540,19 @@ public enum StagedRouter {
         let direct = max(1, origin.distance(to: dest))
         let fringe = seamFringeFlags(for: points, toward: dest)
         let ranked = zip(points, fringe).map { point, isFringe -> (
-            score: Double, point: Coordinate, waterLike: Bool, stubIsland: Bool, fringe: Bool
+            score: Double, point: Coordinate, waterLike: Bool,
+            stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool
         ) in
             let via = origin.distance(to: point.coordinate) + point.coordinate.distance(to: dest)
-            return (via / direct, point.coordinate, point.waterLike, point.stubIsland, isFringe)
+            return (via / direct, point.coordinate, point.waterLike,
+                    point.stubOnSearch, point.stubOnNext, isFringe)
         }.sorted(by: handoverRankLessThan)
 
         // Keep the best pin per ~0.4° longitude cell so western stubs cannot
         // crowd out the connected Hwy 69 / French River band.
         var byCell: [Int:(
-            score: Double, point: Coordinate, waterLike: Bool, stubIsland: Bool, fringe: Bool
+            score: Double, point: Coordinate, waterLike: Bool,
+            stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool
         )] = [:]
         for row in ranked {
             let cell = Int((row.point.longitude * 2.5).rounded(.towardZero))
@@ -575,13 +587,18 @@ public enum StagedRouter {
         pickHandoverCandidates(from: points, origin: origin, toward: dest, limit: 1).first
     }
 
-    /// Shared sort key for corridor diversification: land → giant → belt → detour.
+    /// Shared sort key: land → window-giant → next-giant → belt → detour.
+    /// Split search/next stubs so Providence window-live / next-stub pins still
+    /// outrank coastal islands that fail hopLooksLive in [ns,nb].
     static func handoverRankLessThan(
-        _ a: (score: Double, point: Coordinate, waterLike: Bool, stubIsland: Bool, fringe: Bool),
-        _ b: (score: Double, point: Coordinate, waterLike: Bool, stubIsland: Bool, fringe: Bool)
+        _ a: (score: Double, point: Coordinate, waterLike: Bool,
+              stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool),
+        _ b: (score: Double, point: Coordinate, waterLike: Bool,
+              stubOnSearch: Bool, stubOnNext: Bool, fringe: Bool)
     ) -> Bool {
         if a.waterLike != b.waterLike { return !a.waterLike }
-        if a.stubIsland != b.stubIsland { return !a.stubIsland }
+        if a.stubOnSearch != b.stubOnSearch { return !a.stubOnSearch }
+        if a.stubOnNext != b.stubOnNext { return !a.stubOnNext }
         if a.fringe != b.fringe { return !a.fringe }
         return a.score < b.score
     }
