@@ -320,9 +320,10 @@ extension View {
     func dirtGlassControl(
         radius: CGFloat = DirtRadius.control,
         tint: Color? = nil,
-        interactive: Bool = true
+        interactive: Bool = true,
+        bordered: Bool = true
     ) -> some View {
-        modifier(DirtGlassControlSurface(radius: radius, tint: tint, interactive: interactive))
+        modifier(DirtGlassControlSurface(radius: radius, tint: tint, interactive: interactive, bordered: bordered))
     }
 
     func dirtChromeSurface(
@@ -351,6 +352,7 @@ private struct DirtGlassControlSurface: ViewModifier {
     let radius: CGFloat
     let tint: Color?
     let interactive: Bool
+    let bordered: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -367,11 +369,13 @@ private struct DirtGlassControlSurface: ViewModifier {
             }
         }
         .overlay {
-            shape.strokeBorder(
-                Color.white.opacity(contrast == .increased ? 0.95 : 0.65),
-                lineWidth: contrast == .increased ? 1.5 : 1
-            )
-            .allowsHitTesting(false)
+            if bordered {
+                shape.strokeBorder(
+                    Color.white.opacity(contrast == .increased ? 0.95 : 0.65),
+                    lineWidth: contrast == .increased ? 1.5 : 1
+                )
+                .allowsHitTesting(false)
+            }
         }
     }
 }

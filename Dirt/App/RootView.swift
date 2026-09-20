@@ -1554,15 +1554,7 @@ struct RootView: View {
             }
         }
 
-        var stroke: Color {
-            switch self {
-            case .open: .clear
-            case .armed: DirtTheme.orange.opacity(0.65)
-            case .idle: .clear
-            }
-        }
 
-        var strokeWidth: CGFloat { self == .armed ? 1.5 : 0 }
     }
 
     private func dockState(_ tab: DockTab) -> DockItemState {
@@ -1632,11 +1624,10 @@ struct RootView: View {
             .background {
                 if state == .open {
                     shape.fill(.clear)
-                        .dirtGlassControl(tint: DirtTheme.orange, interactive: false)
+                        .dirtGlassControl(tint: DirtTheme.orange, interactive: false, bordered: false)
                         .matchedGeometryEffect(id: "dock-selection", in: dockSelection)
                 }
             }
-            .overlay(shape.stroke(state.stroke, lineWidth: state.strokeWidth))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
