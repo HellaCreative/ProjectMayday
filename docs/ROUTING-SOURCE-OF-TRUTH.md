@@ -122,9 +122,12 @@ catalog with batches of two, followed by the resumable
 full pack/seam factory for candidate `fabric-v4-20260920-01`. It records errors
 and stops rather than publishing or continuing after a failed stage. A successful
 build ends awaiting route qualification; publication is still separately gated.
+Source preparation is complete: all 67 catalog IDs have checked regional extracts
+from OSM timestamp `2026-09-18T20:21:10Z`, totaling 17.77 GiB. The source-lock
+roster matches the actual catalog exactly. The factory has begun its serial
+pack build; no continental release is qualified or published at this checkpoint.
 Source lock: `continent/source-lock.json`; phase logs: `continent-source-preparation.log`
-and `continent-pack-build.log`. No new continental packs have been built or
-published at this checkpoint. Do not duplicate these running jobs.
+and `continent-pack-build.log`. Do not duplicate these running jobs.
 The same evidence directory's `continue-qualification.py` waits for that exact
 supervisor to seal the whole candidate, then generates the continental fixture
 matrix and runs/independently verifies serial native replays. Inspect
