@@ -23,6 +23,10 @@ struct RoutePlannerCard: View {
     /// Figma landscape-primary side drawer. `true` = dock leading; `false` = dock trailing.
     var landscapeDockLeading: Bool? = nil
     var landscapeHasIslandColumn: Bool = false
+    /// Lets the map shell raise this card above its sibling controls while the
+    /// ride-settings panel is open. A child z-index cannot escape its parent's
+    /// stacking context, so the shell owns the final elevation.
+    var onRideSettingsPresentationChanged: (Bool) -> Void = { _ in }
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppEnvironment.self) private var app
@@ -164,6 +168,15 @@ struct RoutePlannerCard: View {
         }
         .animation(.easeInOut(duration: 0.18), value: showDefaultRideSettings)
         .animation(.easeInOut(duration: 0.18), value: selectedStage)
+        .onChange(of: showDefaultRideSettings) { _, _ in
+            publishRideSettingsPresentation()
+        }
+        .onChange(of: selectedStage) { _, _ in
+            publishRideSettingsPresentation()
+        }
+        .onDisappear {
+            onRideSettingsPresentationChanged(false)
+        }
         .onChange(of: app.trial.isSubscribed) { _, subscribed in
             guard subscribed, let reason = app.trial.takePendingReason() else { return }
             resumeAfterSubscribe(reason)
@@ -496,6 +509,10 @@ struct RoutePlannerCard: View {
             showDefaultRideSettings = false
             selectedStage = index
         }
+    }
+
+    private func publishRideSettingsPresentation() {
+        onRideSettingsPresentationChanged(showDefaultRideSettings || selectedStage != nil)
     }
 
     private func requestMode(_ mode: RoutePlannerModel.Mode) {
@@ -1435,15 +1452,7 @@ private struct RideSettingsPanel: View {
                         Text("Riding style")
                             .font(DirtType.sectionLabel)
                             .foregroundStyle(DirtTheme.muted)
-                        Picker("Riding style", selection: $profile) {
-                            ForEach(RouteProfile.allCases) { item in
-                                Text(item.title).tag(item)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: profile) { _, value in
-                            if value == .cleanest { allowUnknown = false }
-                        }
+                        ridingStyleSelector
                     }
                     .padding(DirtSpace.row)
                     .dirtGroupingSurface()
@@ -1521,6 +1530,31 @@ private struct RideSettingsPanel: View {
         } message: {
             Text("Unknown-access routing may include roads that are unverified for motorcycles. Check signs and turn around when access is unclear.")
         }
+    }
+
+    private var ridingStyleSelector: some View {
+        HStack(spacing: 3) {
+            ForEach(RouteProfile.allCases) { item in
+                Button {
+                    profile = item
+                    if item == .cleanest { allowUnknown = false }
+                } label: {
+                    Text(item.title)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundStyle(DirtTheme.ink)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(
+                            profile == item ? Color.white.opacity(0.94) : Color.clear,
+                            in: Capsule()
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(profile == item ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(DirtTheme.orange, in: Capsule())
+        .animation(.easeInOut(duration: 0.16), value: profile)
     }
 
     private func settingsToggle(

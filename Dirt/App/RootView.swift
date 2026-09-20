@@ -91,6 +91,9 @@ struct RootView: View {
         return nil
     }()
     @State private var routeCardOpen = false
+    /// The ride-settings panel must cover the dock and map controls while it is
+    /// open, so its parent route card is promoted above those sibling layers.
+    @State private var routeRideSettingsPresented = false
     /// Measured portrait planner sheet height so compact map controls sit just above it.
     @State private var portraitRouteSheetHeight: CGFloat = 0
     @State private var showRouteConfetti = false
@@ -644,10 +647,14 @@ struct RootView: View {
 
             // Panels rise behind the dock so the sticky bar reads as “above” them.
             if showsDock, routeCardOpen, !navActive {
-                RoutePlannerCard(isOpen: $routeCardOpen, sitsBehindDock: true)
+                RoutePlannerCard(
+                    isOpen: $routeCardOpen,
+                    sitsBehindDock: true,
+                    onRideSettingsPresentationChanged: { routeRideSettingsPresented = $0 }
+                )
                     .coachTarget(.routeCard)
                     .transition(DockSheetMotion.transition)
-                    .zIndex(1)
+                    .zIndex(routeRideSettingsPresented ? 3 : 1)
             }
 
             if showsDock, let sheet = activeSheet, !navActive {
@@ -832,11 +839,12 @@ struct RootView: View {
                     isOpen: $routeCardOpen,
                     sitsBehindDock: false,
                     landscapeDockLeading: dockLeading,
-                    landscapeHasIslandColumn: hasIslandColumn
+                    landscapeHasIslandColumn: hasIslandColumn,
+                    onRideSettingsPresentationChanged: { routeRideSettingsPresented = $0 }
                 )
                     .coachTarget(.routeCard)
                 .transition(DockSheetMotion.transition(dockLeading: dockLeading))
-                .zIndex(1)
+                .zIndex(routeRideSettingsPresented ? 4 : 1)
             } else if let sheet = activeSheet {
                 dockSheet(
                     sheet,

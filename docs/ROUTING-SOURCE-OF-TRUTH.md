@@ -2037,7 +2037,10 @@ overrides. Evidence: `.build/ride-defaults-20260919b.xcresult`.
 
 Ride settings now use one top-entry map panel in two roles. It descends beneath
 the header and dismisses upward, matching the earlier fuel/settings presentation
-rather than rising from the bottom. The Surface control in From Here, Loop and
+rather than rising from the bottom. While open, the panel sits above the map
+controls and dock so unrelated controls cannot overlap it; the DIRT header remains
+above it. Its Clean, Balanced and Dirt control uses larger type on the brand-orange
+track with a white selected segment. The Surface control in From Here, Loop and
 Plan edits the defaults copied into newly created legs. Tapping an existing Plan
 leg's Dirt, Balanced or Clean badge opens the same panel for that leg alone. The
 panel contains style, Allow Unknown, Ride Wander, Avoid cities
