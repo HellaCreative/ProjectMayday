@@ -24,10 +24,24 @@ pack download/update progress window and Avoid ferries preference.
 Build and qualify seven fresh packs first: `ns`, `nb`, `pe`, `nl-island`,
 `nl-lab`, `qc-s`, `qc-n`. Preserve the split geography concept, not old pack
 bytes. Derive all seven from one dated OSM source with a recorded hash; never
-relabel older regional data as the new source epoch. The candidate is explicitly
-limited to these seven regions, not a complete continental fabric. Do not mix
-old regions into it to make a full catalog. Other regions follow only after this
-process is qualified.
+relabel older regional data as the new source epoch. The published
+`fabric-v4-20260919-01` candidate contains these seven regions; it is not a
+complete continental fabric. Do not mix incompatible old regions into it.
+
+The owner subsequently clarified the overnight scope: autonomously build, test,
+repair and publish the full Canada/US pack and seam set as a new immutable DEV
+candidate. Use the seven-region work as the starting recipe. Verify the actual
+split-region roster, compatible source lock, resource needs and resumable jobs;
+begin independent preparation while resolving relevant factory blockers. Reuse
+valid evidence instead of restarting all seven-pack tests. Separate runtime
+route-quality defects from pack defects so a code-only repair does not trigger
+another blanket rebuild. Expand in measured batches and require automated
+source, feature, seam, route and resource checks before qualified DEV publication.
+Retain the existing candidate for rollback and never activate an incomplete
+catalog. Physical-device acceptance remains outstanding but does not block this
+authorized build/test/DEV-publication work. Production remains unchanged.
+Overnight follow-ups are resumption checks, not an eight-hour estimate for the
+seven packs or a guarantee of continental completion by morning.
 
 Every region, including small provinces, receives the same source, feature,
 connectivity, actual-route and memory checks. Test legal road crossings in both
@@ -1022,8 +1036,10 @@ previously rejected region-count/first-result ordering as a general ride policy.
 
 Owner request, September 19: keep one running checklist here, so the lessons
 from the Atlantic/Quebec qualification become the process for every subsequent
-province/state. Status: ready for focused owner testing, **not yet cleared for
-bulk expansion**. The seven packs are NS, NB, PEI, Newfoundland island, Labrador,
+province/state. Status: the owner has authorized overnight continental build,
+test and DEV publication; the outstanding checks below remain acceptance work,
+not a requirement to repeat already valid tests before independent preparation.
+Do not label failing output qualified. The seven packs are NS, NB, PEI, Newfoundland island, Labrador,
 Quebec south and Quebec north. Do not equate stored seam proofs with a completed
 legal journey, or host speed with phone speed.
 
@@ -1083,17 +1099,17 @@ immutable DEV publication and download verification; focused engine/app tests
 and serial route matrices also exist. Evidence and tooling are referenced in
 section 1 and `scripts/pack-fabric/scripts/build-v4-fabric.js` /
 `ship-v4-candidate.js`. **Not yet demonstrated as one enforced release gate:**
-all final-version journeys, resource targets and owner acceptance automatically
-blocking publication together. Wire the repeatable automated subset into one
-pass/fail qualification step before bulk expansion; physical acceptance remains
-explicit. Do not claim every item above is already automated.
+all final-version journeys and resource targets automatically blocking qualified
+publication together. Wire the repeatable automated subset into one pass/fail
+qualification step for continental DEV publication; physical acceptance remains
+explicit before production promotion. Do not claim every item above is already automated.
 
 No finite matrix can guarantee perfect OSM coverage or prove every possible
 journey. The objective is a reproducible build with detected regressions and
 honest limits, so routine routing-code repairs do not trigger another blanket
-pack rebuild. Expand only after the outstanding Atlantic/Quebec blockers and
-qualification checks above are resolved, in measured batches with neighboring
-crossings qualified together.
+pack rebuild. Resolve factory defects before replicating them; expand in measured
+batches with neighboring crossings qualified together. Track runtime and
+physical-device limitations separately and preserve failed/untested status honestly.
 
 
 Work in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`. The current task began at
