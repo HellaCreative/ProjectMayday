@@ -143,12 +143,14 @@ final class RoutePlannerModel {
     }
     var showingLoop = false
     var loopFar: RouteCoordinate?
+    private var loopFarWaypointID: UUID?
     private(set) var routeCompletionID: UUID?
     private var loopRunID: UUID?
 
     func selectLoop() {
         switchToPlanClearing()
         showingLoop = true
+        loopFarWaypointID = nil
         loopFar = nil
         fuelPlanningStatus = nil
         isAssemblingRoute = false
@@ -244,6 +246,8 @@ final class RoutePlannerModel {
                     "loop distance=\(Int(result.distanceMeters)) reridden=\(Int(result.reriddenMeters)) return=\(Int(result.returnMeters)) style=\(selectedProfile.rawValue) allowUnknown=\(selectedAllow) outAndBack=\(outAndBack)")
                 self.ridePreferences = preferences
                 self.itinerary = itinerary
+                self.loopFar = far
+                self.loopFarWaypointID = itinerary.waypoints[1].id
                 self.built = built
                 self.destination = start
                 self.routeIdentity = "loop:\(runID.uuidString)"
@@ -357,7 +361,6 @@ final class RoutePlannerModel {
         avoidMotorways = newProfile == .cleanest && preferences.avoidHighways
         suppressPlannerReroute = false
         syncNetworkAccessPolicy()
-        if showingLoop, loopFar != nil, hasRoute { generateLoop() }
     }
 
     var canAllowFerries: Bool {
@@ -897,22 +900,17 @@ final class RoutePlannerModel {
         itineraryBuilder.setCurrentGeneration(itinerary.generation)
 
         if showingLoop {
-            switch action {
-            case .move(let id, let to):
-                if itinerary.waypoints.indices.contains(1), itinerary.waypoints[1].id == id {
-                    loopFar = to
-                }
-                generateLoop()
-                return
-            case .setProfile, .setLegRideSettings, .setAllowUnknown, .setAvoidMotorways, .setPreferBackRoads,
-                 .setHopProfile, .setHopAllowUnknown, .setHopAvoidMotorways:
-                generateLoop()
-                return
-            case .replaceAll, .clear, .markImpassable:
-                break
-            default:
-                generateLoop()
-                return
+            // Generation creates the initial circuit only. Once committed, its
+            // rider pins and per-leg settings belong to the canonical itinerary.
+            // Regenerating [start, far, start] here silently erased inserted pins.
+            loopRunID = nil
+            if case .move(let id, let to) = action, id == loopFarWaypointID {
+                loopFar = to
+            }
+            if let farID = loopFarWaypointID,
+               !itinerary.waypoints.contains(where: { $0.id == farID }) {
+                loopFarWaypointID = nil
+                loopFar = nil
             }
         }
 
@@ -1753,7 +1751,30 @@ final class RoutePlannerModel {
 
     func keepMovingWaypoint() {
         showsWaypointPlacementConfirmation = false
-        toast = "Drag the waypoint to your preferred location"
+        toast = "Drag the pin or zoom the map. Tap the pin when ready."
+    }
+
+    /// Only an explicit tap on the pending pin asks to commit. Annotation
+    /// re-selection, map movement and drag release must never open this prompt.
+    func requestWaypointPlacementConfirmation(markerID: String, snappedCoordinate: CLLocationCoordinate2D?) {
+        guard navigation.phase == .idle, !isRouting else { return }
+        let isDraft = markerID == "waypoint-draft" && waypointPlacement != nil
+        let isMove = waypointMove.map { markerID == "wp:\($0.id.uuidString)" } ?? false
+        guard isDraft || isMove else { return }
+        guard let snappedCoordinate else {
+            showsWaypointPlacementConfirmation = false
+            toast = "No nearby road found. Zoom in or move the pin closer to a road, then tap it again."
+            return
+        }
+        let point = RouteCoordinate(longitude: snappedCoordinate.longitude, latitude: snappedCoordinate.latitude)
+        if let draft = waypointPlacement, isDraft {
+            waypointPlacement = (draft.legID, point)
+        } else if let move = waypointMove, isMove {
+            waypointMove = (move.id, point)
+        }
+        refreshMap()
+        mapState.selectPlannerPin(markerID)
+        showsWaypointPlacementConfirmation = true
     }
 
     func confirmWaypointPlacement() {
@@ -1781,8 +1802,12 @@ final class RoutePlannerModel {
         if showingLoop {
             loopFar = point
             errorMessage = nil
-            if hasRoute, itinerary.waypoints.count >= 3 {
-                apply(.move(waypointID: itinerary.waypoints[1].id, to: point), source: "loopFar")
+            if !itinerary.legs.isEmpty {
+                guard let farID = loopFarWaypointID else {
+                    toast = "Add a waypoint on the route to reshape this loop"
+                    return
+                }
+                apply(.move(waypointID: farID, to: point), source: "loopFar")
             } else {
                 generateLoop()
             }
@@ -2585,9 +2610,8 @@ final class RoutePlannerModel {
 
     // MARK: - Waypoint drag (map pin drag-to-move)
 
-    /// The map snaps a drag-release to its nearest visible road. Keep the
-    /// proposed coordinate separate until the rider confirms; never project
-    /// the pin back onto the old route or start a search during placement.
+    /// Dragging only updates a preview. The rider can pan/zoom freely, then
+    /// tap the pin to snap to a nearby road and ask to commit the edit.
     func moveWaypoint(markerID: String, to rawCoordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle, !isRouting else { return }
         if markerID.hasPrefix("fuel:") {
@@ -2596,14 +2620,14 @@ final class RoutePlannerModel {
         }
         if markerID == "waypoint-draft", let draft = waypointPlacement {
             waypointPlacement = (draft.legID, RouteCoordinate(longitude: rawCoordinate.longitude, latitude: rawCoordinate.latitude))
-            showsWaypointPlacementConfirmation = true
+            showsWaypointPlacementConfirmation = false
             refreshMap()
             mapState.selectPlannerPin(markerID)
             return
         }
         let raw = RouteCoordinate(longitude: rawCoordinate.longitude, latitude: rawCoordinate.latitude)
-        // Map coordinator already snaps the drop to a visible road; do not pull
-        // it back onto the old route the rider is deliberately reshaping.
+        // Keep the preview where the rider drops it; the explicit pin tap
+        // performs road snapping without pulling it back onto the old route.
         let snapped = raw
         if showingLoop {
             if markerID == "loop-far" {
@@ -2865,7 +2889,7 @@ final class RoutePlannerModel {
         else { return }
         waypointPlacement = nil
         waypointMove = (waypointID, snapped)
-        showsWaypointPlacementConfirmation = true
+        showsWaypointPlacementConfirmation = false
         refreshMap()
         mapState.selectPlannerPin(markerID)
     }
@@ -3219,7 +3243,7 @@ final class RoutePlannerModel {
         case .plan:
             markers.append(contentsOf: canonicalMarkers(riderPinsLocked: false))
         }
-        if showingLoop, !hasRoute, let far = loopFar {
+        if showingLoop, itinerary.waypoints.isEmpty, let far = loopFar {
             markers.append(
                 MapState.Marker(
                     id: "loop-far",
@@ -3296,7 +3320,7 @@ final class RoutePlannerModel {
                 longitude: waypointMove?.id == waypoint.id ? waypointMove!.coordinate.longitude : waypoint.coordinate.longitude,
                 label: "\(index + 1)",
                 kind: index == 0 ? .start : (index == itinerary.waypoints.count - 1 ? .destination : .stage),
-                isLocked: showingLoop ? index != 1 : riderPinsLocked
+                isLocked: showingLoop ? (index == 0 || index == itinerary.waypoints.count - 1) : riderPinsLocked
             )
         }
         var fuelOrdinal = 0

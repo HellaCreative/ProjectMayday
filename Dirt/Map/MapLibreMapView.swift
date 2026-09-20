@@ -1007,7 +1007,7 @@ struct MapLibreMapView: UIViewRepresentable {
                     }
                 } else {
                     view.onTapped = { [weak self] markerID in
-                        self?.selectPlannerPinForEditing(markerID)
+                        self?.handlePlannerPinTap(markerID)
                     }
                     view.onDragBegan = { [weak self] markerID in
                         self?.state.selectPlannerPin(markerID)
@@ -1397,7 +1397,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 view.onDragEnded = nil
             } else {
                 view.onTapped = { [weak self] markerID in
-                    self?.selectPlannerPinForEditing(markerID)
+                    self?.handlePlannerPinTap(markerID)
                 }
                 view.onDragBegan = { [weak self] markerID in
                     self?.state.selectPlannerPin(markerID)
@@ -1418,6 +1418,12 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         private func finishPlannerPinMove(_ markerID: String, coordinate: CLLocationCoordinate2D) {
+            // Drafts and itinerary pins stay movable even when dropped away from
+            // a road. Snapping/confirmation waits for a deliberate tap on the pin.
+            if markerID == "waypoint-draft" || markerID.hasPrefix("wp:") {
+                state.onPlannerPinDragEnd?(markerID, coordinate)
+                return
+            }
             guard let mapView else { return }
             let point = mapView.convert(coordinate, toPointTo: mapView)
             guard let snapped = snapToNearestRoad(coordinate, at: point, in: mapView) else {
@@ -1425,6 +1431,16 @@ struct MapLibreMapView: UIViewRepresentable {
                 return
             }
             state.onPlannerPinDragEnd?(markerID, snapped)
+        }
+
+        private func handlePlannerPinTap(_ markerID: String) {
+            guard !state.isNavigating, let mapView,
+                  let annotation = annotations.first(where: { $0.markerID == markerID }),
+                  !annotation.isLocked else { return }
+            selectPlannerPinForEditing(markerID)
+            let point = mapView.convert(annotation.coordinate, toPointTo: mapView)
+            let snapped = snapToNearestRoad(annotation.coordinate, at: point, in: mapView)
+            state.onPlannerPinPlacementTap?(markerID, snapped)
         }
 
         /// Tap-select enters move mode: orange lift chrome + pan drag armed.
@@ -1549,7 +1565,7 @@ struct MapLibreMapView: UIViewRepresentable {
                     }
                     return
                 }
-                selectPlannerPinForEditing(pin.markerID)
+                handlePlannerPinTap(pin.markerID)
                 return
             }
 

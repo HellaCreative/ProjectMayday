@@ -9,6 +9,11 @@ struct MapZoomTouchFixture: View {
     @State private var mapTouches = 0
     @State private var zoomActions = 0
     @State private var standalone = false
+    @State private var pinDrags = 0
+    @State private var placementTaps = 0
+    private var testsPlacement: Bool {
+        ProcessInfo.processInfo.environment["DIRT_UI_TEST_PIN_PLACEMENT"] == "1"
+    }
 
     var body: some View {
         ZStack {
@@ -18,6 +23,10 @@ struct MapZoomTouchFixture: View {
                 VStack {
                     Text("Map touches: \(mapTouches)").accessibilityIdentifier("map-touch-count")
                     Text("Zoom actions: \(zoomActions)").accessibilityIdentifier("zoom-action-count")
+                    if testsPlacement {
+                        Text("Pin drags: \(pinDrags)").accessibilityIdentifier("pin-drag-count")
+                        Text("Placement taps: \(placementTaps)").accessibilityIdentifier("placement-tap-count")
+                    }
                     Button(standalone ? "Show map stack" : "Show standalone zoom") { standalone.toggle() }
                 }
                 .padding().background(.regularMaterial)
@@ -36,6 +45,21 @@ struct MapZoomTouchFixture: View {
         .onAppear {
             app.mapState.onTap = recordMapTouch
             app.mapState.onLongPress = recordMapTouch
+            if testsPlacement {
+                app.mapState.onPlannerPinDragEnd = { id, coordinate in
+                    pinDrags += 1
+                    app.mapState.setPlannerMarkers([.init(id: id, latitude: coordinate.latitude,
+                        longitude: coordinate.longitude, label: "+", kind: .stage)])
+                    app.mapState.selectPlannerPin(id)
+                }
+                app.mapState.onPlannerPinPlacementTap = { id, _ in
+                    placementTaps += 1
+                    // Confirmation/No redraws the same draft in the planner.
+                    let markers = app.mapState.plannerMarkers
+                    app.mapState.setPlannerMarkers(markers)
+                    app.mapState.selectPlannerPin(id)
+                }
+            }
         }
         .onChange(of: app.mapState.camera?.id) { _, _ in
             if let command = app.mapState.camera?.command, case .zoom = command {
@@ -46,8 +70,9 @@ struct MapZoomTouchFixture: View {
 
     private func recordMapTouch(_ coordinate: CLLocationCoordinate2D) {
         mapTouches += 1
-        app.mapState.setPlannerMarkers([.init(id: "fixture-pin", latitude: coordinate.latitude,
-            longitude: coordinate.longitude, label: "1", kind: .destination)])
+        app.mapState.setPlannerMarkers([.init(id: testsPlacement ? "waypoint-draft" : "fixture-pin", latitude: coordinate.latitude,
+            longitude: coordinate.longitude, label: testsPlacement ? "+" : "1", kind: .destination)])
+        if testsPlacement { app.mapState.selectPlannerPin("waypoint-draft") }
     }
 }
 #endif

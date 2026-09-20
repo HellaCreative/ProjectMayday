@@ -53,6 +53,114 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.routeCompletionID != firstCompletion)
     }
 
+    @Test func completedLoopReturnWaypointCanBeInsertedMovedAndDeleted() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.mode = .plan
+        model.showingLoop = true
+        let start = point(0), far = point(1), added = point(0.4), moved = point(0.6)
+        model.generateLoop(start: start, far: far)
+        await model.waitForCanonicalBuildForTesting()
+        let originalIDs = model.itinerary.waypoints.map(\.id)
+        let outbound = try #require(model.built?.legs.first)
+        let inboundID = try #require(model.itinerary.legs.last?.id)
+        source.routeRequests.removeAll()
+
+        model.handleRouteTap(point(0.5).locationCoordinate, riderLegID: inboundID, source: "longPress")
+        model.moveWaypoint(markerID: "waypoint-draft", to: added.locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: "waypoint-draft", snappedCoordinate: added.locationCoordinate)
+        model.confirmWaypointPlacement()
+        model.confirmWaypointPlacement()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.showingLoop)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, far, added, start])
+        #expect(model.stages.count == 3)
+        #expect(model.built?.legs.first == outbound)
+        #expect(model.itinerary.waypoints.first?.id == originalIDs.first)
+        #expect(model.itinerary.waypoints.last?.id == originalIDs.last)
+        #expect(source.loopRequestCount == 1)
+        let pinID = try #require(model.itinerary.waypoints.dropFirst(2).first?.id)
+        let markerID = "wp:\(pinID.uuidString)"
+        #expect(map.plannerMarkers.first { $0.id == markerID }?.isLocked == false)
+        #expect(map.plannerMarkers.count == 4)
+        #expect(model.allCoordinates.contains(added))
+
+        model.moveWaypoint(markerID: markerID, to: moved.locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: markerID, snappedCoordinate: moved.locationCoordinate)
+        model.confirmWaypointPlacement()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, far, moved, start])
+        #expect(model.itinerary.waypoints[2].id == pinID)
+        #expect(model.allCoordinates.contains(moved))
+        #expect(model.built?.legs.first == outbound)
+        model.apply(.delete(waypointID: pinID), source: "test")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, far, start])
+        #expect(model.stages.count == 2)
+        #expect(source.loopRequestCount == 1)
+    }
+
+    @Test func completedLoopLegSettingsRebuildOnlySelectedLeg() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.mode = .plan
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        let outbound = try #require(model.built?.legs.first)
+        let ids = model.itinerary.waypoints.map(\.id)
+        source.routeRequests.removeAll()
+        let preferences = RidePreferences(wander: 0.95, avoidCities: false, avoidHighways: false)
+        model.applyLegRideSettings(at: 1, profile: .dirt, allowUnknown: true, ridePreferences: preferences)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(source.loopRequestCount == 1)
+        #expect(model.itinerary.waypoints.map(\.id) == ids)
+        #expect(model.built?.legs.first == outbound)
+        #expect(model.itinerary.legs[1].ridePreferences == preferences)
+        #expect(model.itinerary.legs[1].allowUnknown)
+        #expect(!source.routeRequests.isEmpty)
+        #expect(source.routeRequests.allSatisfy { $0.options?.ridePreferences == preferences && $0.accessPolicy.motorizedUnknown })
+    }
+
+    @Test func loopOutboundInsertionKeepsFarPinIdentityAndFailureDoesNotCelebrate() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.mode = .plan
+        model.showingLoop = true
+        let start = point(0), far = point(1), added = point(0.4), movedFar = point(0.9)
+        model.generateLoop(start: start, far: far)
+        await model.waitForCanonicalBuildForTesting()
+        let originalFarID = model.itinerary.waypoints[1].id
+        let completion = model.routeCompletionID
+        source.routeError = RoutingError.server("Cannot reach requested pin")
+        model.apply(.insert(afterLegID: model.itinerary.legs[0].id, coordinate: added), source: "test")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, added, far, start])
+        #expect(model.routeCompletionID == completion)
+        #expect(model.errorMessage != nil)
+        #expect(map.plannerMarkers.count == 4)
+        source.routeError = nil
+        model.handleMapLongPress(movedFar.locationCoordinate)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, added, movedFar, start])
+        #expect(model.itinerary.waypoints[2].id == originalFarID)
+        #expect(model.loopFar == movedFar)
+        #expect(source.loopRequestCount == 1)
+    }
+
     @Test func failedLoopDoesNotSignalCompletion() async {
         let source = PlannerFakeRoutingSource()
         source.routeError = RoutingError.server("Test failure")
@@ -895,6 +1003,51 @@ struct RoutePlannerModelItineraryTests {
         #expect(source.fuelChainRequests.isEmpty)
     }
 
+    @Test func draftCanBeRefinedWithoutPromptUntilPinTapAndRequiresRoadSnap() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.selectMode(.plan)
+        model.apply(.replaceAll(waypoints: [point(0), point(1)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: false, preferBackRoads: false), source: "seed")
+        await model.waitForCanonicalBuildForTesting()
+        source.routeRequests.removeAll()
+        model.handleRouteTap(point(0.5).locationCoordinate, source: "longPress")
+        for position in [point(0.3), point(0.6), point(0.8)] {
+            model.moveWaypoint(markerID: "waypoint-draft", to: position.locationCoordinate)
+            model.refreshMap() // Map viewport/redraw and re-selection are not acceptance.
+            map.selectPlannerPin("waypoint-draft")
+            #expect(!model.showsWaypointPlacementConfirmation)
+            model.confirmWaypointPlacement() // No prompt means no commit.
+            #expect(model.waypointPlacement?.coordinate == position)
+            #expect(model.itinerary.waypoints.count == 2)
+            #expect(source.routeRequests.isEmpty)
+        }
+        model.requestWaypointPlacementConfirmation(markerID: "waypoint-draft", snappedCoordinate: nil)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        #expect(model.waypointPlacement?.coordinate == point(0.8))
+        #expect(model.toast?.contains("No nearby road") == true)
+        model.requestWaypointPlacementConfirmation(markerID: "wp:unrelated", snappedCoordinate: point(0.2).locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: "waypoint-draft", snappedCoordinate: point(0.75).locationCoordinate)
+        #expect(model.showsWaypointPlacementConfirmation)
+        #expect(model.waypointPlacement?.coordinate == point(0.75))
+        model.keepMovingWaypoint()
+        model.confirmWaypointPlacement()
+        #expect(source.routeRequests.isEmpty)
+        model.moveWaypoint(markerID: "waypoint-draft", to: point(0.6).locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: "waypoint-draft", snappedCoordinate: point(0.55).locationCoordinate)
+        model.confirmWaypointPlacement()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [point(0), point(0.55), point(1)])
+        #expect(model.waypointPlacement == nil)
+        #expect(!source.routeRequests.isEmpty)
+    }
+
     @Test func addedWaypointWaitsForConfirmationAfterDragging() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
@@ -914,6 +1067,8 @@ struct RoutePlannerModelItineraryTests {
         model.keepMovingWaypoint()
         #expect(!model.showsWaypointPlacementConfirmation)
         model.moveWaypoint(markerID: "waypoint-draft", to: CLLocationCoordinate2D(latitude: (point(0).latitude + point(1).latitude) / 2, longitude: (point(0).longitude + point(1).longitude) / 2))
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: "waypoint-draft", snappedCoordinate: CLLocationCoordinate2D(latitude: (point(0).latitude + point(1).latitude) / 2, longitude: (point(0).longitude + point(1).longitude) / 2))
         #expect(model.showsWaypointPlacementConfirmation)
         #expect(source.routeRequests.isEmpty)
         model.confirmWaypointPlacement()
@@ -946,6 +1101,8 @@ struct RoutePlannerModelItineraryTests {
         let originalDestinationID = try #require(model.itinerary.waypoints.last?.id)
         model.handleRouteTap(start.locationCoordinate, source: "longPress")
         model.moveWaypoint(markerID: "waypoint-draft", to: inserted.locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: "waypoint-draft", snappedCoordinate: inserted.locationCoordinate)
         model.confirmWaypointPlacement()
         model.confirmWaypointPlacement() // A repeated callback must not insert twice.
         await model.waitForCanonicalBuildForTesting()
@@ -983,13 +1140,19 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
         model.handleRouteTap(start.locationCoordinate, source: "longPress")
         model.moveWaypoint(markerID: "waypoint-draft", to: point(0.4).locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: "waypoint-draft", snappedCoordinate: point(0.4).locationCoordinate)
         model.keepMovingWaypoint()
         model.moveWaypoint(markerID: "waypoint-draft", to: point(0.5).locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: "waypoint-draft", snappedCoordinate: point(0.5).locationCoordinate)
         model.confirmWaypointPlacement()
         await model.waitForCanonicalBuildForTesting()
         let id = model.itinerary.waypoints[1].id
         for coordinate in [point(0.6), point(0.7)] {
             model.moveWaypoint(markerID: "wp:\(id.uuidString)", to: coordinate.locationCoordinate)
+            #expect(!model.showsWaypointPlacementConfirmation)
+            model.requestWaypointPlacementConfirmation(markerID: "wp:\(id.uuidString)", snappedCoordinate: coordinate.locationCoordinate)
             model.confirmWaypointPlacement()
             await model.waitForCanonicalBuildForTesting()
             #expect(model.itinerary.waypoints.count == 3)
@@ -1019,6 +1182,8 @@ struct RoutePlannerModelItineraryTests {
         source.routeRequests.removeAll()
         let markerID = "wp:\(waypoint.id.uuidString)"
         model.moveWaypoint(markerID: markerID, to: point(0.7).locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: markerID, snappedCoordinate: point(0.7).locationCoordinate)
         #expect(model.showsWaypointPlacementConfirmation)
         #expect(model.itinerary.waypoints.last?.coordinate == waypoint.coordinate)
         #expect(source.routeRequests.isEmpty)
@@ -1027,6 +1192,8 @@ struct RoutePlannerModelItineraryTests {
         model.confirmWaypointPlacement()
         #expect(source.routeRequests.isEmpty)
         model.moveWaypoint(markerID: markerID, to: point(0.8).locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: markerID, snappedCoordinate: point(0.8).locationCoordinate)
         model.confirmWaypointPlacement()
         await model.waitForCanonicalBuildForTesting()
         #expect(model.waypointMove == nil)
@@ -1067,6 +1234,8 @@ struct RoutePlannerModelItineraryTests {
         #expect(map.selectedPlannerPinID == third.id)
 
         model.moveWaypoint(markerID: third.id, to: point(0.75).locationCoordinate)
+        #expect(!model.showsWaypointPlacementConfirmation)
+        model.requestWaypointPlacementConfirmation(markerID: third.id, snappedCoordinate: point(0.75).locationCoordinate)
         #expect(model.showsWaypointPlacementConfirmation)
         #expect(model.waypointMove != nil)
     }
@@ -1231,7 +1400,10 @@ private final class PlannerFakeRoutingSource: RoutingSource {
         )
     }
 
+    var loopRequestCount = 0
+
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
+        loopRequestCount += 1
         func leg(_ from: RouteCoordinate, _ to: RouteCoordinate) async throws -> RouteResponse {
             try await route(RouteRequest(profile: request.profile, locations: [
                 RouteLocation(latitude: from.latitude, longitude: from.longitude, label: "start"),

@@ -2224,9 +2224,9 @@ are still proposal-only until Stage 3.
 | Generated pump | `FuelStop` | `coordinate`, `stationID`, `name`, `afterRiderLegID`, `resetsTank`. Lives on `BuiltLeg`, not on `RiderItinerary`. Display marker id `fuel:{riderLegID}:{builtLegIndex}`, `MapState.MarkerKind.fuel`, label `F1`… |
 | Rider-on-pump | `BuiltItinerary.waypointFuelStops: [UUID: FuelStop]` | Derived each build by snapping a rider waypoint to a packed station (`ItineraryRangeArithmetic.fuelWaypointSnapMeters`). Not persisted on `RiderWaypoint`. |
 | Pump pick | `RiderLeg.fuelStopOverrides: [String: String]` | Departure anchor (`from.uuidString` or previous `stationID`) → chosen `stationID`. |
-| Rider drag | `ItineraryAction.move(waypointID:to:)` | Marker `wp:{UUID}`. Confirm-then-rebuild. `reduce` sets `rebuildFromLegIndex = max(0, waypointIndex-1)` and `rebuildThroughLegIndex = nil` → rebuilds the **suffix**, then fuel re-solves. |
+| Rider drag | `ItineraryAction.move(waypointID:to:)` | Marker `wp:{UUID}`. Drag/pan/zoom freely; tap the pending pin to road-snap and request Yes/No, then rebuild only after Yes. `reduce` sets `rebuildFromLegIndex = max(0, waypointIndex-1)` and `rebuildThroughLegIndex = nil` → rebuilds the **suffix**, then fuel re-solves. |
 | Fuel “drag” | `RoutePlannerModel.moveFuelStop` / `beginPlannerPinDrag` | Separate path. Drop must land on `validFuelTargets` within 5 km (or a probed replacement). Writes `setFuelStopOverride`. Not free placement. |
-| Loop (Build) | start + rider-dropped far pin + target distance → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep) and a hard extent — outbound/return never travel farther from start than the pin — moved with the ordinary waypoint drag to rebuild; no heading. The distance target shapes wander inside that extent rather than placing the far point or setting the boundary. One style and one Allow Unknown for the whole circuit. Fuel is not consulted while building. |
+| Loop (Build) | start + rider-dropped far pin + target distance → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep) and a hard extent — outbound/return never travel farther from start than the pin — no heading. The distance target shapes wander inside that initial extent rather than placing the far point or setting the boundary. Initial legs inherit the selected defaults. Once generated, rider waypoint edits and individual leg settings use the canonical itinerary builder, retaining other pins and reusable legs instead of regenerating the circuit. Rider edits can reshape the initial extent. Fuel is not consulted while building. |
 | Loop (Plan close) | `closeLoop()` → `.append(coordinate: start)` | Same: extra rider waypoint at the start pin, not a special route type. |
 | Saved library | `SavedRoute` (`SwiftData`) | `coordinatesData` (full polyline), `segmentsData?`, `profileRawValue` (one profile for the whole record), `ridePreferencesData?`, `routeSeedsData?`, stats. **No `RiderItinerary`.** |
 | Reopen | `loadSavedRoute` → `applyStoredRouteGeometry` | Frozen `.saved` track with pins `start`/`dest`. Does not restore waypoints or fuel stops. Re-planning requires a new From Here / Plan. |
@@ -2857,3 +2857,44 @@ still ran and were rejected when they failed existing quality checks. No scoring
 or access policy was changed from this diagnostic. The owner's exact endpoints,
 mode, settings and seed are still needed to qualify their reported case. Evidence:
 `.build/wander-unknown-20260920/{identity,summary,midpoint-summary}.json`.
+
+
+Completed-loop edit repair (September 20): the owner log at 22:44:49 and
+22:45:07 showed confirmed insertions followed by `pack loop` generation, which
+replaced the edited itinerary with fresh `[start, far, start]` pins. Completed
+loop edits now use the normal canonical rebuild path. The Loop tab remains, the
+original far pin is tracked by identity instead of array position, and all
+interior rider pins remain draggable. Per-leg settings also use this path, so
+editing one leg does not rerun the original whole-loop defaults. Changing build
+defaults alone no longer regenerates an existing loop. The generator still owns
+initial loop creation; this repair changes no road scoring or pack bytes.
+Evidence: `.build/loop-edit-20260920/baseline.xcresult` reproduces insertion and
+leg-settings failures; `after.xcresult` passes all 39 planner-model tests, including
+return-leg insert/move/delete, unchanged outbound reuse, per-leg request settings,
+and existing completion/overview checks. `failure-and-far-pin.xcresult` exposed
+an extra legacy far marker after a failed edit; that condition is now restricted
+to pre-itinerary loop creation. `tap-placement.xcresult` passes all 41 planner
+model tests, including failure preservation and far-pin identity after inserting
+an outbound waypoint. Physical acceptance remains pending.
+
+Waypoint placement interaction (owner update, September 20): dragging a draft
+or existing itinerary pin updates only its preview; release never opens the
+confirmation. Riders may pan, zoom and drag again, then explicitly tap the pending
+pin. That tap snaps the preview to the nearest visible motorable basemap road
+and opens Yes/No. No preserves the draft for refinement; Yes commits and rebuilds.
+No nearby road leaves the draft editable with guidance to zoom in/move closer,
+without launching a doomed off-road request. Programmatic MapLibre annotation
+selection does not invoke confirmation. This is a basemap proximity snap, not a
+claim of legal access or connectivity: the pack router still validates those
+under the leg's settings. Fuel replacement retains its separate constrained path.
+Model coverage checks repeated drops, redraw/reselection, unrelated pin taps,
+missing/successful snapping, No, and committing the snapped coordinate exactly
+once. No scoring or pack artifact changes are part of this repair.
+
+Real-map gesture verification: `.build/loop-edit-20260920/pin-gestures-final.xcresult`
+passes on the reused iPhone 17 simulator: two pin drags, zoom in/out, and two
+explicit taps. Drag release, redraw and zoom produce no placement-tap callback.
+The first harness attempt used the wrong accessibility element type; the next
+exposed a second-drag timing/redraw issue in the simplified harness. The final
+harness reproduces the planner's confirmation redraw and passes the complete
+sequence. This is simulator gesture evidence, not physical-device acceptance.

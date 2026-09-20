@@ -368,6 +368,8 @@ final class MapState {
     /// Arguments: marker ID (e.g. "s0", "e0", "dest") + new map coordinate.
     var onPlannerPinDragEnd: ((String, CLLocationCoordinate2D) -> Void)?
     var onPlannerPinSnapFailed: (() -> Void)?
+    /// Explicit user tap only; nil means no nearby visible motorable road.
+    var onPlannerPinPlacementTap: ((String, CLLocationCoordinate2D?) -> Void)?
 
     /// Currently selected planner pin (tap-to-select, then drag or tap map to move).
     var selectedPlannerPinID: String? {

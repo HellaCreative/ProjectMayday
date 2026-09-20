@@ -199,6 +199,9 @@ final class AppEnvironment {
             planner.toast = "Move the waypoint closer to a road, then try again"
             planner.refreshMap()
         }
+        mapState.onPlannerPinPlacementTap = { [planner] markerID, coordinate in
+            planner.requestWaypointPlacementConfirmation(markerID: markerID, snappedCoordinate: coordinate)
+        }
         mapState.onPlannerPinDragEnd = { [planner] markerID, coordinate in
             planner.moveWaypoint(markerID: markerID, to: coordinate)
         }

@@ -404,6 +404,35 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testWaypointDragAndZoomWaitForExplicitPinTap() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_ZOOM_TOUCH"] = "1"
+        app.launchEnvironment["DIRT_UI_TEST_PIN_PLACEMENT"] = "1"
+        app.launch()
+        let taps = app.staticTexts["placement-tap-count"]
+        let drags = app.staticTexts["pin-drag-count"]
+        XCTAssertTrue(taps.waitForExistence(timeout: 8))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.45)).tap()
+        let pin = app.buttons["+"].firstMatch
+        XCTAssertTrue(pin.waitForExistence(timeout: 5))
+        XCTAssertEqual(taps.label, "Placement taps: 0")
+        pin.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).press(forDuration: 0.2, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.50, dy: 0.55)))
+        XCTAssertEqual(drags.label, "Pin drags: 1")
+        XCTAssertEqual(taps.label, "Placement taps: 0", "Drag release/reselection must not ask to place")
+        app.buttons["map-zoom-in"].tap()
+        app.buttons["map-zoom-out"].tap()
+        XCTAssertEqual(taps.label, "Placement taps: 0", "Zoom must leave placement open")
+        pin.tap()
+        XCTAssertEqual(taps.label, "Placement taps: 1", "Only tapping the pin requests confirmation")
+        print("PLACEMENT_PIN_AFTER_TAP: \(pin.debugDescription)")
+        pin.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).press(forDuration: 0.2, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.6)))
+        XCTAssertEqual(drags.label, "Pin drags: 2")
+        XCTAssertEqual(taps.label, "Placement taps: 1")
+        pin.tap()
+        XCTAssertEqual(taps.label, "Placement taps: 2")
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
