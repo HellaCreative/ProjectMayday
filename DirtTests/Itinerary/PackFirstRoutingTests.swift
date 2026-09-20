@@ -649,6 +649,19 @@ struct PackFirstRoutingTests {
         }
     }
 
+    @Test func MarylandPackCoversDistrictOfColumbiaWithoutClaimingVirginia() {
+        let washington = CLLocationCoordinate2D(latitude: 38.8977, longitude: -77.0365)
+        let silverSpring = CLLocationCoordinate2D(latitude: 38.9897, longitude: -77.0261)
+        let alexandria = CLLocationCoordinate2D(latitude: 38.8048, longitude: -77.0469)
+        #expect(RegionPolygons.polygonOwner(longitude: washington.longitude, latitude: washington.latitude) == "md")
+        #expect(GraphPackStore.primaryRegionId(containing: washington) == "md")
+        #expect(GraphPackStore.primaryRegionId(containing: alexandria) == "va")
+        #expect(Set(GraphPackStore.requiredCatalogRoutingRegions(for: [washington, silverSpring],
+            published: ["md", "va"])) == ["md"])
+        #expect(Set(GraphPackStore.requiredCatalogRoutingRegions(for: [washington, alexandria],
+            published: ["md", "va"])) == ["md", "va"])
+    }
+
     @Test func NewfoundlandIslandAndLabradorFollowAdministrativeGeography() {
         for (longitude, latitude, expected) in [
             (-59.137,47.57,"nl-island"), (-57.95,48.95,"nl-island"),

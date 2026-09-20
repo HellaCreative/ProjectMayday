@@ -84,8 +84,13 @@ Texas and all other regions still require measured resource qualification.
 The North America September 18 download completed after resuming the existing
 2.63 GB partial at `.build/fresh-fabric-20260919/source/north-america-260918.osm.pbf`; its checked
 prefix agrees with the newly downloaded bytes. Expected complete bytes:
-19,394,968,944 (downloaded); publisher MD5 `3b344803d19c468b54695dc3d92747f1`. Full checksum
-and OSM timestamp must pass before continental extraction. A bounded two-region
+19,394,968,944 (verified); publisher MD5 `3b344803d19c468b54695dc3d92747f1`.
+The internal copy and independent source preparer both passed verification:
+SHA-256 `3a56f675df146786cedced50810951a886aecc6c69c364e91bd9de06c1343f79`,
+OSM timestamp `2026-09-18T20:21:10Z`. Its fabric epoch is
+`osm-20260918T202110Z-3a56f675df146786`; it is not relabeled as the previous
+Canada-only parent identity. The checked copy took 501.537 s; extraction now
+reads the internal SSD. A bounded two-region
 single-process extraction mode is implemented in `prepare-common-source-lock.js`
 (`--batch-size 2`, default remains 1). The real NS/PE comparison now passes:
 both extracted PBF hashes exactly equal the separately produced source files.
@@ -109,6 +114,35 @@ build ends awaiting route qualification; publication is still separately gated.
 Source lock: `continent/source-lock.json`; phase logs: `continent-source-preparation.log`
 and `continent-pack-build.log`. No new continental packs have been built or
 published at this checkpoint. Do not duplicate these running jobs.
+
+Continental coverage preflight found D.C. outside both the Maryland and Virginia
+clip outlines. The Maryland pack now includes OSM administrative relations
+`162112` and `162069`; the 67-pack roster is unchanged. Factory clip and app/live
+ownership polygons are identical, the union is GEOS-valid, and Virginia ownership
+is preserved. `fetch-admin-polygon.js` applies this rule on future refreshes,
+with the participating relation IDs recorded in the geometry metadata. A failing
+D.C. coverage regression now passes, alongside union hole/gap checks (six tests,
+`dc-coverage-before.log`, `dc-coverage-tests.log`). The existing simulator passes
+all 34 acquisition tests, including D.C./Virginia pack selection
+(`dc-acquisition-tests.xcresult`). These are boundary/acquisition checks; the
+actual D.C. roads and Virginia crossing remain to be qualified on the new packs.
+Only Maryland's region geometry changed. The source job checkpointed and retained
+AB/AK/AL/AR/AZ/BC, then resumed with the corrected pending Maryland halo/recipe;
+no completed regional source is regenerated. A temporary idle-sleep inhibitor
+runs with the overnight pipeline and ends when that process exits.
+
+First North America batch AB/AK: extraction 194.74 s, peak RSS 2,958,458,880 bytes,
+peak physical footprint 8,143,765,632 bytes; checksum-complete batch 209.675 s.
+AL/AR extraction: 197.06 s, peak physical footprint 8,097,857,600 bytes. These are
+factory measurements on M1/16 GiB, not phone-routing performance. Continue at
+most two regions per extraction process, one heavy job at a time.
+
+Two older opt-in app qualification assertions still required 70% dirt on Ontario
+and cross-Canada rides. They now follow the owner's removal of that universal
+floor; route/access/shape/variety assertions remain and cross-Canada adds saved
+response and displayed-surface consistency checks. The test target compiles;
+those two real-pack route tests await the continental inputs and are not counted
+as passing yet.
 
 The final same-binary host matrix now passes **89/89** requests
 (`handover-integrated-matrix/` in the continental evidence directory), and the
@@ -506,10 +540,12 @@ No highway/ferry cost change is included in the Labrador candidate.
 
 Remaining limits: owner NS–NB Balanced is about 17–19% dirt at the tested
 settings; subsequent owner testing shows higher Wander can increase its dirt
-share. Retain the current profile pending comparable endpoint/seed evidence. Four long NS–QC Balanced/Clean results repeat about 0.66–2.28 km;
-the six inspected shape replays have no repeats, but this is not true of every
-matrix result. The synthetic destination-only parking approach remains unresolved.
-Halifax–PE still selects the ferry in the stated case. These are disclosed route
+share. Retain the current profile pending comparable endpoint/seed evidence. The four
+earlier long NS–QC Balanced/Clean repeated-road failures now pass the latest
+89-request handover matrix described above. The synthetic destination-only
+parking approach remains unresolved. Halifax–PE selects the ferry with ferry
+avoidance off in the stated historical case; the new explicit avoidance-on
+bridge replay passes on the host and awaits current White acceptance. These are disclosed route
 quality/access limitations, not a reason to claim all packs or all routing are
 finished. The seven-region candidate is for owner testing; other regions must
 not be mixed into this release. Recovery is the previous immutable candidate

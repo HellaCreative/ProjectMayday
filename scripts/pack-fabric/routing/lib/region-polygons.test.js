@@ -4,8 +4,23 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   polygonOwner,
-  seamCorridor
+  seamCorridor,
+  pointInGeometry
 } = require("./region-polygons");
+
+test("Maryland coverage includes D.C. without stealing Virginia", () => {
+  const fs = require("node:fs");
+  const { clipGeojsonPath, coverageRelationIds } = require("../../scripts/fetch-admin-polygon");
+  assert.deepEqual(coverageRelationIds("md"), [162112, 162069]);
+  const clip = JSON.parse(fs.readFileSync(clipGeojsonPath("md")));
+  const geometry = clip.geometry || clip.features[0].geometry;
+  for (const point of [[-77.0365,38.8977],[-76.986,38.880],[-77.0261,38.9897]]) {
+    assert.equal(pointInGeometry(...point, geometry), true);
+    assert.equal(polygonOwner(...point), "md");
+  }
+  assert.equal(polygonOwner(-77.0469,38.8048), "va");
+  assert.equal(pointInGeometry(-77.0469,38.8048, geometry), false);
+});
 
 test("western Newfoundland stays on the island; Labrador follows its OSM boundary", () => {
   const { newfoundlandHalfForPoint } = require("../regional/select");

@@ -139,7 +139,8 @@ struct NativeCandidateQualificationTests {
             let route = try await session.route(native, directories: directories)
             let quality = RouteQuality(route: route)
             #expect(route.limit == nil)
-            #expect(quality.knownDirtPercent >= 70)
+            // Record the actual mix below. The owner removed the universal
+            // Dirt percentage floor; access, shape, variety and reporting still qualify.
             #expect(quality.reriddenMeters == 0)
             let graph = try PackRepository(installedDirectories: directories).open("on-s").graph
             #expect(!RouteQuality.hasClosedRoadCircuit(route.segments, in: graph))
@@ -181,7 +182,14 @@ struct NativeCandidateQualificationTests {
             let hash = SHA256.hash(data: Data((route.segments.map(\.edgeID).joined(separator: "\n") + "\n").utf8))
                 .map { String(format: "%02x", $0) }.joined()
             if let firstHash { #expect(hash == firstHash) } else { firstHash = hash }
-            #expect(RouteQuality(route: route).knownDirtPercent >= 70)
+            // A continental ride must report its actual surfaces honestly;
+            // it must not fail solely for falling below a fixed Dirt percentage.
+            let response = NativeRoutingAdapter.response(route, style: .dirt)
+            let reopened = try JSONDecoder().decode(RouteResponse.self, from: JSONEncoder().encode(response))
+            #expect(reopened.geometry == response.geometry)
+            #expect(reopened.dirtPercent == response.dirtPercent)
+            let painted = RouteSurfaceComposition.from(responses: [response])
+            #expect(abs(painted.dirtPercent - response.dirtPercent) <= 1)
             #expect(RouteQuality(route: route).reriddenMeters == 0)
             #expect(ProcessMemory.megabytes().peak < 1_300)
             report("canada-\(run)", started: started, route: route)

@@ -1181,7 +1181,7 @@ final class GraphPackStore {
             ("ca", "California", 244199538), ("co", "Colorado", 114113249), ("ct", "Connecticut", 52608872), ("de", "Delaware", 13537231),
             ("fl", "Florida", 120762739), ("ga", "Georgia", 167294463), ("hi", "Hawaii", 10873477), ("id", "Idaho", 72786166),
             ("il", "Illinois", 151287100), ("in", "Indiana", 116302988), ("ia", "Iowa", 55837212), ("ks", "Kansas", 67554405),
-            ("ky", "Kentucky", 100264936), ("la", "Louisiana", 62109940), ("me", "Maine", 39266092), ("md", "Maryland", 83840404),
+            ("ky", "Kentucky", 100264936), ("la", "Louisiana", 62109940), ("me", "Maine", 39266092), ("md", "Maryland & D.C.", 83840404),
             ("ma", "Massachusetts", 90608647), ("mi", "Michigan", 157694424), ("mn", "Minnesota", 91067488), ("ms", "Mississippi", 56275764),
             ("mo", "Missouri", 128190467), ("mt", "Montana", 55927395), ("ne", "Nebraska", 43248777), ("nv", "Nevada", 68412194),
             ("nh", "New Hampshire", 36822888), ("nj", "New Jersey", 79525284), ("nm", "New Mexico", 63689894), ("ny", "New York", 150764306),
