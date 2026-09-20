@@ -2841,3 +2841,19 @@ repeats that outlier twice per binary with alternating order. Check its state an
 live processes before starting more heavy work. Phone Search builds use an
 isolated accepted checkout, excluding this experiment. The final publication gate
 is unchanged; the 70-region candidate is built but not qualified or published.
+
+Owner-reported Wander/Allow Unknown interaction (September 20): the per-leg
+settings reducer, request snapshot, response-cache identity and native adapter
+retain Wander independently of unknown motorcycle access. A controlled host
+comparison using accepted phone source `d763de7`, September 19 NS pack, Porters
+Lake–Yarmouth, fixed seed 1 and city/highway/ferry avoidance found distinct road
+hashes at every sampled setting. Unknown off at Wander 0/50/100% returned
+414.3/531.3/626.9 km with 31.3/53.9/59.2% known dirt. Unknown on at Wander
+0/50/75/100% returned 452.1/526.6/521.9/542.9 km with 65.5/72.6/73.7/74.1%
+known dirt. This reproduces a much weaker upper-slider response with Unknown on,
+not a globally ignored setting. Wander expands permitted exploration and softens
+away costs; it does not require a longer route at each step. Composition proposals
+still ran and were rejected when they failed existing quality checks. No scoring
+or access policy was changed from this diagnostic. The owner's exact endpoints,
+mode, settings and seed are still needed to qualify their reported case. Evidence:
+`.build/wander-unknown-20260920/{identity,summary,midpoint-summary}.json`.
