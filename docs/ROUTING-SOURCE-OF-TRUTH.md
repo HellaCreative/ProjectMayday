@@ -152,6 +152,18 @@ AB/AK/AL/AR/AZ/BC, then resumed with the corrected pending Maryland halo/recipe;
 no completed regional source is regenerated. A temporary idle-sleep inhibitor
 runs with the overnight pipeline and ends when that process exits.
 
+The installation reuse decision now hashes every artifact in an older native
+revision instead of trusting matching file sizes. Same-size corruption in graph,
+geometry, fuel or seams cannot be retained as a valid older download. Navigation
+continues to prevent replacement, including repair of corrupt installed bytes;
+downloaded native manifests must also identify the catalog's fabric release.
+All 35 acquisition tests pass on the existing simulator
+(`install-identity-tests.xcresult`), including valid-old-revision reuse and
+same-size artifact corruption. This is installation-identity regression coverage;
+it does not claim exhaustive interrupted-network or new continental-download
+acceptance. Source preparation paused at its batch boundary for this serial app
+test and resumed afterward without discarding completed extracts.
+
 First North America batch AB/AK: extraction 194.74 s, peak RSS 2,958,458,880 bytes,
 peak physical footprint 8,143,765,632 bytes; checksum-complete batch 209.675 s.
 AL/AR extraction: 197.06 s, peak physical footprint 8,097,857,600 bytes. These are

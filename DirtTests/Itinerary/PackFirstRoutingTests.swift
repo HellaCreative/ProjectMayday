@@ -1,4 +1,5 @@
 import CoreLocation
+import CryptoKit
 import Foundation
 import Testing
 @testable import Dirt
@@ -792,6 +793,41 @@ struct PackFirstRoutingTests {
                 protectInstalledRevisions: true
             ) == false
         )
+    }
+
+    @Test func retainingOlderNativeRevisionVerifiesEveryArtifactRatherThanOnlyItsSize() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = ["graph": "graph.v4.bin", "geometry": "geometry.v1.bin",
+                     "fuel": "fuel.v1.json", "seams": "cross-pack-seams.v2.json"]
+        var manifest: [String: Any] = ["schema": "pack-manifest.v2", "regionId": "ns",
+            "fabricReleaseId": "older-immutable-release", "sourceEpoch": "fixture-epoch",
+            "timezone": "America/Halifax", "capabilities": ["legal-topology.v1", "cross-pack-seams.v2"]]
+        // This test exercises installation identity, not native graph decoding.
+        let bytes = Data("original immutable artifact".utf8)
+        for (key, name) in files {
+            try bytes.write(to: directory.appendingPathComponent(name))
+            manifest[key] = ["name": name, "bytes": bytes.count,
+                "sha256": SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()]
+        }
+        try JSONSerialization.data(withJSONObject: manifest)
+            .write(to: directory.appendingPathComponent("pack-manifest.v2.json"))
+        #expect(GraphPackStore.nativeRevisionMatchesIdentity(regionID: "ns", directory: directory))
+        #expect(!GraphPackStore.nativeRevisionMatchesIdentity(regionID: "nb", directory: directory))
+        for name in files.values {
+            let file = directory.appendingPathComponent(name)
+            var corrupt = bytes
+            corrupt[0] ^= 1
+            try corrupt.write(to: file)
+            let valid = GraphPackStore.nativeRevisionMatchesIdentity(regionID: "ns", directory: directory)
+            #expect(!valid, "same-size corruption in \(name) must not be retained")
+            #expect(GraphPackStore.shouldReplaceInstalledRevision(hasChecksumValidInstalledRevision: valid,
+                replaceInstalled: false, protectInstalledRevisions: false))
+            try bytes.write(to: file)
+        }
+        try FileManager.default.removeItem(at: directory.appendingPathComponent("cross-pack-seams.v2.json"))
+        #expect(!GraphPackStore.nativeRevisionMatchesIdentity(regionID: "ns", directory: directory))
     }
 
     @Test func fromHereAndPlanUseTheSameAcquisitionWorkflow() async {

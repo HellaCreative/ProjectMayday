@@ -1481,7 +1481,8 @@ final class GraphPackStore {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
         let contract = try JSONDecoder().decode(DirtRoutingEngine.PackManifest.self,from: data)
         try contract.validate()
-        guard contract.regionId == region.id.lowercased(), Self.contractMatchesCatalog(contract,region: region) else {
+        guard contract.regionId == region.id.lowercased(), contract.fabricReleaseId == version,
+              Self.contractMatchesCatalog(contract,region: region) else {
             throw PackIntegrityError.regionIncomplete(regionId: region.id)
         }
         try data.write(to: directory.appendingPathComponent("pack-manifest.v2.json"),options: .atomic)
@@ -1565,11 +1566,28 @@ final class GraphPackStore {
             }
 
             let existingGraph = findGraphFileURL(regionId: regionId)
-            let hasChecksumValidInstalledRevision = hasCompleteNativePack(regionId)
             let existingDir = existingGraph?.deletingLastPathComponent()
             let matchesCurrent = existingDir.map {
                 Self.regionMatchesIdentity(region: region, directory: $0)
             } ?? false
+            // A same-size corrupt file is not a valid older revision to retain.
+            // Keep expensive verification out of the ordinary Layers status path.
+            let hasChecksumValidInstalledRevision: Bool
+            if matchesCurrent {
+                hasChecksumValidInstalledRevision = true
+            } else if let existingDir {
+                hasChecksumValidInstalledRevision = await Task.detached(priority: .utility) {
+                    Self.nativeRevisionMatchesIdentity(regionID: normalizedRegionId, directory: existingDir)
+                }.value
+                try Task.checkCancellation()
+            } else {
+                hasChecksumValidInstalledRevision = false
+            }
+            if protectInstalledRevisions, existingGraph != nil, !matchesCurrent,
+               replaceInstalled || !hasChecksumValidInstalledRevision {
+                throw NSError(domain: "DIRT.Packs", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "End navigation before updating this pack."])
+            }
             if hasChecksumValidInstalledRevision,
                matchesCurrent
                 || !Self.shouldReplaceInstalledRevision(
@@ -1648,7 +1666,7 @@ final class GraphPackStore {
 
             try Task.checkCancellation()
             // Navigation may have started while the replacement was downloading.
-            if replaceInstalled && protectInstalledRevisions {
+            if protectInstalledRevisions && existingGraph != nil {
                 throw NSError(domain: "DIRT.Packs", code: 1,
                     userInfo: [NSLocalizedDescriptionKey: "End navigation before updating this pack."])
             }
@@ -2171,6 +2189,17 @@ final class GraphPackStore {
                 expectedBytes: file.bytes,
                 expectedSHA256: file.sha256
             )
+        }
+    }
+
+    nonisolated static func nativeRevisionMatchesIdentity(regionID: String, directory: URL) -> Bool {
+        guard let data = try? Data(contentsOf: directory.appendingPathComponent("pack-manifest.v2.json")),
+              let contract = try? JSONDecoder().decode(DirtRoutingEngine.PackManifest.self, from: data),
+              (try? contract.validate()) != nil, contract.regionId == regionID.lowercased() else { return false }
+        let artifacts = [contract.graph, contract.geometry, contract.fuel] + (contract.seams.map { [$0] } ?? [])
+        return artifacts.allSatisfy { artifact in
+            fileMatchesIdentity(at: directory.appendingPathComponent(artifact.name),
+                expectedBytes: artifact.bytes, expectedSHA256: artifact.sha256)
         }
     }
 
