@@ -2823,3 +2823,21 @@ verification, retaining its saved rows and unchanged plan, probe and output
 identities; `join-profile/replay-state.json` records the process and evidence. Final release qualification must use the final
 engine source, including later navigation changes; do not call old-binary subset
 receipts final release acceptance.
+
+The 50-row diagnostic replay completed: 20 rows now pass, 30 still fail.
+Twenty-eight exceed the host resident-memory ceiling; six do not complete (five
+time, one label limit), with overlap between those categories. This subset is not
+a final release qualification. Its failed incomplete receipts also emit dependent
+missing-settings/road-identity checks; do not count those as independent pack bugs.
+No repeated-road failure remains among completed routes in this replay.
+
+The uncommitted compact matching-grid experiment stores exact UInt32 road indices
+and widens candidates at lookup. All 170 engine tests pass, including raw/indexed
+matching. Five paired routes complete with equal directed-road hashes and lower
+physical footprint (roughly 15–31 MiB each). Four lower host RSS too, but NC→GA
+increased from 935 to 1102 MiB, so the experiment is not accepted yet. The serial
+recheck at `.build/continental-qualification-20260920/compact-index/recheck/run.py`
+repeats that outlier twice per binary with alternating order. Check its state and
+live processes before starting more heavy work. Phone Search builds use an
+isolated accepted checkout, excluding this experiment. The final publication gate
+is unchanged; the 70-region candidate is built but not qualified or published.
