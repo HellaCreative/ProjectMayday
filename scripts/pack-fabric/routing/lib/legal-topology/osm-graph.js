@@ -506,6 +506,25 @@ function buildGraphFromOsm(osm, options = {}) {
   }
 
   const restrictions = [];
+  let onlyTurnExits = null;
+  function exitsAtOnlyTurnNode(node) {
+    if (!onlyTurnExits) {
+      // Sparse and shared across unresolved rules; do not rescan the whole
+      // region for every rejected relation or index every node unnecessarily.
+      onlyTurnExits = new Map();
+      for (const rule of restrictionParse) if (rule.only) {
+        for (const id of rule.viaNodeIds) {
+          const via = graphNodeFor(id);
+          if (via != null) onlyTurnExits.set(via, []);
+        }
+      }
+      for (const edge of edges) {
+        onlyTurnExits.get(edge.from)?.push(edge.index);
+        if (edge.to !== edge.from) onlyTurnExits.get(edge.to)?.push(edge.index);
+      }
+    }
+    return onlyTurnExits.get(node) || [];
+  }
   for (const r of restrictionParse) {
     const viaGraph = r.viaNodeIds.map((id) => graphNodeFor(id)).filter((v) => v != null);
     const viaNode = viaGraph.length ? viaGraph[0] : null;
@@ -523,7 +542,21 @@ function buildGraphFromOsm(osm, options = {}) {
       }
     }
     if (viaNode != null && (!fromEdges.length || !toEdges.length)) {
-      rejected.push({ kind: "restriction", osmRelationId: r.osmRelationId, reason: "unresolved_members" });
+      let failClosedTurns = 0;
+      if (r.only && fromEdges.length && !toEdges.length) {
+        // The named sole exit is unavailable. Dropping the only-* rule would
+        // authorize every other exit. Retain the exact incoming/via scope as
+        // denied turns, while keeping other approaches and arrival at the
+        // junction available. No road geometry or permission is fabricated.
+        for (const fromEdge of fromEdges) for (const toEdge of exitsAtOnlyTurnNode(viaNode)) {
+          restrictions.push({ ...r, kind: 8, kindName: "no_entry", only: false,
+            toWayId: edges[toEdge].osmWayId, fromEdge, toEdge, viaNode,
+            viaWayCount: 0, viaWayIds: [], viaEdges: [] });
+          failClosedTurns++;
+        }
+      }
+      rejected.push({ kind: "restriction", osmRelationId: r.osmRelationId, reason: "unresolved_members",
+        ...(failClosedTurns ? { originalKind: r.kindName, failClosedTurns } : {}) });
       continue;
     }
     const resolvedPaths = viaNode != null

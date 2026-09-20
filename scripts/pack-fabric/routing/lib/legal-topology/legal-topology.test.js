@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const { evaluateMotorcycleAccess, throughAllowed } = require("./motorcycle-access");
 const { travelDirectionV4 } = require("./direction");
 const { evaluateBarrier } = require("./barriers");
+const { PackedOplNodeStore } = require("./opl");
 const {
   parseRestrictionRelation,
   compileRestrictionIndex,
@@ -42,6 +43,50 @@ function packed(osm, provenance = { regionId: "fix", sourceEpoch: "epoch-1" }) {
   const geom = decodeGeometryV1(encoded.geomBuffer);
   return { graph, encoded, pack, geom };
 }
+
+test("an unresolved only-turn exit cannot open other turns from its known approach", () => {
+  const input = {
+    nodes: [node(1, 0, 0), node(2, 0.001, 0), node(3, 0.002, 0), node(4, 0.001, 0.001)],
+    ways: [way(10, [1, 2], { highway: "residential" }),
+      way(11, [2, 3], { highway: "residential" }),
+      way(12, [2, 4], { highway: "footway" })],
+    relations: [rel(100, [{ type: "way", ref: 10, role: "from" },
+      { type: "node", ref: 2, role: "via" }, { type: "way", ref: 12, role: "to" }],
+      { type: "restriction", restriction: "only_right_turn" })]
+  };
+  for (const compact of [false, true]) {
+    const source = structuredClone(input);
+    if (compact) {
+      source.nodeStore = new PackedOplNodeStore();
+      for (const n of source.nodes) source.nodeStore.add(n);
+      source.nodes = [];
+    }
+    const { graph, pack } = packed(source);
+    const from = graph.edges.findIndex(e => e.osmWayId === "10");
+    const other = graph.edges.findIndex(e => e.osmWayId === "11");
+    const via = graph.nodes.findIndex(n => n.osmNodeId === "2");
+    for (const rows of [graph.restrictions, pack.restrictions]) {
+      const index = compileRestrictionIndex(rows);
+      assert.equal(indexedTurnAllowed(index, from, other, via), false);
+      assert.equal(indexedTurnAllowed(index, from, from, via), false);
+      assert.equal(indexedTurnAllowed(index, other, from, via), true);
+    }
+    assert.ok(graph.edges.every(e => e.accessForward === 0 && e.accessReverse === 0));
+    assert.ok(graph.rejected.some(r => r.osmRelationId === "100" && r.failClosedTurns === 2));
+  }
+});
+
+test("a missing prohibited exit does not close unrelated turns", () => {
+  const { graph } = packed({
+    nodes: [node(1, 0, 0), node(2, 0.001, 0), node(3, 0.002, 0)],
+    ways: [way(10, [1, 2], { highway: "residential" }), way(11, [2, 3], { highway: "residential" })],
+    relations: [rel(100, [{ type: "way", ref: 10, role: "from" },
+      { type: "node", ref: 2, role: "via" }, { type: "way", ref: 99, role: "to" }],
+      { type: "restriction", restriction: "no_right_turn" })]
+  });
+  assert.equal(graph.restrictions.length, 0);
+  assert.ok(graph.edges.every(e => e.accessForward === 0 && e.accessReverse === 0));
+});
 
 test("explicit motorcycle permission retains supplemental road classes without opening pedestrian-only ways", () => {
   for (const highway of ["footway", "cycleway", "bridleway", "pedestrian"]) {

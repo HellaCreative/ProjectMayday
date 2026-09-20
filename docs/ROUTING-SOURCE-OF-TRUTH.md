@@ -128,6 +128,22 @@ roster matches the actual catalog exactly. The factory has begun its serial
 pack build; no continental release is qualified or published at this checkpoint.
 Source lock: `continent/source-lock.json`; phase logs: `continent-source-preparation.log`
 and `continent-pack-build.log`. Do not duplicate these running jobs.
+Continental building exposed an unresolved-only-turn defect before publication.
+A valid incoming road could lose its `only_*` restriction when the named exit
+could not be represented at the via junction. A failing four-node regression
+reproduced that omission. The factory now encodes denied turns from that exact
+incoming/via context, without closing unrelated approaches or inventing an exit.
+Thirty-nine focused legal/format/seam tests pass, including both ordinary and
+compact factory input paths. Source inspection of southern California found 32
+unresolved only-turn relations: 27 had no represented incoming approach; five
+had an approach but no attached exit (two already denied, two unknown, one
+through-permitted). Three actual source relations replay with retained turn
+blocks. Evidence: `unresolved-only-turn-*` and `ca-s-only-turn-*` in the continental
+evidence directory. This is not a blanket claim that every malformed source
+restriction is resolved. The factory scheduler was held while its current child
+finished; restart affected pack construction with the corrected recipe, retaining
+all 67 verified source extracts. No affected pack has been published.
+
 The same evidence directory's `continue-qualification.py` waits for that exact
 supervisor to seal the whole candidate, then generates the continental fixture
 matrix and runs/independently verifies serial native replays. Inspect
