@@ -184,6 +184,14 @@ existing qualified seven-pack candidate produces byte-identical plans twice,
 with both catalogs last (`publication-plan-determinism.json`). It uses an owned
 temporary output directory, changes no existing candidate and uploads nothing.
 Actual continental publication remains pending the new candidate's qualification.
+`continue-app-qualification.py` waits for the host qualifier's successful state,
+then builds the current app and runs the opt-in native candidate suite plus
+acquisition, preferences, planner, itinerary and incremental-edit checks on the
+single existing simulator. Inspect `app-qualification-state.json` before starting
+other heavy work. It records the actual source identity, rejects missing native
+execution markers and stops on failure. Local pack tests do not enable the
+published-download test; remote verification and download acceptance occur after
+qualified publication. This follower does not install White or publish anything.
 
 First North America batch AB/AK: extraction 194.74 s, peak RSS 2,958,458,880 bytes,
 peak physical footprint 8,143,765,632 bytes; checksum-complete batch 209.675 s.
