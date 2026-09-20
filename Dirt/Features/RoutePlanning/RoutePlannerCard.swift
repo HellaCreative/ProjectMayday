@@ -481,8 +481,10 @@ struct RoutePlannerCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
             }
-            surfaceDirtIsland
-                .disabled(planner.isRouting)
+            if !planner.hasRoute {
+                surfaceDirtIsland
+                    .disabled(planner.isRouting)
+            }
 
             if planner.isRouting {
                 loopControlLayout {
@@ -676,11 +678,9 @@ struct RoutePlannerCard: View {
     // MARK: - Plan
 
     @ViewBuilder private var planContent: some View {
-
-        surfaceDirtIsland
-
         if planner.stages.isEmpty {
             VStack(spacing: 8) {
+                surfaceDirtIsland
                 helperBoxLabel(
                     Text("\(Text("Long-press").fontWeight(.bold)) the map for point 1, then again for point 2 to build your first leg.")
                 )

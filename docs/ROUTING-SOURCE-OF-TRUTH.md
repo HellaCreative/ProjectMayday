@@ -2048,13 +2048,15 @@ above it. Clean, Balanced and Dirt use the original native segmented control and
 its system selection behavior. The settings fit in one fixed panel without an
 internal scrolling surface. The panel enters from just beneath the
 header with a short, lightly damped spring, and its header has deliberate top
-clearance around the close control. The Surface control in From Here, Loop and
-Plan edits the defaults copied into newly created legs. Tapping an existing Plan
-leg's Dirt, Balanced or Clean badge opens the same panel for that leg alone. The
-Surface label and its current-style control remain in their original compact
-launcher width. Surface stays against the left side and the icon, style name and
-chevrons remain one CTA group aligned to the right; its reserved hit area supplies
-the flexible visual gap between them. The
+clearance around the close control. Before a route has legs, the Surface control
+in From Here, Loop and Plan edits the defaults copied into newly created legs.
+Once Plan or Loop has created legs, the global Surface launcher is hidden and
+the leg rows are the only route-setting controls. Tapping an existing leg's Dirt,
+Balanced or Clean badge opens the same panel for that leg alone. The Surface label
+and its current-style control remain in their original compact launcher width.
+Surface stays against the left side and the icon, style name and chevrons remain
+one CTA group aligned to the right; its reserved hit area supplies the flexible
+visual gap between them. The
 panel contains style, Allow Unknown, Ride Wander, Avoid cities
 and towns, Avoid highways and Avoid ferries. Done applies the draft once and
 rebuilds only the selected Plan leg; the numbered leg button already focuses
