@@ -218,6 +218,21 @@ result on the M1 Mac, not phone performance or continental riding-quality
 qualification. California Dirt's search-limit failure remains unresolved.
 The full continental factory continuation can now resume with the corrected
 70-source lock; it cannot publish by itself.
+Fresh corrected California bytes still fail LA–San Diego Dirt at the unchanged
+1.6-million-label limit. A direct profile-only diagnostic took 18.791 s and
+1,230,602,240 bytes kernel peak RSS; it does not establish a usable alternative.
+Two bounded-composition experiments also failed: 47.736 s without the section's
+necessary-city fallback and 57.899 s with it. The latter passed 143 synthetic
+engine tests, but neither completed the real request. Both experiments were
+removed from the candidate; their patches and receipts are preserved under
+`bounded-composition-rejected*` and `california-bounded-composition-*`. No larger
+label limit, weaker riding settings or success assertion was substituted.
+Continental fixture generation now streams complete seam files and retains a
+bounded deterministic sample solely for choosing synthetic test endpoints;
+pack proofs are unchanged. Reader checks cover chunk boundaries, escaped Unicode,
+exact node IDs, access filtering and truncated input. This avoids the fixture
+runner's whole-file JSON string limit; it is not a phone memory improvement.
+
 
 The seam JSON writer batches filesystem writes without removing or changing any
 proof. Complete UTF-8 output is byte-identical in the regression. This is a factory
