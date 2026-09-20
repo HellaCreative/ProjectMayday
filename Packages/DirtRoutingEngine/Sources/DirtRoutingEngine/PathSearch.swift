@@ -19,6 +19,10 @@ public struct SearchOptions: Sendable {
     /// Exact source roads permitted for a generated regional handover.
     /// Rider destinations leave this empty.
     public var requiredArrivalRoads: Set<String> = []
+    /// Source-road identity plus travel direction permitted at a generated
+    /// regional handover. Direction is pack-local only after it has been
+    /// re-proved against the following pack's directed topology.
+    var requiredArrivalDirections: Set<String> = []
     public var arrival: SearchArrival?
     public var precedingMeters = 0.0
     public var precedingDirtMeters = 0.0
@@ -52,7 +56,9 @@ public struct SearchOptions: Sendable {
     public var composeDirtRide = false
     /// Generated regional cuts continue the incoming direction, just as one
     /// uninterrupted search would. Rider waypoints retain ordinary turn-around behavior.
-    var continuationForward: Bool?
+    /// Exact travel direction carried between independently loaded region stages.
+    /// Public so qualification replays can reproduce a seam continuation.
+    public var continuationForward: Bool?
     public var arrivalEdgeID: String?
     public var arrivalRestrictions: [RestrictionProgress] = []
     /// Extra legal destinations for a nearest-reachable search. Corridor and

@@ -59,8 +59,21 @@ receipt after validating every downloaded artifact. The receipt is bound to the
 manifest hash, expected artifact hashes, sizes, file identities and modification
 times; any changed or replaced file restores full checksum verification. This
 keeps pack integrity checks at installation while avoiding hundreds of megabytes
-of repeated SHA reads at every route launch. The receipt is derived local state
-and does not change published pack bytes.
+of repeated SHA reads at every route launch. It also records the verified seam
+neighbor summary so a long route does not parse every proof in every supplied
+region merely to discover the regional chain. Full proof decoding and legal
+revalidation still occur for each selected handover. The receipt is derived local
+state and does not change published pack bytes.
+
+The owner Halifax–Squamish pressure route exposed this distinction. Before the
+neighbor summary, the 60-second first window expired while scanning seam metadata
+and began no road search. With the repaired receipt path it completes all seven
+regional stages in 139.3 seconds at 76.9% known dirt, with Unknown off and
+city/highway/ferry avoidance on. Peak host RSS is 891.7 MB. The same fixed test
+seed retains directed-road SHA-256
+`5caf6270cd61553f323e735e65cdf4d2bd1c1219b0ab5db261ba9fb1a48651f2`.
+This equality qualifies the metadata-only repair; it is not a requirement for
+fresh rider routes. Evidence: `owner-halifax-squamish-final.json` and `.time`.
 
 Current same-binary app qualification on the existing iOS 26.5 simulator passes
 the dense representative set with Wander 50%, Unknown off, and city/highway/ferry
@@ -82,8 +95,9 @@ fresh seeds, Dirt should offer meaningfully different legal rides within the
 selected style and Wander setting. Saved rider routes retain their accepted
 geometry; newly generated routes are not required to reproduce an earlier line.
 
-The complete serial continental host matrix is running against the sealed
-candidate and the current probe. It covers internal journeys in every region and
+The complete serial continental host matrix was restarted against source
+`deabed0` after the Halifax–Squamish metadata failure was repaired. It covers
+internal journeys in every region and
 style plus both directions and styles for every neighboring pair, with explicit
 settings, endpoint, legality, geometry, repeated-road, elapsed-time and RSS gates.
 The app matrix remains queued behind it so the two heavy jobs do not compete.
@@ -926,8 +940,19 @@ The rider chooses places and riding preferences. DIRT should produce a legal,
 connected route promptly, preserve useful progress on long calculations, and
 explain any limitation accurately. A long trip may take longer than a short one;
 the app must not hang, exhaust memory, silently change the trip, or claim a
-destination was reached when it was not. Planning in stages remains an option,
-not a substitute for fixing regional continuity.
+destination was reached when it was not.
+
+A From Here ride whose proven road distance is at least 1,000 km becomes a Plan
+with real, editable rider waypoints spaced at roughly 800 km along a legal guide
+route. For an obviously continental request, obtain that guide before starting
+the final Dirt searches; it may use neutral Balanced guidance with zero Wander
+and without city/highway avoidance solely to find legal waypoint positions.
+Preserve the rider's Avoid Ferries choice. The guide does not become the ride and
+does not weaken the selected style, Wander, access, city, highway, or other
+settings on the final legs. Each final leg is calculated normally, and moving a
+generated waypoint rebuilds its neighbouring legs through the ordinary Plan
+flow. If guidance fails, keep the original pins and settings. This is the shared
+iOS requirement and future Android contract.
 
 ### Riding styles and preferences
 
@@ -1853,7 +1878,21 @@ Non-staged composition rejects repeated roads, closed source-junction circuits
 and short dirt scraps. Passing near an earlier part of the ride on a different
 road is no longer automatically rejected by the old two-kilometre proximity
 check. Loop's far-pin extent and ordinary legal turn-around behavior are retained.
-Saved route geometry is not regenerated. Fixed roughly-800 km cuts remain rejected.
+Saved route geometry is not regenerated. The roughly-800 km generated waypoints
+apply only to new From Here rides of at least 1,000 km; they are editable rider
+waypoints, not hidden immutable engine cuts. A completed long route may be split
+in place using its accepted legal geometry without rerouting.
+
+September 20 qualification used Halifax to Squamish through Canada. The neutral
+Balanced guide completed in 62.18 seconds and supplied ten generated final-leg
+boundaries. All ten Dirt legs completed individually: 84.47 seconds of combined
+leg search, 10,455 km, 76.8% distance-weighted known dirt, a slowest leg of 25.25
+seconds, and a maximum per-leg peak of 303,808 labels. Evidence:
+`.build/continental-qualification-20260920/halifax-squamish-800-guide-balanced.json`
+and `.build/continental-qualification-20260920/halifax-squamish-800-legs/summary.json`.
+This qualifies bounded completion and editability on the host; current physical
+device timing, UI behavior, cancellation, and waypoint editing still require the
+owner's Play build acceptance.
 
 Long-route stages now retain traversed original road identities before releasing
 their graphs. Dirt continuations first try unused roads, with the ordinary

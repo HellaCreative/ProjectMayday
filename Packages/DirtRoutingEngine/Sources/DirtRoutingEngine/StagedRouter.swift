@@ -1,10 +1,9 @@
 import Foundation
 
 /// Internal stages for a rider-to-rider leg that spans two or more packs.
-/// Three-plus packs use overlapping two-pack windows so border seams stay
-/// searchable. Exactly two packs on a long geodesic stage as single-pack hops
-/// with a seam handover — needed so Ontario South/North (and later QC/CA
-/// halves) clear the label budget instead of joining both halves into one graph.
+/// Long journeys use one pack at a time and hand over on a source-identical
+/// road proven by both neighboring packs. This keeps preparation and search
+/// bounded by one region instead of repeatedly joining overlapping pairs.
 public enum StagedRouter {
     public static let longGeodesicMeters = 400_000.0
     /// Two-pack corridors (subregion halves) stage earlier than multi-province.
@@ -40,10 +39,20 @@ public enum StagedRouter {
     /// 20s fuel-hop ceiling — staged Dirt personality searches need tens of
     /// seconds on nb+qc-s / prairie windows (005137Z stage timings).
     static func dirtCandidateSliceSeconds(remainingSeconds: Double, candidatesLeft: Int) -> Double {
+        // Keep one useful retry inside a normal app window. Direction proof can
+        // establish that the next pack is live without proving that the current
+        // pack can approach that exact direction efficiently. Spending the
+        // entire minute there made a second, known-good Indiana seam unreachable.
+        if remainingSeconds <= 60 {
+            guard candidatesLeft > 1, remainingSeconds > 20 else { return remainingSeconds }
+            return min(45, remainingSeconds - 15)
+        }
         let later = max(0, candidatesLeft - 1)
         let reserve = Double(later) * 20
         let available = max(0, remainingSeconds - reserve)
-        return min(remainingSeconds, max(20, available))
+        // Longer diagnostic windows still reserve time for alternatives.
+        let usefulPrimary = min(40, remainingSeconds)
+        return min(remainingSeconds, max(usefulPrimary, available))
     }
 
     static func budgetForHandoverCandidate(_ budget: ComputationBudget, style: RidingStyle,
@@ -64,10 +73,7 @@ public enum StagedRouter {
     }
 
     public static func overlappingWindows(_ chain: [String]) -> [[String]] {
-        guard chain.count >= 2 else { return chain.isEmpty ? [] : [chain] }
-        // Two-pack long corridors: sequential single-pack stages + seam pin.
-        if chain.count == 2 { return [[chain[0]], [chain[1]]] }
-        return (0..<(chain.count - 1)).map { [chain[$0], chain[$0 + 1]] }
+        chain.map { [$0] }
     }
 
     public static func route(_ request: RoutingRequest, repository: PackRepository,
@@ -175,6 +181,7 @@ public enum StagedRouter {
             var incomplete: RoutingFailure?
             var reach0: EndpointReachability?
             var reach1: EndpointReachability?
+            var directionReach: EndpointReachability?
             for (attempt, hopEnd) in pins.enumerated() {
                 try budget.check()
                 // Directed reachability on both halves — overlap stubs that Balanced
@@ -199,12 +206,15 @@ public enum StagedRouter {
                     budget, style: request.profile.style, attempt: attempt, candidateCount: pins.count)
                 do {
                     var hop0 = request.with(start: cursor, end: hopEnd)
-                    let sharedMatches = try RoadMatcher(pack: secondGraph).matches(
-                        at: hopEnd, radius: 1, start: true, policy: request.access,
-                        limit: 64, budget: attemptBudget)
-                    hop0.options.requiredArrivalRoads = Set(sharedMatches.filter {
-                        secondGraph.accessCode($0.edge, forward: $0.forward != false) == 0
-                    }.map { secondGraph.identity(of: $0.edge) })
+                    let sharedMatches = try onwardHandoverMatches(at: hopEnd, toward: request.end,
+                        graph: secondGraph, request: request, budget: attemptBudget,
+                        reach: &directionReach)
+                    hop0.options.requiredArrivalRoads = Set(sharedMatches.map {
+                        secondGraph.identity(of: $0.edge)
+                    })
+                    hop0.options.requiredArrivalDirections = Set(sharedMatches.compactMap {
+                        directedIdentity($0, graph: secondGraph)
+                    })
                     guard !hop0.options.requiredArrivalRoads.isEmpty else { throw RoutingFailure.noMatch }
                     hop0.options.compassMaxRemaining = max(450_000, cursor.distance(to: hopEnd) * 2.5)
                     let started0 = ContinuousClock.now
@@ -225,7 +235,9 @@ public enum StagedRouter {
                     hop1.options.compassMaxRemaining = max(450_000, part0.end.coordinate.distance(to: request.end) * 2.5)
                     hop1.options.precedingMeters = part0.distanceMeters
                     hop1.options.precedingDirtMeters = knownDirtMeters(part0)
-                    hop1.options.priorEdges.formUnion(part0.segments.map { firstGraph.identity(of: $0.edge) })
+                    hop1.options.priorEdges.formUnion(part0.segments.suffix(64).map {
+                        firstGraph.identity(of: $0.edge)
+                    })
                     // Local array numbering belongs to the originating pack.
                     // Carry original topology identity into the next window.
                     hop1.options.arrivalEdgeID = part0.segments.last.map { firstGraph.identity(of: $0.edge) }
@@ -278,24 +290,31 @@ public enum StagedRouter {
             // Open the stage graph before ranking so stub-island demotion uses the
             // joined window's giant component (Providence nb↔me class).
             let indexed = try openWindow(window, repository: repository, budget: budget, prepared: prepared)
+            let nextIndexed: IndexedGraph? = if index + 1 < windows.count {
+                try openWindow(windows[index + 1], repository: repository,
+                    budget: budget, prepared: prepared)
+            } else { nil }
             let candidates: [Coordinate]
-            if index + 1 < windows.count, let next = windows[index + 1].last, let shared = window.last {
-                // Aim intermediate handovers along the pack chain, not at the
-                // ultimate destination. NS→BC otherwise ranks nb→qc-s pins toward
-                // Whistler and burns the candidate list on western stubs before
-                // the search ever reaches Manitoba / SK / AB.
+            if index + 1 < windows.count,
+               let source = window.last, let landing = windows[index + 1].last {
+                // Finish this stage at its own real regional seam. The older
+                // next-seam target searched most of the following region only
+                // to cut that suffix off at handover and search it again in the
+                // next window. On long state chains that doubled label work.
+                // Rank this seam toward the following seam so the chosen entry
+                // still supports useful onward progress.
                 let toward = try chainLocalAim(
                     windows: windows,
                     stageIndex: index,
-                    next: next,
+                    next: landing,
                     finalDestination: request.end,
                     repository: repository,
-                    currentShared: shared,
+                    currentShared: source,
                     budget: budget
                 )
-                candidates = try handoverCandidates(
-                    from: shared,
-                    into: next,
+                let anchors = try handoverCandidates(
+                    from: source,
+                    into: landing,
                     from: cursor,
                     toward: toward,
                     repository: repository,
@@ -303,22 +322,19 @@ public enum StagedRouter {
                     budget: budget,
                     access: request.access
                 )
+                guard let nextIndexed else { throw RoutingFailure.noPath }
+                candidates = try sharedHandoverPoints(anchors, first: indexed, next: nextIndexed,
+                    access: request.access, budget: budget)
             } else {
                 candidates = [request.end]
             }
             guard !candidates.isEmpty else { throw RoutingFailure.noPath }
-            // Keep only the active and next window resident; completed routes own
-            // geometry, not their prepared graphs.
-            var prefetch: DispatchWorkItem?
-            if index + 1 < windows.count {
-                prefetch = prepared.prefetch(windows[index + 1], repository: repository, budget: budget)
-            }
-            defer { prefetch?.wait() }
             var lastError: Error = RoutingFailure.noPath
             var incomplete: RoutingFailure?
             var advanced = false
             var reach: EndpointReachability?
             var onwardReach: EndpointReachability?
+            var directionReach: EndpointReachability?
             for (attempt, hopEnd) in candidates.enumerated() {
                 try budget.check()
                 // Same stub filter as the two-pack path — NS→NB→QC handovers
@@ -338,8 +354,7 @@ public enum StagedRouter {
                         // from this seam to the rider's destination. A shared ferry
                         // can end in a third region absent from a short chain.
                         let onwardStarted = ContinuousClock.now
-                        let nextGraph = try openWindow(windows[index + 1], repository: repository,
-                            budget: budget, prepared: prepared)
+                        guard let nextGraph = nextIndexed else { throw RoutingFailure.noPath }
                         let onward = try hopLooksLive(request.end, origin: hopEnd, graph: nextGraph,
                             request: request, budget: budget, reach: &onwardReach)
                         request.options.counter?.recordStage("onwardFilter", since: onwardStarted)
@@ -358,6 +373,24 @@ public enum StagedRouter {
                     budget, style: request.profile.style, attempt: attempt, candidateCount: candidates.count)
                 var hop = request.with(start: cursor, end: hopEnd)
                 hop.options.priorEdges = traversedRoads
+                if index + 1 < windows.count, let nextIndexed {
+                    let aim = try chainLocalAim(windows: windows, stageIndex: index,
+                        next: windows[index + 1].last!, finalDestination: request.end,
+                        repository: repository, currentShared: window.last!, budget: attemptBudget)
+                    let sharedMatches = try onwardHandoverMatches(at: hopEnd, toward: aim,
+                        graph: nextIndexed, request: request, budget: attemptBudget,
+                        reach: &directionReach)
+                    hop.options.requiredArrivalRoads = Set(sharedMatches.map {
+                        nextIndexed.identity(of: $0.edge)
+                    })
+                    hop.options.requiredArrivalDirections = Set(sharedMatches.compactMap {
+                        directedIdentity($0, graph: nextIndexed)
+                    })
+                    guard !hop.options.requiredArrivalRoads.isEmpty else {
+                        lastError = RoutingFailure.noMatch
+                        continue
+                    }
+                }
                 let span = cursor.distance(to: hopEnd)
                 hop.options.compassMaxRemaining = max(450_000, span * 2.5)
                 if let previous = parts.last {
@@ -385,24 +418,43 @@ public enum StagedRouter {
                     }
                     guard part.limit == nil else { throw RoutingFailure.resourceLimit(part.limit!) }
                     if index + 1 < windows.count {
-                        let nextGraph = try openWindow(windows[index + 1], repository: repository,
-                            budget: budget, prepared: prepared)
+                        let validationBudget = try budget.afterCompletedSearchForValidation()
+                        let validationStarted = ContinuousClock.now
+                        defer { hop.options.counter?.recordStage("handoverValidation:\(index)", since: validationStarted) }
+                        guard let nextGraph = nextIndexed else { throw RoutingFailure.noPath }
                         part = try handoverBeforeFinalRoad(part, request: hop, graph: indexed,
-                            nextGraph: nextGraph, budget: budget)
+                            nextGraph: nextGraph, budget: validationBudget)
                         guard let arrivalIdentity = part.segments.last.map({ indexed.identity(of: $0.edge) }) else {
                             throw RoutingFailure.noMatch
                         }
                         let continuations = try RoadMatcher(pack: nextGraph).matches(at: part.end.coordinate,
-                            radius: 1, start: true, policy: request.access, limit: 64, budget: budget)
-                        guard continuations.contains(where: {
-                            nextGraph.matches($0.edge, identities: [arrivalIdentity]) && $0.forward == part.segments.last?.forward
+                            radius: 1, start: true, policy: request.access, limit: 64, budget: validationBudget)
+                        let identities = continuations.filter {
+                            nextGraph.matches($0.edge, identities: [arrivalIdentity])
+                        }
+                        let directions = identities.filter { $0.forward == part.segments.last?.forward }
+                        let legal = directions.filter {
+                            guard let directed = directedIdentity($0, graph: nextGraph) else { return false }
+                            return hop.options.requiredArrivalDirections.contains(directed)
                                 && canContinueForward($0, graph: nextGraph, request: request)
-                        }) else { throw RoutingFailure.noMatch }
+                        }
+                        hop.options.counter?.recordStage(
+                            "handoverProof:\(index):all=\(continuations.count):id=\(identities.count):dir=\(directions.count):legal=\(legal.count)",
+                            since: validationStarted)
+                        guard !legal.isEmpty else { throw RoutingFailure.noMatch }
                     }
                     incomingIdentity = part.segments.last.map { indexed.identity(of: $0.edge) }
                     // Remember original road identities before evicting this window.
                     // The next window has different local indices but the same roads.
-                    traversedRoads.formUnion(part.segments.map { indexed.identity(of: $0.edge) })
+                    let historyStarted = ContinuousClock.now
+                    // Only the tail can overlap the adjacent pack. Carrying the
+                    // entire completed region performs thousands of global-ID
+                    // conversions for roads that cannot exist in the next
+                    // stage and can exhaust the handover window.
+                    traversedRoads = Set(part.segments.suffix(64).map {
+                        indexed.identity(of: $0.edge)
+                    })
+                    hop.options.counter?.recordStage("carryHistory:\(index)", since: historyStarted)
                     parts.append(part)
                     cursor = part.end.coordinate
                     advanced = true
@@ -427,8 +479,6 @@ public enum StagedRouter {
                 }
             }
             if !advanced { throw incomplete ?? lastError }
-            prefetch?.wait()
-            prefetch = nil // DispatchWorkItem permits only one successful wait.
             if renewAfterCommittedStage, index + 1 < windows.count {
                 stageBudget = try budget.afterCommittedStage()
             }
@@ -486,12 +536,132 @@ public enum StagedRouter {
         return result
     }
 
+    static func directedIdentity(_ match: RoadMatch, graph: any RoadGraph) -> String? {
+        guard let forward = match.forward else { return nil }
+        return "\(graph.identity(of: match.edge))|\(forward ? 1 : 0)"
+    }
+
+    /// Prove which direction on a shared seam road can continue toward the
+    /// following regional target. The same source road can be present in both
+    /// packs while one direction merely returns into the region just completed.
+    static func onwardHandoverMatches(at point: Coordinate, toward destination: Coordinate,
+                                      graph: IndexedGraph, request: RoutingRequest,
+                                      budget: ComputationBudget,
+                                      reach: inout EndpointReachability?) throws -> [RoadMatch] {
+        let proofStarted = ContinuousClock.now
+        let matcher = RoadMatcher(pack: graph)
+        let starts = try matcher.matches(at: point, radius: 1, start: true,
+            policy: request.access, limit: 64, budget: budget).filter {
+                graph.accessCode($0.edge, forward: $0.forward != false) == 0
+                    && canContinueForward($0, graph: graph, request: request)
+            }
+        guard !starts.isEmpty else {
+            request.options.counter?.recordStage("directionProof:starts=0", since: .now)
+            return []
+        }
+        // Intermediate aims may be a capped geographic point rather than a
+        // rider pin on a road. A broad lookup is only used to choose the legal
+        // outbound seam direction; it never moves a route endpoint.
+        let radius = max(50_000, request.matchRadiusMeters)
+        let intent = point.bearing(to: destination) * 180 / .pi
+        let ends = try matcher.matches(at: destination, radius: radius, start: false,
+            policy: request.access, intent: intent + 180, limit: 12, budget: budget)
+        guard !ends.isEmpty else {
+            request.options.counter?.recordStage("directionProof:starts=\(starts.count):ends=0", since: .now)
+            return []
+        }
+        let clean = request.profile.style == .cleanest
+        let checker = try reach ?? EndpointReachability(graph: graph, budget: budget) { edge in
+            (!request.access.avoidFerries || graph.structure(edge) != "ferry")
+                && (!clean || graph.accessCode(edge, forward: true) == 0
+                    || graph.accessCode(edge, forward: false) == 0)
+        }
+        reach = checker
+        var result: [RoadMatch] = []
+        for start in starts {
+            for end in ends where try checker.mayConnect(start: start, end: end, budget: budget) {
+                result.append(start)
+                break
+            }
+        }
+        // Connectivity alone cannot choose a direction on an overlap road. A
+        // direction that enters the next region can still hit a turn/access
+        // dead end, while the apparent reverse direction legally loops onto
+        // the onward network. Prove the preferred direction with a short real
+        // distance search. This validates a seam; it does not compare or score
+        // alternate rider routes.
+        let grouped = Dictionary(grouping: result) { graph.identity(of: $0.edge) }
+        var proved: [RoadMatch] = []
+        for identity in grouped.keys.sorted() {
+            let ranked = (grouped[identity] ?? []).sorted {
+                guard let af = $0.forward, let bf = $1.forward else { return $0.score < $1.score }
+                let a = RoadMatcher.travelBearing(graph.polyline($0.edge), along: $0.alongMeters, forward: af)
+                let b = RoadMatcher.travelBearing(graph.polyline($1.edge), along: $1.alongMeters, forward: bf)
+                return RoadMatcher.angle(intent, a) < RoadMatcher.angle(intent, b)
+            }
+            if ranked.count == 1 {
+                proved.append(ranked[0])
+            } else {
+                let matches = try exactlyReachableDirections(
+                ranked, ends: ends, graph: graph, request: request,
+                    budget: budget.limited(to: min(2, budget.remainingSeconds)))
+                proved.append(contentsOf: matches)
+            }
+        }
+        result = proved
+        request.options.counter?.recordStage(
+            "directionProof:starts=\(starts.count):ends=\(ends.count):live=\(result.count)",
+            since: proofStarted)
+        return result
+    }
+
+    /// Return the first bearing-ranked seam direction that an exact legal
+    /// distance search can carry into the next region. A bounded/inconclusive
+    /// proof remains eligible so a slow but valid region is not declared dead.
+    static func exactlyReachableDirections(_ starts: [RoadMatch], ends: [RoadMatch],
+                                           graph: any RoadGraph, request: RoutingRequest,
+                                           budget: ComputationBudget) throws -> [RoadMatch] {
+        guard let primary = ends.first else { return [] }
+        var reached: [RoadMatch] = [], inconclusive: [RoadMatch] = []
+        let distinctEnds = ends.reduce(into: [RoadMatch]()) { result, match in
+            if !result.contains(where: { $0.edge == match.edge }) { result.append(match) }
+        }
+        for start in starts {
+            do {
+                try budget.check()
+                var options = SearchOptions()
+                options.objective = .distance
+                options.varietyEnabled = false
+                options.cityWall = false
+                options.composeDirtRide = false
+                options.additionalEnds = Array(distinctEnds.dropFirst())
+                let perDirection = budget.limited(to: min(2, budget.remainingSeconds))
+                switch try PathSearch(pack: graph).boundedSearch(
+                    start: start, end: primary, policy: request.profile,
+                    access: request.access, options: options, budget: perDirection) {
+                case .reached:
+                    reached.append(start)
+                case .stoppedAtBudget:
+                    inconclusive.append(start)
+                }
+            } catch RoutingFailure.noPath {
+                continue
+            } catch let RoutingFailure.resourceLimit(kind)
+                where kind == "time" || kind == "labels" || kind == "search history bytes" {
+                inconclusive.append(start)
+            }
+        }
+        // Only discard a direction when the exact probe proved it dead. An
+        // unfinished probe is not evidence against a legal seam, and keeping
+        // all still-possible directions preserves the route search's choice.
+        return reached + inconclusive
+    }
+
     /// A shared incoming road can be only a stub in the next pack. A cut at
     /// its end needs a legal onward exit; its mere presence is not continuity.
     static func canContinueForward(_ match: RoadMatch, graph: any RoadGraph, request: RoutingRequest) -> Bool {
         guard let forward = match.forward else { return false }
         let node = graph.endpoint(match.edge, from: !forward)
-        if match.coordinate.distance(to: graph.coordinate(node: node)) >= 1 { return true }
         let incoming = graph.restrictionEdge(match.edge)
         for at in [node] + graph.coincidentSiblings(node) {
             for arc in graph.outgoing(at) {
@@ -515,11 +685,32 @@ public enum StagedRouter {
                                        graph: any RoadGraph, nextGraph: any RoadGraph,
                                        budget: ComputationBudget) throws -> ComputedRoute {
         guard route.limit == nil, route.segments.count > 1 else { return route }
+        // Normal single-pack stages end on the verified seam road itself. Keep
+        // the entire completed stage when that exact endpoint and direction can
+        // continue; the caller performs the same final identity check before
+        // committing it. This avoids scanning a long route for an unnecessary
+        // earlier cut.
+        if let last = route.segments.last {
+            let identity = graph.identity(of: last.edge)
+            let endpointMatches = try RoadMatcher(pack: nextGraph).matches(
+                at: route.end.coordinate, radius: 1, start: true,
+                policy: request.access, limit: 64, budget: budget)
+            if endpointMatches.contains(where: {
+                nextGraph.matches($0.edge, identities: [identity])
+                    && $0.forward == last.forward
+                    && (request.options.requiredArrivalDirections.isEmpty
+                        || directedIdentity($0, graph: nextGraph).map {
+                            request.options.requiredArrivalDirections.contains($0)
+                        } == true)
+                    && canContinueForward($0, graph: nextGraph, request: request)
+            }) { return route }
+        }
         // Handover targets are generated planning aids, not rider pins. Pass
-        // control at the first already-ridden, source-identical road the next
-        // window can legally continue. Driving farther toward an arbitrary
-        // target can create a spur that the next window immediately reverses.
-        let cuts = 1..<route.segments.count
+        // control at the latest already-ridden, source-identical road the next
+        // window can legally continue. Regional stages now end at the real
+        // seam, so scanning from the origin repeats thousands of irrelevant
+        // spatial lookups and throws away useful completed riding.
+        let cuts = (1..<route.segments.count).reversed()
         var active = request.options.arrival?.restrictions ?? request.options.arrivalRestrictions
         for cut in cuts {
             try budget.check()
@@ -541,8 +732,15 @@ public enum StagedRouter {
             }) else { continue }
             let matches = try RoadMatcher(pack: nextGraph).matches(at: point, radius: 1, start: true,
                 policy: request.access, limit: 64, budget: budget)
-            guard matches.contains(where: { nextGraph.matches($0.edge, identities: [graph.identity(of: last.edge)]) && $0.forward == last.forward
-                    && canContinueForward($0, graph: nextGraph, request: request) }) else {
+            guard matches.contains(where: {
+                nextGraph.matches($0.edge, identities: [graph.identity(of: last.edge)])
+                    && $0.forward == last.forward
+                    && (request.options.requiredArrivalDirections.isEmpty
+                        || directedIdentity($0, graph: nextGraph).map {
+                            request.options.requiredArrivalDirections.contains($0)
+                        } == true)
+                    && canContinueForward($0, graph: nextGraph, request: request)
+            }) else {
                 continue
             }
             let prefix = Array(route.segments.prefix(cut))
@@ -761,9 +959,9 @@ public enum StagedRouter {
             || ["ford", "low_water_crossing", "stepping_stones", "stream", "tidal"].contains(leaf)
     }
 
-    /// Intermediate hops aim at the next pack's onward seam belt. The final hop
-    /// still aims at the rider destination. Keeps Canada↔Canada westbound rides
-    /// from poisoning Maritimes/QC handovers with a Rockies geodesic.
+    /// Rank the current seam toward the following pack's seam belt. The final
+    /// hop still aims at the rider destination. Keeps Canada↔Canada westbound
+    /// rides from poisoning Maritimes/QC handovers with a Rockies geodesic.
     ///
     /// When the onward belt is far beyond the *current* seam (Winnipeg/BC class
     /// at qc-s↔on-n aiming at on-n↔mb), rank against a capped aim just past the

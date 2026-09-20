@@ -8,7 +8,7 @@ struct SearchStorageBudgetTests {
         let ordinary = ChunkedArray<PathSearch.Label>.payloadBytes(forCount: budget.maximumLabels)
         let partialChunk = ChunkedArray<PathSearch.Arc>.payloadBytes(forCount: 1)
         #expect(ordinary + partialChunk <= budget.maximumSearchHistoryBytes)
-        #expect(budget.maximumSearchHistoryBytes == 160 * 1_600_000)
+        #expect(budget.maximumSearchHistoryBytes == 160 * 2_000_000)
     }
 
     @Test func fractionalRoadsConsumeHistoryAllowanceAndStayExact() throws {
@@ -38,8 +38,10 @@ struct SearchStorageBudgetTests {
         let parent = ComputationBudget(seconds: 1, maximumLabels: 17, maximumSearchHistoryBytes: 12345)
         let attempt = parent.limited(to: 20)
         let committed = try parent.afterCommittedStage()
+        let validation = try parent.afterCompletedSearchForValidation()
         #expect(attempt.deadline == parent.deadline)
         #expect(attempt.maximumLabels == 17 && committed.maximumLabels == 17)
         #expect(attempt.maximumSearchHistoryBytes == 12345 && committed.maximumSearchHistoryBytes == 12345)
+        #expect(validation.maximumLabels == 17 && validation.maximumSearchHistoryBytes == 12345)
     }
 }

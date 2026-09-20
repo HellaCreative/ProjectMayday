@@ -194,6 +194,130 @@ struct RoutePlannerModelItineraryTests {
         #expect(source.routeRequests.count + source.fuelChainRequests.count == callsBeforeConversion)
     }
 
+    @Test func longFromHereRidePromotesLegalGeometryIntoEditableLegsWithoutRerouting() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+
+        let start = point(0)
+        let middle = point(0.5)
+        let end = point(1)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(start, end)] = 1_700_000
+        source.profileGeometry[.dirt] = [start, middle, end]
+        let model = makeModel(source: source)
+        model.selectMode(.fromHere)
+
+        model.apply(
+            .replaceAll(
+                waypoints: [start, end], profile: .dirt, allowUnknown: false,
+                avoidMotorways: true, preferBackRoads: false
+            ),
+            source: "fromHere"
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(source.routeRequests.count == 1)
+        #expect(model.mode == .plan)
+        #expect(model.itinerary.waypoints.count == 4)
+        #expect(model.built?.legs.count == 3)
+        #expect(model.built?.legs.map { Int(($0.response.distanceMeters ?? 0).rounded()) }
+            == [800_000, 450_000, 450_000])
+        #expect(model.itinerary.waypoints.first?.coordinate == start)
+        #expect(model.itinerary.waypoints.last?.coordinate == end)
+        #expect(model.activeResponses.flatMap(\.coordinates).first == start)
+        #expect(model.activeResponses.flatMap(\.coordinates).last == end)
+    }
+
+    @Test func continentalFromHereRideBuildsEditableDirtLegsFromLegalGuide() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+
+        let start = RouteCoordinate(longitude: -63, latitude: 45)
+        let middle = RouteCoordinate(longitude: -73, latitude: 45)
+        let end = RouteCoordinate(longitude: -83, latitude: 45)
+        let source = PlannerFakeRoutingSource()
+        source.routeHandler = { request in
+            let endpoints = try requestEndpoints(request)
+            if request.profile == .balanced {
+                return RouteResponse(
+                    status: "complete", error: nil, message: nil,
+                    distanceMeters: 1_700_000,
+                    estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
+                    geometry: [start, middle, end], segments: nil,
+                    stats: RouteStats(dirtPercent: 0, pavedPercent: 100),
+                    maneuvers: nil, warnings: nil,
+                    dirtPercentValue: nil, pavedPercentValue: nil
+                )
+            }
+            return plannerRoadResponse(from: endpoints.0, to: endpoints.1)
+        }
+        let model = makeModel(source: source)
+        model.selectMode(.fromHere)
+
+        model.apply(
+            .replaceAll(
+                waypoints: [start, end], profile: .dirt, allowUnknown: false,
+                avoidMotorways: true, preferBackRoads: false
+            ),
+            source: "fromHere"
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(source.routeRequests.count == 4)
+        #expect(source.routeRequests.first?.profile == .balanced)
+        #expect(source.routeRequests.dropFirst().allSatisfy { $0.profile == .dirt })
+        #expect(!source.routeRequests.dropFirst().contains { request in
+            guard let endpoints = try? requestEndpoints(request) else { return false }
+            return endpoints.0 == start && endpoints.1 == end
+        })
+        #expect(model.mode == .plan)
+        #expect(model.itinerary.waypoints.count == 4)
+        #expect(model.built?.legs.count == 3)
+        #expect(model.itinerary.waypoints.first?.coordinate == start)
+        #expect(model.itinerary.waypoints.last?.coordinate == end)
+    }
+
+    @Test func longRouteSplitUsesRouteDistanceAndLeavesShortRoutesAlone() throws {
+        let geometry = [point(0), point(0.25), point(0.5), point(0.75), point(1)]
+        let long = RouteResponse(
+            status: "complete", error: nil, message: nil,
+            distanceMeters: 2_100_000,
+            estimatedMovingSeconds: 21_000,
+            estimatedElapsedSeconds: 22_000,
+            geometry: geometry,
+            segments: nil,
+            stats: RouteStats(dirtPercent: 70, pavedPercent: 30),
+            maneuvers: nil,
+            warnings: nil,
+            dirtPercentValue: nil,
+            pavedPercentValue: nil
+        )
+        let split = try #require(RoutePlannerModel.longRouteSplitPlan(response: long))
+        #expect(split.waypoints.count == 4)
+        #expect(split.responses.map { Int(($0.distanceMeters ?? 0).rounded()) }
+            == [800_000, 800_000, 500_000])
+        #expect(split.responses.reduce(0) { $0 + ($1.distanceMeters ?? 0) } == 2_100_000)
+        #expect(split.responses.allSatisfy { ($0.distanceMeters ?? .infinity) <= 800_000 })
+
+        var short = long
+        short = RouteResponse(
+            status: short.status, error: nil, message: nil,
+            distanceMeters: 999_999,
+            estimatedMovingSeconds: nil,
+            estimatedElapsedSeconds: nil,
+            geometry: geometry,
+            segments: nil,
+            stats: short.stats,
+            maneuvers: nil,
+            warnings: nil,
+            dirtPercentValue: nil,
+            pavedPercentValue: nil
+        )
+        #expect(RoutePlannerModel.longRouteSplitPlan(response: short) == nil)
+    }
+
     @Test func insertAndDeleteMutateOnlyCanonicalWaypoints() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }

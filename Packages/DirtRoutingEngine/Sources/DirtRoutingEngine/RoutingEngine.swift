@@ -19,7 +19,10 @@ public struct RoutingRequest: Sendable {
         copy.profile = profile
         copy.access = access
         copy.options = options
-        if end != self.end { copy.options.requiredArrivalRoads = [] }
+        if end != self.end {
+            copy.options.requiredArrivalRoads = []
+            copy.options.requiredArrivalDirections = []
+        }
         copy.matchRadiusMeters = matchRadiusMeters
         copy.mapZoom = mapZoom
         return copy

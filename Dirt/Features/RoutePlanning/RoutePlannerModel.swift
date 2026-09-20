@@ -940,7 +940,7 @@ final class RoutePlannerModel {
         reuse: BuiltItinerary?,
         replanFromStationID: String? = nil
     ) {
-        let requested = itinerary
+        var requested = itinerary
         let preferences = ridePreferences
         let fuel = FuelRangePrefs.snapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)
@@ -997,18 +997,29 @@ final class RoutePlannerModel {
             }
 
             self.itineraryBuilder.mapZoom = self.mapState.mapZoom
+            var buildReuse = reuse
+            var buildThroughLegIndex = throughLegIndex
+            let scaffolded = await RidePreferenceContext.$current.withValue(preferences) {
+                await self.scaffoldLongFromHereRideIfNeeded(requested)
+            }
+            if let scaffolded {
+                requested = scaffolded
+                buildReuse = nil
+                buildThroughLegIndex = nil
+            }
+            let buildRequest = requested
             let result = await RidePreferenceContext.$current.withValue(preferences) {
-                await RoutingSessionContext.$seed.withValue(self.routingSessionSeed) {
+                return await RoutingSessionContext.$seed.withValue(self.routingSessionSeed) {
                     await self.itineraryBuilder.build(
-                        requested,
+                        buildRequest,
                         from: legIndex,
-                        through: throughLegIndex,
-                        reuse: reuse,
+                        through: buildThroughLegIndex,
+                        reuse: buildReuse,
                         fuel: fuel,
                         source: self.routingSourcePolicy,
                         replanFromStationID: replanFromStationID,
                         onFuelStatus: { [weak self] _ in
-                            guard let self, self.itinerary.generation == requested.generation else { return }
+                            guard let self, self.itinerary.generation == buildRequest.generation else { return }
                             // Keep the map toast on craft hype — never surface fuel-planning copy.
                             self.fuelPlanningStatus = Self.craftingRouteToast
                             self.toast = Self.craftingRouteToast
@@ -1024,7 +1035,7 @@ final class RoutePlannerModel {
             }
             guard !Task.isCancelled else {
                 RoutingDebugLog.shared.event(
-                    "build result discarded requestedGen=\(requested.generation) "
+                    "build result discarded requestedGen=\(buildRequest.generation) "
                         + "resultGen=\(result.generation) currentGen=\(self.itinerary.generation) "
                         + "reason=cancelled"
                 )
@@ -1032,7 +1043,7 @@ final class RoutePlannerModel {
             }
             guard self.itinerary.generation == result.generation else {
                 RoutingDebugLog.shared.event(
-                    "build result discarded requestedGen=\(requested.generation) "
+                    "build result discarded requestedGen=\(buildRequest.generation) "
                         + "resultGen=\(result.generation) currentGen=\(self.itinerary.generation) "
                         + "reason=stale"
                 )
@@ -1073,6 +1084,8 @@ final class RoutePlannerModel {
                 if case .fuelUnknown(let message) = $0 { return message }
                 return nil
             }.first
+            let promotedLongRide = hardFailure == nil
+                && self.promoteLongFromHereRideIfNeeded(result)
             // Fuel proof is advisory once road geometry exists. Only a route
             // geometry failure belongs in the blocking error channel.
             self.errorMessage = hardFailure
@@ -1082,6 +1095,9 @@ final class RoutePlannerModel {
                 }.joined(separator: ";")
                 if self.toast != Self.legCompleteToast {
                     self.announceRouteReadyIfComplete()
+                }
+                if promotedLongRide {
+                    self.toast = "Long ride split into editable legs"
                 }
             } else if let error = self.errorMessage {
                 self.toast = error
@@ -1107,6 +1123,111 @@ final class RoutePlannerModel {
                 }
             }
             self.refreshMap()
+        }
+    }
+
+    /// A very long From Here request first gets a fast legal guide route. Its
+    /// geometry supplies safe editable pins before the Dirt searches begin, so
+    /// the actual ride is calculated as ordinary roughly-800 km planner legs.
+    /// The guide never becomes visible route geometry and does not determine
+    /// the riding style of any final leg.
+    private func scaffoldLongFromHereRideIfNeeded(
+        _ requested: RiderItinerary
+    ) async -> RiderItinerary? {
+        guard mode == .fromHere,
+              requested.waypoints.count == 2,
+              requested.legs.count == 1,
+              let riderLeg = requested.legs.first
+        else { return nil }
+
+        let endpoints = requested.waypoints.map(\.coordinate)
+        // Routed distance is unavailable until a legal path exists. Eight
+        // hundred kilometres straight-line is a conservative trigger for the
+        // 1,000 km routed-distance rule. The guide is discarded when its proven
+        // road distance remains below the actual threshold.
+        let directMeters = CLLocation(
+            latitude: endpoints[0].latitude,
+            longitude: endpoints[0].longitude
+        ).distance(from: CLLocation(
+            latitude: endpoints[1].latitude,
+            longitude: endpoints[1].longitude
+        ))
+        guard directMeters >= 800_000 else { return nil }
+
+        let guideRequest = RouteRequest(
+            profile: .balanced,
+            locations: [
+                RouteLocation(
+                    latitude: endpoints[0].latitude,
+                    longitude: endpoints[0].longitude,
+                    label: "Point 1"
+                ),
+                RouteLocation(
+                    latitude: endpoints[1].latitude,
+                    longitude: endpoints[1].longitude,
+                    label: "Point 2"
+                )
+            ],
+            allowUnknown: false,
+            sessionSeed: routingSessionSeed,
+            avoidMotorways: false,
+            preferBackRoads: false,
+            mapZoom: mapState.mapZoom
+        )
+
+        do {
+            var guidePreferences = RidePreferenceContext.current ?? RidePreferences()
+            guidePreferences.wander = 0
+            guidePreferences.avoidCities = false
+            guidePreferences.avoidHighways = false
+            // Avoid Ferries is a true connection choice, so the invisible guide
+            // preserves it. Wander/city/highway preferences belong to the final
+            // Dirt legs and would only make this scaffold needlessly expensive.
+            let guide = try await RidePreferenceContext.$current.withValue(guidePreferences) {
+                try await routingSourcePolicy.select(for: guideRequest).route(guideRequest)
+            }
+            guard !Task.isCancelled,
+                  itinerary.generation == requested.generation,
+                  let split = Self.longRouteSplitPlan(response: guide)
+            else { return nil }
+
+            let before = itinerary
+            let replacement = reduce(
+                before,
+                .replaceAll(
+                    waypoints: split.waypoints,
+                    profile: riderLeg.profile,
+                    allowUnknown: riderLeg.allowUnknown,
+                    avoidMotorways: riderLeg.avoidMotorways,
+                    preferBackRoads: riderLeg.preferBackRoads
+                )
+            ).itinerary
+            itinerary = replacement
+            built = nil
+            destination = nil
+            destinationName = nil
+            fromHereResponse = nil
+            fromHereNeedsStartPin = false
+            fromHereStartOverride = nil
+            mode = .plan
+            mapState.selectPlannerPin(nil)
+            routeIdentity = "plan:" + split.waypoints.dropFirst().map {
+                "\($0.latitude),\($0.longitude)"
+            }.joined(separator: ";")
+            RoutingDebugLog.shared.event(
+                "long ride scaffolded source=fromHere guideMeters=\(Int(split.totalMeters.rounded())) "
+                    + "legs=\(split.responses.count) targetLegMeters=800000"
+            )
+            refreshMap()
+            return replacement
+        } catch {
+            // A failed guide must not erase the rider's pins. Fall back to the
+            // existing route calculation, which may still complete and can be
+            // promoted after the legal route is returned.
+            RoutingDebugLog.shared.event(
+                "long ride scaffold unavailable source=fromHere detail=\(error.localizedDescription)"
+            )
+            return nil
         }
     }
 
@@ -1159,6 +1280,209 @@ final class RoutePlannerModel {
                 after: itinerary,
                 source: "seed"
             )
+        )
+    }
+
+    /// A continental From Here result becomes a real Plan itinerary. The
+    /// intermediate pins are taken from the legal route that just completed,
+    /// so none can land in water, wilderness, or on an unrelated road. The
+    /// accepted geometry is split and reused; conversion performs no second
+    /// routing pass. Moving a promoted pin later rebuilds only its neighbouring
+    /// rider legs through the ordinary itinerary reducer.
+    @discardableResult
+    private func promoteLongFromHereRideIfNeeded(_ result: BuiltItinerary) -> Bool {
+        guard mode == .fromHere,
+              itinerary.waypoints.count == 2,
+              itinerary.legs.count == 1,
+              let riderLeg = itinerary.legs.first,
+              let response = result.riderRoutes[riderLeg.id] ?? result.legs.first?.response,
+              let split = Self.longRouteSplitPlan(response: response)
+        else { return false }
+
+        destination = nil
+        destinationName = nil
+        fromHereResponse = nil
+        fromHereNeedsStartPin = false
+        fromHereStartOverride = nil
+        mode = .plan
+        mapState.selectPlannerPin(nil)
+        seedCanonicalBuild(
+            coordinates: split.waypoints,
+            profile: riderLeg.profile,
+            allowUnknown: riderLeg.allowUnknown,
+            responses: split.responses
+        )
+        routeIdentity = "plan:" + split.waypoints.dropFirst().map {
+            "\($0.latitude),\($0.longitude)"
+        }.joined(separator: ";")
+        RoutingDebugLog.shared.event(
+            "long ride promoted source=fromHere meters=\(Int(split.totalMeters.rounded())) "
+                + "legs=\(split.responses.count) targetLegMeters=800000"
+        )
+        return true
+    }
+
+    struct LongRouteSplitPlan {
+        let waypoints: [RouteCoordinate]
+        let responses: [RouteResponse]
+        let totalMeters: Double
+    }
+
+    /// Split only after the legal route exists. Distances are measured along
+    /// that route rather than as a straight line between its endpoints.
+    static func longRouteSplitPlan(
+        response: RouteResponse,
+        thresholdMeters: Double = 1_000_000,
+        targetLegMeters: Double = 800_000
+    ) -> LongRouteSplitPlan? {
+        let geometry = response.coordinates
+        guard geometry.count >= 2,
+              targetLegMeters > 0,
+              let reportedMeters = response.distanceMeters,
+              reportedMeters >= thresholdMeters
+        else { return nil }
+
+        let geometryMeters = GeoMath.lineMeters(geometry)
+        guard geometryMeters > 0 else { return nil }
+
+        var boundaries: [Double] = [0]
+        var next = targetLegMeters
+        while next < reportedMeters {
+            boundaries.append(next)
+            next += targetLegMeters
+        }
+        // Avoid producing a nearly empty final leg when the total happens to
+        // fall just beyond a multiple of 800 km. Share that short tail with
+        // the preceding leg while keeping every leg within the same scale.
+        if boundaries.count > 1,
+           reportedMeters - (boundaries.last ?? 0) < targetLegMeters * 0.25 {
+            let previous = boundaries[boundaries.count - 2]
+            boundaries[boundaries.count - 1] = previous + (reportedMeters - previous) / 2
+        }
+        boundaries.append(reportedMeters)
+
+        let cumulative = GeoMath.cumulativeMeters(geometry)
+        func geometryDistance(for routeDistance: Double) -> Double {
+            min(geometryMeters, max(0, routeDistance / reportedMeters * geometryMeters))
+        }
+        func point(at distance: Double) -> RouteCoordinate {
+            if distance <= 0 { return geometry[0] }
+            if distance >= geometryMeters { return geometry[geometry.count - 1] }
+            let upper = cumulative.firstIndex(where: { $0 >= distance }) ?? cumulative.count - 1
+            let lower = max(0, upper - 1)
+            let span = max(0.001, cumulative[upper] - cumulative[lower])
+            let t = min(1, max(0, (distance - cumulative[lower]) / span))
+            return RouteCoordinate(
+                longitude: geometry[lower].longitude
+                    + (geometry[upper].longitude - geometry[lower].longitude) * t,
+                latitude: geometry[lower].latitude
+                    + (geometry[upper].latitude - geometry[lower].latitude) * t
+            )
+        }
+        func geometrySlice(from start: Double, to end: Double) -> [RouteCoordinate] {
+            var points = [point(at: start)]
+            for index in geometry.indices
+                where cumulative[index] > start && cumulative[index] < end {
+                if geometry[index] != points.last { points.append(geometry[index]) }
+            }
+            let final = point(at: end)
+            if final != points.last { points.append(final) }
+            return points
+        }
+
+        let segmentDistances = (response.segments ?? []).map {
+            $0.distanceMeters ?? GeoMath.lineMeters($0.coordinates)
+        }
+        var segmentStarts: [Double] = []
+        var segmentCursor = 0.0
+        for distance in segmentDistances {
+            segmentStarts.append(segmentCursor)
+            segmentCursor += distance
+        }
+        let segmentScale = segmentCursor > 0 ? reportedMeters / segmentCursor : 1
+
+        var responses: [RouteResponse] = []
+        var waypoints: [RouteCoordinate] = []
+        for legIndex in 0..<(boundaries.count - 1) {
+            let startMeters = boundaries[legIndex]
+            let endMeters = boundaries[legIndex + 1]
+            let startGeometryMeters = geometryDistance(for: startMeters)
+            let endGeometryMeters = geometryDistance(for: endMeters)
+            let slice = geometrySlice(from: startGeometryMeters, to: endGeometryMeters)
+            if waypoints.isEmpty, let first = slice.first { waypoints.append(first) }
+            if let last = slice.last { waypoints.append(last) }
+
+            let segments: [RouteSegment]? = response.segments.map { all in
+                all.indices.compactMap { index in
+                    let midpoint = (segmentStarts[index] + segmentDistances[index] / 2) * segmentScale
+                    return midpoint >= startMeters && midpoint < endMeters ? all[index] : nil
+                }
+            }
+            let assigned = segments ?? []
+            let assignedMeters = assigned.reduce(0.0) {
+                $0 + ($1.distanceMeters ?? GeoMath.lineMeters($1.coordinates))
+            }
+            let dirtMeters = assigned.reduce(0.0) {
+                $0 + ($1.isDirt ? ($1.distanceMeters ?? GeoMath.lineMeters($1.coordinates)) : 0)
+            }
+            let unknownAccessMeters = assigned.reduce(0.0) {
+                $0 + (($1.accessClass ?? "").lowercased() == "motorized_unknown"
+                    ? ($1.distanceMeters ?? GeoMath.lineMeters($1.coordinates)) : 0)
+            }
+            let dirtPercent = assignedMeters > 0
+                ? Int((dirtMeters / assignedMeters * 100).rounded())
+                : response.dirtPercent
+            let unknownAccessPercent = assignedMeters > 0
+                ? Int((unknownAccessMeters / assignedMeters * 100).rounded())
+                : response.stats?.unknownAccessPercent
+            let durationShare = (endMeters - startMeters) / reportedMeters
+            let maneuvers = response.maneuvers?.compactMap { maneuver -> RouteManeuver? in
+                guard let along = maneuver.alongMeters,
+                      along >= startMeters,
+                      legIndex == boundaries.count - 2 ? along <= endMeters : along < endMeters
+                else { return nil }
+                return maneuver.shiftingAlong(by: -startMeters)
+            }
+            var leg = RouteResponse(
+                status: response.status,
+                error: response.error,
+                message: response.message,
+                distanceMeters: endMeters - startMeters,
+                estimatedMovingSeconds: response.estimatedMovingSeconds.map { $0 * durationShare },
+                estimatedElapsedSeconds: response.estimatedElapsedSeconds.map { $0 * durationShare },
+                geometry: slice,
+                segments: segments,
+                stats: RouteStats(
+                    dirtPercent: dirtPercent,
+                    pavedPercent: max(0, 100 - dirtPercent),
+                    unknownAccessPercent: unknownAccessPercent,
+                    unknownSurfacePercent: response.stats?.unknownSurfacePercent,
+                    surfaceFamilyMode: response.stats?.surfaceFamilyMode
+                ),
+                maneuvers: maneuvers,
+                warnings: response.warnings,
+                dirtPercentValue: nil,
+                pavedPercentValue: nil
+            )
+            leg.backtrackMeters = response.backtrackMeters.map { $0 * durationShare }
+            leg.backtrackPct = response.backtrackPct
+            leg.backtrackReason = response.backtrackReason
+            leg.restrictedMeters = response.restrictedMeters.map { $0 * durationShare }
+            leg.restrictedReason = response.restrictedReason
+            leg.debug = response.debug
+            leg.serviceContract = response.serviceContract
+            leg.serviceBuild = response.serviceBuild
+            if legIndex == boundaries.count - 2 {
+                leg.arrivalEdgeId = response.arrivalEdgeId
+                leg.arrivalRestrictions = response.arrivalRestrictions
+            }
+            responses.append(leg)
+        }
+        guard waypoints.count == responses.count + 1 else { return nil }
+        return LongRouteSplitPlan(
+            waypoints: waypoints,
+            responses: responses,
+            totalMeters: reportedMeters
         )
     }
 

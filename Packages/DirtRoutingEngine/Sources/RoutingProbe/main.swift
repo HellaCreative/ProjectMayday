@@ -34,19 +34,21 @@ guard let seed, zoomArgument == nil || (zoom?.isFinite == true),
     print("Invalid seed, map zoom or fuel range"); exit(2)
 }
 let compact = environment["DIRT_PROBE_COMPACT"] == "1"
-let started = ContinuousClock.now
+var started = ContinuousClock.now
 // Default to the phone label limit; explicit overrides are experiments only.
 let configuredLabels = environment["DIRT_MAX_LABELS"].flatMap(Int.init)
 let budgetLabels = configuredLabels ?? ComputationBudget.defaultMaximumLabels
-var budget = ComputationBudget(seconds: seconds, maximumLabels: budgetLabels)
+let configuredHistoryBytes = environment["DIRT_MAX_HISTORY_BYTES"].flatMap(Int.init)
+var budget = ComputationBudget(seconds: seconds, maximumLabels: budgetLabels,
+    maximumSearchHistoryBytes: configuredHistoryBytes ?? ComputationBudget.defaultMaximumSearchHistoryBytes)
 let counter = SearchCounter()
 let preparedGraphs = PreparedGraphStore()
 var directOpenSeconds = 0.0, directJoinSeconds = 0.0, directIndexSeconds = 0.0
-func elapsed() -> Double {
+@MainActor func elapsed() -> Double {
     let d = started.duration(to: .now).components
     return Double(d.seconds)+Double(d.attoseconds)/1e18
 }
-func measuredPreparation<T>(_ seconds: inout Double, _ work: () throws -> T) rethrows -> T {
+@MainActor func measuredPreparation<T>(_ seconds: inout Double, _ work: () throws -> T) rethrows -> T {
     let began = elapsed()
     defer { seconds += elapsed() - began }
     return try work()
@@ -98,10 +100,20 @@ do {
             // verified every artifact; subsequent calculations validate the
             // compact receipt and structural graph identities instead of
             // rereading hundreds of megabytes solely to repeat SHA-256.
+            let installationBudget = ComputationBudget(seconds: max(300, seconds), maximumLabels: budgetLabels,
+                maximumSearchHistoryBytes: configuredHistoryBytes ?? ComputationBudget.defaultMaximumSearchHistoryBytes)
             _ = try measuredPreparation(&directOpenSeconds) {
-                try regions.map { try repository.open($0, requireSeams: regions.count > 1, budget: budget) }
+                try regions.map { try repository.open($0, requireSeams: regions.count > 1,
+                                                       budget: installationBudget) }
             }
             for region in regions { try repository.persistVerificationReceipt(for: region) }
+            // Installation/download validation is deliberately outside the
+            // route window in the app. Start the route clock only after the
+            // exact installed revision has its durable receipt.
+            started = .now
+            budget = ComputationBudget(seconds: seconds, maximumLabels: budgetLabels,
+                maximumSearchHistoryBytes: configuredHistoryBytes ?? ComputationBudget.defaultMaximumSearchHistoryBytes)
+            directOpenSeconds = 0
         }
         if !stageLong {
             let packs = try measuredPreparation(&directOpenSeconds) {
@@ -148,6 +160,9 @@ do {
     request.options.cityWall = environment["DIRT_NO_CITY_WALL"] != "1"
     request.options.counter = counter
     request.options.arrivalEdgeID = environment["DIRT_ARRIVAL_EDGE"]
+    if let value = environment["DIRT_CONTINUATION_FORWARD"] {
+        request.options.continuationForward = value == "1" || value.lowercased() == "true"
+    }
     if let path = environment["DIRT_PRIOR_EDGES"] {
         request.options.priorEdges = Set(try String(contentsOfFile: path,encoding: .utf8)
             .split(whereSeparator: \.isNewline).map(String.init))
@@ -233,7 +248,7 @@ do {
                                            compassStore: compassStore, renewAfterCommittedStage: true)
         } else if let indexed {
             // Mirror the app’s non-staged recreational composition as well.
-            request.options.composeDirtRide = true
+            request.options.composeDirtRide = environment["DIRT_COMPOSE_RIDE"] != "0"
             // The app keeps one compass store per routing session; mirror it.
             result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore()).route(request,budget: budget)
         } else {

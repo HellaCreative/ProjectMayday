@@ -4,6 +4,33 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct StagedRouterTests {
+    @Test func seamDirectionUsesLegalRouteProofRatherThanInitialBearing() throws {
+        // The east-facing direction looks correct but ends at a cul-de-sac.
+        // The west-facing direction reaches the onward road after a legal loop.
+        let nodes: [Coordinate] = [
+            .init(longitude: 0, latitude: 0), .init(longitude: 0.01, latitude: 0),
+            .init(longitude: 0.02, latitude: 0), .init(longitude: 0, latitude: 0.01),
+            .init(longitude: 0.02, latitude: 0.01)
+        ]
+        let graph = PolicyTests.Line(nodes: nodes,
+            edges: [(0,1),(1,2),(0,3),(3,4)],
+            surfaces: Array(repeating: "asphalt", count: 4),
+            roads: Array(repeating: "tertiary", count: 4))
+        let point = Coordinate(longitude: 0.005, latitude: 0)
+        let starts = [
+            RoadMatch(edge: 0, coordinate: point, distanceMeters: 0,
+                alongMeters: graph.distance(0) / 2, geometryMeters: graph.distance(0), forward: true),
+            RoadMatch(edge: 0, coordinate: point, distanceMeters: 0,
+                alongMeters: graph.distance(0) / 2, geometryMeters: graph.distance(0), forward: false)
+        ]
+        let end = RoadMatch(edge: 3, coordinate: nodes[4], distanceMeters: 0,
+            alongMeters: graph.distance(3), geometryMeters: graph.distance(3), forward: true)
+        let request = RoutingRequest(start: point, end: nodes[4], style: .dirt)
+        let proved = try StagedRouter.exactlyReachableDirections(starts, ends: [end],
+            graph: graph, request: request, budget: .init(seconds: 2))
+        #expect(proved.map(\.forward) == [false])
+    }
+
     @Test func handoverScreeningConsidersTheLegalDirectionAwayFromTheDestination() throws {
         let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),
             .init(longitude: 0.01, latitude: 0), .init(longitude: 0, latitude: 0.02),
@@ -155,9 +182,9 @@ struct StagedRouterTests {
             policy: request.profile, access: request.access, options: request.options)
         let handover = try StagedRouter.handoverBeforeFinalRoad(route, request: request, graph: graph,
             nextGraph: graph, budget: .init())
-        #expect(handover.segments.map(\.edge) == [0])
-        #expect(handover.distanceMeters == 100)
-        #expect(handover.end.coordinate == graph.coordinate(node: 1))
+        #expect(handover.segments.map(\.edge) == [0,1,2])
+        #expect(handover.distanceMeters == 300)
+        #expect(handover.end.coordinate == graph.coordinate(node: 3))
     }
 
     @Test func sharedInteriorContinuesWhenTheApproachRoadIsLocalToOnePack() throws {
@@ -255,14 +282,13 @@ struct StagedRouterTests {
         let sudbury = Coordinate(longitude: -81.0, latitude: 46.49)
         let parrySound = Coordinate(longitude: -80.035, latitude: 45.347)
         #expect(StagedRouter.shouldStage(regionCount: 2, start: parrySound, end: sudbury))
-        #expect(StagedRouter.overlappingWindows(["ns", "nb", "qc"]) == [["ns", "nb"], ["nb", "qc"]])
+        #expect(StagedRouter.overlappingWindows(["ns", "nb", "qc"]) == [["ns"], ["nb"], ["qc"]])
         #expect(StagedRouter.overlappingWindows(["on-s", "on-n"]) == [["on-s"], ["on-n"]])
         #expect(StagedRouter.overlappingWindows(["ns", "nb"]) == [["ns"], ["nb"]])
-        // Three-pack corridors produce two overlapping pair-windows — not the
-        // single-pack half shape used by the atomic two-pack branch.
+        // Every long corridor keeps one prepared region resident per stage.
         let three = StagedRouter.overlappingWindows(["ns", "nb", "me"])
-        #expect(three == [["ns", "nb"], ["nb", "me"]])
-        #expect(three.allSatisfy { $0.count == 2 })
+        #expect(three == [["ns"], ["nb"], ["me"]])
+        #expect(three.allSatisfy { $0.count == 1 })
     }
 
     @Test func handoverDiversifiesAwayFromWesternStubClusters() {
@@ -416,10 +442,10 @@ struct StagedRouterTests {
     @Test func dirtHandoverSlicesReserveTimeForLaterCandidates() {
         // 12 candidates / 300s parent: reserve 11×20s, first pin gets ~80s.
         #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 300, candidatesLeft: 12) == 80)
-        // Two left / 60s: reserve 20s, current gets 40s.
-        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 60, candidatesLeft: 2) == 40)
-        // Tight parent still keeps a 20s floor when reserve would go negative.
-        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 30, candidatesLeft: 5) == 20)
+        // A normal app window retains one useful retry after a hard approach.
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 60, candidatesLeft: 2) == 45)
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 60, candidatesLeft: 12) == 45)
+        #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 30, candidatesLeft: 5) == 15)
         // Never invent time beyond the parent remainder.
         #expect(StagedRouter.dirtCandidateSliceSeconds(remainingSeconds: 15, candidatesLeft: 3) == 15)
     }
@@ -453,7 +479,7 @@ struct StagedRouterTests {
             .appendingPathComponent("staged-chain-aim-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        // Stage0 next=qc-s; following window ends at on-n — aim qc-s↔on-n.
+        // Stage0 lands in qc-s; the following window ends at on-n — aim qc-s↔on-n.
         try writeSeamFixture(
             root: root, region: "qc-s",
             neighbors: ["on-n": [
@@ -477,18 +503,17 @@ struct StagedRouterTests {
         ])
         let rockies = Coordinate(longitude: -122.9, latitude: 50.5)
         // Mirrors NS→BC overlapping windows once catalog has sk/ab/bc.
-        let windows = [["ns", "nb"], ["nb", "qc-s"], ["qc-s", "on-n"], ["on-n", "mb"],
-                       ["mb", "sk"], ["sk", "ab"], ["ab", "bc"]]
+        let windows = [["ns"], ["nb"], ["qc-s"], ["on-n"], ["mb"], ["sk"], ["ab"], ["bc"]]
         let early = try StagedRouter.chainLocalAim(
-            windows: windows, stageIndex: 0, next: "qc-s",
+            windows: windows, stageIndex: 1, next: "qc-s",
             finalDestination: rockies, repository: repo
         )
         #expect(abs(early.longitude - (-75.0)) < 0.2)
         #expect(abs(early.longitude - rockies.longitude) > 40)
 
-        // Call site: stageIndex 3 window [on-n,mb], next=windows[4].last=sk.
+        // Call site: stageIndex 4 leaves mb for sk and aims at sk↔ab.
         let prairie = try StagedRouter.chainLocalAim(
-            windows: windows, stageIndex: 3, next: "sk",
+            windows: windows, stageIndex: 4, next: "sk",
             finalDestination: rockies, repository: repo
         )
         #expect(abs(prairie.longitude - (-110.0)) < 0.2)
@@ -496,7 +521,7 @@ struct StagedRouterTests {
 
         // Penultimate stage has no following window — keep the rider destination.
         let last = try StagedRouter.chainLocalAim(
-            windows: windows, stageIndex: 5, next: "bc",
+            windows: windows, stageIndex: 6, next: "bc",
             finalDestination: rockies, repository: repo
         )
         #expect(last.longitude == rockies.longitude)

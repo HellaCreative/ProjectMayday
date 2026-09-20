@@ -60,16 +60,17 @@ private final class CalculationCancellation: @unchecked Sendable {
 /// One absolute monotonic deadline covers preparation and every attempt in a
 /// window. Only a completed, committed stage may start another window.
 public struct ComputationBudget: Sendable {
-    public static let defaultMaximumLabels = 2_400_000
+    public static let defaultMaximumLabels = 3_000_000
+    public static let defaultMaximumSearchHistoryBytes = 320_000_000
     let deadline: ContinuousClock.Instant
     public let maximumLabels: Int
-    /// Fixed history allowance from the former 160-byte × 1.6M label layout.
-    /// Compact labels may use more entries without increasing this allowance.
+    /// Bounded compact-history allowance. Single-pack staging removes far more
+    /// resident graph data than this modest search increase adds.
     public let maximumSearchHistoryBytes: Int
     private let windowSeconds: Double
     private let cancellation: CalculationCancellation
     public init(seconds: Double = 18, maximumLabels: Int = ComputationBudget.defaultMaximumLabels,
-                maximumSearchHistoryBytes: Int = 256_000_000) {
+                maximumSearchHistoryBytes: Int = ComputationBudget.defaultMaximumSearchHistoryBytes) {
         let seconds = seconds.isFinite ? max(0, seconds) : 18
         deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
         self.maximumLabels = max(1, maximumLabels)
@@ -89,6 +90,15 @@ public struct ComputationBudget: Sendable {
         try cancellation.check()
         return .init(deadline: .now.advanced(by: .seconds(windowSeconds)),
                      maximumLabels: maximumLabels, maximumSearchHistoryBytes: maximumSearchHistoryBytes, windowSeconds: windowSeconds, cancellation: cancellation)
+    }
+    /// A completed search may use a tiny, explicit allowance to prove its seam
+    /// identity and direction. It cannot fund more search or another attempt.
+    func afterCompletedSearchForValidation(seconds: Double = 2) throws -> Self {
+        try cancellation.check()
+        return .init(deadline: max(deadline, .now.advanced(by: .seconds(max(0, seconds)))),
+                     maximumLabels: maximumLabels,
+                     maximumSearchHistoryBytes: maximumSearchHistoryBytes,
+                     windowSeconds: windowSeconds, cancellation: cancellation)
     }
     private init(deadline: ContinuousClock.Instant, maximumLabels: Int, maximumSearchHistoryBytes: Int,
                  windowSeconds: Double, cancellation: CalculationCancellation) {
