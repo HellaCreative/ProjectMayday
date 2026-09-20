@@ -15,7 +15,8 @@ enum SeamJSONReader {
 
     static func read(_ file: BinaryFile, budget: ComputationBudget,
                      retaining neighbors: Set<String>? = nil,
-                     metadataOnly: Bool = false, chunkBytes: Int = 65_536) throws -> Result {
+                     metadataOnly: Bool = false, chunkBytes: Int = 65_536,
+                     trustedPayload: Bool = false) throws -> Result {
         let cursor = Cursor(file: file, budget: budget, chunkBytes: chunkBytes)
         let decoder = JSONDecoder()
         var strings: [String: String] = [:]
@@ -32,6 +33,16 @@ enum SeamJSONReader {
             case "neighbors":
                 try cursor.object { region in
                     guard found[region] == nil else { throw invalid("duplicate neighbor") }
+                    if metadataOnly && trustedPayload {
+                        // Installation has already checksum-verified this exact
+                        // sidecar. Chain discovery needs only the neighboring
+                        // region names, so do not materialize and JSON-decode
+                        // every proof merely to step over its array. A selected
+                        // handover is still fully decoded below on loadSeams.
+                        try cursor.skipValue()
+                        found[region] = .init()
+                        return
+                    }
                     let retain = !metadataOnly && (neighbors?.contains(region) ?? true)
                     var anchors = SeamDocument.Anchors()
                     try cursor.array {
@@ -126,6 +137,43 @@ enum SeamJSONReader {
                 if try peekNonWhitespace() == 93 { position += 1; return }
                 try expect(44)
                 guard try peekNonWhitespace() != 93 else { throw invalid("trailing array comma") }
+            }
+        }
+        /// Advance over one JSON value without retaining its bytes. This is
+        /// used only for checksum-verified proof arrays during metadata reads.
+        func skipValue() throws {
+            guard let first = try peekNonWhitespace() else { throw invalid("missing value") }
+            var closers: [UInt8] = []
+            var quoted = false, escaped = false
+            let compound = first == 123 || first == 91
+            let string = first == 34
+            var consumed = false
+            while let byte = try peek() {
+                if !compound && !string && consumed &&
+                    (byte == 44 || byte == 93 || byte == 125 || byte == 32 || byte == 9 || byte == 10 || byte == 13) {
+                    return
+                }
+                _ = try take(); consumed = true
+                if quoted {
+                    if escaped { escaped = false }
+                    else if byte == 92 { escaped = true }
+                    else if byte == 34 {
+                        quoted = false
+                        if string && !compound { return }
+                    }
+                    continue
+                }
+                if byte == 34 { quoted = true }
+                else if byte == 123 || byte == 91 {
+                    closers.append(byte == 123 ? 125 : 93)
+                    guard closers.count <= 128 else { throw invalid("nesting exceeds bounded reader") }
+                } else if byte == 125 || byte == 93 {
+                    guard closers.popLast() == byte else { throw invalid("mismatched brackets") }
+                    if closers.isEmpty { return }
+                }
+            }
+            guard consumed, !quoted, closers.isEmpty, !compound, !string else {
+                throw invalid("unfinished value")
             }
         }
         /// Isolate one value across arbitrary I/O boundaries. Its decoder then

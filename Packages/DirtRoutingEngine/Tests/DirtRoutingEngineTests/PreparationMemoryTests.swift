@@ -198,12 +198,19 @@ struct PreparationMemoryTests {
             // Same-size JSON replacement leaves all binary offsets intact.
             let needle = Data("\"fix\"".utf8), replacement = Data("\"\(region)\" ".utf8)
             while let range = graph.range(of: needle) { graph.replaceSubrange(range, with: replacement) }
-            let artifacts: [(String, Data)] = [("graph.v4.bin", graph), ("geometry.v1.bin", geometry), ("fuel.v1.json", Data("{}".utf8))]
+            let seams = try JSONSerialization.data(withJSONObject: [
+                "schemaVersion": "dirt-cross-pack-seams.v2", "fabricReleaseId": "test",
+                "sourceEpoch": "fixture", "regionId": region, "neighbors": [:]
+            ])
+            let artifacts: [(String, Data)] = [("graph.v4.bin", graph), ("geometry.v1.bin", geometry),
+                ("fuel.v1.json", Data("{}".utf8)), ("cross-pack-seams.v2.json", seams)]
             var manifest: [String: Any] = ["schema": "pack-manifest.v2", "fabricReleaseId": "test", "regionId": region,
-                "sourceEpoch": "fixture", "timezone": "America/Halifax", "capabilities": ["legal-topology.v1"]]
+                "sourceEpoch": "fixture", "timezone": "America/Halifax",
+                "capabilities": ["legal-topology.v1", "cross-pack-seams.v2"]]
             for (name, bytes) in artifacts {
                 try bytes.write(to: root.appendingPathComponent(name))
-                let field = name.hasPrefix("graph") ? "graph" : name.hasPrefix("geometry") ? "geometry" : "fuel"
+                let field = name.hasPrefix("graph") ? "graph" : name.hasPrefix("geometry") ? "geometry" :
+                    name.hasPrefix("fuel") ? "fuel" : "seams"
                 manifest[field] = ["name": name, "bytes": bytes.count,
                     "sha256": SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()]
             }
@@ -217,6 +224,7 @@ struct PreparationMemoryTests {
         _ = try store.indexed(["cc"], repository: repository, budget: .init())
         try repository.persistVerificationReceipt(for: "cc")
         #expect(PackRepository.hasValidVerificationReceipt(region: "cc", directory: roots["cc"]!))
+        #expect(try repository.seamNeighborIDs("cc").isEmpty)
         #expect(try store.peek(["aa"], repository: repository) == nil)
         #expect(try store.peek(["bb"], repository: repository) != nil)
         #expect(try store.peek(["cc"], repository: repository) != nil)

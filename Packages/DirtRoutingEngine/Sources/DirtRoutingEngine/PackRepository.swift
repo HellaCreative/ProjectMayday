@@ -147,6 +147,10 @@ public struct PackRepository: Sendable {
         let regionId: String
         let manifestSHA256: String
         let artifacts: [Artifact]
+        /// Derived during installation after the seam artifact has passed its
+        /// checksum. Route-chain discovery can then avoid scanning every proof.
+        let seamNeighborIDs: [String]?
+        let seamRoadNeighborIDs: [String]?
     }
     private static let verificationReceiptName = ".dirt-pack-verification.v1.json"
     private let directories: [String:URL]
@@ -242,11 +246,28 @@ public struct PackRepository: Sendable {
         guard Self.verified.contains(key) else {
             throw RoutingFailure.invalidPack("pack must be checksum verified before recording receipt")
         }
+        if let existing = Self.validVerificationReceipt(region: region, directory: root,
+            manifestData: manifestData, manifest: manifest),
+           manifest.seams == nil || existing.seamNeighborIDs != nil {
+            return
+        }
         let artifacts = [manifest.graph, manifest.geometry, manifest.fuel] + (manifest.seams.map { [$0] } ?? [])
         let records = try artifacts.map { try Self.receiptArtifact($0, in: root) }
+        let seamMetadata = try manifest.seams.map { artifact in
+            try SeamJSONReader.read(BinaryFile(url: root.appendingPathComponent(artifact.name)),
+                                    budget: .init(seconds: 300), metadataOnly: true,
+                                    trustedPayload: true).metadata
+        }
+        let seamRoadNeighborIDs: [String]?
+        if let roads = seamMetadata?.roadNeighbors {
+            seamRoadNeighborIDs = Array(roads).sorted()
+        } else {
+            seamRoadNeighborIDs = nil
+        }
         let receipt = VerificationReceipt(version: 1, regionId: region,
             manifestSHA256: SHA256.hash(data: manifestData).map { String(format: "%02x", $0) }.joined(),
-            artifacts: records)
+            artifacts: records, seamNeighborIDs: seamMetadata.map { Array($0.neighborIDs).sorted() },
+            seamRoadNeighborIDs: seamRoadNeighborIDs)
         let encoded = try JSONEncoder().encode(receipt)
         try encoded.write(to: root.appendingPathComponent(Self.verificationReceiptName), options: .atomic)
     }
@@ -262,20 +283,28 @@ public struct PackRepository: Sendable {
 
     private static func hasValidVerificationReceipt(region: String, directory: URL,
                                                      manifestData: Data, manifest: PackManifest) -> Bool {
+        validVerificationReceipt(region: region, directory: directory,
+            manifestData: manifestData, manifest: manifest) != nil
+    }
+
+    private static func validVerificationReceipt(region: String, directory: URL,
+                                                  manifestData: Data,
+                                                  manifest: PackManifest) -> VerificationReceipt? {
         guard manifest.regionId == region,
               let data = try? Data(contentsOf: directory.appendingPathComponent(verificationReceiptName)),
               let receipt = try? JSONDecoder().decode(VerificationReceipt.self, from: data),
               receipt.version == 1, receipt.regionId == region,
               receipt.manifestSHA256 == SHA256.hash(data: manifestData).map({ String(format: "%02x", $0) }).joined()
-        else { return false }
+        else { return nil }
         let artifacts = [manifest.graph, manifest.geometry, manifest.fuel] + (manifest.seams.map { [$0] } ?? [])
-        guard receipt.artifacts.count == artifacts.count else { return false }
-        return zip(receipt.artifacts, artifacts).allSatisfy { recorded, expected in
+        guard receipt.artifacts.count == artifacts.count,
+              zip(receipt.artifacts, artifacts).allSatisfy({ recorded, expected in
             guard recorded.name == expected.name, recorded.bytes == expected.bytes,
                   recorded.sha256 == expected.sha256,
                   let current = try? receiptArtifact(expected, in: directory) else { return false }
             return current == recorded
-        }
+        }) else { return nil }
+        return receipt
     }
 
     private static func receiptArtifact(_ artifact: PackManifest.Artifact, in directory: URL) throws -> VerificationReceipt.Artifact {
@@ -303,12 +332,17 @@ public struct PackRepository: Sendable {
         let identity = try preparationIdentity([region])
         return try Self.envelopes.value(for: identity) {
             guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
-            let manifest = try JSONDecoder().decode(PackManifest.self,
-                from: Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json")))
+            let manifestData = try Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json"))
+            let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
             try manifest.validate()
             guard manifest.regionId == region else { throw RoutingFailure.invalidPack("wrong region") }
             let graph = try BinaryFile(url: root.appendingPathComponent(manifest.graph.name))
-            guard graph.data.count == manifest.graph.bytes, try graph.sha256 == manifest.graph.sha256 else {
+            guard graph.data.count == manifest.graph.bytes else {
+                throw RoutingFailure.invalidPack("planning graph identity mismatch")
+            }
+            let alreadyVerified = Self.hasValidVerificationReceipt(region: region, directory: root,
+                manifestData: manifestData, manifest: manifest)
+            if !alreadyVerified, try graph.sha256 != manifest.graph.sha256 {
                 throw RoutingFailure.invalidPack("planning graph identity mismatch")
             }
             return try GraphPack.nodeBounds(graph, budget: budget)
@@ -316,14 +350,19 @@ public struct PackRepository: Sendable {
     }
     private func seamFile(_ region: String) throws -> BinaryFile {
         guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
-        let manifest = try JSONDecoder().decode(PackManifest.self,
-            from: Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json")))
+        let manifestData = try Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json"))
+        let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
         try manifest.validate(requireSeams: true)
         guard manifest.regionId == region, let artifact = manifest.seams else {
             throw RoutingFailure.invalidPack("seam manifest identity")
         }
         let file = try BinaryFile(url: root.appendingPathComponent(artifact.name))
-        guard file.data.count == artifact.bytes, try file.sha256 == artifact.sha256 else {
+        guard file.data.count == artifact.bytes else {
+            throw RoutingFailure.invalidPack("seam artifact identity mismatch")
+        }
+        let alreadyVerified = Self.hasValidVerificationReceipt(region: region, directory: root,
+            manifestData: manifestData, manifest: manifest)
+        if !alreadyVerified, try file.sha256 != artifact.sha256 {
             throw RoutingFailure.invalidPack("seam artifact identity mismatch")
         }
         return file
@@ -331,7 +370,18 @@ public struct PackRepository: Sendable {
     private func metadata(_ region: String, budget: ComputationBudget) throws -> SeamJSONReader.Metadata {
         let key = try preparationIdentity([region])
         return try Self.inputs.metadata(key) {
-            try SeamJSONReader.read(seamFile(region), budget: budget, metadataOnly: true).metadata
+            if let root = directories[region] {
+                let manifestData = try Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json"))
+                let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
+                try manifest.validate(requireSeams: true)
+                if let receipt = Self.validVerificationReceipt(region: region, directory: root,
+                    manifestData: manifestData, manifest: manifest),
+                   let neighborIDs = receipt.seamNeighborIDs {
+                    return .init(neighborIDs: Set(neighborIDs),
+                                 roadNeighbors: receipt.seamRoadNeighborIDs.map(Set.init))
+                }
+            }
+            return try SeamJSONReader.read(seamFile(region), budget: budget, metadataOnly: true).metadata
         }
     }
     func seamNeighborIDs(_ region: String, budget: ComputationBudget = .init(seconds: 60)) throws -> Set<String> {
