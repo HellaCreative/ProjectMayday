@@ -472,6 +472,17 @@ struct RoutePlannerModelItineraryTests {
         #expect(mapState.routePolylineCoordinates.first == first)
         #expect(mapState.routePolylineCoordinates.last == second)
         #expect(mapState.plannerMarkers.count == 2)
+
+        model.toast = RoutePlannerModel.routeReadyToast
+        #expect(model.frameCompletedRouteForCelebration())
+        #expect(model.toast == RoutePlannerModel.routeReadyToast)
+        guard let camera = mapState.camera,
+              case let .fit(coordinates) = camera.command else {
+            Issue.record("Route completion should fit the complete route")
+            return
+        }
+        #expect(coordinates.first == first)
+        #expect(coordinates.last == second)
     }
 
     @Test func twoWaypointTwoStopItineraryRendersExactlyThreeFlatRows() async throws {

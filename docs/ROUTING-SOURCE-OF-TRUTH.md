@@ -1444,6 +1444,11 @@ qualification targets, not new routing cutoffs or claims of achieved performance
 They require isolated cold/repeated runs and separate physical-device targets
 before phone acceptance; no whole-journey deadline follows from them.
 
+When a complete route succeeds, restore and frame the full assembled route before
+the success confetti begins. This overview releases location following and uses the
+planner's current map insets. Partial builds and individual leg updates do not force
+an overview or trigger the completion celebration.
+
 For any retained server computation, test concurrent requests, bounded admission,
 per-request memory, cancellations, and cold behavior on the actual service class.
 

@@ -97,6 +97,7 @@ struct RootView: View {
     /// Measured portrait planner sheet height so compact map controls sit just above it.
     @State private var portraitRouteSheetHeight: CGFloat = 0
     @State private var showRouteConfetti = false
+    @State private var routeConfettiTask: Task<Void, Never>?
     @State private var coachStep: CoachStep? = OnboardingPrefs.coachComplete ? nil : .openRoute
     /// Left↔right landscape keeps the same size; this ticket forces chrome to re-read
     /// island-side safe-area insets when the device flips.
@@ -524,6 +525,9 @@ struct RootView: View {
             }
             .onDisappear {
                 UIDevice.current.endGeneratingDeviceOrientationNotifications()
+                routeConfettiTask?.cancel()
+                routeConfettiTask = nil
+                showRouteConfetti = false
                 RoutingDebugLog.shared.event("app root disappeared")
             }
             .onReceive(NotificationCenter.default.publisher(
@@ -562,9 +566,19 @@ struct RootView: View {
             }
             .onChange(of: app.planner.toast) { _, newValue in
                 guard newValue == RoutePlannerModel.routeReadyToast else { return }
-                showRouteConfetti = true
-                Task { @MainActor in
+                routeConfettiTask?.cancel()
+                showRouteConfetti = false
+                let framedRoute = app.planner.frameCompletedRouteForCelebration()
+                routeConfettiTask = Task { @MainActor in
+                    if framedRoute && !reduceMotion {
+                        try? await Task.sleep(for: .milliseconds(350))
+                    }
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        showRouteConfetti = true
+                    }
                     try? await Task.sleep(for: .seconds(1.6))
+                    guard !Task.isCancelled else { return }
                     withAnimation(.easeOut(duration: 0.25)) {
                         showRouteConfetti = false
                     }

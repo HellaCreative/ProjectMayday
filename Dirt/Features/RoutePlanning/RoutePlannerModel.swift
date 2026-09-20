@@ -3800,6 +3800,19 @@ final class RoutePlannerModel {
         )
     }
 
+    /// Frame a fully completed route before its success celebration without
+    /// replacing the success message shown to the rider.
+    @discardableResult
+    func frameCompletedRouteForCelebration() -> Bool {
+        guard routePlanIsCompleteSuccess, canFocusEntirePlannedRoute else { return false }
+        refreshMap()
+        mapState.fit(allCoordinates)
+        RoutingDebugLog.shared.event(
+            "map focus scope=route_completion stages=\(stages.count) points=\(allCoordinates.count)"
+        )
+        return true
+    }
+
     /// True when idle planning has a drawable route worth framing.
     /// Hidden while navigating (nav owns its own overview toggle) and when
     /// there is no polyline yet (prefer hide-when-empty).
