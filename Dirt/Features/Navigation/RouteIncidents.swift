@@ -321,7 +321,9 @@ final class IncidentRecoveryModel {
                 to: destination,
                 avoidEdgeIds: avoid,
                 profile: policy.profile,
-                allowUnknown: policy.allowUnknown
+                allowUnknown: policy.allowUnknown,
+                ridePreferences: policy.ridePreferences,
+                avoidMotorways: policy.avoidMotorways
             )
             let km = (response.distanceMeters ?? 0) / 1000
             let stageNote = planner.shouldPreserveStagesForRecovery
@@ -374,7 +376,9 @@ final class IncidentRecoveryModel {
                 to: target,
                 avoidEdgeIds: avoid,
                 profile: policy.profile,
-                allowUnknown: policy.allowUnknown
+                allowUnknown: policy.allowUnknown,
+                ridePreferences: policy.ridePreferences,
+                avoidMotorways: policy.avoidMotorways
             )
             let km = (response.distanceMeters ?? 0) / 1000
             let stageNote = planner.shouldPreserveStagesForRecovery

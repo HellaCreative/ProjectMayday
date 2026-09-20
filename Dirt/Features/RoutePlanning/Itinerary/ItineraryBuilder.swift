@@ -2529,26 +2529,28 @@ private func routeRequest(
     let leg = itinerary.legs[legIndex]
     let departureID = leg.from.uuidString
     let profile = profileOverride ?? leg.effectiveProfile(departingFrom: departureID)
-    return routeRequest(
-        profile: profile,
-        allowUnknown: leg.allowsUnknown(
-            departingFrom: departureID,
-            effectiveProfile: profile
-        ),
-        // Continue at the actual reached road position, not the unsnapped
-        // rider pin. Keep the original waypoint as rider intent.
-        from: history.arrivalCoordinate ?? itinerary.waypoints[legIndex].coordinate,
-        to: itinerary.waypoints[legIndex + 1].coordinate,
-        avoidEdgeIDs: itinerary.impassableEdgeIDs,
-        maxPathMeters: maxPathMeters,
-        history: history,
-        avoidMotorways: leg.avoidsMajorHighways(
-            departingFrom: departureID,
-            effectiveProfile: profile
-        ),
-        preferBackRoads: leg.preferBackRoads,
-        mapZoom: DirtSnapRequestContext.mapZoom
-    )
+    return RidePreferenceContext.$current.withValue(leg.ridePreferences) {
+        routeRequest(
+            profile: profile,
+            allowUnknown: leg.allowsUnknown(
+                departingFrom: departureID,
+                effectiveProfile: profile
+            ),
+            // Continue at the actual reached road position, not the unsnapped
+            // rider pin. Keep the original waypoint as rider intent.
+            from: history.arrivalCoordinate ?? itinerary.waypoints[legIndex].coordinate,
+            to: itinerary.waypoints[legIndex + 1].coordinate,
+            avoidEdgeIDs: itinerary.impassableEdgeIDs,
+            maxPathMeters: maxPathMeters,
+            history: history,
+            avoidMotorways: leg.avoidsMajorHighways(
+                departingFrom: departureID,
+                effectiveProfile: profile
+            ),
+            preferBackRoads: leg.preferBackRoads,
+            mapZoom: DirtSnapRequestContext.mapZoom
+        )
+    }
 }
 
 private func straightLineMeters(_ from: RouteCoordinate, _ to: RouteCoordinate) -> Double {

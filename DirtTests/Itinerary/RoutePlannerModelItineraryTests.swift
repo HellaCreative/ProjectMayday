@@ -34,7 +34,9 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
         #expect(model.itinerary.waypoints == before)
         #expect(model.errorMessage == nil)
-        #expect(!model.displayedRidePreferences.avoidFerries)
+        #expect(model.displayedRidePreferences.avoidFerries)
+        #expect(model.itinerary.legs.first?.ridePreferences.avoidFerries == false)
+        #expect(model.itinerary.legs.dropFirst().allSatisfy { $0.ridePreferences.avoidFerries })
         #expect(model.displayedRidePreferences.wander == 0.75)
         #expect(model.displayedRidePreferences.avoidHighways && model.displayedRidePreferences.avoidCities)
         #expect(source.routeRequests.last?.options?.ridePreferences?.avoidFerries == false)
@@ -545,6 +547,92 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.itinerary.legs[0].profile == .dirt)
         #expect(model.itinerary.legs[1].profile == .balanced)
         #expect(model.stages.map(\.profile) == [.dirt, .balanced])
+    }
+
+    @Test func perLegRideSettingsReachOnlyThatLegsRouteRequest() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(
+                waypoints: [point(0), point(0.5), point(1)],
+                profile: .dirt,
+                allowUnknown: false,
+                avoidMotorways: false,
+                preferBackRoads: false
+            ),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+        let firstPreferences = model.itinerary.legs[0].ridePreferences
+        let selectedPreferences = RidePreferences(
+            wander: 0.9,
+            avoidCities: false,
+            avoidHighways: false,
+            avoidFerries: false
+        )
+
+        source.routeRequests.removeAll()
+        model.applyLegRideSettings(
+            at: 1,
+            profile: .balanced,
+            allowUnknown: true,
+            ridePreferences: selectedPreferences
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.itinerary.legs[0].ridePreferences == firstPreferences)
+        #expect(model.itinerary.legs[1].ridePreferences == selectedPreferences)
+        #expect(source.routeRequests.allSatisfy {
+            $0.options?.ridePreferences == selectedPreferences
+        })
+    }
+
+    @Test func defaultRideSettingsAreCopiedIntoNewPlanLegs() async throws {
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        let firstDefaults = RidePreferences(
+            wander: 0.7,
+            avoidCities: false,
+            avoidHighways: true,
+            avoidFerries: false
+        )
+        model.applyDefaultRideSettings(
+            profile: .balanced,
+            allowUnknown: true,
+            ridePreferences: firstDefaults
+        )
+
+        model.apply(.append(coordinate: point(0)), source: "test")
+        model.apply(.append(coordinate: point(0.5)), source: "test")
+        await model.waitForCanonicalBuildForTesting()
+
+        let laterDefaults = RidePreferences(
+            wander: 0.25,
+            avoidCities: true,
+            avoidHighways: false,
+            avoidFerries: true
+        )
+        model.applyDefaultRideSettings(
+            profile: .dirt,
+            allowUnknown: false,
+            ridePreferences: laterDefaults
+        )
+
+        #expect(model.itinerary.legs[0].profile == .balanced)
+        #expect(model.itinerary.legs[0].allowUnknown)
+        #expect(model.itinerary.legs[0].ridePreferences == firstDefaults)
+
+        model.apply(.append(coordinate: point(1)), source: "test")
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.itinerary.legs.count == 2)
+        #expect(model.itinerary.legs[0].ridePreferences == firstDefaults)
+        #expect(model.itinerary.legs[1].profile == .dirt)
+        #expect(!model.itinerary.legs[1].allowUnknown)
+        #expect(model.itinerary.legs[1].ridePreferences == laterDefaults)
     }
 
     @Test func stageCardFuelHopControlsDriveCleanPlanRebuild() async throws {

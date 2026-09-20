@@ -19,7 +19,14 @@ struct RiderItineraryTests {
     }
 
     @Test func insertAfterFirstLegSplitsInPlace() throws {
-        let initial = itinerary([point(0), point(2)])
+        var initial = itinerary([point(0), point(2)])
+        let preferences = RidePreferences(
+            wander: 0.8,
+            avoidCities: false,
+            avoidHighways: true,
+            avoidFerries: false
+        )
+        initial.legs[0].ridePreferences = preferences
         let originalEndID = initial.waypoints[1].id
         let oldLegID = try #require(initial.legs.first?.id)
 
@@ -30,6 +37,7 @@ struct RiderItineraryTests {
         #expect(change.rebuildFromLegIndex == 0)
         #expect(change.itinerary.legs[0].id != oldLegID)
         #expect(change.itinerary.legs[1].id != oldLegID)
+        #expect(change.itinerary.legs.allSatisfy { $0.ridePreferences == preferences })
         #expect(change.itinerary.invariantsHold)
     }
 
@@ -117,6 +125,72 @@ struct RiderItineraryTests {
         #expect(change.rebuildThroughLegIndex == 1)
         #expect(change.itinerary.legs[0] == initial.legs[0])
         #expect(change.itinerary.legs[1].profile == .dirt)
+    }
+
+    @Test func legRideSettingsChangeOnlyTheSelectedLeg() throws {
+        let initial = itinerary([point(0), point(1), point(2)], profile: .dirt)
+        let selectedID = try #require(initial.legs.last?.id)
+        let preferences = RidePreferences(
+            wander: 0.85,
+            avoidCities: false,
+            avoidHighways: true,
+            avoidFerries: false
+        )
+
+        let change = reduce(
+            initial,
+            .setLegRideSettings(
+                legID: selectedID,
+                profile: .balanced,
+                allowUnknown: true,
+                ridePreferences: preferences
+            )
+        )
+
+        #expect(change.rebuildFromLegIndex == 1)
+        #expect(change.rebuildThroughLegIndex == 1)
+        #expect(change.itinerary.legs[0] == initial.legs[0])
+        #expect(change.itinerary.legs[1].profile == .balanced)
+        #expect(change.itinerary.legs[1].allowUnknown)
+        #expect(change.itinerary.legs[1].ridePreferences == preferences)
+    }
+
+    @Test func cleanLegSettingsForceUnknownOffWithoutChangingAvoidanceChoices() throws {
+        let initial = itinerary([point(0), point(1)], profile: .dirt)
+        let legID = try #require(initial.legs.first?.id)
+        let preferences = RidePreferences(
+            wander: 0.25,
+            avoidCities: false,
+            avoidHighways: false,
+            avoidFerries: false
+        )
+
+        let change = reduce(
+            initial,
+            .setLegRideSettings(
+                legID: legID,
+                profile: .cleanest,
+                allowUnknown: true,
+                ridePreferences: preferences
+            )
+        )
+
+        let leg = try #require(change.itinerary.legs.first)
+        #expect(!leg.allowUnknown)
+        #expect(leg.ridePreferences == preferences)
+        #expect(leg.profile == .cleanest)
+    }
+
+    @Test func olderSavedLegsReceiveCurrentRideDefaults() throws {
+        let original = try #require(itinerary([point(0), point(1)], profile: .dirt).legs.first)
+        let encoded = try JSONEncoder().encode(original)
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "ridePreferences")
+        let legacy = try JSONSerialization.data(withJSONObject: object)
+
+        let decoded = try JSONDecoder().decode(RiderLeg.self, from: legacy)
+
+        #expect(decoded.ridePreferences == RidePreferences())
     }
 
     @Test func setProfileForAllLegsRebuildsFromFirstLeg() {

@@ -16,6 +16,10 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     let to: UUID
     var profile: RouteProfile
     var allowUnknown: Bool
+    /// Wander and avoidance choices belong to this rider-created leg. Route
+    /// defaults are copied here when the leg is created, then edits rebuild
+    /// only this leg.
+    var ridePreferences: RidePreferences
     /// Internal inverse of the Clean "Allow major highways" control.
     var avoidMotorways: Bool
     /// Legacy persisted field. Clean no longer adds a primary-road penalty.
@@ -40,6 +44,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         to: UUID,
         profile: RouteProfile,
         allowUnknown: Bool,
+        ridePreferences: RidePreferences = RidePreferences(),
         avoidMotorways: Bool = true,
         preferBackRoads: Bool = false,
         hopOverrides: [String: RouteProfile] = [:],
@@ -52,6 +57,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         self.to = to
         self.profile = profile
         self.allowUnknown = profile == .cleanest ? false : allowUnknown
+        self.ridePreferences = ridePreferences.normalized
         self.avoidMotorways = profile == .cleanest ? avoidMotorways : false
         self.preferBackRoads = false
         self.hopOverrides = hopOverrides
@@ -86,7 +92,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, from, to, profile, allowUnknown, avoidMotorways, preferBackRoads
+        case id, from, to, profile, allowUnknown, ridePreferences, avoidMotorways, preferBackRoads
         case hopOverrides, hopAvoidMotorways, hopAllowUnknown, fuelStopOverrides
     }
 
@@ -97,6 +103,9 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         to = try container.decode(UUID.self, forKey: .to)
         profile = try container.decode(RouteProfile.self, forKey: .profile)
         allowUnknown = try container.decode(Bool.self, forKey: .allowUnknown)
+        ridePreferences = try container.decodeIfPresent(
+            RidePreferences.self, forKey: .ridePreferences
+        )?.normalized ?? RidePreferences()
         avoidMotorways = try container.decodeIfPresent(Bool.self, forKey: .avoidMotorways)
             ?? (profile == .cleanest)
         preferBackRoads = try container.decodeIfPresent(Bool.self, forKey: .preferBackRoads) ?? false
@@ -142,6 +151,27 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
     mutating func relocateWaypoint(at index: Int, to coordinate: RouteCoordinate) {
         guard waypoints.indices.contains(index) else { return }
         waypoints[index].coordinate = coordinate
+    }
+
+    mutating func setRideDefaults(
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        preferences: RidePreferences,
+        forLegsNotIn existingIDs: Set<UUID>
+    ) {
+        for index in legs.indices where !existingIDs.contains(legs[index].id) {
+            legs[index].profile = profile
+            legs[index].allowUnknown = profile == .cleanest ? false : allowUnknown
+            legs[index].ridePreferences = preferences.normalized
+            legs[index].avoidMotorways = profile == .cleanest && preferences.avoidHighways
+            legs[index].preferBackRoads = false
+        }
+    }
+
+    mutating func setRidePreferencesForAllLegs(_ preferences: RidePreferences) {
+        for index in legs.indices {
+            legs[index].ridePreferences = preferences.normalized
+        }
     }
 
     init(

@@ -6,6 +6,12 @@ nonisolated enum ItineraryAction: Equatable, Codable, Sendable {
     case move(waypointID: UUID, to: RouteCoordinate)
     case delete(waypointID: UUID)
     case setProfile(legID: UUID?, RouteProfile)
+    case setLegRideSettings(
+        legID: UUID,
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        ridePreferences: RidePreferences
+    )
     case setHopProfile(legID: UUID, stationID: String, RouteProfile)
     case setHopAvoidMotorways(legID: UUID, stationID: String, Bool)
     case setHopAllowUnknown(legID: UUID, stationID: String, Bool)

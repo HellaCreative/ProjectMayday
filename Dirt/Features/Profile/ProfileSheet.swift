@@ -16,6 +16,7 @@ struct ProfileSheet: View {
     @State private var showLicences = false
     @State private var showDeleteAccountConfirmation = false
     @State private var showRideSettings = false
+    @State private var showFuelSettings = false
     @State private var showLegal = false
     @State private var showEditName = false
     @State private var testerToolsOpen = false
@@ -44,6 +45,12 @@ struct ProfileSheet: View {
                         accountCard
 
                         VStack(spacing: DirtSpace.tight) {
+                            Button { showFuelSettings = true } label: {
+                                navigationRow("Fuel notifications", systemImage: "fuelpump.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Opens fuel distance, reserve, and notification settings")
+
                             Button { showRideSettings = true } label: {
                                 navigationRow("Keep-awake & contribute", systemImage: "moon.zzz.fill")
                             }
@@ -99,6 +106,9 @@ struct ProfileSheet: View {
         }
         .sheet(isPresented: $showRideSettings) {
             rideSettingsSheet
+        }
+        .sheet(isPresented: $showFuelSettings) {
+            ProfileFuelSettingsSheet()
         }
         .sheet(isPresented: $showLegal) {
             legalSheet
@@ -744,6 +754,101 @@ struct ProfileSheet: View {
             .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
             .contentShape(Rectangle())
             .buttonStyle(.plain)
+    }
+}
+
+private struct ProfileFuelSettingsSheet: View {
+    @Environment(AppEnvironment.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var notificationsEnabled = FuelRangePrefs.notificationsEnabled
+    @State private var rangeKm = FuelRangePrefs.kilometers
+    @State private var reservePercent = FuelRangePrefs.reservePercent
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DirtSheetHeader(title: "Fuel notifications", onClose: { dismiss() })
+            ScrollView {
+                VStack(alignment: .leading, spacing: DirtSpace.group) {
+                    VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                        Toggle("Turn on fuel notifications", isOn: $notificationsEnabled)
+                            .font(DirtType.rowTitle)
+                            .tint(DirtTheme.orange)
+
+                        Text(notificationsEnabled
+                            ? "Shows remaining kilometres and fuel reminders while navigating."
+                            : "Fuel does not change the route. Notifications are currently off.")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Divider()
+
+                        HStack(spacing: DirtSpace.inner) {
+                            Text("\(Int(rangeKm)) km")
+                                .font(DirtType.metricInline)
+                                .monospacedDigit()
+                                .frame(minWidth: 58, alignment: .leading)
+                            Slider(
+                                value: $rangeKm,
+                                in: FuelRangePrefs.minimumKm...FuelRangePrefs.maximumKm,
+                                step: 10
+                            )
+                            .tint(DirtTheme.orange)
+                            .accessibilityLabel("Fuel distance")
+                        }
+
+                        HStack {
+                            Text("Usable \(Int(FuelRangePrefs.usableKilometers(for: rangeKm, reservePercent: reservePercent))) km")
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.muted)
+                            Spacer()
+                            Menu {
+                                ForEach([0, 5, 10, 15, 20, 25, 30], id: \.self) { percent in
+                                    Button("\(percent)%") { reservePercent = Double(percent) }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text("\(Int(reservePercent))% reserve")
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 8, weight: .bold))
+                                }
+                                .font(DirtType.chip)
+                                .fontWeight(.bold)
+                                .foregroundStyle(DirtTheme.ink)
+                                .padding(.horizontal, 10)
+                                .frame(minHeight: DirtHit.min)
+                                .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            .dirtDropdownSurface()
+                        }
+                    }
+                    .padding(DirtSpace.row)
+                    .dirtGroupingSurface()
+
+                    Button("Done") {
+                        FuelRangePrefs.notificationsEnabled = notificationsEnabled
+                        app.navigation.setFuelNotificationsEnabled(notificationsEnabled)
+                        FuelRangePrefs.kilometers = rangeKm
+                        FuelRangePrefs.lastEnabledKilometers = rangeKm
+                        FuelRangePrefs.reservePercent = reservePercent
+                        RoutingDebugLog.shared.event(
+                            "profile fuel notifications=\(notificationsEnabled ? 1 : 0) "
+                                + "range=\(Int(rangeKm))km reserve=\(Int(reservePercent))%"
+                        )
+                        app.planner.toast = "Fuel notifications saved"
+                        dismiss()
+                    }
+                    .buttonStyle(DirtCTAStyle.brand())
+                }
+                .padding(.horizontal, DirtSpace.group)
+                .padding(.top, DirtSpace.tight)
+                .padding(.bottom, DirtSpace.section)
+            }
+        }
+        .background(DirtTheme.sheetMaterial)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(DirtTheme.sheetMaterial)
     }
 }
 

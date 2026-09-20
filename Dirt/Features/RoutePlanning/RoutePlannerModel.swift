@@ -28,6 +28,7 @@ final class RoutePlannerModel {
         let allowUnknown: Bool
         let avoidMotorways: Bool
         let preferBackRoads: Bool
+        let ridePreferences: RidePreferences
         let response: RouteResponse?
         let isRouting: Bool
         let error: String?
@@ -67,6 +68,7 @@ final class RoutePlannerModel {
                 effectiveProfile: effectiveProfile
             )
             preferBackRoads = riderLeg.preferBackRoads
+            ridePreferences = riderLeg.ridePreferences
             response = builtLeg.response
             if case .pending = status { isRouting = true } else { isRouting = false }
             if case .failed(let message) = status { error = message } else { error = nil }
@@ -106,6 +108,7 @@ final class RoutePlannerModel {
                 effectiveProfile: riderLeg.profile
             )
             preferBackRoads = riderLeg.preferBackRoads
+            ridePreferences = riderLeg.ridePreferences
             response = nil
             if case .pending = status { isRouting = true } else { isRouting = false }
             if case .failed(let message) = status { error = message } else { error = nil }
@@ -207,10 +210,11 @@ final class RoutePlannerModel {
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads,
                     seed: UInt64.random(in: 1...9_007_199_254_740_991), avoidFerries: preferences.avoidFerries))
                 guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
-                let itinerary = reduce(RiderItinerary(), .replaceAll(
+                var itinerary = reduce(RiderItinerary(), .replaceAll(
                     waypoints: [start, far, start],
                     profile: selectedProfile, allowUnknown: selectedAllow,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
+                itinerary.setRidePreferencesForAllLegs(preferences)
                 guard itinerary.legs.count == 2, itinerary.legs.allSatisfy({ $0.profile == selectedProfile }),
                       itinerary.legs.allSatisfy({ $0.allowUnknown == selectedAllow }) else {
                     self.errorMessage = "Loop legs must keep the selected riding style."
@@ -266,6 +270,7 @@ final class RoutePlannerModel {
     var profile: RouteProfile = .dirt {
         didSet {
             guard oldValue != profile else { return }
+            guard !suppressPlannerReroute else { return }
             if !suppressPlannerReroute, profile == .cleanest {
                 suppressPlannerReroute = true
                 allowUnknown = false
@@ -284,6 +289,7 @@ final class RoutePlannerModel {
     var allowUnknown = false {
         didSet {
             if oldValue != allowUnknown {
+                guard !suppressPlannerReroute else { return }
                 syncNetworkAccessPolicy()
                 if showingLoop, loopFar != nil, hasRoute {
                     generateLoop()
@@ -333,15 +339,54 @@ final class RoutePlannerModel {
         else { apply(.rebuild, source: "ridePreferences") }
     }
 
+    /// Changes the values copied into subsequently-created legs. Existing Plan
+    /// legs keep their own choices; their style button edits them explicitly.
+    func applyDefaultRideSettings(
+        profile newProfile: RouteProfile,
+        allowUnknown newAllowUnknown: Bool,
+        ridePreferences preferences: RidePreferences
+    ) {
+        guard navigation.phase == .idle else { return }
+        suppressPlannerReroute = true
+        profile = newProfile
+        allowUnknown = newProfile == .cleanest ? false : newAllowUnknown
+        ridePreferences = preferences.normalized
+        avoidMotorways = newProfile == .cleanest && preferences.avoidHighways
+        suppressPlannerReroute = false
+        syncNetworkAccessPolicy()
+        if showingLoop, loopFar != nil, hasRoute { generateLoop() }
+    }
+
     var canAllowFerries: Bool {
-        displayedRidePreferences.avoidFerries && errorMessage == NativeRoutingAdapter.ferriesAvoidedMessage
+        guard errorMessage == NativeRoutingAdapter.ferriesAvoidedMessage else { return false }
+        if let index = stages.firstIndex(where: { $0.error != nil }) {
+            return stages[index].ridePreferences.avoidFerries
+        }
+        return displayedRidePreferences.avoidFerries
     }
 
     func allowFerriesAndRetry() {
         guard canAllowFerries else { return }
+        if let index = stages.firstIndex(where: { $0.error != nil }) {
+            let stage = stages[index]
+            var preferences = stage.ridePreferences
+            preferences.avoidFerries = false
+            applyLegRideSettings(
+                at: index,
+                profile: stage.profile,
+                allowUnknown: stage.allowUnknown,
+                ridePreferences: preferences
+            )
+            return
+        }
         var preferences = displayedRidePreferences
         preferences.avoidFerries = false
-        applyRidePreferences(preferences)
+        applyDefaultRideSettings(
+            profile: profile,
+            allowUnknown: allowUnknown,
+            ridePreferences: preferences
+        )
+        reroute()
     }
 
     var showUnknownAck = false
@@ -818,7 +863,22 @@ final class RoutePlannerModel {
         default:
             break
         }
-        itinerary = change.itinerary
+        var nextItinerary = change.itinerary
+        let priorLegIDs = Set(before.legs.map(\.id))
+        switch action {
+        case .replaceAll:
+            nextItinerary.setRidePreferencesForAllLegs(displayedRidePreferences)
+        case .append:
+            nextItinerary.setRideDefaults(
+                profile: profile,
+                allowUnknown: allowUnknown,
+                preferences: displayedRidePreferences,
+                forLegsNotIn: priorLegIDs
+            )
+        default:
+            break
+        }
+        itinerary = nextItinerary
         RoutingDebugLog.shared.event(
             ItineraryLog.line(action: action, before: before, after: itinerary, source: source)
         )
@@ -839,7 +899,7 @@ final class RoutePlannerModel {
                 }
                 generateLoop()
                 return
-            case .setProfile, .setAllowUnknown, .setAvoidMotorways, .setPreferBackRoads,
+            case .setProfile, .setLegRideSettings, .setAllowUnknown, .setAvoidMotorways, .setPreferBackRoads,
                  .setHopProfile, .setHopAllowUnknown, .setHopAvoidMotorways:
                 generateLoop()
                 return
@@ -1192,7 +1252,7 @@ final class RoutePlannerModel {
             else { return nil }
 
             let before = itinerary
-            let replacement = reduce(
+            var replacement = reduce(
                 before,
                 .replaceAll(
                     waypoints: split.waypoints,
@@ -1202,6 +1262,7 @@ final class RoutePlannerModel {
                     preferBackRoads: riderLeg.preferBackRoads
                 )
             ).itinerary
+            replacement.setRidePreferencesForAllLegs(riderLeg.ridePreferences)
             itinerary = replacement
             built = nil
             destination = nil
@@ -1248,6 +1309,7 @@ final class RoutePlannerModel {
                 preferBackRoads: preferBackRoads
             )
         ).itinerary
+        itinerary.setRidePreferencesForAllLegs(displayedRidePreferences)
         var legs: [BuiltLeg] = []
         for index in responses.indices where itinerary.legs.indices.contains(index) {
             legs.append(BuiltLeg(
@@ -1829,6 +1891,24 @@ final class RoutePlannerModel {
     func setStageProfile(_ newProfile: RouteProfile, at index: Int) {
         guard stages.indices.contains(index) else { return }
         apply(.setProfile(legID: stages[index].riderLegID, newProfile), source: "card")
+    }
+
+    func applyLegRideSettings(
+        at index: Int,
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        ridePreferences: RidePreferences
+    ) {
+        guard stages.indices.contains(index) else { return }
+        apply(
+            .setLegRideSettings(
+                legID: stages[index].riderLegID,
+                profile: profile,
+                allowUnknown: allowUnknown,
+                ridePreferences: ridePreferences
+            ),
+            source: "leg-settings"
+        )
     }
 
     func setFuelHopProfile(_ newProfile: RouteProfile, at index: Int) {
@@ -3672,38 +3752,6 @@ final class RoutePlannerModel {
         return markers
     }
 
-    // MARK: - Fuel assist
-
-    /// Rebuild the current route after the rider changes automatic planning,
-    /// tank range, or reserve (From here / Plan).
-    func reapplyFuelAssist(rangeKm requestedRangeKm: Double? = nil) {
-        let rangeKm = requestedRangeKm ?? FuelRangePrefs.kilometers
-        guard rangeKm > 0 else { return }
-        guard mode == .fromHere || mode == .plan else { return }
-        guard itinerary.legs.count > 0 else { return }
-        FuelRangePrefs.kilometers = rangeKm
-        FuelRangePrefs.lastEnabledKilometers = rangeKm
-        fuelPlanNotice = nil
-        RoutingDebugLog.shared.event(
-            "fuel range stored mode=\(mode) range=\(Int(rangeKm))km (routing does not consult fuel)"
-        )
-        toast = "Fuel range saved"
-    }
-
-    /// Invalidates an in-flight itinerary as soon as the rider grabs the fuel
-    /// slider. The released value starts exactly one replacement job.
-    func cancelFuelAssistForRangeEdit() {
-        buildTask?.cancel()
-        itineraryBuilder.cancelCurrentBuild()
-        isAssemblingRoute = false
-        fuelPlanningStatus = nil
-        fuelPreviewStops = []
-        if toast == "Looking for fuel stops" {
-            toast = nil
-        }
-        refreshMap()
-    }
-
     /// Station beside the already-drawn line, ~0.8 tank along it.
     /// Not the nearest pump to a crow-flies point (that is the 50 km spur).
     static func pickFuelStop(
@@ -4214,11 +4262,14 @@ final class RoutePlannerModel {
         avoidEdgeIds: [String] = [],
         networkOnline: Bool? = nil,
         profile: RouteProfile? = nil,
-        allowUnknown: Bool? = nil
+        allowUnknown: Bool? = nil,
+        ridePreferences: RidePreferences? = nil,
+        avoidMotorways: Bool? = nil
     ) async throws -> RouteResponse {
         let useProfile = profile ?? self.profile
         let useAllow = allowUnknown ?? self.allowUnknown
-        let request = RidePreferenceContext.$current.withValue(displayedRidePreferences) {
+        let preferences = ridePreferences ?? displayedRidePreferences
+        let request = RidePreferenceContext.$current.withValue(preferences) {
             RouteRequest(
                 profile: useProfile,
                 locations: [
@@ -4229,7 +4280,7 @@ final class RoutePlannerModel {
                 avoidEdgeIds: avoidEdgeIds,
                 sessionSeed: planningSessionSeed,
                 cleanMetroMultiplier: nil,
-                avoidMotorways: avoidMotorways,
+                avoidMotorways: avoidMotorways ?? self.avoidMotorways,
                 preferBackRoads: preferBackRoads
             )
         }
@@ -4306,12 +4357,24 @@ final class RoutePlannerModel {
         return routedIndices.first
     }
 
-    /// Profile / Allow for the stage that will be re-routed (falls back to planner defaults).
-    func activeStageRoutingPolicy(near point: RouteCoordinate? = nil) -> (profile: RouteProfile, allowUnknown: Bool) {
+    /// Complete settings for the stage that will be re-routed. A recovery must
+    /// keep the choices attached to that leg instead of falling back to the
+    /// defaults for newly-created legs.
+    func activeStageRoutingPolicy(near point: RouteCoordinate? = nil) -> (
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        ridePreferences: RidePreferences,
+        avoidMotorways: Bool
+    ) {
         if let idx = activeStageIndex(near: point) {
-            return (stages[idx].profile, stages[idx].allowUnknown)
+            return (
+                stages[idx].profile,
+                stages[idx].allowUnknown,
+                stages[idx].ridePreferences,
+                stages[idx].avoidMotorways
+            )
         }
-        return (profile, allowUnknown)
+        return (profile, allowUnknown, displayedRidePreferences, avoidMotorways)
     }
 
     /// Matches a report position to the nearest routed segment's network edge
@@ -4473,7 +4536,9 @@ final class RoutePlannerModel {
                 avoidEdgeIds: avoidEdgeIds,
                 networkOnline: networkOnline,
                 profile: useProfile,
-                allowUnknown: useAllow
+                allowUnknown: useAllow,
+                ridePreferences: stages[index].ridePreferences,
+                avoidMotorways: stages[index].avoidMotorways
             )
             guard !Task.isCancelled,
                   navigationRerouteGeneration == requestGeneration,

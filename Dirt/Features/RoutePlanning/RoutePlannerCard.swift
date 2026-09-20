@@ -32,13 +32,9 @@ struct RoutePlannerCard: View {
     @State private var saveName = ""
     /// GPX share sheet — only presented after the export gate allows it.
     @State private var exportShareURL: URL?
-    /// Pending unknown-access confirmation. `nil` target = From-here (global).
-    @State private var unknownAckStage: Int?
-    @State private var showUnknownAck = false
-    /// Stage whose mode the chips edit (Plan tab). Nil = chips collapsed.
+    /// Leg whose ride settings modal is open.
     @State private var selectedStage: Int?
-    /// From here: same expand/collapse as a single Plan stage (no delete).
-    @State private var fromHereChipsOpen = false
+    @State private var showDefaultRideSettings = false
     @State private var showFromHereToPlanConfirm = false
     @State private var showPlanToFromHereConfirm = false
     @State private var showClearConfirm = false
@@ -74,19 +70,6 @@ struct RoutePlannerCard: View {
         } message: {
             Text("This replaces the current unsaved plan. Saved rides are kept.")
         }
-        .alert("Unknown access is not permission", isPresented: $showUnknownAck) {
-            Button("I understand — continue", role: .destructive) {
-                if let index = unknownAckStage {
-                    planner.setStageAllowUnknown(true, at: index)
-                } else {
-                    planner.allowUnknown = true
-                }
-                unknownAckStage = nil
-            }
-            Button("Cancel", role: .cancel) { unknownAckStage = nil }
-        } message: {
-            Text("Unknown-access routing may include branch lines that are unverified for motorcycles. That is not legal permission and may expose you to closures, private land, seasonal restrictions, or enforcement.")
-        }
         .alert(isUpdatingSavedRoute ? "Update saved route" : "Save route", isPresented: $showSaveDialog) {
             TextField("Route name", text: $saveName)
             Button(isUpdatingSavedRoute ? "Update" : "Save") {
@@ -114,6 +97,45 @@ struct RoutePlannerCard: View {
                 DirtShareSheet(items: [url])
             }
         }
+        .sheet(isPresented: $showDefaultRideSettings) {
+            RideSettingsSheet(
+                title: "Default ride settings",
+                scopeNote: "Used for new legs. Existing Plan legs keep their own settings.",
+                profile: planner.profile,
+                allowUnknown: planner.allowUnknown,
+                preferences: planner.displayedRidePreferences
+            ) { profile, allowUnknown, preferences in
+                planner.applyDefaultRideSettings(
+                    profile: profile,
+                    allowUnknown: allowUnknown,
+                    ridePreferences: preferences
+                )
+                showDefaultRideSettings = false
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { selectedStage != nil },
+            set: { if !$0 { selectedStage = nil } }
+        )) {
+            if let index = selectedStage, planner.stages.indices.contains(index) {
+                let stage = planner.stages[index]
+                RideSettingsSheet(
+                    title: "Leg \(index + 1)",
+                    scopeNote: "Changes apply only to this leg.",
+                    profile: stage.profile,
+                    allowUnknown: stage.allowUnknown,
+                    preferences: stage.ridePreferences
+                ) { profile, allowUnknown, preferences in
+                    planner.applyLegRideSettings(
+                        at: index,
+                        profile: profile,
+                        allowUnknown: allowUnknown,
+                        ridePreferences: preferences
+                    )
+                    selectedStage = nil
+                }
+            }
+        }
         .onChange(of: app.trial.isSubscribed) { _, subscribed in
             guard subscribed, let reason = app.trial.takePendingReason() else { return }
             resumeAfterSubscribe(reason)
@@ -125,12 +147,10 @@ struct RoutePlannerCard: View {
         ) {
             Button("Keep") {
                 selectedStage = nil
-                fromHereChipsOpen = false
                 planner.switchToPlanKeepingFromHere()
             }
             Button("Clear", role: .destructive) {
                 selectedStage = nil
-                fromHereChipsOpen = false
                 planner.switchToPlanClearing()
             }
             Button("Cancel", role: .cancel) {}
@@ -144,12 +164,10 @@ struct RoutePlannerCard: View {
         ) {
             Button("Use last pin") {
                 selectedStage = nil
-                fromHereChipsOpen = false
                 planner.switchToFromHereUsingLastPin()
             }
             Button("Start anew", role: .destructive) {
                 selectedStage = nil
-                fromHereChipsOpen = false
                 planner.switchToFromHereClearing()
             }
             Button("Cancel", role: .cancel) {}
@@ -196,7 +214,6 @@ struct RoutePlannerCard: View {
     private func performClear() {
         planner.clearRoute()
         selectedStage = nil
-        fromHereChipsOpen = false
     }
 
     // MARK: - Portrait shell
@@ -451,7 +468,6 @@ struct RoutePlannerCard: View {
             return
         }
         selectedStage = nil
-        fromHereChipsOpen = false
         planner.selectMode(mode)
     }
 
@@ -464,11 +480,9 @@ struct RoutePlannerCard: View {
             } else {
                 StageCard(
                     number: 1,
-                    profileTitle: planner.profile.title,
-                    isActive: fromHereChipsOpen,
-                    onToggle: {
-                        withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen.toggle() }
-                    },
+                    profileTitle: planner.stages.first?.profile.title ?? planner.profile.title,
+                    isActive: false,
+                    onToggle: { selectedStage = 0 },
                     onFocus: { planner.focusStage(at: 0) },
                     headline: {
                         stageMetrics(
@@ -478,32 +492,7 @@ struct RoutePlannerCard: View {
                             showsWarning: false
                         )
                     },
-                    detail: {
-                        VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                            profileSegments(active: planner.profile) { profile in
-                                planner.profile = profile
-                                withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = false }
-                            }
-                            profilePolicyToggle(
-                                profile: planner.profile,
-                                allowUnknown: Binding(
-                                    get: { planner.allowUnknown },
-                                    set: { on in
-                                        if on {
-                                            unknownAckStage = nil
-                                            showUnknownAck = true
-                                        } else {
-                                            planner.allowUnknown = false
-                                        }
-                                    }
-                                ),
-                                avoidMotorways: Binding(
-                                    get: { planner.avoidMotorways },
-                                    set: { planner.avoidMotorways = $0 }
-                                )
-                            )
-                        }
-                    }
+                    detail: { EmptyView() }
                 )
             }
 
@@ -517,19 +506,6 @@ struct RoutePlannerCard: View {
             clearAllButton
         } else {
             fromHereProfileHeader
-            if planner.profile == .cleanest {
-                profilePolicyToggle(
-                    profile: planner.profile,
-                    allowUnknown: Binding(
-                        get: { planner.allowUnknown },
-                        set: { _ in }
-                    ),
-                    avoidMotorways: Binding(
-                        get: { planner.avoidMotorways },
-                        set: { planner.avoidMotorways = $0 }
-                    )
-                )
-            }
             fromHereGuidanceAndRecovery
         }
     }
@@ -546,22 +522,25 @@ struct RoutePlannerCard: View {
             Text("Surface")
                 .font(DirtType.rowTitle)
                 .foregroundStyle(DirtTheme.ink)
-            Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
-                ForEach(RouteProfile.allCases) { profile in
-                    Label {
-                        Text(profile.title)
-                    } icon: {
-                        DirtSurfaceIcon.menuImage(for: profile.title)
-                    }
-                    .tag(profile)
+            Button {
+                showDefaultRideSettings = true
+            } label: {
+                HStack(spacing: 6) {
+                    DirtSurfaceIcon.menuImage(for: planner.profile.title)
+                    Text(planner.profile.title)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9, weight: .bold))
                 }
+                .font(DirtType.chip)
+                .fontWeight(.bold)
+                .foregroundStyle(DirtTheme.ink)
+                .frame(minWidth: DirtHit.dropdown, minHeight: DirtHit.min, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .pickerStyle(.menu)
-            .dirtDropdownSurface(titleColor: DirtTheme.ink)
-            .frame(minWidth: DirtHit.dropdown, alignment: .leading)
-            .labelsHidden()
-            .accessibilityLabel("Surface")
+            .buttonStyle(.plain)
+            .accessibilityLabel("Default ride settings")
             .accessibilityValue(planner.profile.title)
+            .accessibilityHint("Opens surface, Wander, access, and avoidance settings")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -632,8 +611,8 @@ struct RoutePlannerCard: View {
 
     @ViewBuilder private var planContent: some View {
 
-        // Mode chips live per-stage (tap a stage to expand). Hide the top row
-        // until the first stage exists so empty Plan stays clean.
+        surfaceDirtIsland
+
         if planner.stages.isEmpty {
             VStack(spacing: 8) {
                 helperBoxLabel(
@@ -747,7 +726,7 @@ struct RoutePlannerCard: View {
     @ViewBuilder private var stageList: some View {
         // Native List owns horizontal gesture arbitration: a left swipe reveals
         // Delete without opening the profile disclosure or moving the map.
-        let bandHeight: CGFloat = selectedStage == nil ? 210 : 280
+        let bandHeight: CGFloat = 210
         let visibleRows = planner.stages.count
         let collapsedHeight = min(
             bandHeight,
@@ -760,7 +739,7 @@ struct RoutePlannerCard: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .listRowSpacing(10)
-            .frame(height: selectedStage == nil ? collapsedHeight : bandHeight)
+            .frame(height: collapsedHeight)
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.hidden)
             .onAppear {
@@ -774,29 +753,6 @@ struct RoutePlannerCard: View {
                     proxy.scrollTo(last, anchor: .bottom)
                 }
             }
-            .onChange(of: selectedStage) {
-                guard let index = selectedStage, planner.stages.indices.contains(index) else { return }
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(planner.stages[index].id, anchor: .bottom)
-                }
-            }
-        }
-    }
-
-    private func scrollToNewestStage(_ proxy: ScrollViewProxy, animated: Bool) {
-        guard let last = planner.stages.last?.id else { return }
-        if animated {
-            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(last, anchor: .bottom) }
-        } else {
-            proxy.scrollTo(last, anchor: .bottom)
-        }
-    }
-
-    /// Keep an expanding stage in view — its detail is taller than the collapsed row.
-    private func revealSelectedStage(_ proxy: ScrollViewProxy) {
-        guard let index = selectedStage, planner.stages.indices.contains(index) else { return }
-        withAnimation(.easeOut(duration: 0.25)) {
-            proxy.scrollTo(planner.stages[index].id, anchor: .bottom)
         }
     }
 
@@ -834,103 +790,26 @@ struct RoutePlannerCard: View {
         }
     }
 
-    /// One self-contained stage: metrics + profile control on a single tappable row,
-    /// with the profile options revealing *inside* the same card so the grouping reads.
+    /// One self-contained stage. The number focuses the map; the style opens
+    /// the leg-owned settings sheet.
     @ViewBuilder private func stageBlock(index: Int, stage: RoutePlannerModel.Stage) -> some View {
-        let isActive = selectedStage == index
         StageCard(
             number: index + 1,
             profileTitle: stage.profile.title,
-            isActive: isActive,
-            onToggle: { toggleStageSelection(index) },
+            isActive: false,
+            onToggle: {
+                if planner.showingLoop {
+                    showDefaultRideSettings = true
+                } else {
+                    selectedStage = index
+                }
+            },
             onFocus: { planner.focusStage(at: index) },
             endpointTitle: planner.stageEndpointTitle(at: index),
             endpointIsFuelStation: planner.stageEndpointIsFuelStation(at: index),
             viaSubtitle: planner.stageFuelStationSubtitle(at: index),
             headline: { stageHeadline(stage, at: index) },
-            detail: {
-                VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                    if stage.response != nil {
-                        Button {
-                            planner.focusEntireStage(at: index)
-                        } label: {
-                            Label(
-                                "View entire leg",
-                                systemImage: "arrow.up.left.and.arrow.down.right"
-                            )
-                            .font(DirtType.chip)
-                            .fontWeight(.bold)
-                            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(DirtTheme.ink)
-                        .background(
-                            DirtTheme.wash,
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        )
-                        .accessibilityHint("Fits the complete geometry for this leg on the map")
-                    }
-                    if let notice = planner.profileAvailabilityNotice(at: index) {
-                        Label(notice, systemImage: "exclamationmark.triangle.fill")
-                            .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.action)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if !planner.showingLoop, stage.endsAtFuelStop, planner.canReplaceFuelStop(at: index) {
-                        Button {
-                            planner.selectFuelWaypoint(at: index)
-                        } label: {
-                            Label("Choose another pump", systemImage: "fuelpump.circle.fill")
-                                .font(DirtType.chip)
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(DirtTheme.action)
-                        .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                    if !planner.showingLoop {
-                    profileSegments(active: stage.profile) { profile in
-                        planner.setFuelHopProfile(profile, at: index)
-                        withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
-                    }
-                    profilePolicyToggle(
-                        profile: stage.profile,
-                        allowUnknown: Binding(
-                            get: { stage.allowUnknown },
-                            set: { on in
-                                if on {
-                                    unknownAckStage = index
-                                    showUnknownAck = true
-                                } else {
-                                    planner.setStageAllowUnknown(false, at: index)
-                                }
-                            }
-                        ),
-                        avoidMotorways: Binding(
-                            get: { stage.avoidMotorways },
-                            set: { planner.setStageAvoidMotorways($0, at: index) }
-                        )
-                    )
-                    if stage.error != nil, stage.profile != .cleanest {
-                        Button {
-                            planner.setFuelHopProfile(.cleanest, at: index)
-                        } label: {
-                            Label(
-                                "Use Clean for this leg",
-                                systemImage: "arrow.triangle.2.circlepath"
-                            )
-                            .font(DirtType.chip)
-                            .fontWeight(.bold)
-                            .foregroundStyle(DirtTheme.action)
-                            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                            .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    }
-                }
-            }
+            detail: { EmptyView() }
         )
     }
 
@@ -1103,88 +982,7 @@ struct RoutePlannerCard: View {
             + "Check departure times, seasonal service, and motorcycle boarding before you ride."
     }
 
-    /// Equal-width profile segments. Reads as one control instead of three loose pills.
-    private func profileSegments(
-        active: RouteProfile,
-        onSelect: @escaping (RouteProfile) -> Void
-    ) -> some View {
-        HStack(spacing: 4) {
-            ForEach(RouteProfile.allCases) { profile in
-                Button {
-                    onSelect(profile)
-                } label: {
-                    Text(profile.title)
-                        .font(DirtType.chip)
-                        .fontWeight(.bold)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .foregroundStyle(active == profile ? DirtTheme.onOrange : DirtTheme.ink)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: DirtHit.min)
-                        .background(active == profile ? DirtTheme.orange : DirtTheme.wash)
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .stroke(
-                                    active == profile
-                                        ? DirtTheme.onOrange.opacity(0.25)
-                                        : DirtTheme.hairline,
-                                    lineWidth: 1
-                                )
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(active == profile ? [.isSelected] : [])
-            }
-        }
-    }
-
-    private func toggleStageSelection(_ index: Int) {
-        withAnimation(.easeInOut(duration: 0.18)) {
-            selectedStage = selectedStage == index ? nil : index
-        }
-    }
-
     // MARK: - Shared rows
-
-    /// Lives in the expanded profile band — not on the dense stage metrics row.
-    /// Fuel-leg details stay to two compact control rows: profile and access.
-    /// The full legal explanation was already acknowledged when Allow was enabled.
-    private func compactAllowUnknownControl(
-        stage: RoutePlannerModel.Stage,
-        index: Int
-    ) -> some View {
-        HStack(spacing: DirtSpace.tight) {
-            Text(stage.profile == .cleanest ? "Unknown access off for Clean" : "Allow unknown access")
-                .font(DirtType.helper)
-                .foregroundStyle(DirtTheme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer(minLength: 0)
-            Toggle(
-                "",
-                isOn: Binding(
-                    get: { stage.allowUnknown },
-                    set: { on in
-                        if on {
-                            unknownAckStage = index
-                            showUnknownAck = true
-                        } else {
-                            planner.setStageAllowUnknown(false, at: index)
-                        }
-                    }
-                )
-            )
-            .labelsHidden()
-            .tint(DirtTheme.orange)
-            .disabled(stage.profile == .cleanest)
-            .opacity(stage.profile == .cleanest ? 0.4 : 1)
-        }
-        .padding(.horizontal, DirtSpace.inner)
-        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-        .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-    }
 
     private func allowUnknownControl(
         binding: Binding<Bool>,
@@ -1549,6 +1347,149 @@ struct GPXImportButton: View {
         ) { result in
             guard case .success(let urls) = result, let url = urls.first else { return }
             app.planner.importGPX(from: url, context: modelContext, continueAsPlan: continueAsPlan)
+        }
+    }
+}
+
+private struct RideSettingsSheet: View {
+    let title: String
+    let scopeNote: String
+    let onSave: (RouteProfile, Bool, RidePreferences) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var profile: RouteProfile
+    @State private var allowUnknown: Bool
+    @State private var preferences: RidePreferences
+    @State private var showUnknownWarning = false
+
+    init(
+        title: String,
+        scopeNote: String,
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        preferences: RidePreferences,
+        onSave: @escaping (RouteProfile, Bool, RidePreferences) -> Void
+    ) {
+        self.title = title
+        self.scopeNote = scopeNote
+        self.onSave = onSave
+        _profile = State(initialValue: profile)
+        _allowUnknown = State(initialValue: profile == .cleanest ? false : allowUnknown)
+        _preferences = State(initialValue: preferences.normalized)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DirtSheetHeader(title: title, onClose: { dismiss() })
+            ScrollView {
+                VStack(alignment: .leading, spacing: DirtSpace.group) {
+                    Text(scopeNote)
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                        Text("Riding style")
+                            .font(DirtType.sectionLabel)
+                            .foregroundStyle(DirtTheme.muted)
+                        Picker("Riding style", selection: $profile) {
+                            ForEach(RouteProfile.allCases) { item in
+                                Text(item.title).tag(item)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: profile) { _, value in
+                            if value == .cleanest { allowUnknown = false }
+                        }
+                    }
+                    .padding(DirtSpace.row)
+                    .dirtGroupingSurface()
+
+                    VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                        settingsToggle(
+                            "Allow unknown",
+                            detail: profile == .cleanest
+                                ? "Clean uses roads verified for motorcycle access."
+                                : "May include roads whose motorcycle access is not confirmed.",
+                            isOn: Binding(
+                                get: { allowUnknown },
+                                set: { value in
+                                    if value { showUnknownWarning = true }
+                                    else { allowUnknown = false }
+                                }
+                            )
+                        )
+                        .disabled(profile == .cleanest)
+                        .opacity(profile == .cleanest ? 0.55 : 1)
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+                            HStack {
+                                Text("Ride Wander")
+                                    .font(DirtType.rowTitle)
+                                Spacer()
+                                Text("\(Int((preferences.wander * 100).rounded()))%")
+                                    .font(DirtType.metricInline)
+                                    .monospacedDigit()
+                            }
+                            Slider(value: $preferences.wander, in: 0...1, step: 0.05)
+                                .tint(DirtTheme.orange)
+                                .accessibilityLabel("Ride Wander")
+                                .accessibilityValue("\(Int((preferences.wander * 100).rounded())) percent")
+                            Text("Higher values give DIRT more room to find an interesting ride.")
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.muted)
+                        }
+
+                        Divider()
+                        settingsToggle("Avoid cities and towns", isOn: $preferences.avoidCities)
+                        Divider()
+                        settingsToggle("Avoid highways", isOn: $preferences.avoidHighways)
+                        Divider()
+                        settingsToggle("Avoid ferries", isOn: $preferences.avoidFerries)
+                    }
+                    .padding(DirtSpace.row)
+                    .dirtGroupingSurface()
+
+                    Button("Done") {
+                        onSave(profile, allowUnknown, preferences.normalized)
+                        dismiss()
+                    }
+                    .buttonStyle(DirtCTAStyle.brand())
+                }
+                .padding(.horizontal, DirtSpace.group)
+                .padding(.top, DirtSpace.tight)
+                .padding(.bottom, DirtSpace.section)
+            }
+        }
+        .background(DirtTheme.sheetMaterial)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(DirtTheme.sheetMaterial)
+        .alert("Unknown access is not permission", isPresented: $showUnknownWarning) {
+            Button("I understand — continue", role: .destructive) { allowUnknown = true }
+            Button("Cancel", role: .cancel) { allowUnknown = false }
+        } message: {
+            Text("Unknown-access routing may include roads that are unverified for motorcycles. Check signs and turn around when access is unclear.")
+        }
+    }
+
+    private func settingsToggle(
+        _ title: String,
+        detail: String? = nil,
+        isOn: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Toggle(title, isOn: isOn)
+                .font(DirtType.rowTitle)
+                .tint(DirtTheme.orange)
+                .frame(minHeight: DirtHit.min)
+            if let detail {
+                Text(detail)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

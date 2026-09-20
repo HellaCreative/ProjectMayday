@@ -22,6 +22,7 @@ nonisolated func reduce(
             preserving: itinerary.legs,
             fallbackProfile: itinerary.legs.last?.profile ?? .balanced,
             fallbackAllowUnknown: itinerary.legs.last?.allowUnknown ?? false,
+            fallbackRidePreferences: itinerary.legs.last?.ridePreferences ?? RidePreferences(),
             fallbackAvoidMotorways: itinerary.legs.last?.avoidMotorways ?? false,
             fallbackPreferBackRoads: itinerary.legs.last?.preferBackRoads ?? false
         )
@@ -44,6 +45,7 @@ nonisolated func reduce(
             preserving: itinerary.legs,
             fallbackProfile: split.profile,
             fallbackAllowUnknown: split.allowUnknown,
+            fallbackRidePreferences: split.ridePreferences,
             fallbackAvoidMotorways: split.avoidMotorways,
             fallbackPreferBackRoads: split.preferBackRoads
         )
@@ -80,6 +82,7 @@ nonisolated func reduce(
             preserving: itinerary.legs,
             fallbackProfile: fallbackLeg?.profile ?? .balanced,
             fallbackAllowUnknown: fallbackLeg?.allowUnknown ?? false,
+            fallbackRidePreferences: fallbackLeg?.ridePreferences ?? RidePreferences(),
             fallbackAvoidMotorways: fallbackLeg?.avoidMotorways ?? false,
             fallbackPreferBackRoads: fallbackLeg?.preferBackRoads ?? false
         )
@@ -119,6 +122,39 @@ nonisolated func reduce(
             legs: legs,
             rebuildFrom: legID == nil ? 0 : affected.first,
             rebuildThrough: legID == nil ? nil : affected.first
+        )
+
+    case .setLegRideSettings(let legID, let profile, let allowUnknown, let ridePreferences):
+        guard let index = itinerary.legs.firstIndex(where: { $0.id == legID }) else {
+            return unchanged(itinerary)
+        }
+        let normalized = ridePreferences.normalized
+        let effectiveUnknown = profile == .cleanest ? false : allowUnknown
+        let current = itinerary.legs[index]
+        guard current.profile != profile
+                || current.allowUnknown != effectiveUnknown
+                || current.ridePreferences != normalized
+        else { return unchanged(itinerary) }
+        var legs = itinerary.legs
+        legs[index].profile = profile
+        legs[index].allowUnknown = effectiveUnknown
+        legs[index].ridePreferences = normalized
+        legs[index].hopOverrides.removeAll()
+        legs[index].hopAvoidMotorways.removeAll()
+        legs[index].hopAllowUnknown.removeAll()
+        legs[index].fuelStopOverrides.removeAll()
+        if profile == .cleanest {
+            legs[index].avoidMotorways = normalized.avoidHighways
+        } else {
+            legs[index].avoidMotorways = false
+        }
+        legs[index].preferBackRoads = false
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: legs,
+            rebuildFrom: index,
+            rebuildThrough: index
         )
 
     case .setHopProfile(let legID, let stationID, let profile):
@@ -284,6 +320,7 @@ nonisolated func reduce(
             preserving: [],
             fallbackProfile: profile,
             fallbackAllowUnknown: allowUnknown,
+            fallbackRidePreferences: RidePreferences(),
             fallbackAvoidMotorways: avoidMotorways,
             fallbackPreferBackRoads: preferBackRoads
         )
@@ -323,6 +360,7 @@ private nonisolated func rebuiltLegs(
     preserving existing: [RiderLeg],
     fallbackProfile: RouteProfile,
     fallbackAllowUnknown: Bool,
+    fallbackRidePreferences: RidePreferences = RidePreferences(),
     fallbackAvoidMotorways: Bool = false,
     fallbackPreferBackRoads: Bool = false
 ) -> [RiderLeg] {
@@ -338,6 +376,7 @@ private nonisolated func rebuiltLegs(
             to: to,
             profile: fallbackProfile,
             allowUnknown: fallbackAllowUnknown,
+            ridePreferences: fallbackRidePreferences,
             avoidMotorways: fallbackAvoidMotorways,
             preferBackRoads: fallbackPreferBackRoads
         )

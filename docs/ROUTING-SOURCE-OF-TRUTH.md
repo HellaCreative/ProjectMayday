@@ -15,9 +15,8 @@ The current native engine is the implementation being improved. Existing code,
 packs, tests, and measured experiments are assets to evaluate, not obligations
 to preserve unsuccessful behavior. The earlier engine replacement is historical;
 the active task does not authorize another engine rewrite, reverting the app,
-or changing its interface beyond the owner-requested progress
-notice, matching Your ride to the existing Fuel Range panel, and the requested
-pack download/update progress window and Avoid ferries preference.
+or changing its interface beyond the owner-requested routing controls, progress
+notice, pack download/update progress window, and Profile fuel-notification settings.
 
 ### Fresh regional build qualification (owner authorization, September 19)
 
@@ -1462,7 +1461,7 @@ establish US coverage.
 
 ### Ferry-choice qualification — September 19
 
-The owner approved one Avoid ferries switch in Your ride, default on. It is
+The owner approved one Avoid ferries switch in ride settings, default on. It is
 carried through From here, Plan, Loop, saved preference decoding and navigation
 recovery. Ferry avoidance filters matching, exact road search, reverse guidance
 and regional road connections; guidance caches include the choice. Ferry-only
@@ -2036,24 +2035,21 @@ required for these default changes. The DIRT Dev build and all five focused
 including native defaults for all three styles and explicit saved-setting
 overrides. Evidence: `.build/ride-defaults-20260919b.xcresult`.
 
-The owner also requested that **Your ride** use the existing **Fuel Range**
-floating map panel presentation: same top entrance, placement, material, rounded
-border, shadow, compact header and Done action. The two panels now share their
-surface styling and presentation host; opening either closes the other. Your
-ride groups Wander and the two avoidance switches without nested cards. Done
-applies the draft once; closing via the settings button or switching to Fuel
-Range discards uncommitted edits. Removed the obsolete waypoint/fuel-road caveat
-and the obsolete online-planning/fuel-stages introduction. Reduced Motion uses a
-fade instead of the slide. Routing selection and defaults are unchanged.
+Ride settings now use one native modal in two roles. The Surface control in From
+Here, Loop and Plan edits the defaults copied into newly created legs. Tapping an
+existing Plan leg's Dirt, Balanced or Clean badge opens the same modal for that
+leg alone. The modal contains style, Allow Unknown, Ride Wander, Avoid cities
+and towns, Avoid highways and Avoid ferries. Done applies the draft once and
+rebuilds only the selected Plan leg; the numbered leg button already focuses
+that leg, so the old inline drawer controls and View entire leg action are
+removed. Cities and towns remain one routing rule because the engine treats
+them together.
 
-Verification: DIRT Dev simulator build succeeds (`.build/ride-panel-20260919.log`).
-On the existing iPhone17/iOS26.5 simulator, inspected both panels in portrait,
-opened/switched/closed them, changed a switch, applied with Done, reopened and
-verified the value, then restored it. The default 50% Wander and both avoidance
-switches on are visible. No obsolete copy remains. Landscape reflow could not be
-verified: the simulator rotated its display but the app stayed in its portrait
-layout. Large Dynamic Type and VoiceOver interaction remain unverified. A new
-native build is required; no physical-device installation was performed.
+Fuel remains advisory and never creates route waypoints. Its notification toggle,
+tank distance and reserve controls live in Profile and commit together with Done.
+They are removed from the route-map controls. This native change still requires a
+successful build, focused automated checks and physical-device acceptance before
+it is qualified.
 
 The owner requested a caveat inside the existing progress animation only after
 a route has been building for 20 seconds, including with Reduce Motion enabled.
