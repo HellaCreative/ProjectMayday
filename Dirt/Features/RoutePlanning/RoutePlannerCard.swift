@@ -1425,6 +1425,7 @@ private struct RideSettingsPanel: View {
     @State private var allowUnknown: Bool
     @State private var preferences: RidePreferences
     @State private var showUnknownWarning = false
+    @State private var ridingStyleSelectionIsMoving = false
     @Namespace private var ridingStyleSelection
 
     init(
@@ -1542,20 +1543,42 @@ private struct RideSettingsPanel: View {
         HStack(spacing: 3) {
             ForEach(RouteProfile.allCases) { item in
                 Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                    guard item != profile else { return }
+                    ridingStyleSelectionIsMoving = true
+                    withAnimation(
+                        .spring(response: 0.28, dampingFraction: 0.9),
+                        completionCriteria: .logicallyComplete
+                    ) {
                         profile = item
                         if item == .cleanest { allowUnknown = false }
+                    } completion: {
+                        withAnimation(.easeOut(duration: 0.08)) {
+                            ridingStyleSelectionIsMoving = false
+                        }
                     }
                 } label: {
                     ZStack {
                         if profile == item {
                             Capsule()
-                                .fill(.ultraThinMaterial)
+                                .fill(
+                                    ridingStyleSelectionIsMoving
+                                        ? AnyShapeStyle(.ultraThinMaterial)
+                                        : AnyShapeStyle(Color.white)
+                                )
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color.white.opacity(0.62), lineWidth: 1)
+                                        .stroke(
+                                            ridingStyleSelectionIsMoving
+                                                ? Color.white.opacity(0.62)
+                                                : DirtTheme.hairline,
+                                            lineWidth: 1
+                                        )
                                 )
-                                .shadow(color: .black.opacity(0.14), radius: 4, y: 2)
+                                .shadow(
+                                    color: .black.opacity(ridingStyleSelectionIsMoving ? 0.14 : 0.08),
+                                    radius: ridingStyleSelectionIsMoving ? 4 : 2,
+                                    y: ridingStyleSelectionIsMoving ? 2 : 1
+                                )
                                 .matchedGeometryEffect(
                                     id: "ride-style-glass",
                                     in: ridingStyleSelection

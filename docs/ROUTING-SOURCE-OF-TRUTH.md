@@ -2040,7 +2040,8 @@ the header and dismisses upward, matching the earlier fuel/settings presentation
 rather than rising from the bottom. While open, the panel sits above the map
 controls and dock so unrelated controls cannot overlap it; the DIRT header remains
 above it. Its Clean, Balanced and Dirt control uses larger type on the brand-orange
-track with a sliding glass selected segment. The settings fit in one fixed panel
+track with an opaque white resting selection. The selection becomes translucent
+glass only while it slides, then settles back to white. The settings fit in one fixed panel
 without an internal scrolling surface. The panel enters from just beneath the
 header with a short, lightly damped spring, and its header has deliberate top
 clearance around the close control. The Surface control in From Here, Loop and
