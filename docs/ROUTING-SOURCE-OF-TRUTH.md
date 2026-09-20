@@ -43,6 +43,19 @@ authorized build/test/DEV-publication work. Production remains unchanged.
 Overnight follow-ups are resumption checks, not an eight-hour estimate for the
 seven packs or a guarantee of continental completion by morning.
 
+Continental factory milestone (September 20, 09:45 UTC): all **70 catalog
+regions** have completed their graph/geometry/fuel and separate Rider Services
+builds for `fabric-v4-20260920-01`. The four Texas pieces replace the retained,
+uncatalogued monolithic Texas trial; that trial is not a release member.
+`continental-graph-artifact-inventory.json` records the locked catalog's source
+identity and per-region artifact/report inventory: one source epoch, matching
+geometry-preparation edge counts in all 70 packs, and zero reported unproven
+stitches. Graphs total 5.908 GiB, geometry 5.086 GiB and fuel 0.034 GiB before
+seams. These are stored bytes, not required downloads or resident memory for
+one journey. All 155 neighboring-pair seam checks and the full native/app route
+matrix remain in progress or queued; the candidate is not yet sealed, qualified,
+published or installed on White. The existing DEV release remains active.
+
 Continental preparation verification (September 20, evidence in
 `.build/continental-qualification-20260920`): all seven existing immutable
 packs pass a fresh `verifyRegion` audit, including graph/geometry/fuel/seams,
