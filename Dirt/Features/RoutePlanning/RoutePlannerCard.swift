@@ -581,14 +581,14 @@ struct RoutePlannerCard: View {
         surfaceDirtIsland
     }
 
-    /// Surface label + profile menu share the row evenly so neither control
-    /// bunches against the leading edge.
+    /// Compact Surface island with breathing room between its label and CTA.
     private var surfaceDirtIsland: some View {
-        HStack(spacing: DirtSpace.tight) {
+        HStack(spacing: 0) {
             Text("Surface")
                 .font(DirtType.rowTitle)
                 .foregroundStyle(DirtTheme.ink)
-                .frame(maxWidth: .infinity, alignment: .center)
+            Spacer(minLength: DirtSpace.tight)
+                .frame(maxWidth: DirtSpace.group)
             Button {
                 openDefaultSettings()
             } label: {
@@ -601,10 +601,9 @@ struct RoutePlannerCard: View {
                 .font(DirtType.chip)
                 .fontWeight(.bold)
                 .foregroundStyle(DirtTheme.ink)
-                .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .center)
+                .frame(minWidth: DirtHit.dropdown, minHeight: DirtHit.min, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity)
             .buttonStyle(.plain)
             .accessibilityLabel("Default ride settings")
             .accessibilityValue(planner.profile.title)
@@ -620,8 +619,9 @@ struct RoutePlannerCard: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: DirtHit.min)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: DirtHit.min, alignment: .leading)
     }
 
     /// Empty / error From here — always leave a next step (never red text alone).
