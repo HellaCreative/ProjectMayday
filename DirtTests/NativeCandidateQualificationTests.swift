@@ -81,6 +81,46 @@ struct NativeCandidateQualificationTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(10)))
+    func denseContinentalRidesCompleteColdAndWarmThroughAppSession() async throws {
+        let cases: [(String, [String], Coordinate, Coordinate)] = [
+            ("kitchener-barrie", ["on-s"],
+             .init(longitude: -80.4925, latitude: 43.4516), .init(longitude: -79.6903, latitude: 44.3894)),
+            ("austin-houston", ["tx-sw", "tx-se"],
+             .init(longitude: -97.7431, latitude: 30.2672), .init(longitude: -95.3698, latitude: 29.7604)),
+            ("los-angeles-san-diego", ["ca-s"],
+             .init(longitude: -118.2437, latitude: 34.0522), .init(longitude: -117.1611, latitude: 32.7157))
+        ]
+        for (name, regions, start, end) in cases {
+            let session = NativeRoutingSession()
+            let directories = Dictionary(uniqueKeysWithValues: regions.map { ($0, root.appendingPathComponent($0)) })
+            var firstRoads: [String]?
+            for run in 0...1 {
+                var request = RoutingRequest(start: start, end: end, style: .dirt, allowUnknown: false, seed: 1)
+                request.profile.wander = 0.5
+                request.profile.avoidMajorHighways = true
+                request.access.avoidFerries = true
+                request.options.cityWall = true
+                let started = ContinuousClock.now
+                let route = try await session.route(request, directories: directories)
+                #expect(started.duration(to: .now) < .seconds(180))
+                #expect(route.limit == nil)
+                #expect(route.start.coordinate.distance(to: start) <= 250)
+                #expect(route.end.coordinate.distance(to: end) <= 250)
+                #expect(route.segments.allSatisfy { ![2, 5].contains($0.access) && $0.structure != "ferry" })
+                verifyShortUnknownConnectors(route)
+                #expect(RouteQuality(route: route).reriddenMeters <= 100)
+                let roads = route.segments.map { "\($0.edgeID):\($0.forward)" }
+                if let firstRoads { #expect(roads == firstRoads) } else { firstRoads = roads }
+                // The host matrix measures isolated per-process RSS. This app
+                // report also retains the process-lifetime footprint peak; it
+                // must not be mislabeled as a reset, per-request peak.
+                #expect(ProcessMemory.megabytes().peak < 1_300)
+                report("dense-\(name)-run\(run)", started: started, route: route)
+            }
+        }
+    }
+
     @Test(.timeLimit(.minutes(3)))
     func confederationBridgeCompletesBothDirectionsInEveryStyle() async throws {
         let directories = Dictionary(uniqueKeysWithValues: ["nb", "pe"].map { ($0, root.appendingPathComponent($0)) })

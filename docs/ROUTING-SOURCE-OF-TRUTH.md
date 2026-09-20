@@ -207,7 +207,9 @@ thinned. The first Austin–Houston replay reached both routing stages within
 939,261,952 bytes kernel peak RSS, then rejected a complete road because an
 optional comparison expired. That runtime defect now keeps a completed road's
 own completion status separate from `comparisonStopped` diagnostics; genuine
-incomplete roads, invalid data and cancellation still fail. The repaired replay
+incomplete roads, invalid data and cancellation still fail. All 141 native engine
+tests pass, including completed-versus-incomplete comparison and cancellation
+regressions. The repaired replay
 completes in 34.619 s (35.06 s process wall time), 886,161,408 bytes kernel peak
 RSS and 500,878,720 bytes physical footprint. Independent receipts pass continuity,
 matching, settings, access, repeated-road and resource checks. Evidence:
