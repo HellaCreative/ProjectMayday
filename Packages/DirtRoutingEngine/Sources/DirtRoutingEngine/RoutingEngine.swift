@@ -304,7 +304,13 @@ public struct RoutingEngine: Sendable {
                     let failureBefore = incomplete
                     route = try run(options)
                     quality = RouteQuality(route: route,urbanBoxes: UrbanCores.boxes(in: pack))
-                    if route.limit == nil && quality.knownDirtPercent < 70 {
+                    // A second whole-region comparison is optional. When the
+                    // first legal route has already consumed most of the label
+                    // allowance, repeating that flood can use the rest of the
+                    // window and return no better ride. Keep the completed road
+                    // and leave time for seeded ride-area proposals instead.
+                    let comparisonHasHeadroom = route.poppedLabels < budget.maximumLabels * 4 / 5
+                    if route.limit == nil && quality.knownDirtPercent < 70 && comparisonHasHeadroom {
                         var profileOptions = options
                         profileOptions.objective = .profile
                         do {

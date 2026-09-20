@@ -994,13 +994,20 @@ public enum StagedRouter {
         }
         reach = checker
         // Intent ranks matches, but the first direction can lead into a dead
-        // end or a clipped overlap. This is a necessary-only preflight: reject
-        // only when every candidate pair the router can try is disconnected.
-        for start in starts {
-            for end in ends where WeakComponents.of(match: start, pack: graph, ids: components)
-                == WeakComponents.of(match: end, pack: graph, ids: components) {
-                if try checker.mayConnect(start: start, end: end, budget: budget) { return true }
-            }
+        // end or a clipped overlap. Walk once from all origin matches in each
+        // shared weak component. The origin is stable across seam candidates,
+        // so later candidates reuse the exact directed field.
+        let startGroups = Dictionary(grouping: starts) {
+            WeakComponents.of(match: $0, pack: graph, ids: components)
+        }
+        let endGroups = Dictionary(grouping: ends) {
+            WeakComponents.of(match: $0, pack: graph, ids: components)
+        }
+        for component in startGroups.keys.sorted() {
+            guard let componentStarts = startGroups[component],
+                  let componentEnds = endGroups[component] else { continue }
+            if try checker.mayConnectAny(starts: componentStarts, ends: componentEnds,
+                                         budget: budget) { return true }
         }
         return false
     }

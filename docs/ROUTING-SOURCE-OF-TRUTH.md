@@ -43,92 +43,51 @@ authorized build/test/DEV-publication work. Production remains unchanged.
 Overnight follow-ups are resumption checks, not an eight-hour estimate for the
 seven packs or a guarantee of continental completion by morning.
 
-Continental factory milestone (September 20, 09:45 UTC): all **70 catalog
-regions** have completed their graph/geometry/fuel and separate Rider Services
-builds for `fabric-v4-20260920-01`. The four Texas pieces replace the retained,
-uncatalogued monolithic Texas trial; that trial is not a release member.
-`continental-graph-artifact-inventory.json` records the locked catalog's source
-identity and per-region artifact/report inventory: one source epoch, matching
-geometry-preparation edge counts in all 70 packs, and zero reported unproven
-stitches. Graphs total 5.908 GiB, geometry 5.086 GiB and fuel 0.034 GiB before
-seams. These are stored bytes, not required downloads or resident memory for
-one journey. All 155 neighboring-pair seam checks and the full native/app route
-matrix remain in progress or queued; the candidate is not yet sealed, qualified,
-published or installed on White. The existing DEV release remains active.
+Continental factory milestone (September 20): `fabric-v4-20260920-01` is a
+sealed candidate containing **70 catalog regions** and **155 verified neighboring
+pairs**, all derived from source epoch
+`osm-20260918T202110Z-3a56f675df146786`. The four Texas pieces replace the
+uncatalogued monolithic Texas trial. Graphs total 5.908 GiB, geometry 5.086 GiB
+and fuel 0.034 GiB before seams. These are stored continental totals, not one
+rider's download or the memory needed for one journey. Production and White
+remain unchanged. DEV publication waits for the serial host and app route gates.
 
-Continental split-memory finding (September 20): the completed California
-north/south seam pair contains 579,250 proofs, reflecting its broad 0.25° extra
-overlap. An isolated, complete California seam view was extracted from the
-factory checkpoint without dropping proof records; it is diagnostic input,
-not a separately qualified or published fabric. The default-budget San
-Jose–Salinas Dirt request exceeded a 2 GiB sampled-RSS safety ceiling before
-searching. A process sample located whole-file JSON decoding in regional join.
-The first bounded streamed-reader version retained the exact Halifax–Saint
-Stephen directed-road hash on the existing seven-pack fabric; later compact
-storage changes require their own integrated qualification.
-Its California replay reduces kernel peak RSS to 1,329,610,752 bytes and peak
-physical footprint to 940,921,664 bytes, but still times out at 60.202 s before
-search: pack opening 26.384 s, join 33.808 s. This is an unresolved qualification
-failure, not a completed memory repair. Evidence: `california-seam-memory-preflight`,
-`california-streamed-seam-preflight` and `streamed-seam-compatibility` under the
-continental evidence directory. No published pack, routing permission, search
-budget, or phone installation has changed.
+The accepted runtime candidate streams seam facts, uses compact mapped integer
+and search-history storage, reuses fixed-origin directed reachability, and uses a
+specialized reverse-guidance queue. Installation now records a small verification
+receipt after validating every downloaded artifact. The receipt is bound to the
+manifest hash, expected artifact hashes, sizes, file identities and modification
+times; any changed or replaced file restores full checksum verification. This
+keeps pack integrity checks at installation while avoiding hundreds of megabytes
+of repeated SHA reads at every route launch. The receipt is derived local state
+and does not change published pack bytes.
 
-The compact proof representation and one-sided reciprocal lookup subsequently
-measured 1,311,326,208 bytes kernel peak RSS / 749,392,256 bytes physical footprint
-on the same external-drive replay. It still timed out at 60.026 s before search
-(open 26.534 s, join 32.319 s). A byte-for-byte, hash-verified copy on the internal
-SSD completed in 54.851 s (open 3.199 s, join 22.216 s, index 5.384 s), with
-1,569,669,120 bytes peak RSS / 825,119,744 bytes physical footprint. The completed
-138.534 km route contains no known dirt. These diagnostic comparisons isolate a
-storage contribution, not physical-phone performance or acceptable ride quality;
-both remain above the continental RSS gate. Evidence: `california-compact-seam-preflight`,
-`california-compact-seam-internal-preflight`, and `california-internal-input-copy.json`.
+Current same-binary app qualification on the existing iOS 26.5 simulator passes
+the dense representative set with Wander 50%, Unknown off, and city/highway/ferry
+avoidance on. Kitchener–Barrie completes in 15.2 s cold / 7.9 s warm at 63.2%
+known dirt and peaks at 193 MB physical footprint. Austin–Houston completes in
+35.0 / 20.9 s at 8.4% known dirt and peaks at 324 MB. Los Angeles–San Diego
+completes in 50.3 / 42.4 s, peaks at 575 MB, and currently reports 0% known dirt.
+The California result is a disclosed route-quality limitation under these strict
+settings, not a reason to widen access, disable avoidance, or mislabel pavement.
+Its completed legal route is retained once the first search consumes at least
+80% of the label allowance; an optional second whole-region comparison may no
+longer exhaust the remaining calculation window. Evidence:
+`.build/continental-qualification-20260920/receipt-app-dense-6.xcresult` and
+`ca-s-comparison-headroom.json`.
 
-A fresh normal Debug app build now passes after removing package-forced WMO.
-The six-replay dense app test does not pass: Kitchener–Barrie completes cold/warm
-in 44.283 / 18.802 s with the same 204 km, 63.2% known-dirt route, but Austin–Houston
-reaches its 60 s calculation limit. California is not reached by that test after
-the thrown Texas failure. Evidence: `streamed-seam-clean-build` and
-`streamed-seam-clean-app-tests.xcresult`. Exposing only chunked-label operations
-for cross-file optimization did not recover the earlier WMO speed. Exposing
-generic mapped-column and priority-queue operations also made no material
-difference (Kitchener 43.453 / 18.730 s); its Texas attempt failed again, with a
-three-second process sample during that attempt rather than a clean timing run.
-That sample identifies repeated generic integer-load metadata work during
-seam endpoint reachability. The current repair uses concrete signed/unsigned
-little-endian loads and an explicitly retained mapping, and stores large proof
-lists in fixed chunks. All 163 engine tests pass, including unaligned integer
-extremes, atomic file replacement, escaped Data lifetime, and 8,193 ordered seam
-records. An initial lifetime defect on tiny mapped files was caught and repaired;
-the failed test output is retained. Evidence: `inline-primitives-app-sample.txt`,
-`concrete-columns-build/engine-tests.log`, and `concrete-columns-fixed-build`.
-The normal Debug app build passes. Kitchener–Barrie improves to 28.616 / 14.925 s
-cold/warm with the same 204 km and 63.2% known dirt, but Austin–Houston still
-reaches its 60 s limit, so California is not reached in that app test. Evidence:
-`concrete-columns-fixed-app-tests.xcresult`. The chunked-proof California internal
-SSD diagnostic completes in 54.951 s, with the same 138.534 km road hash and no
-known dirt, but its 1,676,902,400-byte RSS peak is worse than the preceding flat
-proof-list run. Chunking those proof lists is not a demonstrated improvement.
-Evidence: `california-chunked-concrete-internal-preflight`. Pack bytes and routing
-controls are unchanged. Do not count earlier WMO app timings as current Play
-qualification.
+Exact road equality is used only when qualifying a low-level storage or loading
+change against the same request and seed. It is not a product objective. Across
+fresh seeds, Dirt should offer meaningfully different legal rides within the
+selected style and Wander setting. Saved rider routes retain their accepted
+geometry; newly generated routes are not required to reproduce an earlier line.
 
-The next same-request process sample identifies generic search-history access as
-a hot path. Merely forcing its generic helpers inline did not improve timing
-(29.158 → 30.207 s); that annotation experiment was removed. A concrete label
-history retaining the identical 4,096-record chunks, parent indices and payload
-limit completes the Debug host replay in 22.650 s, search 15.881 → 9.153 s. All
-1,045,321 examined labels, 204 km, 63.2% known dirt and directed-road SHA-256
-`69b71e25e5f17bbc67238b75a12aa800004002ae35d292debbd8a3e03c3f1f3b` agree.
-All 163 engine tests and the fresh normal app build pass. Through the app,
-Kitchener–Barrie improves from 28.616 / 14.925 s to 21.100 / 8.586 s cold/warm,
-with the same roads and dirt share. Austin–Houston still reaches the 60 s window,
-after 27.506 s of search and 3,485,395 pops, so the six-replay app test remains
-failed and California is not reached. These are simulator diagnostics, not phone
-timings. Evidence: `kitchener-concrete-debug-profile`,
-`kitchener-forced-inline-label-profile`, `kitchener-concrete-label-profile`,
-`concrete-label-build`, and `concrete-label-app-app-tests.xcresult`.
+The complete serial continental host matrix is running against the sealed
+candidate and the current probe. It covers internal journeys in every region and
+style plus both directions and styles for every neighboring pair, with explicit
+settings, endpoint, legality, geometry, repeated-road, elapsed-time and RSS gates.
+The app matrix remains queued behind it so the two heavy jobs do not compete.
+The candidate is not qualified or published until both gates pass.
 
 Continental preparation verification (September 20, evidence in
 `.build/continental-qualification-20260920`): all seven existing immutable

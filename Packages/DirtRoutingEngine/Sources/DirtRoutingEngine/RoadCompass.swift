@@ -1,5 +1,45 @@
 import Foundation
 
+/// Concrete min-heap for the reverse distance field. This loop processes
+/// millions of entries on dense regional windows; keeping the comparison
+/// statically dispatched avoids the generic closure call on every sift step.
+private struct CompassHeap {
+    struct Entry {
+        let node: Int32
+        let meters: Double
+    }
+    private var values: [Entry] = []
+    private static func before(_ a: Entry, _ b: Entry) -> Bool {
+        a.meters == b.meters ? a.node < b.node : a.meters < b.meters
+    }
+    mutating func push(node: Int, meters: Double) {
+        let value = Entry(node: Int32(node), meters: meters)
+        values.append(value)
+        var index = values.count - 1
+        while index > 0 {
+            let parent = (index - 1) >> 1
+            if !Self.before(values[index], values[parent]) { break }
+            values.swapAt(index, parent)
+            index = parent
+        }
+    }
+    mutating func pop() -> Entry? {
+        guard !values.isEmpty else { return nil }
+        if values.count == 1 { return values.removeLast() }
+        let first = values[0]
+        values[0] = values.removeLast()
+        var index = 0
+        while (index << 1) + 1 < values.count {
+            let left = (index << 1) + 1, right = left + 1
+            let best = right < values.count && Self.before(values[right], values[left]) ? right : left
+            if !Self.before(values[best], values[index]) { break }
+            values.swapAt(best, index)
+            index = best
+        }
+        return first
+    }
+}
+
 /// Reuses recent destination remaining tables across corridor, endpoint and fuel
 /// passes, matching JS `roadCompassCache`. Keys must identify the graph as well as
 /// the destination, because one store outlives a change of prepared regions.
@@ -53,12 +93,13 @@ public struct RoadCompass: Sendable {
                 }
             }
         }
+        guard count < Int(Int32.max) else { throw RoutingFailure.resourceLimit("road compass") }
         var remaining = Array(repeating: Double.infinity, count: count)
-        var heap = BinaryHeap<(Int, Double)> { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 < $1.1 }
+        var heap = CompassHeap()
         func seed(_ node: Int, _ meters: Double) {
             guard node >= 0, node < count, meters < remaining[node] else { return }
             remaining[node] = meters
-            heap.push((node, meters))
+            heap.push(node: node, meters: meters)
         }
         let length = pack.distance(end.edge)
         let along = max(0, min(length, end.alongMeters))
@@ -68,17 +109,18 @@ public struct RoadCompass: Sendable {
         while let current = heap.pop() {
             if pops & 255 == 0 { try budget.check() }
             pops += 1
-            if current.1 != remaining[current.0] { continue }
-            if current.1 > maxRemaining { continue }
-            for slot in Int(arcs.inStart[current.0])..<Int(arcs.inStart[current.0 + 1]) {
+            let node = Int(current.node)
+            if current.meters != remaining[node] { continue }
+            if current.meters > maxRemaining { continue }
+            for slot in Int(arcs.inStart[node])..<Int(arcs.inStart[node + 1]) {
                 let arc = Int(arcs.inArcs[slot])
                 if avoidFerries && pack.structure(Int(arcs.outEdge[arc])) == "ferry" { continue }
                 let from = arcs.source(arc), meters = arcs.distance(arc)
                 guard meters.isFinite, meters >= 0 else { continue }
-                let candidate = current.1 + meters
+                let candidate = current.meters + meters
                 if candidate < remaining[from] {
                     remaining[from] = candidate
-                    heap.push((from, candidate))
+                    heap.push(node: from, meters: candidate)
                 }
             }
         }

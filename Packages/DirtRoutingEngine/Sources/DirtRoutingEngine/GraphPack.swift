@@ -107,7 +107,8 @@ public final class GraphPack: Sendable {
         try self.init(graph: BinaryFile(url: graphURL), geometry: BinaryFile(url: geometryURL), budget: budget)
     }
     init(graph: BinaryFile, geometry: BinaryFile, budget: ComputationBudget,
-         structuralValidation: Bool = true) throws {
+         structuralValidation: Bool = true,
+         verifiedIdentity: (graph: String, geometry: String)? = nil) throws {
         try budget.check()
         try graph.range(0, 140)
         guard try graph.read(0, as: UInt32.self) == 0x34545244,
@@ -144,10 +145,21 @@ public final class GraphPack: Sendable {
         enums = try graph.json(offset(56),offset(60),as: PackEnums.self)
         metadata = try graph.json(offset(60),offset(72),as: PackMetadata.self)
         sourceEpoch = try graph.json(offset(128),offset(132),as: PackMetadata.self).sourceEpoch
-        // BinaryFile memoizes SHA256; reuse the same digest for identity and fields.
-        graphSHA256 = try graph.sha256
-        let geometryDigest = try geometry.sha256Digest()
-        geometrySHA256 = try geometry.sha256
+        // Installation verifies every byte. A durable receipt tied to the
+        // installed file revisions lets later launches reuse those digests.
+        // Without that receipt, compute both hashes here as before.
+        let geometryDigest: Data
+        if let verifiedIdentity,
+           let digest = Data(hexadecimal: verifiedIdentity.geometry) {
+            graphSHA256 = verifiedIdentity.graph
+            geometrySHA256 = verifiedIdentity.geometry
+            geometryDigest = digest
+        } else {
+            // BinaryFile memoizes SHA256; reuse each digest for identity and fields.
+            graphSHA256 = try graph.sha256
+            geometryDigest = try geometry.sha256Digest()
+            geometrySHA256 = try geometry.sha256
+        }
         let identityAt = try offset(136)
         try graph.range(identityAt,32)
         guard geometryDigest == graph.data.subdata(in: identityAt..<(identityAt+32)) else {
@@ -298,5 +310,21 @@ public final class GraphPack: Sendable {
             return Coordinate(longitude: Double(Float(bitPattern: geometry.unchecked(geometryCoordinatesOffset+i*4,as: UInt32.self))),
                               latitude: Double(Float(bitPattern: geometry.unchecked(geometryCoordinatesOffset+(i+1)*4,as: UInt32.self))))
         }
+    }
+}
+
+private extension Data {
+    init?(hexadecimal: String) {
+        guard hexadecimal.count == 64 else { return nil }
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(32)
+        var index = hexadecimal.startIndex
+        for _ in 0..<32 {
+            let next = hexadecimal.index(index, offsetBy: 2)
+            guard let byte = UInt8(hexadecimal[index..<next], radix: 16) else { return nil }
+            bytes.append(byte)
+            index = next
+        }
+        self.init(bytes)
     }
 }

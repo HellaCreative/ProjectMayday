@@ -13,6 +13,7 @@ import DirtRoutingEngine
 //   DIRT_DIRT_PAVEMENT_AWAY=<n>    Dirt pavement away multiplier at full wander (10/4/2/1)
 //   DIRT_WANDER=<0..1>             detour appetite (default 1)
 //   DIRT_LOOP_METERS=<n>           build a loop of n metres from FROM to TO and back
+//   DIRT_PERSIST_VERIFIED_PACKS=1  record durable receipts after full verification
 let arguments = Array(CommandLine.arguments.dropFirst())
 let environment = ProcessInfo.processInfo.environment
 guard (8...12).contains(arguments.count),
@@ -91,6 +92,17 @@ do {
         let start = Coordinate(longitude: lonA, latitude: latA)
         let dest = Coordinate(longitude: lonB, latitude: latB)
         stageLong = fuelUsable == nil && StagedRouter.shouldStage(regionCount: regions.count, start: start, end: dest)
+        if environment["DIRT_PERSIST_VERIFIED_PACKS"] == "1" {
+            // Mirror a completed app installation before timing either the
+            // direct or staged route. Installation has already checksum-
+            // verified every artifact; subsequent calculations validate the
+            // compact receipt and structural graph identities instead of
+            // rereading hundreds of megabytes solely to repeat SHA-256.
+            _ = try measuredPreparation(&directOpenSeconds) {
+                try regions.map { try repository.open($0, requireSeams: regions.count > 1, budget: budget) }
+            }
+            for region in regions { try repository.persistVerificationReceipt(for: region) }
+        }
         if !stageLong {
             let packs = try measuredPreparation(&directOpenSeconds) {
                 try regions.map { try repository.open($0,requireSeams: regions.count > 1,budget: budget) }

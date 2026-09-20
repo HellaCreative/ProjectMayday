@@ -123,6 +123,38 @@ struct RoutingEngineTests {
         }
     }
 
+    @Test func fixedOriginReachabilityMatchesPairwiseDirectedScreening() throws {
+        let line = PolicyTests.Line(
+            nodes: [.init(longitude: 0, latitude: 0), .init(longitude: 0.01, latitude: 0),
+                    .init(longitude: 0.02, latitude: 0), .init(longitude: 0.01, latitude: 0.01),
+                    .init(longitude: 0.5, latitude: 0), .init(longitude: 0.51, latitude: 0)],
+            edges: [(0,1),(1,2),(1,3),(4,5)], surfaces: Array(repeating: "asphalt", count: 4),
+            roads: Array(repeating: "tertiary", count: 4))
+        let graph = try IndexedGraph(line)
+        let matches = (0..<line.edgeCount).flatMap { edge in
+            [true, false].map { forward in
+                RoadMatch(edge: edge, coordinate: line.nodes[line.edges[edge].0],
+                    distanceMeters: 0, alongMeters: line.distance(edge) * 0.5,
+                    geometryMeters: line.distance(edge), forward: forward)
+            }
+        }
+        let checker = try EndpointReachability(graph: graph, budget: .init())
+        for start in matches {
+            for end in matches {
+                let pairwise = try checker.mayConnect(start: start, end: end, budget: .init())
+                let fixed = try checker.mayConnectAny(starts: [start], ends: [end], budget: .init())
+                #expect(fixed == pairwise)
+            }
+        }
+        let starts = Array(matches.prefix(4)), ends = Array(matches.suffix(4))
+        let pairwiseAny = try starts.contains { start in
+            try ends.contains { end in
+                try checker.mayConnect(start: start, end: end, budget: .init())
+            }
+        }
+        #expect(try checker.mayConnectAny(starts: starts, ends: ends, budget: .init()) == pairwiseAny)
+    }
+
     @Test func cleanestTakesBackRoadsAndStaysNearTheShortestLegalNonHighway() throws {
         let pack = PolicyTests.Line(
             nodes: [

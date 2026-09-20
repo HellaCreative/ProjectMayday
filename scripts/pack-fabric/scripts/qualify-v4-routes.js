@@ -178,7 +178,11 @@ async function main(args = process.argv.slice(2)) {
     const stem = String(i).padStart(4, "0"), file = `${stem}.json`;
     const env = { ...process.env, DIRT_WANDER: String(c.wander), DIRT_ALLOW_UNKNOWN: c.allowUnknown ? "1" : "0",
       DIRT_AVOID_FERRIES: c.avoidFerries ? "1" : "0", DIRT_AVOID_HIGHWAYS: c.avoidHighways ? "1" : "0",
-      DIRT_NO_CITY_WALL: c.avoidCities ? "0" : "1", DIRT_PROBE_COMPACT: "0" };
+      DIRT_NO_CITY_WALL: c.avoidCities ? "0" : "1", DIRT_PROBE_COMPACT: "0",
+      // A phone verifies every artifact while installing it. Persist the same
+      // revision-bound receipt after the first qualification open so later
+      // routes measure planning rather than repeat checksum I/O.
+      DIRT_PERSIST_VERIFIED_PACKS: "1" };
     for (const key of ["DIRT_MAX_LABELS", "DIRT_ARRIVAL_EDGE", "DIRT_PRIOR_EDGES", "DIRT_LOOP_METERS", "DIRT_DIRT_PAVEMENT_AWAY"]) delete env[key];
     const run = await measuredRun(["-l", options.probe, path.join(options.root, "packs"), c.regions.join(","),
       ...c.from.map(String), ...c.to.map(String), c.style, String(c.windowSeconds), String(c.seed), "12.5"],

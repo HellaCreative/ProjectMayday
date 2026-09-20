@@ -215,6 +215,8 @@ struct PreparationMemoryTests {
         #expect(try store.indexed(["aa"], repository: repository, budget: .init()).cacheIdentity == a.cacheIdentity)
         _ = try store.indexed(["bb"], repository: repository, budget: .init())
         _ = try store.indexed(["cc"], repository: repository, budget: .init())
+        try repository.persistVerificationReceipt(for: "cc")
+        #expect(PackRepository.hasValidVerificationReceipt(region: "cc", directory: roots["cc"]!))
         #expect(try store.peek(["aa"], repository: repository) == nil)
         #expect(try store.peek(["bb"], repository: repository) != nil)
         #expect(try store.peek(["cc"], repository: repository) != nil)
@@ -224,6 +226,7 @@ struct PreparationMemoryTests {
         #expect(envelope.contains(a.coordinate(node: 0)))
         let changed = roots["cc"]!.appendingPathComponent("fuel.v1.json")
         try Data("[]".utf8).write(to: changed, options: .atomic)
+        #expect(!PackRepository.hasValidVerificationReceipt(region: "cc", directory: roots["cc"]!))
         #expect(try store.peek(["cc"], repository: repository) == nil)
         #expect(throws: RoutingFailure.self) { try store.indexed(["cc"], repository: repository, budget: .init()) }
         #expect(try repository.preparationIdentity(["aa", "bb"]) != repository.preparationIdentity(["bb", "aa"]))

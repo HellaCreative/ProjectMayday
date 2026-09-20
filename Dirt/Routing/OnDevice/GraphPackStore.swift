@@ -1682,6 +1682,11 @@ final class GraphPackStore {
             } else {
                 try FileManager.default.moveItem(at: dest, to: destination)
             }
+            // The staged revision has already passed full checksum validation.
+            // Record its final installed file identities so route startup does
+            // not reread hundreds of megabytes solely to repeat those hashes.
+            let installedRepository = try PackRepository(installedDirectories: [regionId: destination])
+            try installedRepository.persistVerificationReceipt(for: regionId)
             verifiedInstalledRegionIds.insert(regionId)
             setInstall(regionId, .installed)
             packedFuelByRegion.removeValue(forKey: regionId)
@@ -2202,6 +2207,9 @@ final class GraphPackStore {
               let data = try? Data(contentsOf: directory.appendingPathComponent("pack-manifest.v2.json")),
               let contract = try? JSONDecoder().decode(DirtRoutingEngine.PackManifest.self,from: data),
               (try? contract.validate()) != nil, contractMatchesCatalog(contract,region: region) else { return false }
+        if PackRepository.hasValidVerificationReceipt(region: region.id.lowercased(), directory: directory) {
+            return true
+        }
         return files.allSatisfy { file in
             fileMatchesIdentity(
                 at: directory.appendingPathComponent(file.name),

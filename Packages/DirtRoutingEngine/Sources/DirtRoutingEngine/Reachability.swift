@@ -161,6 +161,9 @@ final class EndpointReachability {
     /// `free[node]`: reachable after a coincident-node transfer, when any road may follow.
     private struct Marks { let arrival: [Bool]; let free: [Bool] }
     private var cache: [EndKey: Marks] = [:]
+    private struct StartKey: Hashable { let edge: Int; let direction: Int8 }
+    private struct ForwardKey: Hashable { let starts: [StartKey] }
+    private var forwardCache: [ForwardKey: Marks] = [:]
 
     init(graph: any RoadGraph, budget: ComputationBudget,
          permitsThrough: @escaping (Int) -> Bool = { _ in true }) throws {
@@ -188,6 +191,27 @@ final class EndpointReachability {
         return false
     }
 
+    /// Answers the same question for a set of snap candidates while walking the
+    /// graph once from the fixed origin. Staged seam screening calls this many
+    /// times with the same origin and different border points; caching that one
+    /// forward field avoids rebuilding a whole reverse field for every border
+    /// road without changing which candidate pairs are considered connected.
+    func mayConnectAny(starts: [RoadMatch], ends: [RoadMatch],
+                       budget: ComputationBudget) throws -> Bool {
+        guard !starts.isEmpty, !ends.isEmpty else { return false }
+        for start in starts {
+            for end in ends {
+                if start.edge == end.edge {
+                    let forward = start.alongMeters <= end.alongMeters
+                    if start.forward != !forward { return true }
+                }
+                if startsAtDestinationJunction(start, end: end) { return true }
+            }
+        }
+        let marks = try forwardMarks(from: starts, budget: budget)
+        return ends.contains { canFinish($0, marks: marks) }
+    }
+
     /// Arrival may use either direction of the destination road.
     private func finishes(_ node: Int, _ end: RoadMatch) -> Bool {
         node == graph.endpoint(end.edge, from: true) || node == graph.endpoint(end.edge, from: false)
@@ -201,6 +225,81 @@ final class EndpointReachability {
         for sibling in graph.coincidentSiblings(node)
         where sibling != node && sibling >= 0 && sibling < graph.nodeCount && marks.free[sibling] { return true }
         return false
+    }
+
+    private func startsAtDestinationJunction(_ start: RoadMatch, end: RoadMatch) -> Bool {
+        guard start.edge != end.edge else { return false }
+        let a = graph.endpoint(start.edge, from: true), b = graph.endpoint(start.edge, from: false)
+        return (start.forward != true && finishes(a, end))
+            || (start.forward != false && finishes(b, end))
+    }
+
+    private func canFinish(_ end: RoadMatch, marks: Marks) -> Bool {
+        for node in [graph.endpoint(end.edge, from: true), graph.endpoint(end.edge, from: false)]
+        where node >= 0 && node < graph.nodeCount {
+            if marks.free[node] { return true }
+            for slot in Int(arcs.inStart[node])..<Int(arcs.inStart[node + 1]) {
+                let arc = Int(arcs.inArcs[slot])
+                if Int(arcs.outEdge[arc]) != end.edge && marks.arrival[arc] { return true }
+            }
+        }
+        return false
+    }
+
+    private func forwardMarks(from starts: [RoadMatch], budget: ComputationBudget) throws -> Marks {
+        var unique = Set<StartKey>()
+        for start in starts {
+            let direction: Int8 = start.forward == true ? 1 : (start.forward == false ? -1 : 0)
+            unique.insert(StartKey(edge: start.edge, direction: direction))
+        }
+        let keys = unique.sorted { a, b in
+            a.edge == b.edge ? a.direction < b.direction : a.edge < b.edge
+        }
+        let key = ForwardKey(starts: keys)
+        if let cached = forwardCache[key] { return cached }
+        let nodeCount = graph.nodeCount
+        var arrival = [Bool](repeating: false, count: arcs.outEdge.count)
+        var free = [Bool](repeating: false, count: nodeCount)
+        var arcQueue: [Int32] = [], nodeQueue: [Int32] = []
+        func markArc(_ arc: Int) {
+            let edge = Int(arcs.outEdge[arc])
+            if !arrival[arc], permitsThrough(edge) {
+                arrival[arc] = true; arcQueue.append(Int32(arc))
+            }
+        }
+        func markFree(_ node: Int) {
+            if !free[node] { free[node] = true; nodeQueue.append(Int32(node)) }
+        }
+        func continueFrom(_ node: Int, except edge: Int?) {
+            guard node >= 0, node < nodeCount else { return }
+            for arc in Int(arcs.outStart[node])..<Int(arcs.outStart[node + 1])
+            where edge == nil || Int(arcs.outEdge[arc]) != edge! { markArc(arc) }
+            for sibling in graph.coincidentSiblings(node)
+            where sibling != node && sibling >= 0 && sibling < nodeCount { markFree(sibling) }
+        }
+        for start in starts {
+            if start.forward != true {
+                continueFrom(graph.endpoint(start.edge, from: true), except: start.edge)
+            }
+            if start.forward != false {
+                continueFrom(graph.endpoint(start.edge, from: false), except: start.edge)
+            }
+        }
+        var steps = 0
+        while true {
+            if let arc = arcQueue.popLast() {
+                continueFrom(Int(arcs.targets[Int(arc)]), except: Int(arcs.outEdge[Int(arc)]))
+            } else if let node = nodeQueue.popLast() {
+                continueFrom(Int(node), except: nil)
+            } else {
+                break
+            }
+            steps += 1
+            if steps & 4095 == 0 { try budget.check() }
+        }
+        let marks = Marks(arrival: arrival, free: free)
+        forwardCache[key] = marks
+        return marks
     }
 
     private func marks(for end: RoadMatch, budget: ComputationBudget) throws -> Marks {

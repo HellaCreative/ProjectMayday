@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public struct PackManifest: Decodable, Sendable {
@@ -134,6 +135,20 @@ private final class RoutingInputCache: @unchecked Sendable {
 /// Explicit local inputs. The acquisition UI supplies directories after installation;
 /// missing data is returned as data demand, never translated into a server request.
 public struct PackRepository: Sendable {
+    private struct VerificationReceipt: Codable {
+        struct Artifact: Codable, Equatable {
+            let name: String
+            let bytes: Int
+            let sha256: String
+            let fileNumber: UInt64
+            let modifiedAt: TimeInterval
+        }
+        let version: Int
+        let regionId: String
+        let manifestSHA256: String
+        let artifacts: [Artifact]
+    }
+    private static let verificationReceiptName = ".dirt-pack-verification.v1.json"
     private let directories: [String:URL]
     /// Manifest sha256 receipts already fully validated in this process.
     private static let verified = VerifiedPackReceipts()
@@ -167,8 +182,12 @@ public struct PackRepository: Sendable {
         try budget.check()
         guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
         let manifestURL = root.appendingPathComponent("pack-manifest.v2.json")
+        let manifestData: Data
         let manifest: PackManifest
-        do { manifest = try JSONDecoder().decode(PackManifest.self,from: Data(contentsOf: manifestURL)) }
+        do {
+            manifestData = try Data(contentsOf: manifestURL)
+            manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
+        }
         catch { throw RoutingFailure.invalidPack("manifest unreadable: \(region)") }
         try manifest.validate(requireSeams: requireSeams)
         guard manifest.regionId == region else { throw RoutingFailure.invalidPack("wrong region") }
@@ -179,12 +198,17 @@ public struct PackRepository: Sendable {
             try budget.check()
             return .init(manifest: manifest, graph: graph, fuelData: fuel, seamsFile: seams)
         }
-        let receipt = "\(region)|\(manifest.graph.sha256)|\(manifest.geometry.sha256)|\(manifest.fuel.sha256)"
+        let receipt = try Self.verificationKey(region: region, manifest: manifest, directory: root)
         let alreadyVerified = Self.verified.contains(receipt)
+            || Self.hasValidVerificationReceipt(region: region, directory: root,
+                                                 manifestData: manifestData, manifest: manifest)
         func verifiedArtifact(_ artifact: PackManifest.Artifact) throws -> BinaryFile {
             try budget.check()
             let file = try BinaryFile(url: root.appendingPathComponent(artifact.name))
-            guard file.data.count == artifact.bytes, try file.sha256 == artifact.sha256 else {
+            guard file.data.count == artifact.bytes else {
+                throw RoutingFailure.invalidPack("\(region)/\(artifact.name) identity mismatch")
+            }
+            if !alreadyVerified, try file.sha256 != artifact.sha256 {
                 throw RoutingFailure.invalidPack("\(region)/\(artifact.name) identity mismatch")
             }
             try budget.check()
@@ -193,7 +217,8 @@ public struct PackRepository: Sendable {
         let graphBytes = try verifiedArtifact(manifest.graph), geometryBytes = try verifiedArtifact(manifest.geometry)
         // SOT §8.8: hash/validate once per install identity; re-open trusts the receipt.
         let graph = try GraphPack(graph: graphBytes, geometry: geometryBytes, budget: budget,
-                                  structuralValidation: !alreadyVerified)
+                                  structuralValidation: !alreadyVerified,
+                                  verifiedIdentity: alreadyVerified ? (manifest.graph.sha256, manifest.geometry.sha256) : nil)
         guard graph.metadata.regionId == region else { throw RoutingFailure.invalidPack("graph region mismatch") }
         guard graph.sourceEpoch == manifest.sourceEpoch else { throw RoutingFailure.invalidPack("graph source epoch mismatch") }
         let fuel = try verifiedArtifact(manifest.fuel).data
@@ -201,6 +226,77 @@ public struct PackRepository: Sendable {
         Self.verified.insert(receipt)
         Self.inputs.remember(graph, key: identity)
         return .init(manifest: manifest,graph: graph,fuelData: fuel,seamsFile: seams)
+    }
+
+    /// Persist proof that this exact installed revision has already passed full
+    /// checksum verification. File replacement, size, or modification changes
+    /// invalidate it and restore the full verification path.
+    public func persistVerificationReceipt(for region: String) throws {
+        guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
+        let manifestURL = root.appendingPathComponent("pack-manifest.v2.json")
+        let manifestData = try Data(contentsOf: manifestURL)
+        let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
+        try manifest.validate()
+        guard manifest.regionId == region else { throw RoutingFailure.invalidPack("wrong region") }
+        let key = try Self.verificationKey(region: region, manifest: manifest, directory: root)
+        guard Self.verified.contains(key) else {
+            throw RoutingFailure.invalidPack("pack must be checksum verified before recording receipt")
+        }
+        let artifacts = [manifest.graph, manifest.geometry, manifest.fuel] + (manifest.seams.map { [$0] } ?? [])
+        let records = try artifacts.map { try Self.receiptArtifact($0, in: root) }
+        let receipt = VerificationReceipt(version: 1, regionId: region,
+            manifestSHA256: SHA256.hash(data: manifestData).map { String(format: "%02x", $0) }.joined(),
+            artifacts: records)
+        let encoded = try JSONEncoder().encode(receipt)
+        try encoded.write(to: root.appendingPathComponent(Self.verificationReceiptName), options: .atomic)
+    }
+
+    public static func hasValidVerificationReceipt(region: String, directory: URL) -> Bool {
+        let manifestURL = directory.appendingPathComponent("pack-manifest.v2.json")
+        guard let manifestData = try? Data(contentsOf: manifestURL),
+              let manifest = try? JSONDecoder().decode(PackManifest.self, from: manifestData),
+              (try? manifest.validate()) != nil else { return false }
+        return hasValidVerificationReceipt(region: region, directory: directory,
+            manifestData: manifestData, manifest: manifest)
+    }
+
+    private static func hasValidVerificationReceipt(region: String, directory: URL,
+                                                     manifestData: Data, manifest: PackManifest) -> Bool {
+        guard manifest.regionId == region,
+              let data = try? Data(contentsOf: directory.appendingPathComponent(verificationReceiptName)),
+              let receipt = try? JSONDecoder().decode(VerificationReceipt.self, from: data),
+              receipt.version == 1, receipt.regionId == region,
+              receipt.manifestSHA256 == SHA256.hash(data: manifestData).map({ String(format: "%02x", $0) }).joined()
+        else { return false }
+        let artifacts = [manifest.graph, manifest.geometry, manifest.fuel] + (manifest.seams.map { [$0] } ?? [])
+        guard receipt.artifacts.count == artifacts.count else { return false }
+        return zip(receipt.artifacts, artifacts).allSatisfy { recorded, expected in
+            guard recorded.name == expected.name, recorded.bytes == expected.bytes,
+                  recorded.sha256 == expected.sha256,
+                  let current = try? receiptArtifact(expected, in: directory) else { return false }
+            return current == recorded
+        }
+    }
+
+    private static func receiptArtifact(_ artifact: PackManifest.Artifact, in directory: URL) throws -> VerificationReceipt.Artifact {
+        let attributes = try FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent(artifact.name).path)
+        guard let bytes = (attributes[.size] as? NSNumber)?.intValue,
+              let fileNumber = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value,
+              let modified = attributes[.modificationDate] as? Date else {
+            throw RoutingFailure.invalidPack("cannot identify \(artifact.name)")
+        }
+        return .init(name: artifact.name, bytes: bytes, sha256: artifact.sha256,
+                     fileNumber: fileNumber, modifiedAt: modified.timeIntervalSinceReferenceDate)
+    }
+
+    private static func verificationKey(region: String, manifest: PackManifest,
+                                        directory: URL) throws -> String {
+        let artifacts = [manifest.graph, manifest.geometry, manifest.fuel] + (manifest.seams.map { [$0] } ?? [])
+        let revisions = try artifacts.map { artifact in
+            let record = try receiptArtifact(artifact, in: directory)
+            return "\(record.name):\(record.fileNumber):\(record.bytes):\(record.modifiedAt)"
+        }
+        return ([region] + artifacts.map(\.sha256) + revisions).joined(separator: "|")
     }
     func planningEnvelope(_ region: String, budget: ComputationBudget) throws -> GeographicBox {
         try budget.check()
