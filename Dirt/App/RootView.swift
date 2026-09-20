@@ -762,7 +762,6 @@ struct RootView: View {
                 showsDragIndicator: true,
                 landscapeDockLeading: landscapeDockLeading,
                 landscapeHasIslandColumn: landscapeHasIslandColumn,
-                material: .thinMaterial,
                 onDismiss: dismissDockSheet
             ) {
                 LayersSheet(onClose: dismissDockSheet)

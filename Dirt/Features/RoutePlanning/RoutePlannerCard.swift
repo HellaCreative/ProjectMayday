@@ -311,9 +311,7 @@ struct RoutePlannerCard: View {
             // Surface only — the material runs past the home indicator so the sheet reads
             // as coming from the bottom edge, with the dock floating on top of it.
             .background(alignment: .top) {
-                portraitSurfaceShape
-                    .fill(DirtTheme.sheetMaterial)
-                    .overlay(portraitSurfaceShape.stroke(DirtTheme.hairline, lineWidth: 1))
+                DirtGlassSheetSurface(shape: portraitSurfaceShape)
                     .shadow(
                         color: .black.opacity(0.16),
                         radius: 28,
@@ -387,8 +385,7 @@ struct RoutePlannerCard: View {
         .padding(.trailing, dockLeading ? 14 : dockClearance + 10)
         .frame(width: width)
         .frame(maxHeight: .infinity)
-        .background(DirtTheme.sheetMaterial, in: landscapeSurfaceShape(dockLeading: dockLeading))
-        .overlay(landscapeSurfaceShape(dockLeading: dockLeading).stroke(DirtTheme.hairline, lineWidth: 1))
+        .background { DirtGlassSheetSurface(shape: landscapeSurfaceShape(dockLeading: dockLeading)) }
         .clipShape(landscapeSurfaceShape(dockLeading: dockLeading))
         .shadow(color: .black.opacity(0.22), radius: 18, x: dockLeading ? 8 : -8, y: 0)
     }
@@ -1566,14 +1563,9 @@ private struct RideSettingsPanel: View {
             .padding(.top, DirtSpace.tight)
             .padding(.bottom, DirtSpace.section)
         }
-        .background(
-            DirtTheme.sheetMaterial,
-            in: RoundedRectangle(cornerRadius: DirtRadius.sheet, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.sheet, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .background {
+            DirtGlassSheetSurface(shape: RoundedRectangle(cornerRadius: DirtRadius.sheet, style: .continuous))
+        }
         .clipShape(RoundedRectangle(cornerRadius: DirtRadius.sheet, style: .continuous))
         .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
         .alert("Unknown access is not permission", isPresented: $showUnknownWarning) {

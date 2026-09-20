@@ -348,6 +348,43 @@ extension View {
     }
 }
 
+/// A live-map sheet surface: native optical edges over a light frost, with
+/// readable content cards supplied by the caller. Decorative layers never hit-test.
+struct DirtGlassSheetSurface<Surface: InsettableShape>: View {
+    var shape: Surface
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        Group {
+            if reduceTransparency || contrast == .increased {
+                shape.fill(Color(uiColor: .systemBackground))
+            } else {
+                Color.clear
+                    .glassEffect(.clear, in: shape)
+                    .background { shape.fill(.ultraThinMaterial).opacity(0.55) }
+                    .overlay {
+                        shape.fill(LinearGradient(
+                            colors: [.white.opacity(0.14), .white.opacity(0.02), .white.opacity(0.07)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                    }
+            }
+        }
+        .overlay {
+            shape.strokeBorder(LinearGradient(
+                stops: [.init(color: .white.opacity(0.90), location: 0),
+                        .init(color: .white.opacity(0.25), location: 0.42),
+                        .init(color: .white.opacity(0.10), location: 0.65),
+                        .init(color: .white.opacity(0.48), location: 1)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            ), lineWidth: 1)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 private struct DirtGlassControlSurface: ViewModifier {
     let radius: CGFloat
     let tint: Color?

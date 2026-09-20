@@ -96,8 +96,6 @@ struct DockSheetPanel<Content: View>: View {
     var landscapeDockLeading: Bool? = nil
     /// Island phones keep an empty outer column so tabs never sit on the cutout.
     var landscapeHasIslandColumn: Bool = false
-    /// Thin glass — the Layers look is the sheet standard. Groupings use `groupingFill`.
-    var material: Material = DirtTheme.sheetMaterial
     var onDismiss: () -> Void
     @ViewBuilder var content: () -> Content
 
@@ -140,9 +138,7 @@ struct DockSheetPanel<Content: View>: View {
         .preference(key: PlannerSheetHeightKey.self, value: panelHeight)
         .clipShape(portraitShape)
         .background(alignment: .top) {
-            portraitShape
-                .fill(material)
-                .overlay(portraitShape.stroke(DirtTheme.hairline, lineWidth: 1))
+            DirtGlassSheetSurface(shape: portraitShape)
                 .shadow(color: .black.opacity(0.18), radius: 16, y: -4)
                 .ignoresSafeArea(edges: .bottom)
         }
@@ -253,8 +249,7 @@ struct DockSheetPanel<Content: View>: View {
         .padding(.trailing, dockLeading ? 14 : dockClearance + 10)
         .frame(width: width)
         .frame(maxHeight: .infinity)
-        .background(material, in: sideShape(dockLeading: dockLeading))
-        .overlay(sideShape(dockLeading: dockLeading).stroke(DirtTheme.hairline, lineWidth: 1))
+        .background { DirtGlassSheetSurface(shape: sideShape(dockLeading: dockLeading)) }
         .clipShape(sideShape(dockLeading: dockLeading))
         .shadow(
             color: .black.opacity(0.22),
