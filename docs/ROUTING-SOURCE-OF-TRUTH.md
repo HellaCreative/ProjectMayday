@@ -2831,16 +2831,19 @@ a final release qualification. Its failed incomplete receipts also emit dependen
 missing-settings/road-identity checks; do not count those as independent pack bugs.
 No repeated-road failure remains among completed routes in this replay.
 
-The uncommitted compact matching-grid experiment stores exact UInt32 road indices
-and widens candidates at lookup. All 170 engine tests pass, including raw/indexed
-matching. Five paired routes complete with equal directed-road hashes and lower
-physical footprint (roughly 15–31 MiB each). Four lower host RSS too, but NC→GA
-increased from 935 to 1102 MiB, so the experiment is not accepted yet. The serial
-recheck at `.build/continental-qualification-20260920/compact-index/recheck/run.py`
-repeats that outlier twice per binary with alternating order. Check its state and
-live processes before starting more heavy work. Phone Search builds use an
-isolated accepted checkout, excluding this experiment. The final publication gate
-is unchanged; the 70-region candidate is built but not qualified or published.
+The compact matching-grid storage change is accepted after the alternating
+outlier recheck. It stores checked UInt32 road indices and widens candidates at
+lookup. All 170 engine tests pass, including raw/indexed matching. Five paired
+routes retain directed-road hashes and reduce physical footprint by roughly
+15–31 MiB. The NC→GA recheck retains the same roads in all four runs: compact
+footprint is 683.8–686.5 MB versus 722.4–726.2 MB before. Host peak RSS varies
+across runs (compact 1,134.6–1,151.6 MB; before 1,097.0–1,187.9 MB), so this
+is an owned-storage improvement, not proof that the RSS gate passes or that
+routing is faster. Review receipt: `compact-index/accepted-review.json` beneath
+`.build/continental-qualification-20260920`. The remaining 30 failures require
+replay on this source before final integrated qualification. White still uses
+the preceding accepted runtime; this heartbeat does not install an app. The
+70-region candidate remains unpublished and the release thresholds are unchanged.
 
 Owner-reported Wander/Allow Unknown interaction (September 20): the per-leg
 settings reducer, request snapshot, response-cache identity and native adapter

@@ -5,7 +5,7 @@ import Foundation
 public struct IndexedGraph: RoadGraph {
     private let graph: any RoadGraph
     private struct Cell: Hashable { let x: Int; let y: Int }
-    private let cells: [Cell:[Int]]
+    private let cells: [Cell:[UInt32]]
     private let longEdges: [Int]
     private let weakCache = WeakComponentCache()
     private let arcs: ArcIndex
@@ -14,7 +14,7 @@ public struct IndexedGraph: RoadGraph {
     public init(_ graph: any RoadGraph, maximumEntries: Int = 8_000_000,
                 budget: ComputationBudget = .init(seconds: 60)) throws {
         self.graph = graph
-        var index: [Cell:[Int]] = [:], long: [Int] = [], entries = 0
+        var index: [Cell:[UInt32]] = [:], long: [Int] = [], entries = 0
         for edge in 0..<graph.edgeCount {
             if edge & 255 == 0 { try budget.check() }
             // Endpoint matching rejects every other access code in all modes.
@@ -31,7 +31,12 @@ public struct IndexedGraph: RoadGraph {
             if count > 256 { long.append(edge); continue }
             guard entries <= maximumEntries-count else { throw RoutingFailure.resourceLimit("road index") }
             entries += count
-            for y in y0...y1 { for x in x0...x1 { index[.init(x:x,y:y),default: []].append(edge) } }
+            // Repeated cell memberships dominate this index. Store the same
+            // road identity in four bytes, widening only the nearby candidates.
+            guard let compactEdge = UInt32(exactly: edge) else {
+                throw RoutingFailure.resourceLimit("road index identity")
+            }
+            for y in y0...y1 { for x in x0...x1 { index[.init(x:x,y:y),default: []].append(compactEdge) } }
         }
         cells = index; longEdges = long
         // RegionalGraph already joins independently verified source identities.
@@ -59,7 +64,7 @@ public struct IndexedGraph: RoadGraph {
         for y in y0...y1 {
             for x in x0...x1 {
                 let wrapped = ((x+3600)%7200+7200)%7200-3600
-                for edge in cells[.init(x: wrapped,y: y)] ?? [] { edges.insert(edge) }
+                for edge in cells[.init(x: wrapped,y: y)] ?? [] { edges.insert(Int(edge)) }
             }
         }
         return edges.sorted()

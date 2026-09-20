@@ -183,6 +183,28 @@ struct PreparationMemoryTests {
         }
     }
 
+    @Test func compactSpatialMembershipPreservesUnindexedRoadMatches() throws {
+        let fixtures = ReferenceTests()
+        for name in ["legal-topology-canary", "legal-topology-restrictions",
+                     "legal-topology-forecourt", "legal-topology-forecourt-blocked"] {
+            let raw = try GraphPack(graphURL: fixtures.fixture("\(name).graph.v4.bin"),
+                                    geometryURL: fixtures.fixture("\(name).geometry.v1.bin"))
+            let indexed = try IndexedGraph(raw)
+            for edge in 0..<raw.edgeCount {
+                let line = raw.polyline(edge)
+                guard let point = line.first else { continue }
+                for radius in [50.0, 1000.0] {
+                    let expected = try RoadMatcher(pack: raw).matches(at: point,
+                        radius: radius, start: true, policy: .init(allowUnknown: true), budget: .init())
+                    let actual = try RoadMatcher(pack: indexed).matches(at: point,
+                        radius: radius, start: true, policy: .init(allowUnknown: true), budget: .init())
+                    #expect(actual.map(\.edge) == expected.map(\.edge))
+                    #expect(actual.map(\.forward) == expected.map(\.forward))
+                }
+            }
+        }
+    }
+
     @Test func warmPreparationIsBoundedAndRevalidatesChangedBytes() throws {
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
