@@ -12,18 +12,23 @@ const { bufferProjection } = require("../routing/registry/timezones");
 const { clipGeojsonPath } = require("./fetch-admin-polygon");
 const { validateGeometry } = require("./prepare-v4-polygons");
 
-function hashFile(file, algorithm = "sha256") {
-  const h = crypto.createHash(algorithm), fd = fs.openSync(file, "r");
-  const buffer = Buffer.allocUnsafe(8 * 1024 * 1024);
+function hashFileSet(file, algorithms) {
+  const hashes = Object.fromEntries(algorithms.map(name => [name, crypto.createHash(name)]));
+  const fd = fs.openSync(file, "r"), buffer = Buffer.allocUnsafe(8 * 1024 * 1024);
   try {
     for (;;) {
       const n = fs.readSync(fd, buffer, 0, buffer.length, null);
       if (!n) break;
-      h.update(buffer.subarray(0, n));
+      const bytes = buffer.subarray(0, n);
+      for (const hash of Object.values(hashes)) hash.update(bytes);
     }
   } finally { fs.closeSync(fd); }
-  return h.digest("hex");
+  return Object.fromEntries(Object.entries(hashes).map(([name, hash]) => [name, hash.digest("hex")]));
 }
+function hashFile(file, algorithm = "sha256") {
+  return hashFileSet(file, [algorithm])[algorithm];
+}
+
 function run(command, args, log) {
   const fd = log ? fs.openSync(log, "a") : null;
   try {
@@ -66,11 +71,12 @@ function main(args = process.argv.slice(2)) {
   const o = parseArgs(args), source = path.resolve(o.source), output = path.resolve(o.output);
   const root = path.join(path.dirname(output), "regional-sources");
   fs.mkdirSync(root, { recursive: true });
-  if (hashFile(source, "md5") !== o.md5) throw new Error("download does not match publisher MD5");
+  const sourceHashes = hashFileSet(source, ["md5", "sha256"]);
+  if (sourceHashes.md5 !== o.md5) throw new Error("download does not match publisher MD5");
   const timestamp = run("osmium", ["fileinfo", "-g", "header.option.osmosis_replication_timestamp", source]);
   if (!Number.isFinite(Date.parse(timestamp))) throw new Error("source has no valid OSM timestamp");
   const parent = { sourceUrl: o.url, sourceBytes: fs.statSync(source).size,
-    sourceSha256: hashFile(source), osmTimestamp: timestamp, publisherMD5: o.md5 };
+    sourceSha256: sourceHashes.sha256, osmTimestamp: timestamp, publisherMD5: o.md5 };
   const epoch = `osm-${timestamp.replace(/[-:]/g, "")}-${parent.sourceSha256.slice(0, 16)}`;
   const partial = output + ".partial";
   const doc = fs.existsSync(partial) ? JSON.parse(fs.readFileSync(partial)) : {
@@ -78,6 +84,8 @@ function main(args = process.argv.slice(2)) {
     capturedAt: new Date().toISOString(), commonSource: parent, regions: {}
   };
   if (doc.fabricEpoch !== epoch) throw new Error("resume parent source changed; use a new output directory");
+  save(partial, doc);
+  console.log(`verified source ${parent.sourceBytes} bytes sha256=${parent.sourceSha256} timestamp=${timestamp}`);
   const tool = run("osmium", ["--version"]).split("\n")[0];
   const pending = [];
   for (const id of o.regions) {
@@ -132,4 +140,4 @@ function main(args = process.argv.slice(2)) {
 if (require.main === module) {
   try { main(); } catch (e) { console.error(e); process.exitCode = 1; }
 }
-module.exports = { main, parseArgs, hashFile, batchConfig };
+module.exports = { main, parseArgs, hashFile, hashFileSet, batchConfig };

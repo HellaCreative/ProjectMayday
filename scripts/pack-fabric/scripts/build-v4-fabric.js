@@ -266,8 +266,12 @@ function main() {
   const factoryCommit = gitHead();
   const recipes = Object.fromEntries(options.regions.map(id => [id, factoryRecipe(id)]));
   let records = [];
-  for (let index = 0; index < options.regions.length; index += 1) {
-    const id = options.regions[index];
+  // Expose the largest source/build workloads early, before small regions
+  // consume the night. Catalog order and release coverage remain canonical.
+  const buildOrder = [...options.regions].sort((a, b) =>
+    lock.regions[b].sourceBytes - lock.regions[a].sourceBytes || a.localeCompare(b));
+  for (let index = 0; index < buildOrder.length; index += 1) {
+    const id = buildOrder[index];
     const source = OSM_REGION[id];
     assertDiskSpace(options.root, id);
     let record = null;

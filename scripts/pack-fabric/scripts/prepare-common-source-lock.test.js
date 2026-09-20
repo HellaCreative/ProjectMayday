@@ -17,3 +17,20 @@ test("batched extraction retains exact polygons, destinations and timestamp", ()
     polygon: { file_name: e.halo, file_type: "geojson" },
     output_header: { osmosis_replication_timestamp: "2026-09-18T20:21:10Z" } })) });
 });
+
+test("publisher and source-lock hashes cover identical complete bytes in one read pass", t => {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), crypto = require("node:crypto");
+  const { hashFile, hashFileSet } = require("./prepare-common-source-lock");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dirt-hash-set-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "source.pbf");
+  const bytes = Buffer.alloc(8 * 1024 * 1024 + 513, 0x73); bytes[bytes.length - 1] = 0x2f;
+  fs.writeFileSync(file, bytes);
+  const both = hashFileSet(file, ["md5", "sha256"]);
+  for (const algorithm of ["md5", "sha256"]) {
+    assert.equal(both[algorithm], crypto.createHash(algorithm).update(bytes).digest("hex"));
+    assert.equal(both[algorithm], hashFile(file, algorithm));
+  }
+  fs.writeFileSync(file, Buffer.alloc(0));
+  assert.equal(hashFileSet(file, ["sha256"]).sha256, crypto.createHash("sha256").digest("hex"));
+});

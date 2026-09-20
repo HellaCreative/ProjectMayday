@@ -58,6 +58,16 @@ elements. A present, source-locked category may have zero entries; missing or
 inconsistent category counts still fail. Five focused factory/service tests pass
 (`factory-empty-category.log`). Entirely empty payloads and fuel requirements
 retain their existing checks pending source evidence.
+Source verification now computes the publisher MD5 and source-lock SHA-256 in
+one streamed read. Thirteen focused source/factory/publication tests pass,
+including multi-buffer and empty-file hash agreement (`factory-single-read.log`).
+The already-running source check began before this change and is not restarted.
+The pack build schedules larger source files first to expose large-region build
+resource failures early; catalog identity/order and required coverage are unchanged.
+Eight split outlines pass GEOS validity checks, and the four split unions cover
+their ON/QC/CA/NL parents within 1e-9 degrees of floating-point tolerance
+(`split-polygon-validity.json`, `split-coverage.json`, `split-covers-parent.json`).
+This is geographic outline coverage, not proof of every road connection.
 The registered continental roster currently has 67 packs and unsplit Texas;
 Texas and all other regions still require measured resource qualification.
 The North America September 18 download completed after resuming the existing
@@ -112,7 +122,7 @@ The four NS–QC Balanced/Clean repeated-road failures (1,305 / 2,280 / 656 /
 from 6,915 m of repeated road to zero; final replay is 59.270 s / 2,731.935 km /
 42.0% known dirt. This changes generated road selection and is not a speed
 claim or a guarantee of identical riding character. PEI with both avoidances on
-uses the required bridge in 7.640 s. Maximum process RSS across the matrix is
+uses the required bridge in 7.643 s. Maximum process RSS across the matrix is
 907,296,768 bytes (about 865 MiB), on Apple M1 / 16 GiB with background indexing.
 These are host measurements, not physical-phone acceptance or isolated cold/warm
 benchmarks. Pack bytes and the installed White build remain unchanged; a new
