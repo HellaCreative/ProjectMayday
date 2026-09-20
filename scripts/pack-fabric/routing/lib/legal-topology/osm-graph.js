@@ -298,12 +298,21 @@ function buildGraphFromOsm(osm, options = {}) {
     const index = packedIndex(id);
     if (index >= 0 && touch[index] < 2) touch[index] += 1;
   }
+  const revisitingWays = new Set();
   for (const way of ways) {
     const ids = (way.nodeIds || []).map(String);
     if (!ids.length) continue;
     const seen = new Set();
-    for (const id of ids) {
-      if (seen.has(id)) continue;
+    for (let i = 0; i < ids.length; i += 1) {
+      const id = ids[i];
+      if (seen.has(id)) {
+        // An ordinary closed ring only repeats its first node at the end.
+        // Other revisits can create different curves with the same way/from/to
+        // identity. Keep their source shape nodes as real junctions so every
+        // piece is unambiguous, independently of another pack's clip boundary.
+        if (i !== ids.length - 1 || id !== ids[0]) revisitingWays.add(way);
+        continue;
+      }
       seen.add(id);
       touchNode(id);
     }
@@ -320,11 +329,14 @@ function buildGraphFromOsm(osm, options = {}) {
       markSplit(ids[ids.length - 1], indexes ? indexes[indexes.length - 1] : -1);
     }
     for (let i = 0; i < ids.length; i += 1) {
+      if (revisitingWays.has(way)) markSplit(ids[i], indexes ? indexes[i] : -1);
       if (packedNodes && indexes[i] >= 0 && touch[indexes[i]] >= 2) markSplit(ids[i], indexes[i]);
       const node = nodeForId(ids[i], indexes ? indexes[i] : -1);
       if (node && isBarrierNode(node.tags || {})) markSplit(ids[i], indexes ? indexes[i] : -1);
     }
   }
+
+  revisitingWays.clear();
 
   const restrictionParse = [];
   const repeatedSources = [];

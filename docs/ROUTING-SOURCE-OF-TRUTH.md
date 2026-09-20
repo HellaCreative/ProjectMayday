@@ -113,10 +113,12 @@ An opt-in cost-guidance experiment failed its first actual California replay:
 1.6 million labels in both runs. Guided search itself took 19.589 s versus
 13.405 s without guidance; its lower total reflected warm file opening, not a
 search speed improvement. Both exceeded 1 GiB peak RSS. Evidence:
-`cost-guide-ca-s-los-angeles-san-diego-dirt-{0,1}/`. The experiment remains off
-by default and is not an accepted app optimization. A focused refinement checks
-legal-access relaxations and unavoidable urban cost before deciding whether to
-retain it; pack sizing and complete candidate qualification remain required.
+`cost-guide-ca-s-los-angeles-san-diego-dirt-{0,1}/`. A refined legal-access/urban-cost replay also failed at 1.6 million labels:
+48.746 s total, 29.557 s search, about 1.38 GiB peak RSS. Its 141 native tests
+passed but did not qualify the real workload. Both experimental implementations
+were preserved under `cost-guide-refined-source/` and removed from app source.
+Do not enable them as accepted improvements; pack sizing and search efficiency
+remain unresolved.
 The North America September 18 download completed after resuming the existing
 2.63 GB partial at `.build/fresh-fabric-20260919/source/north-america-260918.osm.pbf`; its checked
 prefix agrees with the newly downloaded bytes. Expected complete bytes:
@@ -147,8 +149,18 @@ same OSM epoch (17.77 GiB); `source-lock-original67.json` preserves that checkpo
 The Texas-quarter source preparation reuses the 66 unaffected extracts and adds
 four new pieces from the identical parent. All 70 source extracts are now
 complete and hash-locked; `texas-quarter-source-preparation.log` records completion.
-The four Texas packs are being built and checked separately before resuming the
-whole candidate. No continental release is qualified or published.
+All four individual Texas packs completed, but their joint seal failed on
+OSM way 717538889: it revisits the same two junctions along different curves,
+which the old builder assigned the same way/from/to identity. Both packs contain
+identical source geometry; this is a segment-identity defect, not mixed epochs.
+The factory now retains source shape nodes for ways with internal node revisits
+(ordinary closed rings are unchanged), preserving geometry and legal access.
+Two actual-source regressions failed before the repair and now pass in both
+normal and compact input paths; all 41 focused legal/format/seam checks pass.
+Evidence: `texas-shared-road-mismatch.json`, `repeated-way-geometry-before.log`,
+`repeated-way-geometry-tests.log`. Rebuild the affected candidate recipe and
+repeat the actual seam seal and same-pin Texas route. No continental release
+is qualified or published.
 The resumable factory must use the corrected recipe and updated complete source
 lock. A successful build ends awaiting route qualification; publication remains gated.
 Continental building exposed an unresolved-only-turn defect before publication.
