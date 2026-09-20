@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
-const { audit, validateCoverage, verifyQualification } = require("./qualify-v4-routes");
+const { audit, processMeasurements, validateCoverage, verifyQualification } = require("./qualify-v4-routes");
 const { hashFile } = require("./prepare-common-source-lock");
 const request = { id: "a", regions: ["ns"], from: [-63, 45], to: [-63, 45.001],
   style: "dirt", wander: .5, seed: 1, allowUnknown: false, avoidFerries: true,
@@ -40,6 +40,21 @@ test("coverage requires internal rides in every style and both crossing directio
   cases.push(cases[0]);
   assert.ok(validateCoverage({ cases }, ["ns", "nb"], pairs).includes("missing/duplicate request ID"));
 });
+test("a complete receipt must actually draw both matched endpoints with valid coordinates", () => {
+  const r = result();
+  r.segments[0].geometry = [[-64, 45], request.to];
+  assert.ok(audit(r, request, 1e6).failures.includes("road shape does not reach matched endpoints"));
+  r.segments[0].geometry = [request.from, [null, 45], request.to];
+  assert.ok(audit(r, request, 1e6).failures.includes("invalid road coordinates"));
+  r.segments[0].geometry = [request.from, [181, 91], request.to];
+  assert.ok(audit(r, request, 1e6).failures.includes("invalid road coordinates"));
+});
+test("process measurements keep RSS, footprint and whole-process elapsed time distinct", () => {
+  assert.deepEqual(processMeasurements("4.68 real 2.68 user 0.03 sys\n147030016 maximum resident set size\n86755008 peak memory footprint\n"),
+    { rssBytes: 147030016, peakFootprintBytes: 86755008, processSeconds: 4.68 });
+  assert.deepEqual(processMeasurements("process interrupted"),
+    { rssBytes: null, peakFootprintBytes: null, processSeconds: null });
+});
 test("publication rejects stale, missing and tampered route evidence", t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dirt-qualification-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -60,6 +75,20 @@ test("publication rejects stale, missing and tampered route evidence", t => {
   assert.throws(() => verifyQualification(root, out));
   save(path.join(out, "qualification.json"), summary);
   assert.equal(verifyQualification(root, out).status, "passed");
+  const timeFile = path.join(out, "dirt.time");
+  fs.writeFileSync(timeFile, "1.01 real 0.50 user 0.01 sys\n1000000 maximum resident set size\n800000 peak memory footprint\n");
+  Object.assign(summary.results[0], processMeasurements(fs.readFileSync(timeFile, "utf8")),
+    { measurement: { file: "dirt.time", sha256: hashFile(timeFile) } });
+  save(path.join(out, "qualification.json"), summary);
+  assert.equal(verifyQualification(root, out).status, "passed");
+  fs.appendFileSync(timeFile, " ");
+  assert.throws(() => verifyQualification(root, out), /process measurement changed/);
+  summary.results[0].measurement.sha256 = hashFile(timeFile);
+  summary.results[0].peakFootprintBytes = 1;
+  save(path.join(out, "qualification.json"), summary);
+  assert.throws(() => verifyQualification(root, out), /process measurement differs/);
+  summary.results[0].peakFootprintBytes = 800000;
+  save(path.join(out, "qualification.json"), summary);
   fs.appendFileSync(path.join(out, "dirt.json"), " ");
   assert.throws(() => verifyQualification(root, out), /receipt changed/);
   save(path.join(out, "dirt.json"), result(cases[0]));

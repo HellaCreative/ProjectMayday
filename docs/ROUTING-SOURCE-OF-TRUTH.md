@@ -1,6 +1,6 @@
 # DIRT routing — source of truth
 
-Updated: 2026-09-19. Owner: Richard Smith.
+Updated: 2026-09-20. Owner: Richard Smith.
 
 ## 1. Authority and purpose
 
@@ -1233,7 +1233,14 @@ Already implemented: source locking, resumable factory, graph/geometry/fuel
 checks, source-proven seams, feature inventory, derived matching-grid validation,
 immutable DEV publication and download verification. `qualify-v4-routes.js` now
 runs serial native probes and preserves raw receipts, exact requests, pack and
-binary hashes, elapsed time and measured process RSS. `ship-v4-candidate.js`
+binary hashes, elapsed time and measured process RSS. New receipts also record
+whole-process elapsed time and peak physical footprint separately, with the raw
+measurement file hash checked at publication. The geometry audit verifies valid
+coordinates and that the actual first/last road shape reaches the matched
+endpoints. Five focused evidence tests pass, and all 89 retained seven-pack
+receipts independently pass the stronger geometry audit without recalculating
+routes (`qualification-evidence-tests.log`, `qualification-reaudit.json`).
+`ship-v4-candidate.js`
 requires `--qualification <evidence-directory>` (default: candidate/qualification)
 before creating catalogs or uploading. The verifier requires internal journeys
 in every region/style, both directions of every declared neighboring pair,

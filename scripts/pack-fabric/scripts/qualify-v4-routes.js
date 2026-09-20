@@ -22,6 +22,18 @@ function distance(a, b) {
   return 6371000 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+function processMeasurements(text) {
+  const number = pattern => {
+    const value = Number(text.match(pattern)?.[1]);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  };
+  return {
+    rssBytes: number(/(\d+)\s+maximum resident set size/),
+    peakFootprintBytes: number(/(\d+)\s+peak memory footprint/),
+    processSeconds: number(/([\d.]+)\s+real\s+[\d.]+\s+user/)
+  };
+}
+
 function audit(result, request, rssBytes) {
   const failures = [];
   if (result.status !== "complete" || result.limit) failures.push(`incomplete: ${result.error || result.limit || result.status}`);
@@ -33,7 +45,7 @@ function audit(result, request, rssBytes) {
   for (const [key, point] of [["matchedStart", request.from], ["matchedEnd", request.to]]) {
     if (distance(result[key], point) > 250) failures.push(`${key} outside matching radius`);
   }
-  if (!Number.isFinite(result.seconds) || result.seconds > request.maxSeconds) failures.push("elapsed-time ceiling");
+  if (!Number.isFinite(result.seconds) || result.seconds < 0 || result.seconds > request.maxSeconds) failures.push("elapsed-time ceiling");
   if (!Number.isFinite(rssBytes) || rssBytes <= 0 || rssBytes > request.maxRSSBytes) failures.push("resident-memory ceiling");
   if (!Array.isArray(result.segments) || result.segments.length === 0) failures.push("missing road receipts");
   if (!Number.isFinite(result.distanceMeters) || result.distanceMeters <= 0 ||
@@ -44,6 +56,9 @@ function audit(result, request, rssBytes) {
     if (!Number.isFinite(segment.meters) || segment.meters < 0) failures.push("invalid road distance");
     if (![0, 1, 3, 4].includes(segment.access)) failures.push("prohibited/closed road");
     if (!Array.isArray(segment.geometry) || segment.geometry.length < 2) { failures.push("missing road shape"); continue; }
+    if (segment.geometry.some(point => !Array.isArray(point) || point.length !== 2 ||
+        !point.every(Number.isFinite) || Math.abs(point[0]) > 180 || Math.abs(point[1]) > 90))
+      failures.push("invalid road coordinates");
     if (previous) maxGap = Math.max(maxGap, distance(previous, segment.geometry[0]));
     previous = segment.geometry.at(-1);
     if (segment.access === 1) unknownRun += segment.meters;
@@ -51,6 +66,9 @@ function audit(result, request, rssBytes) {
     longestUnknown = Math.max(longestUnknown, unknownRun);
     if (segment.structure === "ferry") ferries++;
   }
+  if (distance(result.segments?.[0]?.geometry?.[0], result.matchedStart) > 2 ||
+      distance(result.segments?.at(-1)?.geometry?.at(-1), result.matchedEnd) > 2)
+    failures.push("road shape does not reach matched endpoints");
   if (maxGap > 2) failures.push(`discontinuous geometry: ${maxGap} m`);
   if (!request.allowUnknown && longestUnknown > (request.style === "cleanest" ? 0 : 100.01)) failures.push("unknown connector too long");
   if (request.avoidFerries && ferries) failures.push("ferry despite avoidance");
@@ -99,6 +117,13 @@ function verifyQualification(root, directory) {
     if (!row || row.failures.length) throw new Error(`${request.id}: no passing route receipt`);
     const resultFile = path.join(directory, row.file);
     if (hashFile(resultFile) !== row.sha256) throw new Error(`${request.id}: route receipt changed`);
+    if (row.measurement) {
+      const timeFile = path.join(directory, row.measurement.file);
+      if (hashFile(timeFile) !== row.measurement.sha256) throw new Error(`${request.id}: process measurement changed`);
+      const measured = processMeasurements(fs.readFileSync(timeFile, "utf8"));
+      for (const key of ["rssBytes", "peakFootprintBytes", "processSeconds"])
+        if (row[key] !== measured[key]) throw new Error(`${request.id}: process measurement differs: ${key}`);
+    }
     const result = read(resultFile);
     if (audit(result, request, row.rssBytes).failures.length) throw new Error(`${request.id}: route receipt fails audit`);
     if (JSON.stringify((result.packIdentities || []).map(p => p.region).sort()) !== JSON.stringify([...request.regions].sort())) throw new Error(`${request.id}: tested region set differs`);
@@ -158,14 +183,16 @@ async function main(args = process.argv.slice(2)) {
     const run = await measuredRun(["-l", options.probe, path.join(options.root, "packs"), c.regions.join(","),
       ...c.from.map(String), ...c.to.map(String), c.style, String(c.windowSeconds), String(c.seed), "12.5"],
       env, c.maxSeconds * 1000 + 5000);
-    fs.writeFileSync(path.join(options.out, `${stem}.time`), run.stderr || "");
+    const timeFile = path.join(options.out, `${stem}.time`);
+    fs.writeFileSync(timeFile, run.stderr || "");
     let result;
     try { result = JSON.parse(run.stdout); } catch { result = { status: "failed", error: String(run.error || run.stderr) }; }
     save(path.join(options.out, file), result);
-    const rssBytes = Number((run.stderr || "").match(/(\d+)\s+maximum resident set size/)?.[1] || 0);
-    const assessment = audit(result, c, rssBytes);
+    const measurements = processMeasurements(run.stderr || "");
+    const assessment = audit(result, c, measurements.rssBytes);
     if (run.status !== 0) assessment.failures.push(`process status ${run.status}`);
-    summary.results.push({ id: c.id, file, sha256: hashFile(path.join(options.out, file)), rssBytes,
+    summary.results.push({ id: c.id, file, sha256: hashFile(path.join(options.out, file)), ...measurements,
+      measurement: { file: `${stem}.time`, sha256: hashFile(timeFile) },
       seconds: result.seconds, repeatMeters: result.reriddenMeters, ...assessment });
     summary.status = "running"; save(summaryFile, summary);
     console.log(`[${i + 1}/${plan.cases.length}] ${c.id}: ${assessment.failures.length ? assessment.failures.join("; ") : "pass"} (${result.seconds?.toFixed(2)}s)`);
@@ -177,4 +204,4 @@ async function main(args = process.argv.slice(2)) {
   if (summary.status !== "passed") process.exitCode = 1;
 }
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
-module.exports = { audit, distance, validateCoverage, verifyQualification, main };
+module.exports = { audit, distance, processMeasurements, validateCoverage, verifyQualification, main };
