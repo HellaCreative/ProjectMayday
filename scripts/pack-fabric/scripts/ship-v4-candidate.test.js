@@ -10,6 +10,7 @@ test("V4 ship door accepts only a sealed-fabric candidate command", () => {
   assert.equal(parsed.candidate, "fabric-v4-20260907-01");
   assert.equal(parsed.pack, true);
   assert.equal(parsed.verify, true);
+  assert.equal(parseArgs(["--candidate", "fabric-v4-20260907-01", "--pack"]).verify, true);
   assert.deepEqual(parseArgs(["--candidate", "fabric-v4-20260908-01", "--pack", "--regions", "ns,nb,pe,nl"]).regions, ["nb", "nl", "ns", "pe"]);
   assert.throws(() => parseArgs(["--candidate", "fabric-v4-20260908-01", "--pack", "--regions", "ns,typo"]));
   assert.throws(() => parseArgs(["--candidate", "fabric-v4-20260907-01", "--pack", "--live"]), /forbidden/);
@@ -58,4 +59,30 @@ test("V4 ship verification treats only a missing candidate object as reusable=fa
     quiet: true
   });
   assert.equal(missing, false);
+});
+
+test("V4 immutable retries reject existing different bytes instead of permitting overwrite", async () => {
+  const body = Buffer.from("expected");
+  const item = { key: "v4/candidates/fabric-v4-20260907-01/ns/graph.v4.bin",
+    identity: { bytes: body.length, sha256: crypto.createHash("sha256").update(body).digest("hex") } };
+  for (const wrong of [Buffer.from("changed!"), Buffer.from("different length")]) {
+    await assert.rejects(verifyRemote(item, "https://candidate.invalid", {
+      allowMissing: true, attempts: 1, quiet: true,
+      fetchFn: async () => new Response(wrong, { headers: { "content-length": String(wrong.length) } })
+    }), /remote (byte|identity) mismatch/);
+  }
+  await assert.rejects(verifyRemote(item, "https://candidate.invalid", {
+    allowMissing: true, attempts: 1, quiet: true,
+    fetchFn: async () => new Response(null, { status: 503 })
+  }), /HTTP 503/);
+});
+
+test("V4 streamed verification accepts exact bytes without Content-Length", async () => {
+  const body = Buffer.from("verified streamed object");
+  const item = { key: "v4/candidates/fabric-v4-20260907-01/ns/graph.v4.bin",
+    identity: { bytes: body.length, sha256: crypto.createHash("sha256").update(body).digest("hex") } };
+  assert.equal(await verifyRemote(item, "https://candidate.invalid", {
+    allowMissing: true, attempts: 1, quiet: true,
+    fetchFn: async () => new Response(body)
+  }), true);
 });

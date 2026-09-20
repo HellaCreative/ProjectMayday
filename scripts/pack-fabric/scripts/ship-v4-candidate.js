@@ -60,7 +60,7 @@ function identity(filePath) {
 }
 
 function parseArgs(argv) {
-  const options = { candidate: null, pack: false, verify: false, root: null };
+  const options = { candidate: null, pack: false, verify: true, root: null };
   for (let i = 0; i < argv.length; i += 1) {
     const value = argv[i];
     if (value === "--promote" || value === "--live") {
@@ -95,6 +95,9 @@ function readJSON(file) {
 
 function verifyLocalCandidate(options) {
   const release = readJSON(path.join(options.root, "release.json"));
+  if (typeof release.createdAt !== "string" || !Number.isFinite(Date.parse(release.createdAt))) {
+    die("sealed release is missing its creation timestamp");
+  }
   const lockFile = path.join(options.root, "source-lock.json");
   const lockIdentity = identity(lockFile);
   if (!release.sourceLock || lockIdentity.sha256 !== release.sourceLock.sha256 ||
@@ -134,7 +137,7 @@ function verifyLocalCandidate(options) {
   };
   const riderCatalog = {
     schema: "rider-services-manifest.v1",
-    generatedAt: new Date().toISOString(),
+    generatedAt: release.createdAt,
     basePath: `/v4/candidates/${options.candidate}/rider-services`,
     regions: []
   };
@@ -194,18 +197,20 @@ function verifyLocalCandidate(options) {
     });
   }
 
+  // Publish discovery catalogs last. A retry must reproduce the same catalog
+  // bytes, and readers must not discover a release before its artifacts exist.
+  for (const name of ["release.json", "source-lock.json", "cross-pack-topology.v2.json"]) {
+    const filePath = path.join(options.root, name);
+    if (!fs.existsSync(filePath)) die(`candidate missing ${name}`);
+    uploads.push({ key: `v4/candidates/${options.candidate}/${name}`, filePath, identity: identity(filePath) });
+  }
   for (const [name, document] of [
-    ["manifest.json", catalog],
-    ["rider-services/manifest.json", riderCatalog]
+    ["rider-services/manifest.json", riderCatalog],
+    ["manifest.json", catalog]
   ]) {
     const filePath = path.join(options.root, name);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(document, null, 2) + "\n");
-    uploads.push({ key: `v4/candidates/${options.candidate}/${name}`, filePath, identity: identity(filePath) });
-  }
-  for (const name of ["release.json", "source-lock.json", "cross-pack-topology.v2.json"]) {
-    const filePath = path.join(options.root, name);
-    if (!fs.existsSync(filePath)) die(`candidate missing ${name}`);
     uploads.push({ key: `v4/candidates/${options.candidate}/${name}`, filePath, identity: identity(filePath) });
   }
   return {
@@ -371,9 +376,9 @@ async function verifyRemote(item, publicBase, options = {}) {
       if (!response.ok || !response.body) {
         throw new Error(`remote verification HTTP ${response.status} for ${item.key}`);
       }
-      const contentLength = Number(response.headers.get("content-length"));
-      if (Number.isFinite(contentLength) && contentLength !== item.identity.bytes) {
-        if (options.allowMissing) return false;
+      const declaredLength = response.headers.get("content-length");
+      const contentLength = Number(declaredLength);
+      if (declaredLength !== null && Number.isFinite(contentLength) && contentLength !== item.identity.bytes) {
         throw new Error(`remote byte mismatch for ${item.key}`);
       }
       const hash = crypto.createHash("sha256");
@@ -383,7 +388,6 @@ async function verifyRemote(item, publicBase, options = {}) {
         hash.update(chunk);
       }
       if (bytes !== item.identity.bytes || hash.digest("hex") !== item.identity.sha256) {
-        if (options.allowMissing) return false;
         throw new Error(`remote identity mismatch for ${item.key}`);
       }
       if (!options.quiet) console.log("VERIFIED", item.key);

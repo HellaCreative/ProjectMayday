@@ -172,6 +172,19 @@ it does not claim exhaustive interrupted-network or new continental-download
 acceptance. Source preparation paused at its batch boundary for this serial app
 test and resumed afterward without discarding completed extracts.
 
+Candidate publication now always verifies remote bytes, refuses an existing
+different object rather than treating it as missing, and accepts streamed
+responses without a Content-Length header by checking their actual bytes/hash.
+Places-catalog timestamps come from the sealed release, so retries reproduce
+identical catalog bytes. Both discovery catalogs upload after all pack/service
+artifacts and release records, with the routing catalog last. Six focused tests
+pass; `publication-retry-regression.json` reproduces the old overwrite-admission
+bug and confirms rejection. A read-only-input rehearsal of all 54 objects in the
+existing qualified seven-pack candidate produces byte-identical plans twice,
+with both catalogs last (`publication-plan-determinism.json`). It uses an owned
+temporary output directory, changes no existing candidate and uploads nothing.
+Actual continental publication remains pending the new candidate's qualification.
+
 First North America batch AB/AK: extraction 194.74 s, peak RSS 2,958,458,880 bytes,
 peak physical footprint 8,143,765,632 bytes; checksum-complete batch 209.675 s.
 AL/AR extraction: 197.06 s, peak physical footprint 8,097,857,600 bytes. These are
