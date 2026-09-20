@@ -189,7 +189,21 @@ speed or Dirt completion, and still exceed the 1 GiB qualification ceiling.
 Evidence: `california-style-diagnostic-ca-s-los-angeles-san-diego-cleanest-0`
 and `mapped-adjacency-ca-s-los-angeles-san-diego-cleanest-0`.
 The native probe now records distinct search states and superseded queue entries
-to separate unavoidable exploration from duplicated label work.
+to separate unavoidable exploration from duplicated label work. The California
+Dirt replay still reaches 1.6 million labels (1,599,532 distinct states, only 473
+superseded pops); this is exploration, not mostly redundant queue updates.
+Search-history storage now grows in 4,096-entry blocks with stable parent/heap
+indices, avoiding full-array resize peaks. All 139 native tests pass. A further
+same-road California Clean replay used 952,942,592 bytes sampled peak RSS versus
+1,269,334,016 before both memory repairs, with the exact edge hash unchanged.
+Total time was 31.649 s versus 30.058 s, so this is a measured memory improvement,
+not a speed claim. Dirt remains unqualified at the same label limit and
+1,286,881,280 bytes sampled peak RSS. Evidence: `chunked-labels-*`.
+All four tighter Texas extracts are now complete and hash-locked from the same
+parent; the merged lock preserves all 66 unaffected source records exactly.
+The narrow pack rebuild and directed seam/route replay are in progress. The
+full continental factory continuation is gated on that sizing replay completing
+within the 1 GiB host memory ceiling; it cannot publish by itself.
 
 The seam JSON writer batches filesystem writes without removing or changing any
 proof. Complete UTF-8 output is byte-identical in the regression. This is a factory
