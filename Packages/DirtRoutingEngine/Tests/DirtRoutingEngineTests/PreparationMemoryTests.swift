@@ -112,6 +112,33 @@ struct PreparationMemoryTests {
         }
     }
 
+    @Test func mappedAdjacencyPreservesEveryDirectedArcAndReverseOrder() throws {
+        for name in ["legal-topology-canary", "legal-topology-restrictions",
+                     "legal-topology-forecourt", "legal-topology-forecourt-blocked"] {
+            let fixture = ReferenceTests()
+            let graph = try GraphPack(graphURL: fixture.fixture(name + ".graph.v4.bin"),
+                geometryURL: fixture.fixture(name + ".geometry.v1.bin"))
+            let owned = try ArcIndex(nodeCount: graph.nodeCount, budget: .init()) { graph.outgoing($0) }
+            let mapped = try ArcIndex(pack: graph, budget: .init())
+            #expect(mapped.ownedAdjacencyBytes == 0)
+            #expect(owned.ownedAdjacencyBytes > 0)
+            #expect(mapped.inStart == owned.inStart)
+            #expect(mapped.inArcs == owned.inArcs)
+            #expect(mapped.outEdge.count == owned.outEdge.count)
+            for node in 0...graph.nodeCount { #expect(mapped.outStart[node] == owned.outStart[node]) }
+            for arc in 0..<owned.outEdge.count {
+                #expect(mapped.outEdge[arc] == owned.outEdge[arc])
+                #expect(mapped.targets[arc] == owned.targets[arc])
+                #expect(mapped.source(arc) == owned.source(arc))
+                #expect(mapped.forward(arc) == owned.forward(arc))
+                #expect(mapped.distance(arc) == owned.distance(arc))
+            }
+            #expect(throws: RoutingFailure.self) {
+                try ArcIndex(pack: graph, budget: .init(seconds: 0))
+            }
+        }
+    }
+
     @Test func spatialIndexPreservesAllSupportedAccessMatches() throws {
         let nodes = [Coordinate(longitude: 0.001, latitude: 0.001),
                      Coordinate(longitude: 0.002, latitude: 0.001)]

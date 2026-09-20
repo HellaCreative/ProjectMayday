@@ -43,6 +43,8 @@ public struct RoadCompass: Sendable {
         let arcs: ArcIndex
         if let indexed = pack as? IndexedGraph {
             arcs = try indexed.arcIndex(budget: budget)
+        } else if let raw = pack as? GraphPack {
+            arcs = try ArcIndex(pack: raw, budget: budget)
         } else {
             arcs = try ArcIndex(nodeCount: count, budget: budget) { node in
                 pack.outgoing(node).map { arc in
@@ -71,7 +73,7 @@ public struct RoadCompass: Sendable {
             for slot in Int(arcs.inStart[current.0])..<Int(arcs.inStart[current.0 + 1]) {
                 let arc = Int(arcs.inArcs[slot])
                 if avoidFerries && pack.structure(Int(arcs.outEdge[arc])) == "ferry" { continue }
-                let from = Int(arcs.outSource[arc]), meters = arcs.meters[arc]
+                let from = arcs.source(arc), meters = arcs.distance(arc)
                 guard meters.isFinite, meters >= 0 else { continue }
                 let candidate = current.1 + meters
                 if candidate < remaining[from] {

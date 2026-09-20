@@ -349,10 +349,12 @@ public struct PathSearch: Sendable {
         }
         var heap = BinaryHeap<Entry> { $0.cost == $1.cost ? $0.label < $1.label : $0.cost < $1.cost }
         heap.push(.init(label: 0,cost: heapCost(0, startNode)))
-        var goals: [Int] = [], pops = 0, limit: String?
+        var goals: [Int] = [], pops = 0, supersededPops = 0, limit: String?
         var frontierHits: [(label: Int, meters: Double, node: Int)] = []
         defer {
-            options.counter?.recordSearch(pops: pops, labels: labels.count, since: searchStarted)
+            options.counter?.recordSearch(pops: pops, labels: labels.count,
+                                          states: bestSimple.count + bestFull.count,
+                                          supersededPops: supersededPops, since: searchStarted)
             if let profile = options.profile {
                 profile.pops = pops
                 profile.labels = labels.count
@@ -402,7 +404,7 @@ public struct PathSearch: Sendable {
                 catch { limit = "time"; break }
             }
             let current = labels[entry.label]
-            guard bestIndex(current.state) == entry.label else { continue }
+            guard bestIndex(current.state) == entry.label else { supersededPops += 1; continue }
             pops += 1
             if current.state.node == endNode {
                 // A connector must exit onto a positive-length permitted road.

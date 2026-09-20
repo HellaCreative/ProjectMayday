@@ -36,10 +36,14 @@ public struct IndexedGraph: RoadGraph {
         cells = index; longEdges = long
         // RegionalGraph already joins independently verified source identities.
         // Nearby coordinates must not invent extra junctions (e.g. overpasses).
-        arcs = try ArcIndex(nodeCount: graph.nodeCount, budget: budget) { node in
-            graph.outgoing(node).map { arc in
-                arc.meters.isFinite ? arc : RoadArc(target: arc.target, edge: arc.edge,
-                                                    forward: arc.forward, meters: graph.distance(arc.edge))
+        if let pack = graph as? GraphPack {
+            arcs = try ArcIndex(pack: pack, budget: budget)
+        } else {
+            arcs = try ArcIndex(nodeCount: graph.nodeCount, budget: budget) { node in
+                graph.outgoing(node).map { arc in
+                    arc.meters.isFinite ? arc : RoadArc(target: arc.target, edge: arc.edge,
+                                                        forward: arc.forward, meters: graph.distance(arc.edge))
+                }
             }
         }
         try budget.check()
@@ -66,9 +70,10 @@ public struct IndexedGraph: RoadGraph {
     public func coordinate(node: Int) -> Coordinate { graph.coordinate(node: node) }
     public func outgoing(_ node: Int) -> [RoadArc] {
         guard node >= 0, node < nodeCount else { return [] }
+        if let raw = graph as? GraphPack { return raw.outgoing(node) }
         return (Int(arcs.outStart[node])..<Int(arcs.outStart[node + 1])).map { i in
             RoadArc(target: Int(arcs.targets[i]), edge: Int(arcs.outEdge[i]),
-                    forward: arcs.forwards[i], meters: arcs.meters[i])
+                    forward: arcs.forward(i), meters: arcs.distance(i))
         }
     }
     public func endpoint(_ edge: Int,from: Bool) -> Int { graph.endpoint(edge,from: from) }

@@ -59,6 +59,7 @@ func sha256(_ lines: [String]) -> String {
     let pops = counter.pops
     let preparation = preparedGraphs.metrics
     return ["searches":counter.searches,"totalPops":pops,"peakLabels":counter.peakLabels,
+            "peakSearchStates":counter.peakSearchStates,"supersededLabelsPopped":counter.supersededLabelsPopped,
             "preparedGraphBuilds":preparation.builds,"preparedGraphHits":preparation.hits,
             "packOpenSeconds":preparation.openSeconds + directOpenSeconds,"graphJoinSeconds":preparation.joinSeconds + directJoinSeconds,
             "graphIndexSeconds":preparation.indexSeconds + directIndexSeconds,

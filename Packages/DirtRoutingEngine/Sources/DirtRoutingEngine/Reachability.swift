@@ -1,18 +1,82 @@
 import Foundation
 
-/// Directed arcs in flat arrays. Outgoing arc `k` of node `v` has id `outStart[v] + k`,
-/// in the same order as `RoadGraph.outgoing(v)`; `inArcs` lists the ids arriving at each node.
+/// One exact integer column, borrowed from pack bytes or owned for a joined graph.
+enum IndexColumn: Sendable {
+    case mapped(MappedColumn<Int32>)
+    case owned([Int32])
+    var count: Int {
+        switch self { case .mapped(let data): data.count; case .owned(let data): data.count }
+    }
+    var ownedBytes: Int {
+        switch self { case .mapped: 0; case .owned(let data): data.count * MemoryLayout<Int32>.stride }
+    }
+    subscript(_ index: Int) -> Int32 {
+        switch self { case .mapped(let data): data[index]; case .owned(let data): data[index] }
+    }
+}
+
+/// Directed arcs in source order, with an exact reverse lookup. A raw pack
+/// lends its mapped forward columns; joined graphs own their composed columns.
 struct ArcIndex: Sendable {
-    let outStart: [Int32]
+    let outStart: IndexColumn
     let outSource: [Int32]
-    let outEdge: [Int32]
+    let outEdge: IndexColumn
     let inStart: [Int32]
     let inArcs: [Int32]
-    let targets: [Int32]
+    let targets: IndexColumn
     let forwards: [Bool]
     let meters: [Double]
+    private let mapped: GraphPack?
+
+    /// Borrow the already validated adjacency columns. Only the reverse lookup
+    /// needs storage; source, direction and length are exact edge-column reads.
+    init(pack: GraphPack, budget: ComputationBudget) throws {
+        try budget.check()
+        mapped = pack
+        outStart = .mapped(pack.nodeOffsets)
+        outEdge = .mapped(pack.arcEdges)
+        targets = .mapped(pack.targets)
+        outSource = []; forwards = []; meters = []
+        var starts = [Int32](repeating: 0, count: pack.nodeCount + 1)
+        for arc in 0..<pack.arcCount {
+            if arc & 4095 == 0 { try budget.check() }
+            starts[Int(pack.targets[arc]) + 1] += 1
+        }
+        for node in 0..<pack.nodeCount { starts[node + 1] += starts[node] }
+        var fill = starts
+        var incoming = [Int32](repeating: 0, count: pack.arcCount)
+        for arc in 0..<pack.arcCount {
+            if arc & 4095 == 0 { try budget.check() }
+            let target = Int(pack.targets[arc])
+            incoming[Int(fill[target])] = Int32(arc)
+            fill[target] += 1
+        }
+        inStart = starts; inArcs = incoming
+        try budget.check()
+    }
+
+    func source(_ arc: Int) -> Int {
+        guard let pack = mapped else { return Int(outSource[arc]) }
+        let edge = Int(pack.arcEdges[arc]), target = pack.targets[arc]
+        return Int(pack.edgeTo[edge] == target ? pack.edgeFrom[edge] : pack.edgeTo[edge])
+    }
+    func forward(_ arc: Int) -> Bool {
+        guard let pack = mapped else { return forwards[arc] }
+        return pack.edgeFrom[Int(pack.arcEdges[arc])] == source(arc)
+    }
+    func distance(_ arc: Int) -> Double {
+        guard let pack = mapped else { return meters[arc] }
+        return Double(pack.meters[Int(pack.arcEdges[arc])])
+    }
+    var ownedAdjacencyBytes: Int {
+        outStart.ownedBytes + outEdge.ownedBytes + targets.ownedBytes
+            + outSource.count * MemoryLayout<Int32>.stride
+            + forwards.count * MemoryLayout<Bool>.stride
+            + meters.count * MemoryLayout<Double>.stride
+    }
 
     init(nodeCount: Int, budget: ComputationBudget, outgoing: (Int) -> [RoadArc]) throws {
+        mapped = nil
         // Do not walk and materialize every outgoing list just to count it;
         // append in source order and grow the compact buffers as needed.
         guard nodeCount < Int(Int32.max) else { throw RoutingFailure.resourceLimit("arc index") }
@@ -42,9 +106,9 @@ struct ArcIndex: Sendable {
             inArcs[Int(fill[target])] = Int32(arc)
             fill[target] += 1
         }
-        self.outStart = outStart; self.outSource = outSource; self.outEdge = outEdge
+        self.outStart = .owned(outStart); self.outSource = outSource; self.outEdge = .owned(outEdge)
         self.inStart = inStart; self.inArcs = inArcs
-        self.targets = targets; self.forwards = forwards; self.meters = meters
+        self.targets = .owned(targets); self.forwards = forwards; self.meters = meters
     }
 }
 
@@ -104,6 +168,8 @@ final class EndpointReachability {
         self.permitsThrough = permitsThrough
         if let indexed = graph as? IndexedGraph {
             arcs = try indexed.arcIndex(budget: budget)
+        } else if let pack = graph as? GraphPack {
+            arcs = try ArcIndex(pack: pack, budget: budget)
         } else {
             arcs = try ArcIndex(nodeCount: graph.nodeCount, budget: budget) { graph.outgoing($0) }
         }
@@ -165,7 +231,7 @@ final class EndpointReachability {
         while true {
             if let arc = arcQueue.popLast() {
                 // Taking `arc` out of its source continues toward the end.
-                let source = Int(arcs.outSource[Int(arc)])
+                let source = arcs.source(Int(arc))
                 markFree(source)
                 markArrivals(at: source, except: Int(arcs.outEdge[Int(arc)]))
             } else if let node = nodeQueue.popLast() {

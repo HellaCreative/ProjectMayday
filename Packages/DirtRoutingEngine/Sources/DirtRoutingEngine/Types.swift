@@ -103,16 +103,20 @@ public final class SearchCounter: @unchecked Sendable {
     private var searchCount = 0
     private var popCount = 0
     private var labelPeak = 0
+    private var statePeak = 0
+    private var supersededPopCount = 0
     private var searchNanoseconds: UInt64 = 0
     private var stages: [(name: String, nanoseconds: UInt64)] = []
     public init() {}
 
-    func recordSearch(pops: Int, labels: Int, since start: ContinuousClock.Instant) {
+    func recordSearch(pops: Int, labels: Int, states: Int, supersededPops: Int, since start: ContinuousClock.Instant) {
         let elapsed = Self.nanoseconds(since: start)
         locked {
             searchCount += 1
             popCount += pops
             labelPeak = max(labelPeak, labels)
+            statePeak = max(statePeak, states)
+            supersededPopCount += supersededPops
             searchNanoseconds += elapsed
         }
     }
@@ -126,6 +130,8 @@ public final class SearchCounter: @unchecked Sendable {
     public var searches: Int { locked { searchCount } }
     public var pops: Int { locked { popCount } }
     public var peakLabels: Int { locked { labelPeak } }
+    public var peakSearchStates: Int { locked { statePeak } }
+    public var supersededLabelsPopped: Int { locked { supersededPopCount } }
     public var searchMilliseconds: Double { locked { Double(searchNanoseconds) / 1e6 } }
     /// Stage totals in first-seen order, in whole milliseconds: "match:12,compass:85".
     public var stageSummary: String {
