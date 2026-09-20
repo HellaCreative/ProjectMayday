@@ -128,6 +128,7 @@ do {
     if let wander = environment["DIRT_WANDER"].flatMap(Double.init), wander.isFinite {
         request.profile.wander = min(1, max(0, wander))
     }
+    request.profile.avoidMajorHighways = environment["DIRT_AVOID_HIGHWAYS"] != "0"
     request.profile.preferBackRoads = style == .cleanest
     request.mapZoom = zoom
     request.options.cityWall = environment["DIRT_NO_CITY_WALL"] != "1"

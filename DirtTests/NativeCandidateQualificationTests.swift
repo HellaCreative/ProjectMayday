@@ -244,6 +244,39 @@ struct NativeCandidateQualificationTests {
     }
 
     @Test(.timeLimit(.minutes(3)))
+    func ownerLabradorIncludesTheFerryLandingRegion() async throws {
+        let ids = ["ns", "nb", "qc-s", "qc-n", "nl-island", "nl-lab"]
+        let directories = Dictionary(uniqueKeysWithValues: ids.map { ($0, root.appendingPathComponent($0)) })
+        let session = NativeRoutingSession()
+        var request = RoutingRequest(start: .init(longitude: -63.340289, latitude: 44.764859),
+            end: .init(longitude: -60.364640, latitude: 53.293419), style: .dirt,
+            allowUnknown: false, seed: 4449227719714105)
+        request.mapZoom = 12.5
+        request.profile.wander = 0.5
+        request.options.cityWall = true
+        request.profile.avoidMajorHighways = true
+        for run in 0...1 {
+            let started = ContinuousClock.now
+            let route = try await session.route(request, directories: directories)
+            #expect(route.end.coordinate.distance(to: request.end) < 250)
+            #expect(route.start.coordinate.distance(to: request.start) < 250)
+            verifyShortUnknownConnectors(route)
+            for (a, b) in zip(route.segments, route.segments.dropFirst()) {
+                #expect(try #require(a.geometry.last).distance(to: #require(b.geometry.first)) < 1)
+            }
+            #expect(route.searchSummary?.contains("nl-island+qc-n") == true)
+            #expect(Set(route.segments.filter { $0.structure == "ferry" }.map { $0.edgeID.split(separator: ":")[0] }).count == 2)
+            let response = NativeRoutingAdapter.response(route, style: .dirt)
+            #expect(response.status == "complete")
+            #expect(route.limit == nil)
+            #expect(response.warnings?.contains { $0.code == "search_incomplete" } != true)
+            // The usable ferry journey returns without attempting the longer mainland chain.
+            #expect(route.searchSummary?.contains("ns+nb+qc-s+qc-n+nl-lab") == false)
+            report("owner-labrador-run\(run)", started: started, route: route)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(3)))
     func ownerPeiSpeedReplayColdAndWarm() async throws {
         let directories = Dictionary(uniqueKeysWithValues: ["ns","nb","pe"].map { ($0, root.appendingPathComponent($0)) })
         let session = NativeRoutingSession()

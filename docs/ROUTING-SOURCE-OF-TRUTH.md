@@ -65,8 +65,11 @@ PEI diagnosis: the old packs already contain Confederation Bridge way
 `646650186`. Fewest-region acquisition and staged chain selection could exclude
 NB and retain only NS–PE ferry travel. New candidates carry verified road-neighbor
 metadata so acquisition retains both road/bridge and ferry alternatives. Staged
-alternatives share a bounded comparison window and are compared using riding
-style; neither pack count nor a blanket bridge-first rule selects the result.
+alternatives now serve as fallbacks: try the fewest-region chain first and return
+the first complete legal journey; try another only if the earlier attempt cannot
+complete. Do not build additional whole journeys to compare after one is ready.
+Road-level Dirt, Balanced, Clean and Wander selection remains in place. This
+does not establish that the first corridor is the best bridge/ferry choice.
 This is a deliberate regional route-selection correction. Fresh-pack bridge and
 ferry replays now complete in both directions. It is not an
 exhaustive search of every possible administrative chain.
@@ -285,6 +288,93 @@ Dirt/Wander rides on White; installation is not physical route acceptance.
 Source/binary/settings receipts and full route audits are retained beside the
 test result.
 
+Owner acceptance follow-up on White, September 19 (`bridge-waypoint-20260919b`):
+the owner reports the previous routes passing, including PEI and the bridge
+midpoint. The supplied log records the midpoint in 2.773 s, Newfoundland in
+4.691 s, PEI in 26.481 s and Quebec in 37.466 s. PEI performs 34 searches / 18.204 s
+search versus Newfoundland's seven / 3.443 s; PEI preparation is only 0.968 s.
+The remaining delay is primarily route exploration, not ferry duration or
+missing downloads. These are different journeys, not identical-workload timings.
+
+The new owner Labrador request (`-63.340289,44.764859` →
+`-60.364640,53.293419`, seed `4449227719714105`, Dirt, Wander 0.5, Unknown off,
+city/highway avoidance on, zoom 12.5) fails on the phone after 41.882 s. All six
+needed candidate packs download successfully. Host replay reproduces the limit
+in 42.712 s. Isolating the short NS–Newfoundland–Labrador chain reveals no path
+because the ferry landing road passes through Quebec (`qc-n`). A shared ferry
+seam alone does not prove through-connectivity in the adjacent pack. The older
+short ferry qualification included `qc-n`, which explains why it passed without
+qualifying this longer staged chain.
+
+Region-chain discovery now preserves the shortest distinct link bypass in
+addition to its ordinary and road-only chains. Prefix-preserving link deviations
+keep a landing-region detour from being hidden by the same inland alternative.
+At most three chains are available, ordered by region count. The owner’s latest
+direction removes mandatory comparison of complete regional journeys: return the
+first fully proved journey and retain the other chains only for failure recovery.
+Before searching the penultimate stage, a necessary-only connectivity preflight
+checks whether the final window can reach the destination from that handover.
+No new connector, endpoint relocation, access change or pack rebuild is involved.
+Failed alternatives share the existing bounded window, with time reserved for
+fallback. A failed attempt never resets that clock. Label limits and cancellation
+remain unchanged. An incomplete route cannot count as a successful fallback.
+This is a bounded alternative-chain repair, not exhaustive world-wide corridor
+search. All 128 engine tests pass, including the landing-region regression and
+the existing bridge/road-alternative selection checks.
+
+Evidence is in `.build/labrador-recovery-20260919`. The host repair completes
+NS–Newfoundland–Quebec–Labrador in 60.336 s, with 2,009.757 km / 29.9% known dirt
+and both mapped ferries. The route reaches within 44 m of the rider pin, has no
+geometry gaps or prohibited/closed segments, and its longest allowed uncertain
+connector is 51 m. It retains a 54 m repeated section at the Quebec ferry
+handover; this is disclosed, not counted as flawless ride quality. The initial repair still compared a longer mainland journey and exhausted its
+allotted time after already completing the ferry route. The simulator confirmed
+60.079 / 60.066 s totals, although the completed ferry route was ready after
+25.953 / 20.189 s. The owner subsequently directed removal of that extra
+whole-journey comparison. Verification of the first-completion change follows
+below; this earlier measurement is its baseline, not a speed-fix claim. Packs remain
+`fabric-v4-20260919-01`; production and the installed White build are unchanged
+by the investigation.
+
+The first-completion implementation is now qualified locally. All 131 engine
+tests pass, including no extra journey after success, fallback after a failed
+chain, honest limits when every attempt fails, and cancellation without starting
+another alternative. The serial iPhone 17 / iOS 26.5 Debug simulator run on
+Apple M1 passes both integrated tests / eight calculations: bridge midpoint in
+both directions and all three styles, plus the owner Labrador request first/warm.
+Labrador totals fall from 60.079 / 60.066 s to 25.621 / 18.462 s, with no limit
+or comparison-incomplete warning. The run’s peak footprint is 380 MB (previous
+comparison run 391 MB). Host Release replay is 18.060 s instead of 60.336 s;
+selected road hash is unchanged (`d411db0fd0dd84ff2785fa8423e4e684a21c4d3833f4b47112810a3dd527d1cf`).
+Its actual process peak is 624,312,320 bytes RSS / 528,567,040 bytes footprint,
+versus 871,350,272 / 563,940,672 in the comparison baseline. These measurements
+are not phone speed promises or proof of identical cold filesystem caches.
+The 54 m ferry-handover repeat remains; no route-quality or access rule was
+weakened to claim it absent. Evidence: `first-completion-engine-tests.log`,
+`first-completion-native.xcresult`, `first-completion.json`, `.time`, and
+`first-completion-audit.json` under the Labrador evidence directory.
+
+The prepared native candidate stamp is `labrador-landing-20260919c`. It requires
+an Xcode Play build to test on White; no replacement was installed during this
+investigation. Existing installed source `d3457f9` and main checkpoint `62332ff`
+remain recoverable. This candidate changes regional recovery/return behavior,
+not highway/ferry penalties, riding styles, fuel, the interface or published packs.
+
+Controlled western-PEI host replay isolates highway avoidance: identical
+start `-63.340289,44.764859`, destination `-64.090674,46.888514`, seed
+`5050104396304791`, Dirt, Wander 0.5, Unknown off and city avoidance on.
+With highway avoidance on, the ride uses 26.341 km of ferry: 478.439 km,
+43.2% known dirt, 17.106 s. Turning only highway avoidance off selects
+8.552 km of Confederation Bridge instead: 431.948 km, 49.6% known dirt,
+10.699 s. Both complete without a reported limit on the same unchanged packs.
+Evidence: `pei-highways-on.json`, `pei-highways-off.json` and
+`pei-highway-isolation.json` in the Labrador evidence directory. These are
+Apple M1 host timings, not White measurements. Ferry cost returns before the
+road highway multiplier; a bridge waypoint also changes endpoint exemptions.
+This establishes the avoidance toggle's effect for this request, not that a
+blanket ferry surcharge or exemption for every bridge is the correct repair.
+No highway/ferry cost change is included in the Labrador candidate.
+
 Remaining limits: owner NS–NB Balanced is about 17–19% dirt at the tested
 settings; subsequent owner testing shows higher Wander can increase its dirt
 share. Retain the current profile pending comparable endpoint/seed evidence. Four long NS–QC Balanced/Clean results repeat about 0.66–2.28 km;
@@ -379,7 +469,12 @@ deliberate intent and must be reached: use the minimum necessary highway or urba
 travel to serve that pin, then resume back-roads character before and after it. A
 route is never failed for the highway or city mileage a rider's own placement
 requires. The default only governs the ride the engine composes between the
-rider's chosen points. Respect the rider's settlement/highway avoidance and
+rider's chosen points. A successful highway/bridge waypoint replay proves that
+explicit endpoint intent is served; it does not qualify the engine’s unpinned
+bridge-versus-ferry choice. The owner’s western-PEI ferry preference concern
+remains under investigation. Ferries currently have crossing-time cost and
+bypass the road highway multiplier; no new blanket ferry or bridge penalty has
+been accepted or implemented. Respect the rider's settlement/highway avoidance and
 access settings. Small rural towns, necessary endpoint access, and real
 geographic connections must remain distinguishable from an unnecessary trip
 through a large built-up area. Do not revive arbitrary geographic boxes or a

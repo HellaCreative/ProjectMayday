@@ -75,6 +75,7 @@ public enum StagedRouter {
                              prepared: PreparedGraphStore = PreparedGraphStore(),
                              compassStore: RoadCompassStore? = nil,
                              renewAfterCommittedStage: Bool = false) throws -> ComputedRoute {
+        let connectionsStarted = ContinuousClock.now
         let unique = Array(Set(regions)).sorted()
         let startRegion = try containingRegion(request.start, regions: unique, repository: repository,
                                                budget: budget, prepared: prepared, access: request.access, start: true)
@@ -94,19 +95,30 @@ public enum StagedRouter {
             return try routeChain(request, chain: chains[0], repository: repository, budget: budget,
                 prepared: prepared, compassStore: compassStore, renewAfterCommittedStage: renewAfterCommittedStage)
         }
-        var candidates: [ComputedRoute] = []
+        return try firstCompletedConnection(chains, budget: budget) { chain, attemptBudget in
+            let candidate = try routeChain(request, chain: chain, repository: repository, budget: attemptBudget,
+                prepared: prepared, compassStore: compassStore, renewAfterCommittedStage: false)
+            request.options.counter?.recordStage("connectionReady:\(chain.joined(separator: "+"))", since: connectionsStarted)
+            return candidate
+        }
+    }
+
+    /// Alternatives are recovery paths, not mandatory complete-journey comparisons.
+    /// A failed attempt cannot renew the shared window; reserve time for fallback.
+    /// Once a whole legal journey is proved, return it without searching another.
+    static func firstCompletedConnection(_ chains: [[String]], budget: ComputationBudget,
+        build: ([String], ComputationBudget) throws -> ComputedRoute) throws -> ComputedRoute {
         var outcomes: [String] = []
         var incomplete: RoutingFailure?
-        // These are alternatives, not committed stages. Share the existing
-        // window rather than resetting its deadline for each possible journey.
         for (index, chain) in chains.enumerated() {
-            let comparisonBudget = budget.limited(to: budget.remainingSeconds / Double(chains.count - index))
+            let attemptBudget = budget.limited(to: budget.remainingSeconds / Double(chains.count - index))
             do {
-                let candidate = try routeChain(request, chain: chain, repository: repository, budget: comparisonBudget,
-                    prepared: prepared, compassStore: compassStore,
-                    renewAfterCommittedStage: false)
-                candidates.append(candidate)
+                try attemptBudget.check()
+                var candidate = try build(chain, attemptBudget)
+                if let limit = candidate.limit { throw RoutingFailure.resourceLimit(limit) }
                 outcomes.append("\(chain.joined(separator: "+")):\(Int(candidate.distanceMeters))m")
+                candidate.searchSummary = "connections[\(outcomes.joined(separator: ","))];" + (candidate.searchSummary ?? "")
+                return candidate
             } catch RoutingFailure.noPath {
                 outcomes.append("\(chain.joined(separator: "+")):noPath")
             } catch let failure as RoutingFailure {
@@ -118,32 +130,8 @@ public enum StagedRouter {
                 }
             }
         }
-        if var selected = selectConnectionRoute(candidates, style: request.profile.style) {
-            selected.searchSummary = "connections[\(outcomes.joined(separator: ","))];" + (selected.searchSummary ?? "")
-            return selected.reportingLimit(incomplete.map { "connection comparison incomplete: \($0)" })
-        }
         if let incomplete { throw incomplete }
         throw RoutingFailure.noPath
-    }
-
-    /// Apply the same ride-quality selection to complete connection alternatives.
-    /// No pack count or preference for a named bridge/ferry enters this ranking.
-    static func selectConnectionRoute(_ routes: [ComputedRoute], style: RidingStyle) -> ComputedRoute? {
-        let candidates = routes.map { route in
-            RoutingEngine.Candidate(route: route, width: .infinity,
-                quality: RouteQuality(route: route, urbanBoxes: route.qualityUrbanBoxes))
-        }
-        switch style {
-        case .dirt: return RoutingEngine.chooseDirt(candidates)?.route
-        case .balanced: return RoutingEngine.chooseBalanced(candidates)?.route
-        case .cleanest:
-            return candidates.min { a, b in
-                let unpavedA = a.quality.totalMeters > 0 ? 1 - a.quality.pavedMeters / a.quality.totalMeters : 0
-                let unpavedB = b.quality.totalMeters > 0 ? 1 - b.quality.pavedMeters / b.quality.totalMeters : 0
-                if abs(unpavedA - unpavedB) > 0.05 { return unpavedA < unpavedB }
-                return a.route.searchCost < b.route.searchCost
-            }?.route
-        }
     }
 
     private static func routeChain(_ request: RoutingRequest, chain: [String], repository: PackRepository,
@@ -324,6 +312,7 @@ public enum StagedRouter {
             var incomplete: RoutingFailure?
             var advanced = false
             var reach: EndpointReachability?
+            var onwardReach: EndpointReachability?
             for (attempt, hopEnd) in candidates.enumerated() {
                 try budget.check()
                 // Same stub filter as the two-pack path — NS→NB→QC handovers
@@ -336,6 +325,22 @@ public enum StagedRouter {
                     guard live else {
                         lastError = RoutingFailure.noPath
                         continue
+                    }
+                    if index + 2 == windows.count {
+                        // Before spending a whole first-stage search, prove that
+                        // the final window at least has a topological continuation
+                        // from this seam to the rider's destination. A shared ferry
+                        // can end in a third region absent from a short chain.
+                        let onwardStarted = ContinuousClock.now
+                        let nextGraph = try openWindow(windows[index + 1], repository: repository,
+                            budget: budget, prepared: prepared)
+                        let onward = try hopLooksLive(request.end, origin: hopEnd, graph: nextGraph,
+                            request: request, budget: budget, reach: &onwardReach)
+                        request.options.counter?.recordStage("onwardFilter", since: onwardStarted)
+                        guard onward else {
+                            lastError = RoutingFailure.noPath
+                            continue
+                        }
                     }
                 }
                 let candidatesLeft = max(1, candidates.count - attempt)

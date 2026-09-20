@@ -285,12 +285,43 @@ public struct RegionConnectivity: Sendable {
                        roadNeighbors: [String:Set<String>]) throws -> [[String]] {
         let ordinary = try chain(from: start, to: end)
         let roads = roadNeighbors.map { (key, value) in (key, value.intersection(neighbors[key] ?? [])) }
+        var alternatives = [ordinary]
         if let land = try? RegionConnectivity(neighbors: Dictionary(uniqueKeysWithValues: roads))
             .chain(from: start, to: end), land != ordinary {
-            return [land, ordinary]
+            alternatives.append(land)
         }
-        return [ordinary]
+        // A shared seam proves a transfer, not passage through the adjoining
+        // pack. Ferry endpoints and overlap stubs may require an intermediate
+        // region. Retain the shortest distinct bypass of an ordinary-chain link.
+        // This bounded graph-only step opens no road packs or search labels.
+        var bypasses: [[String]] = []
+        for index in 0..<max(0, ordinary.count - 1) {
+            let a = ordinary[index], b = ordinary[index + 1]
+            let prefix = Array(ordinary.prefix(index))
+            var withoutLink = neighbors
+            withoutLink[a]?.remove(b)
+            withoutLink[b]?.remove(a)
+            // Preserve the prefix up to the deviating link. Starting every
+            // bypass at the origin can rediscover the same inland route and
+            // hide the useful intermediate landing-region alternative.
+            for visited in prefix {
+                withoutLink.removeValue(forKey: visited)
+                for key in Array(withoutLink.keys) { withoutLink[key]?.remove(visited) }
+            }
+            if let suffix = try? RegionConnectivity(neighbors: withoutLink).chain(from: a, to: end) {
+                let bypass = prefix + suffix
+                if !alternatives.contains(bypass), !bypasses.contains(bypass) { bypasses.append(bypass) }
+            }
+        }
+        func fewerRegions(_ a: [String], _ b: [String]) -> Bool {
+            a.count == b.count ? a.lexicographicallyPrecedes(b) : a.count < b.count
+        }
+        if let bypass = bypasses.sorted(by: fewerRegions).first { alternatives.append(bypass) }
+        // Try fewer regions first; later chains are fallbacks if legal routing
+        // cannot complete the earlier one. Road-level style selection is unchanged.
+        return alternatives.sorted(by: fewerRegions)
     }
+
     /// Returns the intermediate downloads as well as endpoint regions. A complete
     /// geographic search may request an alternate chain through the same interface.
     public func chain(from start: String,to end: String) throws -> [String] {
