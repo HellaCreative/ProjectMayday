@@ -418,6 +418,15 @@ struct RoutePlannerCard: View {
 
     // MARK: - Tabs
 
+    private var selectedPlanningTab: Int {
+        if planner.showingLoop { return 1 }
+        switch planner.mode {
+        case .fromHere: return 0
+        case .plan: return 2
+        case .saved: return 3
+        }
+    }
+
     private var tabBar: some View {
         HStack(spacing: 4) {
             planningTab("From here", icon: "location", selected: !planner.showingLoop && planner.mode == .fromHere) { requestMode(.fromHere) }
@@ -429,6 +438,36 @@ struct RoutePlannerCard: View {
             planningTab("Plan a route", icon: "point.topleft.down.to.point.bottomright.curvepath", selected: !planner.showingLoop && planner.mode == .plan) { requestMode(.plan) }
             planningTab("Saved", icon: "bookmark", selected: !planner.showingLoop && planner.mode == .saved) { requestMode(.saved) }
         }
+        .background(alignment: .leading) {
+            GeometryReader { geometry in
+                let tabWidth = max(0, (geometry.size.width - 12) / 4)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(DirtTheme.orange)
+                    .frame(width: tabWidth, height: geometry.size.height)
+                    .keyframeAnimator(
+                        initialValue: CGSize(width: 1, height: 1),
+                        trigger: reduceMotion ? 0 : selectedPlanningTab
+                    ) { highlight, scale in
+                        highlight.scaleEffect(x: scale.width, y: scale.height)
+                    } keyframes: { _ in
+                        KeyframeTrack(\.width) {
+                            CubicKeyframe(1.14, duration: 0.14)
+                            SpringKeyframe(1, duration: 0.34, spring: .smooth)
+                        }
+                        KeyframeTrack(\.height) {
+                            CubicKeyframe(0.94, duration: 0.14)
+                            SpringKeyframe(1, duration: 0.34, spring: .smooth)
+                        }
+                    }
+                    .offset(x: CGFloat(selectedPlanningTab) * (tabWidth + 4))
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.44, dampingFraction: 0.82),
+                        value: selectedPlanningTab
+                    )
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .padding(5)
         .dirtGroupingSurface()
     }
@@ -437,12 +476,13 @@ struct RoutePlannerCard: View {
         Button(action: action) {
             VStack(spacing: 5) {
                 Image(systemName: icon).font(.body.weight(.semibold))
-                Text(title == "Plan a route" ? "Plan" : title).font(.caption.weight(selected ? .bold : .medium))
+                Text(title == "Plan a route" ? "Plan" : title).font(.caption.weight(.semibold))
                     .lineLimit(2).multilineTextAlignment(.center)
             }
             .foregroundStyle(selected ? DirtTheme.onOrange : DirtTheme.muted)
             .frame(maxWidth: .infinity, minHeight: min(planningTabHeight, 76))
-            .background(selected ? DirtTheme.orange : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+            .animation(nil, value: selected)
         }
         .buttonStyle(.plain)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
