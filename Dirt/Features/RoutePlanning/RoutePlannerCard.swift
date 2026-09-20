@@ -1425,8 +1425,6 @@ private struct RideSettingsPanel: View {
     @State private var allowUnknown: Bool
     @State private var preferences: RidePreferences
     @State private var showUnknownWarning = false
-    @State private var ridingStyleSelectionIsMoving = false
-    @Namespace private var ridingStyleSelection
 
     init(
         title: String,
@@ -1460,7 +1458,15 @@ private struct RideSettingsPanel: View {
                     Text("Riding style")
                         .font(DirtType.sectionLabel)
                         .foregroundStyle(DirtTheme.muted)
-                    ridingStyleSelector
+                    Picker("Riding style", selection: $profile) {
+                        ForEach(RouteProfile.allCases) { item in
+                            Text(item.title).tag(item)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: profile) { _, value in
+                        if value == .cleanest { allowUnknown = false }
+                    }
                 }
                 .padding(DirtSpace.row)
                 .dirtGroupingSurface()
@@ -1537,65 +1543,6 @@ private struct RideSettingsPanel: View {
         } message: {
             Text("Unknown-access routing may include roads that are unverified for motorcycles. Check signs and turn around when access is unclear.")
         }
-    }
-
-    private var ridingStyleSelector: some View {
-        HStack(spacing: 3) {
-            ForEach(RouteProfile.allCases) { item in
-                Button {
-                    guard item != profile else { return }
-                    ridingStyleSelectionIsMoving = true
-                    withAnimation(
-                        .spring(response: 0.28, dampingFraction: 0.9),
-                        completionCriteria: .logicallyComplete
-                    ) {
-                        profile = item
-                        if item == .cleanest { allowUnknown = false }
-                    } completion: {
-                        withAnimation(.easeOut(duration: 0.08)) {
-                            ridingStyleSelectionIsMoving = false
-                        }
-                    }
-                } label: {
-                    ZStack {
-                        if profile == item {
-                            Capsule()
-                                .fill(
-                                    ridingStyleSelectionIsMoving
-                                        ? AnyShapeStyle(.ultraThinMaterial)
-                                        : AnyShapeStyle(Color.white)
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(
-                                            ridingStyleSelectionIsMoving
-                                                ? Color.white.opacity(0.62)
-                                                : DirtTheme.hairline,
-                                            lineWidth: 1
-                                        )
-                                )
-                                .shadow(
-                                    color: .black.opacity(ridingStyleSelectionIsMoving ? 0.14 : 0.08),
-                                    radius: ridingStyleSelectionIsMoving ? 4 : 2,
-                                    y: ridingStyleSelectionIsMoving ? 2 : 1
-                                )
-                                .matchedGeometryEffect(
-                                    id: "ride-style-glass",
-                                    in: ridingStyleSelection
-                                )
-                        }
-                        Text(item.title)
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundStyle(DirtTheme.ink)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 42)
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(profile == item ? .isSelected : [])
-            }
-        }
-        .padding(4)
-        .background(DirtTheme.orange, in: Capsule())
     }
 
     private func settingsToggle(

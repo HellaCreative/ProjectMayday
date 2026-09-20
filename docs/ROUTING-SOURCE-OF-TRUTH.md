@@ -2039,10 +2039,9 @@ Ride settings now use one top-entry map panel in two roles. It descends beneath
 the header and dismisses upward, matching the earlier fuel/settings presentation
 rather than rising from the bottom. While open, the panel sits above the map
 controls and dock so unrelated controls cannot overlap it; the DIRT header remains
-above it. Its Clean, Balanced and Dirt control uses larger type on the brand-orange
-track with an opaque white resting selection. The selection becomes translucent
-glass only while it slides, then settles back to white. The settings fit in one fixed panel
-without an internal scrolling surface. The panel enters from just beneath the
+above it. Clean, Balanced and Dirt use the original native segmented control and
+its system selection behavior. The settings fit in one fixed panel without an
+internal scrolling surface. The panel enters from just beneath the
 header with a short, lightly damped spring, and its header has deliberate top
 clearance around the close control. The Surface control in From Here, Loop and
 Plan edits the defaults copied into newly created legs. Tapping an existing Plan
