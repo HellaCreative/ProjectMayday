@@ -2035,10 +2035,12 @@ required for these default changes. The DIRT Dev build and all five focused
 including native defaults for all three styles and explicit saved-setting
 overrides. Evidence: `.build/ride-defaults-20260919b.xcresult`.
 
-Ride settings now use one native modal in two roles. The Surface control in From
-Here, Loop and Plan edits the defaults copied into newly created legs. Tapping an
-existing Plan leg's Dirt, Balanced or Clean badge opens the same modal for that
-leg alone. The modal contains style, Allow Unknown, Ride Wander, Avoid cities
+Ride settings now use one top-entry map panel in two roles. It descends beneath
+the header and dismisses upward, matching the earlier fuel/settings presentation
+rather than rising from the bottom. The Surface control in From Here, Loop and
+Plan edits the defaults copied into newly created legs. Tapping an existing Plan
+leg's Dirt, Balanced or Clean badge opens the same panel for that leg alone. The
+panel contains style, Allow Unknown, Ride Wander, Avoid cities
 and towns, Avoid highways and Avoid ferries. Done applies the draft once and
 rebuilds only the selected Plan leg; the numbered leg button already focuses
 that leg, so the old inline drawer controls and View entire leg action are

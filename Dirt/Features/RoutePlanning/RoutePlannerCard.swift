@@ -24,6 +24,7 @@ struct RoutePlannerCard: View {
     var landscapeDockLeading: Bool? = nil
     var landscapeHasIslandColumn: Bool = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppEnvironment.self) private var app
     @Environment(\.modelContext) private var modelContext
 
@@ -54,6 +55,67 @@ struct RoutePlannerCard: View {
     /// Multi-stage or fuel-assisted plans — confirm before wipe.
     private var shouldConfirmClear: Bool {
         planner.stages.count > 1 || planner.stages.contains(where: \.endsAtFuelStop)
+    }
+
+    private var rideSettingsTransition: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+    }
+
+    /// Ride settings use the established map-panel motion: descend from the
+    /// header, remain visually connected to the route controls, and dismiss
+    /// upward. This intentionally avoids the system bottom-sheet metaphor.
+    @ViewBuilder private var rideSettingsOverlay: some View {
+        GeometryReader { geometry in
+            let topInset: CGFloat = landscapeDockLeading == nil ? 72 : 12
+            VStack(spacing: 0) {
+                if showDefaultRideSettings {
+                    RideSettingsPanel(
+                        title: "Default ride settings",
+                        scopeNote: "Used for new legs. Existing Plan legs keep their own settings.",
+                        profile: planner.profile,
+                        allowUnknown: planner.allowUnknown,
+                        preferences: planner.displayedRidePreferences,
+                        onClose: { showDefaultRideSettings = false }
+                    ) { profile, allowUnknown, preferences in
+                        planner.applyDefaultRideSettings(
+                            profile: profile,
+                            allowUnknown: allowUnknown,
+                            ridePreferences: preferences
+                        )
+                        showDefaultRideSettings = false
+                    }
+                    .id("default")
+                    .transition(rideSettingsTransition)
+                } else if let index = selectedStage,
+                          planner.stages.indices.contains(index) {
+                    let stage = planner.stages[index]
+                    RideSettingsPanel(
+                        title: "Leg \(index + 1)",
+                        scopeNote: "Changes apply only to this leg.",
+                        profile: stage.profile,
+                        allowUnknown: stage.allowUnknown,
+                        preferences: stage.ridePreferences,
+                        onClose: { selectedStage = nil }
+                    ) { profile, allowUnknown, preferences in
+                        planner.applyLegRideSettings(
+                            at: index,
+                            profile: profile,
+                            allowUnknown: allowUnknown,
+                            ridePreferences: preferences
+                        )
+                        selectedStage = nil
+                    }
+                    .id(stage.id)
+                    .transition(rideSettingsTransition)
+                }
+            }
+            .frame(maxWidth: 420, maxHeight: max(260, geometry.size.height - topInset - 12))
+            .padding(.top, topInset)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .zIndex(50)
+        }
+        .allowsHitTesting(showDefaultRideSettings || selectedStage != nil)
     }
 
     var body: some View {
@@ -97,45 +159,11 @@ struct RoutePlannerCard: View {
                 DirtShareSheet(items: [url])
             }
         }
-        .sheet(isPresented: $showDefaultRideSettings) {
-            RideSettingsSheet(
-                title: "Default ride settings",
-                scopeNote: "Used for new legs. Existing Plan legs keep their own settings.",
-                profile: planner.profile,
-                allowUnknown: planner.allowUnknown,
-                preferences: planner.displayedRidePreferences
-            ) { profile, allowUnknown, preferences in
-                planner.applyDefaultRideSettings(
-                    profile: profile,
-                    allowUnknown: allowUnknown,
-                    ridePreferences: preferences
-                )
-                showDefaultRideSettings = false
-            }
+        .overlay(alignment: .top) {
+            rideSettingsOverlay
         }
-        .sheet(isPresented: Binding(
-            get: { selectedStage != nil },
-            set: { if !$0 { selectedStage = nil } }
-        )) {
-            if let index = selectedStage, planner.stages.indices.contains(index) {
-                let stage = planner.stages[index]
-                RideSettingsSheet(
-                    title: "Leg \(index + 1)",
-                    scopeNote: "Changes apply only to this leg.",
-                    profile: stage.profile,
-                    allowUnknown: stage.allowUnknown,
-                    preferences: stage.ridePreferences
-                ) { profile, allowUnknown, preferences in
-                    planner.applyLegRideSettings(
-                        at: index,
-                        profile: profile,
-                        allowUnknown: allowUnknown,
-                        ridePreferences: preferences
-                    )
-                    selectedStage = nil
-                }
-            }
-        }
+        .animation(.easeInOut(duration: 0.18), value: showDefaultRideSettings)
+        .animation(.easeInOut(duration: 0.18), value: selectedStage)
         .onChange(of: app.trial.isSubscribed) { _, subscribed in
             guard subscribed, let reason = app.trial.takePendingReason() else { return }
             resumeAfterSubscribe(reason)
@@ -456,6 +484,20 @@ struct RoutePlannerCard: View {
         }
     }
 
+    private func openDefaultSettings() {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            selectedStage = nil
+            showDefaultRideSettings = true
+        }
+    }
+
+    private func openLegSettings(at index: Int) {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            showDefaultRideSettings = false
+            selectedStage = index
+        }
+    }
+
     private func requestMode(_ mode: RoutePlannerModel.Mode) {
         if planner.showingLoop { planner.selectMode(mode); return }
         guard mode != planner.mode else { return }
@@ -482,7 +524,7 @@ struct RoutePlannerCard: View {
                     number: 1,
                     profileTitle: planner.stages.first?.profile.title ?? planner.profile.title,
                     isActive: false,
-                    onToggle: { selectedStage = 0 },
+                    onToggle: { openLegSettings(at: 0) },
                     onFocus: { planner.focusStage(at: 0) },
                     headline: {
                         stageMetrics(
@@ -523,7 +565,7 @@ struct RoutePlannerCard: View {
                 .font(DirtType.rowTitle)
                 .foregroundStyle(DirtTheme.ink)
             Button {
-                showDefaultRideSettings = true
+                openDefaultSettings()
             } label: {
                 HStack(spacing: 6) {
                     DirtSurfaceIcon.menuImage(for: planner.profile.title)
@@ -714,7 +756,7 @@ struct RoutePlannerCard: View {
     /// Secondary to Start: the button name carries what the old helper paragraph explained.
     private var continuePlanningButton: some View {
         Button {
-            selectedStage = 0
+            openLegSettings(at: 0)
             _ = planner.continuePlanningFromSavedTrack()
         } label: {
             Label("Continue planning", systemImage: "arrow.triangle.branch")
@@ -799,9 +841,9 @@ struct RoutePlannerCard: View {
             isActive: false,
             onToggle: {
                 if planner.showingLoop {
-                    showDefaultRideSettings = true
+                    openDefaultSettings()
                 } else {
-                    selectedStage = index
+                    openLegSettings(at: index)
                 }
             },
             onFocus: { planner.focusStage(at: index) },
@@ -1351,11 +1393,11 @@ struct GPXImportButton: View {
     }
 }
 
-private struct RideSettingsSheet: View {
+private struct RideSettingsPanel: View {
     let title: String
     let scopeNote: String
+    let onClose: () -> Void
     let onSave: (RouteProfile, Bool, RidePreferences) -> Void
-    @Environment(\.dismiss) private var dismiss
     @State private var profile: RouteProfile
     @State private var allowUnknown: Bool
     @State private var preferences: RidePreferences
@@ -1367,10 +1409,12 @@ private struct RideSettingsSheet: View {
         profile: RouteProfile,
         allowUnknown: Bool,
         preferences: RidePreferences,
+        onClose: @escaping () -> Void,
         onSave: @escaping (RouteProfile, Bool, RidePreferences) -> Void
     ) {
         self.title = title
         self.scopeNote = scopeNote
+        self.onClose = onClose
         self.onSave = onSave
         _profile = State(initialValue: profile)
         _allowUnknown = State(initialValue: profile == .cleanest ? false : allowUnknown)
@@ -1379,7 +1423,7 @@ private struct RideSettingsSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: title, onClose: { dismiss() })
+            DirtSheetHeader(title: title, onClose: onClose)
             ScrollView {
                 VStack(alignment: .leading, spacing: DirtSpace.group) {
                     Text(scopeNote)
@@ -1453,7 +1497,6 @@ private struct RideSettingsSheet: View {
 
                     Button("Done") {
                         onSave(profile, allowUnknown, preferences.normalized)
-                        dismiss()
                     }
                     .buttonStyle(DirtCTAStyle.brand())
                 }
@@ -1462,10 +1505,16 @@ private struct RideSettingsSheet: View {
                 .padding(.bottom, DirtSpace.section)
             }
         }
-        .background(DirtTheme.sheetMaterial)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-        .presentationBackground(DirtTheme.sheetMaterial)
+        .background(
+            DirtTheme.sheetMaterial,
+            in: RoundedRectangle(cornerRadius: DirtRadius.sheet, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DirtRadius.sheet, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DirtRadius.sheet, style: .continuous))
+        .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
         .alert("Unknown access is not permission", isPresented: $showUnknownWarning) {
             Button("I understand — continue", role: .destructive) { allowUnknown = true }
             Button("Cancel", role: .cancel) { allowUnknown = false }
