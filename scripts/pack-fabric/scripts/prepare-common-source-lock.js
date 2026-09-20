@@ -37,13 +37,17 @@ function save(file, doc) {
   fs.renameSync(file + ".tmp", file);
 }
 function parseArgs(args) {
-  const o = { regions: [] };
+  const o = { regions: [], batchSize: 1 };
   const flags = { "--source": "source", "--url": "url", "--md5": "md5", "--output": "output" };
   for (let i = 0; i < args.length; i++) {
     if (flags[args[i]]) {
       const key = flags[args[i]];
       if (!args[i + 1] || args[i + 1].startsWith("--")) throw new Error(`missing ${args[i]}`);
       o[key] = args[++i];
+    } else if (args[i] === "--batch-size") {
+      o.batchSize = Number(args[++i]);
+      if (!Number.isInteger(o.batchSize) || o.batchSize < 1 || o.batchSize > 2)
+        throw new Error("batch size must be 1 or 2 until larger batches are measured");
     } else if (args[i].startsWith("-")) throw new Error(`unknown argument ${args[i]}`);
     else o.regions.push(args[i]);
   }
@@ -52,6 +56,11 @@ function parseArgs(args) {
   o.regions = [...new Set(o.regions)].sort();
   o.regions.forEach(geofabrikSource);
   return o;
+}
+function batchConfig(items, timestamp) {
+  return { extracts: items.map(item => ({ output: item.pbf,
+    polygon: { file_name: item.halo, file_type: "geojson" },
+    output_header: { osmosis_replication_timestamp: timestamp } })) };
 }
 function main(args = process.argv.slice(2)) {
   const o = parseArgs(args), source = path.resolve(o.source), output = path.resolve(o.output);
@@ -70,6 +79,7 @@ function main(args = process.argv.slice(2)) {
   };
   if (doc.fabricEpoch !== epoch) throw new Error("resume parent source changed; use a new output directory");
   const tool = run("osmium", ["--version"]).split("\n")[0];
+  const pending = [];
   for (const id of o.regions) {
     const region = geofabrikSource(id), polygon = clipGeojsonPath(id);
     if (!polygon) throw new Error(`${id}: missing polygon`);
@@ -92,15 +102,24 @@ function main(args = process.argv.slice(2)) {
     const layer = path.basename(polygon, ".geojson").replace(/'/g, "''");
     run("ogr2ogr", ["-f", "GeoJSON", halo, polygon, "-dialect", "sqlite", "-sql",
       `SELECT ST_Transform(ST_Buffer(ST_Transform(geometry, ${bufferProjection(id, region.country)}), 2000), 4326) AS geometry FROM '${layer}'`, "-nln", "halo"]);
-    console.log(`${id}: extracting from ${timestamp}`);
+    pending.push({ id, pbf, halo, recipe, dir });
+  }
+  // One process scans the common parent for at most two independent extracts.
+  // Polygon, halo and smart relation-completion semantics are unchanged.
+  for (let offset = 0; offset < pending.length; offset += o.batchSize) {
+    const batch = pending.slice(offset, offset + o.batchSize);
+    const config = path.join(root, `batch-${batch.map(x => x.id).join("-")}.json`);
+    save(config, batchConfig(batch, timestamp));
+    console.log(`${batch.map(x => x.id).join(",")}: extracting from ${timestamp}`);
     const started = Date.now();
-    run("/usr/bin/time", ["-l", "osmium", "extract", "--polygon", halo, "--strategy", "smart",
-      "-S", recipe.completeRelationTypes && `types=${recipe.completeRelationTypes}`,
-      "--output-header", `osmosis_replication_timestamp=${timestamp}`,
-      "--overwrite", "-o", pbf, source], path.join(dir, "extract.log"));
-    doc.regions[id] = { sourceUrl: o.url, sourceBytes: fs.statSync(pbf).size,
-      sourceSha256: hashFile(pbf), osmTimestamp: timestamp, cachedPath: pbf,
-      extraction: recipe, elapsedMs: Date.now() - started };
+    run("/usr/bin/time", ["-l", "osmium", "extract", "--config", config, "--strategy", "smart",
+      "-S", "types=multipolygon,restriction", "--overwrite", source], config + ".log");
+    for (const { id, pbf, recipe } of batch) {
+      doc.regions[id] = { sourceUrl: o.url, sourceBytes: fs.statSync(pbf).size,
+        sourceSha256: hashFile(pbf), osmTimestamp: timestamp, cachedPath: pbf,
+        extraction: recipe, elapsedMs: Date.now() - started,
+        extractionBatch: batch.map(x => x.id), measurementFile: config + ".log" };
+    }
     save(partial, doc);
   }
   doc.regions = Object.fromEntries(o.regions.map(id => [id, doc.regions[id]]));
@@ -113,4 +132,4 @@ function main(args = process.argv.slice(2)) {
 if (require.main === module) {
   try { main(); } catch (e) { console.error(e); process.exitCode = 1; }
 }
-module.exports = { main, parseArgs, hashFile };
+module.exports = { main, parseArgs, hashFile, batchConfig };

@@ -17,6 +17,7 @@ const { OSM_REGION } = require("../routing/registry/geofabrik");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 const { readTopologySealMetaSync } = require("./topology-meta");
 const { verifyRegion } = require("./build-v4-fabric");
+const { verifyQualification } = require("./qualify-v4-routes");
 
 const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
@@ -66,6 +67,7 @@ function parseArgs(argv) {
       die(`${value} is forbidden here; candidate upload cannot touch production or deploy`);
     } else if (value === "--candidate") options.candidate = argv[++i];
     else if (value === "--root") options.root = path.resolve(argv[++i]);
+    else if (value === "--qualification") options.qualification = path.resolve(argv[++i]);
     else if (value === "--pack") options.pack = true;
     else if (value === "--verify") options.verify = true;
     else if (value === "--regions") {
@@ -83,6 +85,7 @@ function parseArgs(argv) {
     die("V4 release id must be fabric-v4-YYYYMMDD-NN");
   }
   options.root = options.root || path.join(FABRIC, "routing", "candidates", options.candidate);
+  options.qualification = options.qualification || path.join(options.root, "qualification");
   return options;
 }
 
@@ -115,6 +118,10 @@ function verifyLocalCandidate(options) {
       JSON.stringify(topology.regionIds) !== JSON.stringify(expectedIds)) {
     die("candidate topology identity or selected regions mismatch");
   }
+
+  // Files and seams alone cannot qualify a ride. No upload/catalog mutation
+  // starts until native route receipts cover this exact sealed candidate.
+  const qualification = verifyQualification(options.root, options.qualification || path.join(options.root, "qualification"));
 
   const catalog = {
     version: options.candidate,
@@ -203,6 +210,8 @@ function verifyLocalCandidate(options) {
   }
   return {
     release,
+    qualification: { probeSHA256: qualification.probeSHA256, cases: qualification.results.length,
+      hardware: qualification.hardware, finished: qualification.finished },
     uploads,
     publicBase: `${PUBLIC_R2_BASE.replace(/\/$/, "")}/v4/candidates/${options.candidate}`
   };

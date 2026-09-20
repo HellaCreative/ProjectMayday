@@ -55,9 +55,33 @@ are not silently recertified. Seven focused reuse/publication tests pass,
 including changed-recipe rejection. Source-lock polygon changes fail closed.
 The registered continental roster currently has 67 packs and unsplit Texas;
 Texas and all other regions still require measured resource qualification.
-A dated North America parent download has begun; its downloaded checksum and
-OSM timestamp must pass before any regional extraction. No new continental
-packs have been built or published at this checkpoint.
+The North America September 18 download resumes the existing 2.63 GB partial
+at `.build/fresh-fabric-20260919/source/north-america-260918.osm.pbf`; its checked
+prefix agrees with the newly downloaded bytes. Expected complete bytes:
+19,394,968,944; publisher MD5 `3b344803d19c468b54695dc3d92747f1`. Full checksum
+and OSM timestamp must pass before continental extraction. A bounded two-region
+single-process extraction mode is implemented in `prepare-common-source-lock.js`
+(`--batch-size 2`, default remains 1). Its real NS/PE equivalence/time/memory
+experiment is queued after the route matrix in `run-next-checks.sh` under the
+continental evidence directory. Do not adopt it broadly before that comparison;
+retain the 2 km halo and complete multipolygon/turn-restriction semantics.
+No new continental packs have been built or published at this checkpoint.
+
+The new same-binary 87-request matrix has completed (`final-matrix/` in the
+continental evidence directory): 77 pass the stronger shape/access/resource
+checks. Six failures use the earlier synthetic restricted parking endpoint in
+the NB–QC fixture; the separately preserved corrected public-road approach
+passes all six style/direction requests in `public-approach-matrix/` (2.19–9.03 s).
+These do not repair or erase the original restricted-endpoint issue. Four NS–QC
+Balanced/Clean requests complete but repeat 1,305 / 2,280 m outbound and
+656 / 937 m returning. They remain explicit shape failures. Together the exact
+public-road connectivity fixtures still complete in all 87 cases, but only
+83/87 pass this shape audit. The published files have not changed. These are
+Apple M1/16 GiB host measurements, with background Xcode indexing and source
+download active, not isolated speed benchmarks or physical-phone acceptance.
+Twelve focused factory/gate tests pass; actual candidate publication rejects the
+failed matrix before catalog mutation or upload. Route qualification remains
+failed pending diagnosis/repair and the other acceptance checks below.
 
 Every region, including small provinces, receives the same source, feature,
 connectivity, actual-route and memory checks. Test legal road crossings in both
@@ -1111,14 +1135,28 @@ Repeatable process to carry to every remaining region:
 
 Already implemented: source locking, resumable factory, graph/geometry/fuel
 checks, source-proven seams, feature inventory, derived matching-grid validation,
-immutable DEV publication and download verification; focused engine/app tests
-and serial route matrices also exist. Evidence and tooling are referenced in
-section 1 and `scripts/pack-fabric/scripts/build-v4-fabric.js` /
-`ship-v4-candidate.js`. **Not yet demonstrated as one enforced release gate:**
-all final-version journeys and resource targets automatically blocking qualified
-publication together. Wire the repeatable automated subset into one pass/fail
-qualification step for continental DEV publication; physical acceptance remains
-explicit before production promotion. Do not claim every item above is already automated.
+immutable DEV publication and download verification. `qualify-v4-routes.js` now
+runs serial native probes and preserves raw receipts, exact requests, pack and
+binary hashes, elapsed time and measured process RSS. `ship-v4-candidate.js`
+requires `--qualification <evidence-directory>` (default: candidate/qualification)
+before creating catalogs or uploading. The verifier requires internal journeys
+in every region/style, both directions of every declared neighboring pair,
+unchanged sealed release/plan/route receipts, matching tested graph/geometry
+hashes, settings and endpoint fidelity, continuous segment joins, no denied or
+closed access, the unknown-connector cap, ferry/bridge expectations and explicit
+resource/repeated-road ceilings. Known landing intermediates are allowed in a
+crossing request; a two-pack seam is not assumed to suffice by itself.
+
+This is an enforced automated subset, not complete phone or legal-state
+qualification. Endpoint-only access and turn legality remain engine/app test
+responsibilities; directed structural seam checks remain factory requirements.
+The initial final-version matrix uses a 60-second search window, 180-second
+whole-probe safety ceiling, 1 GiB host RSS ceiling and 100 m repeated-road ceiling.
+These are disclosed diagnostic limits, not achieved everyday latency targets or
+phone memory budgets. Shape failures must be investigated, not hidden by raising
+the ceiling. Current owner mainland Labrador and ferry-choice app evidence remains
+separate. Physical acceptance and the remaining table above are still open.
+Do not claim every item above is already automated.
 
 No finite matrix can guarantee perfect OSM coverage or prove every possible
 journey. The objective is a reproducible build with detected regressions and
