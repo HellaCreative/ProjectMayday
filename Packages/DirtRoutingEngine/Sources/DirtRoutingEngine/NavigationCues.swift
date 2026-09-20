@@ -29,11 +29,11 @@ struct NavigationCues {
                     graph.restrictionIndex.advance(active,from: from,to: id,at: node) != nil
             }
             active = graph.restrictionIndex.advance(active,from: from,to: to,at: node) ?? []
-            guard !alternatives.isEmpty, incoming.access != 4, outgoing.access != 4,
-                  incoming.geometry.count >= 2, outgoing.geometry.count >= 2 else { continue }
-            let a = incoming.geometry[incoming.geometry.count-2], b = incoming.geometry.last!, c = outgoing.geometry[1]
-            var delta = (b.bearing(to: c)-a.bearing(to: b))*180 / .pi
-            while delta > 180 { delta -= 360 }; while delta < -180 { delta += 360 }
+            guard incoming.access != 4, outgoing.access != 4,
+                  let delta = turnDegrees(incoming: incoming.geometry, outgoing: outgoing.geometry) else { continue }
+            // A legal U-turn is itself a decision even at a dead end. Other
+            // calls require a plausible graph branch, never just a road bend.
+            guard abs(delta) >= 160 || !alternatives.isEmpty else { continue }
             let degrees = abs(delta).rounded(), straight = degrees < 30, turnAround = degrees >= 160
             let side = straight ? nil : delta > 0 ? "right" : "left"
             result.append(.init(stableID: "jct:\(incoming.edgeID)>\(outgoing.edgeID)",
@@ -45,4 +45,30 @@ struct NavigationCues {
                             instruction: "Arrive at destination",side: nil,degrees: nil,alongMeters: route.distanceMeters.rounded()))
         return result
     }
+    /// Measure the road approaches, not a tiny OSM vertex at the junction.
+    /// Short vertex pairs can say straight while the rider is still in a bend.
+    static func turnDegrees(incoming: [Coordinate], outgoing: [Coordinate]) -> Double? {
+        guard incoming.count >= 2, outgoing.count >= 2,
+              let junction = incoming.last else { return nil }
+        func approach(_ points: [Coordinate]) -> Coordinate {
+            var remaining = 25.0
+            for i in 1..<points.count {
+                let a = points[i - 1], b = points[i], meters = a.distance(to: b)
+                if meters >= remaining, meters > 0 {
+                    let fraction = remaining / meters
+                    return Coordinate(longitude: a.longitude + (b.longitude - a.longitude) * fraction,
+                                      latitude: a.latitude + (b.latitude - a.latitude) * fraction)
+                }
+                remaining -= meters
+            }
+            return points.last!
+        }
+        let before = approach(Array(incoming.reversed())), after = approach(outgoing)
+        guard before.distance(to: junction) > 0.1, junction.distance(to: after) > 0.1 else { return nil }
+        var delta = (junction.bearing(to: after) - before.bearing(to: junction)) * 180 / .pi
+        while delta > 180 { delta -= 360 }
+        while delta < -180 { delta += 360 }
+        return delta
+    }
+
 }

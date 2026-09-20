@@ -26,6 +26,9 @@ nonisolated enum NativeRoutingAdapter {
             end: .init(longitude: b.longitude,latitude: b.latitude),style: RidingStyle(rawValue: req.profile.rawValue) ?? .balanced,
             allowUnknown: req.accessPolicy.motorizedUnknown,seed: req.options?.sessionSeed ?? 0)
         native.options.maximumMeters = req.options?.maxPathMeters ?? .infinity
+        native.options.blockedStartEscapeToward = req.options?.blockedStartEscapeToward.map {
+            Coordinate(longitude: $0.longitude, latitude: $0.latitude)
+        }
         native.options.avoidEdges = Set(req.options?.avoidEdgeIds ?? [])
         native.options.priorEdges = Set(req.options?.priorEdgeIds ?? [])
         native.options.backtrackFactor = req.options?.backtrackFactor ?? 4

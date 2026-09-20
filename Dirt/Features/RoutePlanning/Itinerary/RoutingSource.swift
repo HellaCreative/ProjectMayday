@@ -50,6 +50,7 @@ final class RouteResponseCache {
         let profile: RouteProfile
         let allowUnknown: Bool
         let avoidEdgeIDs: [String]
+        var blockedStartEscapeToward: RouteCoordinate? = nil
         let priorEdgeIDs: [String]
         let arrivalEdgeID: String?
         let backtrackFactor: Double
@@ -326,6 +327,7 @@ private func cacheKey(
         from: endpoints.0, to: endpoints.1, profile: request.profile,
         allowUnknown: request.accessPolicy.motorizedUnknown,
         avoidEdgeIDs: normalizedEdgeIDs(request.options?.avoidEdgeIds),
+        blockedStartEscapeToward: request.options?.blockedStartEscapeToward,
         priorEdgeIDs: normalizedEdgeIDs(request.options?.priorEdgeIds),
         arrivalEdgeID: request.options?.arrivalEdgeId,
         backtrackFactor: request.options?.backtrackFactor ?? 4,

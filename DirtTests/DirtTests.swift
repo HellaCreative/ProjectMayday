@@ -21,13 +21,13 @@ struct DirtTests {
         #expect(AppConfig.liveFuelURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel")
         #expect(AppConfig.liveFuelChainURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel-chain")
         #expect(AppConfig.livePOIURL.absoluteString == "https://pack-fabric.vercel.app/api/poi")
-        #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260917-02")
+        #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260919-01")
         #expect(AppConfig.packManifestURL.absoluteString ==
             "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
-            "fabric-v4-20260917-02/manifest.json")
+            "fabric-v4-20260919-01/manifest.json")
         #expect(AppConfig.riderServicesManifestURL.absoluteString ==
             "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
-            "fabric-v4-20260917-02/rider-services/manifest.json")
+            "fabric-v4-20260919-01/rider-services/manifest.json")
         for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json"] {
             #expect(AppConfig.packFileURL(version: AppConfig.v4ConnectionRevision, regionId: "qc-s", fileName: name)
                 == AppConfig.v4CandidateBaseURL.appendingPathComponent("qc-s").appendingPathComponent(name))
@@ -885,11 +885,34 @@ struct DirtTests {
         #expect(bend.matches(cueMode: .rally))
         #expect(!bend.matches(cueMode: .junctions))
 
-        #expect(sharp.matches(cueMode: .junctions))
+        #expect(!sharp.matches(cueMode: .junctions))
         #expect(junction.matches(cueMode: .junctions))
         #expect(junction.matches(cueMode: .rally))
         #expect(NavigationCueMode.junctions.detailLabel == "Essential")
         #expect(NavigationCueMode.rally.detailLabel == "Everything")
+    }
+
+    @Test func closeJunctionsAndUTurnSurviveCueNormalization() {
+        let left = RouteManeuver(instruction: "Turn left", type: "turn", stableID: "left", kind: "junction",
+            side: "left", distanceMeters: 0, alongMeters: 100)
+        let right = RouteManeuver(instruction: "Turn right", type: "turn", stableID: "right", kind: "junction",
+            side: "right", distanceMeters: 0, alongMeters: 125)
+        let uturn = RouteManeuver(instruction: "Turn around", type: "uTurn", kind: "junction",
+            side: "left", distanceMeters: 0, alongMeters: 300)
+        let cues = RouteManeuver.enrichForVoiceCues([left, right, uturn])
+        #expect(cues.count == 3)
+        #expect(cues.last?.displayLabel(cueMode: .junctions) == "Turn around")
+        #expect(cues.last?.arrowSystemName(cueMode: .junctions) == "arrow.uturn.left")
+    }
+
+    @Test func rallyKeepsBothDirectionsOfACloseChicane() {
+        let left = RouteManeuver(instruction: "Left 3", type: "bend", kind: "curve", side: "left",
+            number: 3, distanceMeters: 0, alongMeters: 100)
+        let right = RouteManeuver(instruction: "Right 4", type: "bend", kind: "curve", side: "right",
+            number: 4, distanceMeters: 0, alongMeters: 120)
+        let notes = NavCueBuilder.mergeRallyEverything(curves: [left, right], junctions: [])
+        #expect(notes.count == 2)
+        #expect(notes.map { $0.side } == ["left", "right"])
     }
 
     @Test func continueStraightIsAnExplicitGraphDecisionCue() {

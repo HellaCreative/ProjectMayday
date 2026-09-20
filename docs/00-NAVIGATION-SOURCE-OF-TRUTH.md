@@ -179,7 +179,7 @@ differently, but preserve this hierarchy:
 1. always visible: current cue, cue distance, speed, next waypoint name and
    distance;
 2. secondary strip: time to next waypoint and elapsed rider time;
-3. expandable/tertiary: final-destination remaining, climb, and surface detail;
+3. surface immediately above the larger next-waypoint name/distance; final-destination remaining and climb are secondary;
 4. Rally only: current note plus next note and partial distance.
 
 “Always on” means the primary riding information is visible without opening a
@@ -303,3 +303,113 @@ offline reroute.
 7. Refine portrait/landscape HUD hierarchy only after the functions are green.
 8. Run automated gates, then complete the physical gates on an authorized
    device. This document does not grant device-installation permission.
+
+
+## 10. Field-driven navigation audit — 20 September 2026
+
+Scope reviewed: Start/Begin readiness and cancellation, active map/overview,
+location matching and progression, Report and automatic recovery, Junction/Rally
+construction and delivery, speech queue, waypoint continuity, fuel detours,
+background location/keep-awake, and End Ride. This is a code and automated-test
+review, not a claim that field acceptance is complete.
+
+### Implemented corrections
+
+- Report now offers **Route Around** and **End Ride**. The old End Stage action
+  ended all navigation; the new wording is honest and ending requires confirmation.
+  Removed the separate Backtrack and Nearest Verified Network choices. The latter
+  actually targeted a nearby point on the old line, not a new verified network.
+- Route Around is permission to calculate and apply an active-leg replacement.
+  It starts at the current fix, retains the next waypoint and later legs, and
+  shows the replacement in overview. Failure preserves the route. Missing edge
+  identity fails visibly instead of claiming the reported obstruction was avoided.
+  Its task is cancellable and rejects results from a cancelled report, ended
+  session, changed stage, or a rider who moved more than 75 m while it calculated.
+- Road reports use segment projection, fixing mid-road matches that previously
+  failed because only stored vertices were considered. Recovery follows the
+  current stable stage ID before considering geographical proximity; overlapping
+  outbound/return legs cannot choose the wrong waypoint just by proximity.
+- Report escape is an explicit routing constraint, documented in the routing
+  authority. The starting blocked road permits a legal retreat toward its prior
+  endpoint only. It cannot be used forward, later in the route, or as an avoided
+  destination. This does not manufacture a reverse route or override directions.
+  Subsequent navigation requests retain the itinerary's recorded blocked edges.
+- Off-route recovery starts automatically after three accurate, increasing-time
+  fixes more than 50 m off the route over at least two seconds. Accuracy must be
+  35 m or better; the planner ignores fixes older than 15 seconds. One request
+  runs at a time. Failed automatic retries require at least 30 seconds and 30 m
+  of movement; explicit retry remains available. Opening Report suspends this
+  behavior. Rejoining cancels automatic recovery; stale generations cannot apply.
+- Junction no longer synthesizes decisions from geometry-only bends. Removed a
+  second normalization pass that promoted sharp bends and collapsed distinct
+  junctions within 55 m. U-turn meaning and symbols survive normalization.
+- Junction bearings use 25 m approaches rather than tiny adjacent OSM vertices.
+  Keep the active cue until passing the actual junction (5 m tolerance), rather
+  than dropping it 15 m early and presenting the next instruction mid-turn.
+- Speech keeps only still-upcoming maneuver identities and the current waypoint.
+  Off-route/replacement/end clear obsolete pending cues. Existing utterances are
+  not interrupted by the next navigation cue; End stops speech immediately.
+- Rally retains its 6-easy to 1-hairpin meaning and junction priority. Close
+  opposite-direction curve notes are no longer discarded as duplicate curves.
+- Surface is above the next-waypoint row in portrait and landscape. Waypoint
+  title and remaining distance are larger. A delayed Begin Ride checks that
+  preparation is still active before enabling GPS/navigation.
+
+### Audit findings still requiring follow-up
+
+1. **Fuel detours:** `performFuelViaRoute` currently picks the geographically
+   nearest pump, not the nearest legally reachable pump, and uses default ride
+   settings rather than explicitly passing the active leg's full policy. It
+   routes back to a point 40 m ahead on the old line. The accepted fuel stop is
+   not represented as its own named navigation stage, so a subsequent off-route
+   recalculation can target the rider waypoint without retaining that pump.
+   This needs dedicated routing/continuation tests and a repair; fuel remains
+   advisory until the rider requests that detour.
+2. **Graph decision quality:** branch filtering excludes prohibited/service/
+   parking/short alternatives, but does not yet prove every alternative diverges
+   meaningfully or leads beyond a dead-end spur. Complex forks, roundabouts,
+   grade-separated nearby roads, and repeated visits to the same junction need
+   targeted fixtures. Repeated edge-pair cue IDs may suppress a second visit.
+3. **Rally calibration:** the severity model uses geometry radius/angle, not
+   banking, grip, sightlines, or safe speed. Test wide bends, tight hairpins,
+   S-bends and short successive decisions against recorded field geometry before
+   treating the numbers as rider-qualified. No safe-speed claim is made.
+4. **Lifecycle:** the Begin Ride guard prevents activation after cancellation,
+   but a cancel→new preparation while the previous basemap activation is awaiting
+   deserves a generation-specific integration test. Next-stage tile lookahead
+   uses a positional stage number and needs validation after rebasing a reroute
+   from a later leg.
+5. **Device acceptance:** offline Route Around, missing-pack failure, report
+   cancellation, returning naturally to the line, GPS loss/poor accuracy, both
+   orientations with long waypoint names, phone audio, and Bluetooth helmet
+   audio over Music remain field gates. No White installation was performed.
+
+### Research comparison
+
+The separation of maneuver type from bearing/turn modifier agrees with the
+[OSRM maneuver contract](https://project-osrm.org/docs/v26.4.0/http): continuing
+on a road does not by itself mean travelling geometrically straight. The
+[Mapbox rerouting lifecycle](https://docs.mapbox.com/ios/navigation/guides/turn-by-turn-navigation/rerouting/)
+also treats going off-route as a trigger for recalculation. These informed the
+review; DIRT continues using its own installed-pack engine and riding preferences.
+
+### Evidence
+
+- `.build/navigation-audit-20260920/engine-final.log`: **169 engine tests pass**,
+  including a full-engine blocked-road retreat and refusal to arrive through the
+  blocked edge or depart in the prohibited recovery direction.
+- `.build/navigation-audit-20260920/tests-3.xcresult`: **107 app tests pass** plus
+  `DirtUITests/testCueSelectorHierarchy`. Includes actual Report→Route Around
+  integration from a mid-segment GPS fix, preserved later leg, overview,
+  overlapping stages, automatic recovery hysteresis, poor/repeated fixes, queue
+  validity, close junctions/U-turns, and Rally chicanes.
+- `.build/navigation-audit-20260920/tests-4.xcresult`: final **54 focused app
+  tests pass** after fresh-GPS and report/session-cancellation guards.
+- The cue-selector screenshot was inspected; the portrait surface/waypoint
+  hierarchy is visible. Landscape is compiled, not yet visually accepted.
+- The first broad app run exposed three stale expected DEV URLs from September
+  17. The isolation test now expects the existing September 19 seven-pack
+  candidate. App configuration and release selection were not changed.
+
+The continental factory is separate: these are runtime corrections. No pack
+bytes were rebuilt or promoted for this navigation work.

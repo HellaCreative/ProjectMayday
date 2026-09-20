@@ -2794,3 +2794,32 @@ or the task conversation. Add no new routing handoff, freeze, mission, workbook,
 parity appendix, or competing source-of-truth document. If an idea fails, change
 this vision and its evidence/status directly; recover old prose from Git only
 when explicitly investigating history.
+
+
+### Navigation recovery contract — owner feedback, 20 September 2026
+
+Report uses Route Around from the actual rider fix to the active named rider
+waypoint, keeping later legs and their policies. It is not a return to the
+nearest point of the previous route. A legal retreat can be part of a detour;
+reversing an old line alone does not establish legality. Off-route navigation
+also requests recalculation after sustained accurate fixes, retaining reported
+edge exclusions. Presentation and the full audit are recorded in
+`00-NAVIGATION-SOURCE-OF-TRUTH.md`, section 10.
+
+`RouteRequestOptions.blockedStartEscapeToward` maps to the engine's optional
+`SearchOptions.blockedStartEscapeToward`. For a Report request, an avoided start
+edge may be traversed only away from the obstruction toward the earlier endpoint
+of the accepted road geometry. Every other avoided traversal, including terminal
+arrival, remains excluded. Directed access and turn legality still run normally.
+The response-cache key includes the escape coordinate. The default nil preserves
+ordinary planning semantics. Tests exercise both PathSearch and RoutingEngine.
+This is a code-only repair and does not require a new OSM/pack epoch.
+
+Current focused pack replay: `.build/continental-qualification-20260920/join-profile/failed-replay`.
+The adjacency reservation is committed at `0d0169f`. Its 50-row failure replay is
+a diagnostic subset only, using the archived reservation probe; it cannot pass
+the full release coverage gate. The serial job resumed after navigation app
+verification, retaining its saved rows and unchanged plan, probe and output
+identities; `join-profile/replay-state.json` records the process and evidence. Final release qualification must use the final
+engine source, including later navigation changes; do not call old-binary subset
+receipts final release acceptance.

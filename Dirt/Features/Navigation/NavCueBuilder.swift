@@ -7,9 +7,7 @@ import Foundation
 /// Roadbook numbers (do not invert):
 ///   6 = fast / easy … 1 = hairpin
 ///
-/// Junction cues are decision turns (Turn left / Turn right) — never numbered.
-/// Without live graph degree on-device, decisive geometry turns (≥70° or
-/// roadbook ≤3) stand in for network junctions.
+/// Geometry contributes Rally notes only. Junctions come from the graph.
 /// Pure geometry — opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
 /// so `map`/`compactMap` method refs and callers off the main actor stay clean.
 nonisolated enum NavCueBuilder {
@@ -46,7 +44,7 @@ nonisolated enum NavCueBuilder {
         case .rally:
             return curves.map(asRallyManeuver) + [arrive]
         case .junctions:
-            return curves.compactMap(asJunctionIfDecisive) + [arrive]
+            return [arrive]
         }
     }
 
@@ -211,21 +209,6 @@ nonisolated enum NavCueBuilder {
         return ClassifiedCurve(number: number, radiusM: Int(radiusM.rounded()))
     }
 
-    /// Geometry stand-in for network junctions.
-    private static func asJunctionIfDecisive(_ event: CurveEvent) -> RouteManeuver? {
-        guard event.number <= 3 || event.degrees >= 70 else { return nil }
-        return RouteManeuver(
-            instruction: "Turn \(event.side)",
-            type: "turn",
-            kind: "junction",
-            side: event.side,
-            number: nil,
-            degrees: event.degrees,
-            distanceMeters: 0,
-            alongMeters: event.alongMeters
-        )
-    }
-
     private static func asRallyManeuver(_ event: CurveEvent) -> RouteManeuver {
         let hairpin = event.number == 1
         let instruction = hairpin
@@ -266,6 +249,7 @@ nonisolated enum NavCueBuilder {
             guard let prev = keptCurves.last,
                   let a = prev.alongMeters,
                   let b = item.alongMeters,
+                  item.side == prev.side,
                   (b - a) < minSeparationM
             else {
                 keptCurves.append(item)

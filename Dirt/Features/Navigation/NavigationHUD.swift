@@ -84,43 +84,18 @@ struct NavCueCard: View {
         .accessibilityElement(children: nav.missTurnActive ? .contain : .combine)
     }
 
-    private var missTurnActions: some View {
-        VStack(spacing: 8) {
-            Button {
-                app.planner.continueAfterMissTurn()
-            } label: {
-                Text("Continue & reroute")
-                    .font(.dirtUI(15, weight: .heavy))
-                    .foregroundStyle(DirtTheme.onOrange)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(DirtTheme.orange)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .contentShape(Rectangle())
-            }
-            .disabled(nav.missTurnRerouting)
-            .opacity(nav.missTurnRerouting ? 0.55 : 1)
-            .accessibilityLabel("Continue and reroute")
-            .accessibilityHint("Rebuilds the line ahead with your last ride style")
-
-            Button {
-                app.planner.turnAroundAfterMissTurn()
-            } label: {
-                Text("Turn around")
-                    .font(.dirtUI(15, weight: .heavy))
-                    .foregroundStyle(DirtTheme.ink)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(DirtTheme.chromeBorder, lineWidth: 1.5)
-                    )
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("Turn around")
-            .accessibilityHint("Follows the verified line back to the last junction")
+    @ViewBuilder private var missTurnActions: some View {
+        if nav.missTurnRerouting {
+            ProgressView("Finding a route to your waypoint")
+                .font(.dirtUI(13, weight: .semibold))
+                .tint(DirtTheme.orange)
+        } else if nav.missTurnReason != nil {
+            Button("Try rerouting again") { app.planner.continueAfterMissTurn() }
+                .font(.dirtUI(15, weight: .heavy))
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .buttonStyle(.borderedProminent)
+                .tint(DirtTheme.orange)
         }
-        .buttonStyle(.plain)
     }
 
     private var cueBand: NavigationCueBand {
@@ -417,8 +392,8 @@ struct NavBottomPanel: View {
     private var activeCard: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             VStack(alignment: .leading, spacing: 8) {
-                waypointProgress
                 statusRow
+                waypointProgress
                 fuelChrome
 
                 // Report (primary) left · End (secondary + confirm) right — side by side.
@@ -453,7 +428,7 @@ struct NavBottomPanel: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(nav.currentStage?.title ?? "Destination")
-                    .font(.dirtUI(18, weight: .heavy))
+                    .font(.dirtUI(23, weight: .heavy))
                     .foregroundStyle(DirtTheme.ink)
                     .lineLimit(1)
                 if let detail = nav.currentStage?.detail, !detail.isEmpty {
@@ -470,7 +445,7 @@ struct NavBottomPanel: View {
             }
             Spacer(minLength: 6)
             Text(Self.waypointDistance(nav.remainingInCurrentStageMeters))
-                .font(.dirtMono(22, weight: .bold))
+                .font(.dirtMono(28, weight: .bold))
                 .foregroundStyle(DirtTheme.ink)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -626,33 +601,6 @@ struct NavLandscapeRail: View {
 
     private var activeRail: some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 5) {
-                    Image(systemName: nav.currentStage?.kind == .fuelStop ? "fuelpump.fill" : "flag.checkered")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(DirtTheme.orange)
-                    Text(nav.currentStage?.title ?? "Destination")
-                        .font(.dirtUI(13, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink)
-                        .lineLimit(1)
-                }
-                if let detail = nav.currentStage?.detail, !detail.isEmpty {
-                    Text(detail)
-                        .font(.dirtUI(9, weight: .semibold))
-                        .foregroundStyle(DirtTheme.ink.opacity(0.72))
-                        .lineLimit(1)
-                }
-                Text(Self.waypointDistance(nav.remainingInCurrentStageMeters))
-                    .font(.dirtMono(19, weight: .bold))
-                    .foregroundStyle(DirtTheme.ink)
-                    .monospacedDigit()
-                Text("\(NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds)) · Ride \(NavTripFormat.elapsed(nav.elapsedSeconds))")
-                    .font(.dirtUI(9, weight: .semibold))
-                    .foregroundStyle(DirtTheme.ink.opacity(0.82))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-
             HStack(spacing: 6) {
                 Image(systemName: surfaceIsAlert ? "exclamationmark.triangle.fill" : DirtSurfaceIcon.symbol(for: landscapeSurfaceLine))
                     .font(.system(size: 12, weight: .bold))
@@ -667,6 +615,34 @@ struct NavLandscapeRail: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(surfaceIsAlert ? DirtTheme.orange.opacity(0.16) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Image(systemName: nav.currentStage?.kind == .fuelStop ? "fuelpump.fill" : "flag.checkered")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(DirtTheme.orange)
+                    Text(nav.currentStage?.title ?? "Destination")
+                        .font(.dirtUI(17, weight: .heavy))
+                        .foregroundStyle(DirtTheme.ink)
+                        .lineLimit(1)
+                }
+                if let detail = nav.currentStage?.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.dirtUI(9, weight: .semibold))
+                        .foregroundStyle(DirtTheme.ink.opacity(0.72))
+                        .lineLimit(1)
+                }
+                Text(Self.waypointDistance(nav.remainingInCurrentStageMeters))
+                    .font(.dirtMono(24, weight: .bold))
+                    .foregroundStyle(DirtTheme.ink)
+                    .monospacedDigit()
+                Text("\(NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds)) · Ride \(NavTripFormat.elapsed(nav.elapsedSeconds))")
+                    .font(.dirtUI(9, weight: .semibold))
+                    .foregroundStyle(DirtTheme.ink.opacity(0.82))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
 
             landscapeFuelChrome
 

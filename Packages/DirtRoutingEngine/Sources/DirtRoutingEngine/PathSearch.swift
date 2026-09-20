@@ -32,6 +32,9 @@ public struct SearchOptions: Sendable {
     public var pavedOnly = false
     public var cityWall = true
     public var avoidEdges: Set<String> = []
+    /// Report recovery: permit only retreat along the starting blocked road.
+    /// All subsequent use, including an avoided destination edge, stays closed.
+    public var blockedStartEscapeToward: Coordinate?
     public var priorEdges: Set<String> = []
     /// Loop return: outbound edges are expensive, not forbidden.
     public var repeatEdges: Set<String> = []
@@ -298,6 +301,19 @@ public struct PathSearch: Sendable {
         let ea = pack.endpoint(end.edge,from: true), eb = pack.endpoint(end.edge,from: false)
         let startAlong = start.alongMeters
         let startLength = start.geometryMeters
+        let escapeForward: Bool? = options.blockedStartEscapeToward.flatMap { point in
+            let line = pack.polyline(start.edge)
+            var walked = 0.0, best = Double.infinity, along = 0.0
+            for i in 1..<line.count {
+                let projection = RoadMatcher.project(point, onto: line[i-1], to: line[i])
+                let meters = line[i-1].distance(to: line[i])
+                let distance = point.distance(to: projection.point)
+                if distance < best { best = distance; along = walked + projection.fraction * meters }
+                walked += meters
+            }
+            guard best < 5, abs(along - startAlong) > 0.1 else { return nil }
+            return along > startAlong
+        }
         var virtual: [Int:[Arc]] = [:]
         // A destination match's direction only ranks which road the pin snaps to. Arrival
         // may use either legal direction of that road, as in JS find-path-v4.
@@ -558,7 +574,10 @@ public struct PathSearch: Sendable {
                 if !avoid.isEmpty && membership(e) & 1 != 0 {
                     let leavingPin = current.state.node == startNode
                     let arrivingPin = arc.target == endNode
-                    if !leavingPin && !arrivingPin { continue }
+                    if options.blockedStartEscapeToward != nil {
+                        guard leavingPin, e == start.edge, arc.target != endNode,
+                              let escapeForward, arc.forward == escapeForward else { continue }
+                    } else if !leavingPin && !arrivingPin { continue }
                 }
                 let isStart = e == start.edge || customerStart.contains(e)
                 let isEnd = e == end.edge || extraEndEdges.contains(e) || customerEnd.contains(e)

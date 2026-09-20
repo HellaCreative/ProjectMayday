@@ -256,6 +256,13 @@ final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
         let isNow: Bool
     }
     private var speechQueue: [PendingSpeech] = []
+    private var validManeuverIDs: Set<String>?
+
+    func retainUpcomingCues(_ identities: Set<String>) {
+        validManeuverIDs = identities
+        speechQueue.removeAll { !identities.contains($0.maneuverKey) }
+    }
+
 
     override init() {
         let defaults = UserDefaults.standard
@@ -276,6 +283,7 @@ final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
 
         let parts = announceKey.split(separator: "|", maxSplits: 1).map(String.init)
         let maneuverKey = parts.first ?? announceKey
+        guard validManeuverIDs?.contains(maneuverKey) ?? true else { return }
         let isNow = parts.last == NavigationCuePhase.now.rawValue
         guard !speechQueue.contains(where: { $0.announceKey == announceKey }) else { return }
         if isNow {
@@ -403,7 +411,6 @@ extension RouteManeuver {
             return isJunctionCue || isRallyCurve
         case .junctions:
             return isJunctionCue
-                || (normalized == "bend" && (degrees ?? 0) >= 70)
         }
     }
 
@@ -415,7 +422,7 @@ extension RouteManeuver {
 
     nonisolated var isJunctionCue: Bool {
         let normalized = (type ?? kind ?? "").lowercased()
-        if ["turn", "continuestraight", "fork", "junction", "merge", "off ramp", "roundabout"].contains(normalized) {
+        if ["turn", "uturn", "continuestraight", "fork", "junction", "merge", "off ramp", "roundabout"].contains(normalized) {
             return true
         }
         return kind?.lowercased() == "junction"
@@ -424,6 +431,7 @@ extension RouteManeuver {
     /// HUD label: Rally → "Right 6"; Junction → "Turn left".
     func displayLabel(cueMode: NavigationCueMode) -> String {
         let side = self.side?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if type?.lowercased() == "uturn" { return "Turn around" }
         if cueMode == .rally {
             if let side, let number {
                 return "\(side.capitalized) \(number)"
@@ -480,6 +488,7 @@ extension RouteManeuver {
     /// SF Symbol for the cue card — junction ≈ 90°, rally severity varies (6 easy → 1 hairpin).
     func arrowSystemName(cueMode: NavigationCueMode) -> String {
         let left = side?.lowercased() == "left"
+        if type?.lowercased() == "uturn" { return left ? "arrow.uturn.left" : "arrow.uturn.right" }
         if cueMode == .junctions || isJunctionCue {
             if (type ?? kind ?? "").lowercased() == "continuestraight" {
                 return "arrow.up"
@@ -502,100 +511,9 @@ extension RouteManeuver {
         return left ? "arrow.turn.up.left" : "arrow.turn.up.right"
     }
 
-    /// Promote sharp geometric bends into junction decisions so Junction / All
-    /// modes can speak "Turn left" (rally junction idea, without
-    /// requiring live graph degree). Mild bends stay rally curves.
+    /// Preserve graph-authored meaning and every distinct junction. Geometry
+    /// bends are Rally notes, regardless of their severity or proximity.
     static func enrichForVoiceCues(_ input: [RouteManeuver]) -> [RouteManeuver] {
-        let junctionThreshold = 70.0
-        var output: [RouteManeuver] = []
-        output.reserveCapacity(input.count)
-
-        for man in input {
-            let normalized = (type: (man.type ?? "").lowercased(), kind: (man.kind ?? "").lowercased())
-            if normalized.type == "arrive" || normalized.kind == "arrive" {
-                output.append(man)
-                continue
-            }
-            if man.isJunctionCue {
-                let straight = normalized.type == "continuestraight"
-                output.append(
-                    RouteManeuver(
-                        instruction: man.side.map { "Turn \($0)" } ?? man.instruction,
-                        type: straight ? "continueStraight" : "turn",
-                        stableID: man.stableID,
-                        stageID: man.stageID,
-                        kind: "junction",
-                        side: man.side,
-                        number: nil,
-                        degrees: man.degrees,
-                        distanceMeters: man.distanceMeters,
-                        alongMeters: man.alongMeters
-                    )
-                )
-                continue
-            }
-            if normalized.type == "bend" || normalized.kind == "curve" || normalized.type == "curve" {
-                let deg = man.degrees ?? 0
-                if deg >= junctionThreshold, let side = man.side, !side.isEmpty {
-                    output.append(
-                        RouteManeuver(
-                            instruction: "Turn \(side)",
-                            type: "turn",
-                            stableID: man.stableID,
-                            stageID: man.stageID,
-                            kind: "junction",
-                            side: side,
-                            number: nil,
-                            degrees: deg,
-                            distanceMeters: man.distanceMeters,
-                            alongMeters: man.alongMeters
-                        )
-                    )
-                } else {
-                    output.append(
-                        RouteManeuver(
-                            instruction: man.instruction,
-                            type: "bend",
-                            stableID: man.stableID,
-                            stageID: man.stageID,
-                            kind: "curve",
-                            side: man.side,
-                            number: man.number,
-                            degrees: man.degrees,
-                            distanceMeters: man.distanceMeters,
-                            alongMeters: man.alongMeters
-                        )
-                    )
-                }
-                continue
-            }
-            output.append(man)
-        }
-
-        // Collapse near-duplicates: junction wins over overlapping curve.
-        let mergeMeters = 55.0
-        var merged: [RouteManeuver] = []
-        for item in output.sorted(by: { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }) {
-            guard let prev = merged.last,
-                  let a = prev.alongMeters,
-                  let b = item.alongMeters,
-                  abs(a - b) < mergeMeters
-            else {
-                merged.append(item)
-                continue
-            }
-            if item.isJunctionCue && !prev.isJunctionCue {
-                merged[merged.count - 1] = item
-            } else if !item.isJunctionCue && prev.isJunctionCue {
-                // Keep junction.
-            } else if item.isJunctionCue && prev.isJunctionCue {
-                if (item.degrees ?? 0) > (prev.degrees ?? 0) {
-                    merged[merged.count - 1] = item
-                }
-            } else if (item.number ?? 99) < (prev.number ?? 99) {
-                merged[merged.count - 1] = item
-            }
-        }
-        return merged
+        input.sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
     }
 }

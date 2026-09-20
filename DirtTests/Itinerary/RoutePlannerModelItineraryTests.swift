@@ -48,6 +48,75 @@ struct RoutePlannerModelItineraryTests {
         #expect(!model.frameCompletedRouteForCelebration())
     }
 
+    @Test func reportRoutesFromRiderAndPreservesLaterLegAndShowsOverview() async throws {
+        let defaults = UserDefaults.standard
+        let reports = defaults.object(forKey: "dirt_reports_v1")
+        defer {
+            if let reports { defaults.set(reports, forKey: "dirt_reports_v1") }
+            else { defaults.removeObject(forKey: "dirt_reports_v1") }
+        }
+        let source = PlannerFakeRoutingSource()
+        let location = LocationService()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map, locationService: location)
+        source.routeHandler = { request in
+            let (from, to) = try requestEndpoints(request)
+            return recoveryFixture([from, to], edge: "reported-road")
+        }
+        model.apply(.replaceAll(waypoints: [point(0), point(0.1), point(0.2)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: false), source: "plan")
+        await model.waitForCanonicalBuildForTesting()
+        let later = try #require(model.stages.last?.response)
+        let active = try #require(model.stages.first)
+        model.navigation.activate(coordinates: model.allCoordinates, maneuvers: [], stages: [
+            NavigationStage(id: active.id, title: "Point 2", detail: nil, kind: .waypoint, endMeters: 10_000)
+        ])
+        map.beginNavigationCamera()
+        let rider = point(0.05)
+        let fix = CLLocation(coordinate: rider.locationCoordinate, altitude: 0,
+            horizontalAccuracy: 5, verticalAccuracy: -1, timestamp: Date())
+        location.locationManager(CLLocationManager(), didUpdateLocations: [fix])
+        for _ in 0..<100 where location.lastLocation?.timestamp != fix.timestamp {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(model.edgeIdNear(rider) == "reported-road") // Mid-segment, kilometres from vertices.
+        source.routeHandler = { request in
+            let (from, to) = try requestEndpoints(request)
+            return recoveryFixture([from, point(0), .init(longitude: -63, latitude: 45.02), to], edge: "alternate-road")
+        }
+        let incidents = IncidentRecoveryModel(planner: model, locationService: location, network: NetworkPathMonitor())
+        incidents.open()
+        incidents.submitReport(.flooded)
+        incidents.choose(.around)
+        await incidents.waitForRecoveryForTesting()
+        #expect(incidents.step == .hidden)
+        let request = try #require(source.routeRequests.last)
+        #expect(request.locations.first?.longitude == rider.longitude)
+        #expect(request.locations.last?.longitude == point(0.1).longitude)
+        #expect(request.options?.avoidEdgeIds?.contains("reported-road") == true)
+        #expect(request.options?.blockedStartEscapeToward == point(0))
+        #expect(model.stages.last?.response?.coordinates == later.coordinates)
+        #expect(map.navigationCameraMode == .overview)
+        #expect(!model.navigation.recoverySuspended)
+    }
+
+    @Test func navigationRecoveryKeepsActiveStageAtOverlappingLegs() async throws {
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.apply(.replaceAll(waypoints: [point(0), point(0.1), point(0)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: false), source: "plan")
+        await model.waitForCanonicalBuildForTesting()
+        let stage = try #require(model.stages.last)
+        model.navigation.activate(coordinates: [point(0.1), point(0)], maneuvers: [], stages: [
+            NavigationStage(id: stage.id, title: "Point 3", detail: nil, kind: .destination, endMeters: 10_000)
+        ])
+        #expect(model.activeStageIndex(near: point(0.05)) == 1)
+        #expect(model.preservedDestination == point(0))
+        model.apply(.markImpassable(edgeIDs: ["blocked-edge"]), source: "reroute")
+        _ = try await model.routeWhileNavigating(from: point(0.05), to: point(0))
+        #expect(source.routeRequests.last?.options?.avoidEdgeIds?.contains("blocked-edge") == true)
+    }
+
     @Test func navigationRecoveryRetainsExplicitFerryPermission() async throws {
         let source = PlannerFakeRoutingSource()
         let model = makeModel(source: source)
@@ -1056,11 +1125,12 @@ struct RoutePlannerModelItineraryTests {
 private func makeModel(
     source: PlannerFakeRoutingSource,
     policy: RoutingSourcePolicy? = nil,
-    mapState: MapState? = nil
+    mapState: MapState? = nil,
+    locationService: LocationService? = nil
 ) -> RoutePlannerModel {
     RoutePlannerModel(
         routing: RoutingClient(),
-        locationService: LocationService(),
+        locationService: locationService ?? LocationService(),
         mapState: mapState ?? MapState(),
         navigation: NavigationSession(),
         offline: OfflineTileManager(),
@@ -1255,4 +1325,14 @@ private func plannerRoadResponse(from: RouteCoordinate, to: RouteCoordinate) -> 
         geometry: [from, to], segments: nil, stats: .init(dirtPercent: 80, pavedPercent: 20),
         maneuvers: nil, warnings: nil, dirtPercentValue: nil, pavedPercentValue: nil,
         arrivalEdgeId: "reached-road")
+}
+
+private func recoveryFixture(_ coordinates: [RouteCoordinate], edge: String) -> RouteResponse {
+    let meters = GeoMath.lineMeters(coordinates)
+    return RouteResponse(status: "complete", error: nil, message: nil, distanceMeters: meters,
+        estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil, geometry: coordinates,
+        segments: [RouteSegment(surfaceClass: "paved", trackClass: nil, distanceMeters: meters,
+            geometry: coordinates, coords: nil, edgeId: edge)],
+        stats: RouteStats(dirtPercent: 0, pavedPercent: 100), maneuvers: nil, warnings: nil,
+        dirtPercentValue: nil, pavedPercentValue: nil)
 }

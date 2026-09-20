@@ -628,7 +628,9 @@ final class RoutePlannerModel {
         }
         locationService.onLocation = { [weak self] location in
             guard let self else { return }
-            self.navigation.update(with: location)
+            if Date().timeIntervalSince(location.timestamp) <= 15 {
+                self.navigation.update(with: location)
+            }
             self.prefetchNextNavigationTileStageIfNeeded()
             self.prepareCurrentNavigationRoutingPackIfNeeded(at: location.coordinate)
             self.handleGroupTrackingLocation(location)
@@ -2391,6 +2393,10 @@ final class RoutePlannerModel {
                       self.navigationRerouteGeneration == requestGeneration,
                       self.navigation.phase == .active
                 else { return }
+                guard self.responseReachesCurrentRider(response) else {
+                    self.navigation.setMissTurnFailure("Your position changed while routing. Try again from here.")
+                    return
+                }
                 self.mode = .fromHere
                 self.destination = target
                 self.seedCanonicalBuild(
@@ -2419,7 +2425,7 @@ final class RoutePlannerModel {
         }
     }
 
-    private func cancelNavigationReroute() {
+    func cancelNavigationReroute() {
         navigationRerouteTask?.cancel()
         navigationRerouteTask = nil
         navigationRerouteGeneration += 1
@@ -4092,6 +4098,7 @@ final class RoutePlannerModel {
                 toast = "Offline map proxy failed — riding with live tiles only."
             }
 
+            guard !Task.isCancelled, navigation.phase == .prefetching else { return }
             locationService.requestAlways()
             locationService.setBackgroundUpdates(true, for: .navigation)
             locationService.startUpdates()
@@ -4108,7 +4115,7 @@ final class RoutePlannerModel {
             )
             prefetchNextNavigationTileStage(after: 0)
             // Seed cue card immediately from last GPS (don't wait for next tick).
-            if let fix = locationService.lastLocation {
+            if let fix = locationService.lastLocation, Date().timeIntervalSince(fix.timestamp) <= 15 {
                 navigation.update(with: fix)
             }
             mapState.beginNavigationCamera()
@@ -4274,10 +4281,13 @@ final class RoutePlannerModel {
 
     /// Mid-ride / report recovery over installed routing packs.
     /// Optional `profile` / `allowUnknown` override the planner defaults (per-stage Plan).
+    private var navigationEscapeToward: RouteCoordinate?
+
     func routeWhileNavigating(
         from: RouteCoordinate,
         to: RouteCoordinate,
         avoidEdgeIds: [String] = [],
+        blockedStartEscapeToward: RouteCoordinate? = nil,
         networkOnline: Bool? = nil,
         profile: RouteProfile? = nil,
         allowUnknown: Bool? = nil,
@@ -4295,7 +4305,8 @@ final class RoutePlannerModel {
                     RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "B")
                 ],
                 allowUnknown: useAllow,
-                avoidEdgeIds: avoidEdgeIds,
+                avoidEdgeIds: Array(itinerary.impassableEdgeIDs.union(avoidEdgeIds)).sorted(),
+                blockedStartEscapeToward: blockedStartEscapeToward ?? navigationEscapeToward,
                 sessionSeed: planningSessionSeed,
                 cleanMetroMultiplier: nil,
                 avoidMotorways: avoidMotorways ?? self.avoidMotorways,
@@ -4342,6 +4353,10 @@ final class RoutePlannerModel {
             stages[$0].response != nil && stages[$0].end != nil
         }
         guard !routedIndices.isEmpty else { return nil }
+        if navigation.phase == .active, let stageID = navigation.currentStage?.id,
+           let index = routedIndices.first(where: { stages[$0].id == stageID }) {
+            return index
+        }
 
         let probe = point ?? locationService.currentCoordinate
         if let probe {
@@ -4409,13 +4424,40 @@ final class RoutePlannerModel {
         for response in responses {
             for segment in response.segments ?? [] {
                 guard let edgeId = segment.edgeId, !edgeId.isEmpty else { continue }
-                guard let nearest = GeoMath.nearestVertex(to: location, in: segment.coordinates) else { continue }
-                if nearest.meters <= 150, nearest.meters < (best?.meters ?? .infinity) {
-                    best = (nearest.meters, edgeId)
+                guard let nearest = GeoMath.nearestProjection(to: location,
+                    in: segment.coordinates, cumulative: GeoMath.cumulativeMeters(segment.coordinates)) else { continue }
+                if nearest.offMeters <= 150, nearest.offMeters < (best?.meters ?? .infinity) {
+                    best = (nearest.offMeters, edgeId)
                 }
             }
         }
         return best?.edgeId
+    }
+
+    func recordNavigationBlock(edgeID: String, escapeToward: RouteCoordinate) {
+        navigationEscapeToward = escapeToward
+        apply(.markImpassable(edgeIDs: [edgeID]), source: "reroute")
+    }
+
+    private func responseReachesCurrentRider(_ response: RouteResponse) -> Bool {
+        guard let location = locationService.lastLocation,
+              let projection = GeoMath.nearestProjection(to: location, in: response.coordinates,
+                cumulative: GeoMath.cumulativeMeters(response.coordinates)) else { return false }
+        return projection.offMeters <= 50
+    }
+
+    /// The previous end of the reported road, in the accepted travel order.
+    /// The engine proves whether retreat in that direction is legal.
+    func reportEscapeToward(edgeID: String, near point: RouteCoordinate) -> RouteCoordinate? {
+        guard let index = activeStageIndex(near: point), let response = stages[index].response else { return nil }
+        let location = CLLocation(latitude: point.latitude, longitude: point.longitude)
+        return (response.segments ?? []).filter { $0.edgeId == edgeID }.min {
+            func distance(_ segment: RouteSegment) -> Double {
+                GeoMath.nearestProjection(to: location, in: segment.coordinates,
+                    cumulative: GeoMath.cumulativeMeters(segment.coordinates))?.offMeters ?? .infinity
+            }
+            return distance($0) < distance($1)
+        }?.coordinates.first
     }
 
     /// Verified route geometry from the rider's position back to the last
@@ -4491,6 +4533,15 @@ final class RoutePlannerModel {
         return coords[nearest.index]
     }
 
+    func showRecoveryOverview(_ coordinates: [RouteCoordinate]) {
+        if mapState.navigationCameraMode == .detail {
+            mapState.toggleNavigationCameraMode(routeCoordinates: coordinates)
+        } else {
+            mapState.fit(coordinates)
+        }
+        toast = "Route around ready — follow the new line"
+    }
+
     /// Applies a confirmed recovery route (detour / return-to-network).
     /// Multi-stage: updates only the active leg; later stages stay as planned.
     func applyRecoveryRoute(_ response: RouteResponse, near point: RouteCoordinate? = nil) {
@@ -4564,6 +4615,10 @@ final class RoutePlannerModel {
             else { return }
             guard let idx = stages.firstIndex(where: { $0.riderLegID == riderLegID }) else { return }
 
+            guard responseReachesCurrentRider(response) else {
+                navigation.setMissTurnFailure("Your position changed while routing. Finding a route from your new position may be needed.")
+                return
+            }
             applyActiveStageResponse(response, at: idx, isReturnToNetwork: false)
             if announce {
                 if hasOnDeviceRoutingPack, !networkOnline {

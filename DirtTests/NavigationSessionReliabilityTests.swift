@@ -4,66 +4,88 @@ import Testing
 @testable import Dirt
 
 struct NavigationSessionReliabilityTests {
-    @Test @MainActor func offRouteDoesNotAutoRerouteUntilContinue() {
+    @Test @MainActor func sustainedOffRouteFixesRerouteOnceWithoutATap() {
         let session = NavigationSession()
-        let route = Self.straightRoute()
-        var rerouteRequests = 0
-        session.onRerouteNeeded = { rerouteRequests += 1 }
-
-        session.activate(coordinates: route, maneuvers: [])
-        sendOffRouteStrikes(to: session, startingAt: Date(timeIntervalSince1970: 1_000))
-        #expect(session.offRoute)
-        #expect(session.missTurnActive)
-        #expect(session.currentCue == "You're off the line.")
-        #expect(rerouteRequests == 0)
-
-        session.continueMissTurnReroute()
-        #expect(rerouteRequests == 1)
-
+        var requests = 0
+        session.onRerouteNeeded = { requests += 1 }
+        session.activate(coordinates: Self.straightRoute(), maneuvers: [])
+        let start = Date(timeIntervalSince1970: 1_000)
+        sendOffRouteStrikes(to: session, startingAt: start)
+        #expect(session.offRoute && session.missTurnRerouting)
+        #expect(session.currentCue == "Rerouting…")
+        #expect(requests == 1)
+        sendOffRouteStrikes(to: session, startingAt: start.addingTimeInterval(5))
+        #expect(requests == 1)
         session.end()
-        session.activate(coordinates: route, maneuvers: [])
-        sendOffRouteStrikes(to: session, startingAt: Date(timeIntervalSince1970: 1_010))
-        #expect(rerouteRequests == 1)
-        session.continueMissTurnReroute()
-        #expect(rerouteRequests == 2)
+        session.activate(coordinates: Self.straightRoute(), maneuvers: [])
+        sendOffRouteStrikes(to: session, startingAt: start.addingTimeInterval(20))
+        #expect(requests == 2)
     }
 
-    @Test @MainActor func namedMissFiresWhenTheTurnIsBehindTheRider() {
+    @Test @MainActor func reportSuspendsAutomaticRecoveryAndFailureDoesNotLoop() {
         let session = NavigationSession()
-        var rerouteRequests = 0
-        session.onRerouteNeeded = { rerouteRequests += 1 }
-        session.activate(
-            coordinates: Self.straightRoute(),
-            maneuvers: [
-                RouteManeuver(
-                    instruction: "Turn left",
-                    type: "turn",
-                    kind: "junction",
-                    side: "left",
-                    distanceMeters: 0,
-                    alongMeters: 300
-                )
-            ]
-        )
-        let started = Date(timeIntervalSince1970: 1_500)
-        session.update(with: Self.location(
-            latitude: 45,
-            longitude: -62.9968,
-            speed: 12,
-            timestamp: started
-        ))
-        #expect(!session.offRoute)
+        var requests = 0
+        session.onRerouteNeeded = { requests += 1 }
+        session.activate(coordinates: Self.straightRoute(), maneuvers: [])
+        session.recoverySuspended = true
+        let start = Date(timeIntervalSince1970: 1_000)
+        sendOffRouteStrikes(to: session, startingAt: start)
+        #expect(requests == 0)
+        session.recoverySuspended = false
+        sendOffRouteStrikes(to: session, startingAt: start.addingTimeInterval(5))
+        #expect(requests == 1)
+        session.setMissTurnFailure("No connection")
+        sendOffRouteStrikes(to: session, startingAt: start.addingTimeInterval(60))
+        #expect(requests == 1) // Stationary rider: no repeated expensive search.
+        session.continueMissTurnReroute()
+        #expect(requests == 2)
+    }
 
-        session.update(with: Self.location(
-            latitude: 45.0100,
-            longitude: -62.9968,
-            speed: 12,
-            timestamp: started.addingTimeInterval(1)
-        ))
-        #expect(session.offRoute)
-        #expect(session.missTurnActive)
-        #expect(session.currentCue.contains("turn left"))
-        #expect(rerouteRequests == 0)
+    @Test @MainActor func inaccurateOrRepeatedFixesCannotTriggerRerouting() {
+        let session = NavigationSession()
+        var requests = 0
+        session.onRerouteNeeded = { requests += 1 }
+        session.activate(coordinates: Self.straightRoute(), maneuvers: [])
+        let start = Date(timeIntervalSince1970: 1_000)
+        for i in 0..<5 {
+            session.update(with: CLLocation(coordinate: .init(latitude: 45.01, longitude: -63),
+                altitude: 0, horizontalAccuracy: 100, verticalAccuracy: -1,
+                timestamp: start.addingTimeInterval(Double(i))))
+        }
+        let fix = Self.location(latitude: 45.01, longitude: -63, speed: 12, timestamp: start)
+        for _ in 0..<5 { session.update(with: fix) }
+        #expect(requests == 0)
+        #expect(!session.offRoute)
+    }
+
+    @Test @MainActor func bendsNeverInventJunctionsWithoutGraphDecisions() {
+        let session = NavigationSession()
+        session.cueMode = .junctions
+        session.activate(coordinates: [
+            .init(longitude: -63, latitude: 45),
+            .init(longitude: -62.99, latitude: 45),
+            .init(longitude: -62.99, latitude: 45.01)
+        ], maneuvers: [])
+        #expect(!session.maneuvers.contains { $0.isJunctionCue })
+    }
+
+    @Test @MainActor func cueRemainsAtJunctionAndPassedQueueEntriesExpire() {
+        let session = NavigationSession()
+        session.cueMode = .junctions
+        var valid: Set<String> = []
+        session.onCueValidityChanged = { valid = $0 }
+        session.activate(coordinates: Self.straightRoute(), maneuvers: [
+            RouteManeuver(instruction: "Turn left", type: "turn", stableID: "turn",
+                kind: "junction", side: "left", distanceMeters: 0, alongMeters: 300)
+        ])
+        let start = Date(timeIntervalSince1970: 2_000)
+        session.update(with: Self.location(latitude: 45, longitude: -62.9963, speed: 10, timestamp: start))
+        #expect(session.currentManeuver?.stableID == "turn")
+        #expect(valid.contains("turn"))
+        session.update(with: Self.location(latitude: 45, longitude: -62.9958, speed: 10, timestamp: start.addingTimeInterval(5)))
+        #expect(!valid.contains("turn"))
+        session.end()
+        #expect(valid.isEmpty)
     }
 
     @Test @MainActor func fuelRemainingStartsAtUsableWhenNotificationsOn() {

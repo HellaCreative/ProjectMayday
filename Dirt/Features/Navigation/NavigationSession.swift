@@ -60,12 +60,17 @@ final class NavigationSession {
     private(set) var currentSurfaceLabel: String?
     private(set) var upcomingSurfaceAlert: String?
     private(set) var offRoute = false
-    /// Cue-card miss-turn prompt. Nav stays open until Continue, Turn around, or rejoin.
+    /// Off-route state remains visible while recalculation runs.
     private(set) var missTurnActive = false
-    /// Sticky Continue failure (no legal forward line). Not a one-second toast.
+    /// Sticky recovery failure, with an explicit retry.
     private(set) var missTurnReason: String?
-    /// True while Continue & reroute is in flight.
+    /// True while automatic recovery or a retry is in flight.
     private(set) var missTurnRerouting = false
+    /// Report owns recovery while its sheet is open.
+    var recoverySuspended = false
+    private var lastAcceptedFixTime: Date?
+    private var offRouteSince: Date?
+    private var lastAutomaticRerouteFix: CLLocation?
     /// GPS breadcrumbs for End Ride distance (contribute still uses edge ids).
     private(set) var riddenTrack: [RouteCoordinate] = []
     /// Fuel Range switch as Navigation sees it this ride.
@@ -121,7 +126,8 @@ final class NavigationSession {
 
     /// Wired by the planner: recalculates from the rider's position to the
     /// preserved destination with the same profile + access policy.
-    /// Fired only after **Continue & reroute** — never as a silent auto-reroute.
+    /// Queue validity follows route progress and replacement.
+    var onCueValidityChanged: ((Set<String>) -> Void)?
     var onRerouteNeeded: (() -> Void)?
     /// Cancels an in-flight reroute if the rider naturally rejoins the line.
     var onRouteRecovered: (() -> Void)?
@@ -219,6 +225,9 @@ final class NavigationSession {
         // zero, so continuity must be re-anchored by its first location fix.
         lastMatchedSegmentIndex = nil
         lastProgressLocation = nil
+        lastAcceptedFixTime = nil
+        offRouteSince = nil
+        lastAutomaticRerouteFix = nil
         offRoute = false
         offRouteStrikes = 0
         lastUpcomingManeuver = nil
@@ -239,6 +248,7 @@ final class NavigationSession {
         currentSurfaceLabel = surfaceRuns.first?.label
         upcomingSurfaceAlert = nil
         phase = .active
+        onCueValidityChanged?([])
     }
 
     /// Cue mode changed mid-ride. Stable maneuver identities retain their
@@ -285,7 +295,11 @@ final class NavigationSession {
     }
 
     func update(with location: CLLocation) {
-        guard phase == .active, coordinates.count > 1 else { return }
+        guard phase == .active, coordinates.count > 1,
+              location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 35,
+              lastAcceptedFixTime.map({ location.timestamp > $0 }) ?? true
+        else { return }
+        lastAcceptedFixTime = location.timestamp
         if location.speed >= 0 {
             let measured = location.speed
             lastSpeedMPS = lastSpeedMPS > 0
@@ -312,15 +326,15 @@ final class NavigationSession {
 
         guard let proj = projectionRespectingContinuity(for: location) else { return }
 
-        // 50 m on-route threshold.
-        // Named skip fires when that turn is behind the rider. Unnamed drift
-        // still needs three consecutive misses so a GPS jump does not false-alarm.
+        // Sustained accurate fixes are required before rerouting.
         let wasOffRoute = offRoute || offRouteStrikes > 0
         if proj.offMeters > 50 {
-            handleOffRoute()
+            handleOffRoute(location)
             return
         }
 
+        offRouteSince = nil
+        lastAutomaticRerouteFix = nil
         lastMatchedSegmentIndex = proj.segmentIndex
         lastProgressLocation = location
         traveledMeters = proj.alongMeters
@@ -340,7 +354,13 @@ final class NavigationSession {
         updateSurfaceContext()
 
         let visibleManeuvers = maneuvers.filter { $0.matches(cueMode: cueMode) }
-        let nextManeuver = visibleManeuvers.first(where: { ($0.alongMeters ?? 0) > traveledMeters + 15 })
+        // Keep the current decision through its actual junction. Dropping it
+        // 15 m early can show/speak the next straight cue while still turning.
+        let upcoming = visibleManeuvers.filter { ($0.alongMeters ?? 0) >= traveledMeters - 5 }
+        var validCueIDs = Set(upcoming.map(\.announceIdentity))
+        if let stage = currentStage { validCueIDs.insert("waypoint-\(stage.id)") }
+        onCueValidityChanged?(validCueIDs)
+        let nextManeuver = upcoming.first
         let metersToTurn = nextManeuver.flatMap { man -> Double? in
             guard let along = man.alongMeters else { return nil }
             return max(0, along - traveledMeters)
@@ -431,6 +451,8 @@ final class NavigationSession {
     }
 
     func end() {
+        onCueValidityChanged?([])
+        recoverySuspended = false
         phase = .idle
         coordinates = []
         maneuvers = []
@@ -486,14 +508,17 @@ final class NavigationSession {
 
     func continueMissTurnReroute() {
         guard phase == .active, missTurnActive, !missTurnRerouting else { return }
+        guard !recoverySuspended, let onRerouteNeeded else { return }
         missTurnRerouting = true
         missTurnReason = nil
-        onRerouteNeeded?()
+        currentCue = "Rerouting…"
+        onRerouteNeeded()
     }
 
     func setMissTurnFailure(_ message: String) {
         missTurnRerouting = false
         missTurnReason = message
+        currentCue = "Couldn’t reroute"
     }
 
     func clearMissTurn(recovered: Bool) {
@@ -583,16 +608,21 @@ final class NavigationSession {
         fuelViaStation = nil
     }
 
-    private func handleOffRoute() {
-        let named = namedMissManeuverIfBehind()
-        if let named {
-            presentMissTurn(named: named)
-            return
-        }
+    private func handleOffRoute(_ location: CLLocation) {
         offRouteStrikes += 1
-        if offRouteStrikes >= 3 {
-            presentMissTurn(named: nil)
+        if offRouteSince == nil { offRouteSince = location.timestamp }
+        // All departures use hysteresis, including a named missed turn. A single
+        // noisy fix must not replace the accepted line.
+        guard offRouteStrikes >= 3,
+              location.timestamp.timeIntervalSince(offRouteSince!) >= 2 else { return }
+        presentMissTurn(named: namedMissManeuverIfBehind())
+        guard !recoverySuspended, !missTurnRerouting else { return }
+        if let previous = lastAutomaticRerouteFix {
+            guard location.timestamp.timeIntervalSince(previous.timestamp) >= 30,
+                  location.distance(from: previous) >= 30 else { return }
         }
+        lastAutomaticRerouteFix = location
+        continueMissTurnReroute()
     }
 
     private func namedMissManeuverIfBehind() -> RouteManeuver? {
@@ -606,6 +636,7 @@ final class NavigationSession {
 
     private func presentMissTurn(named: RouteManeuver?) {
         offRoute = true
+        onCueValidityChanged?([])
         currentCueMeters = nil
         followingManeuver = nil
         followingManeuverMeters = nil
@@ -800,10 +831,9 @@ final class NavigationSession {
     ) -> [RouteManeuver] {
         let enriched = RouteManeuver.enrichForVoiceCues(incoming)
         let graphDecisions = enriched.filter { $0.isJunctionCue }
-        let essential = graphDecisions.isEmpty
-            ? NavCueBuilder.build(coordinates: coordinates, cueMode: .junctions)
-                .filter(\.isJunctionCue)
-            : graphDecisions
+        // No graph decisions means no known junctions. A bend alone cannot
+        // establish a road choice; geometry only contributes Rally notes.
+        let essential = graphDecisions
         let arrival = enriched.last(where: {
             ($0.type ?? $0.kind ?? "").lowercased() == "arrive"
         }) ?? RouteManeuver(

@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Report → recovery → confirm flow, presented over the map during navigation.
+/// Report and Route Around, presented over the map during navigation.
 /// Bottom sheets that never place route points and never replace
-/// the route without explicit confirmation.
+/// the route without the rider choosing Route Around.
 struct IncidentFlowOverlay: View {
     @Environment(AppEnvironment.self) private var app
+    @State private var confirmingEnd = false
 
     private var incidents: IncidentRecoveryModel { app.incidents }
 
@@ -23,6 +24,10 @@ struct IncidentFlowOverlay: View {
                 .padding(.bottom, 10)
         }
         .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .confirmationDialog("End this ride?", isPresented: $confirmingEnd, titleVisibility: .visible) {
+            Button("End Ride", role: .destructive) { incidents.choose(.endStage) }
+            Button("Keep riding", role: .cancel) {}
+        }
     }
 
     @ViewBuilder private var card: some View {
@@ -40,8 +45,6 @@ struct IncidentFlowOverlay: View {
                 categoriesStep
             case .actions:
                 actionsStep
-            case .confirm:
-                confirmStep
             case let .working(message):
                 workingStep(message)
             }
@@ -98,7 +101,7 @@ struct IncidentFlowOverlay: View {
 
     private var actionsStep: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header("Report logged", sub: "Pick how you want to get clear. Your route won't change until you confirm.")
+            header("Report logged", sub: "Find a way around from where you are. Later waypoints stay in place.")
 
             if let report = incidents.activeReport {
                 HStack(spacing: 10) {
@@ -120,7 +123,8 @@ struct IncidentFlowOverlay: View {
             VStack(spacing: 6) {
                 ForEach(IncidentRecoveryModel.RecoveryAction.allCases) { action in
                     Button {
-                        incidents.choose(action)
+                        if action == .endStage { confirmingEnd = true }
+                        else { incidents.choose(action) }
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(action.title)
@@ -153,56 +157,7 @@ struct IncidentFlowOverlay: View {
         .padding(.bottom, 14)
     }
 
-    // MARK: Step 3 — confirm replacement
-
-    private var confirmStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header("Replace route?", sub: nil)
-
-            if let preview = incidents.preview {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(preview.headline)
-                        .font(.dirtUI(14, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink)
-                    Text(preview.detail)
-                        .font(.dirtUI(12))
-                        .foregroundStyle(DirtTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(DirtTheme.wash)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-
-            HStack(spacing: 8) {
-                Button {
-                    incidents.keepCurrentRoute()
-                } label: {
-                    Text("Keep current route")
-                        .font(.dirtUI(12, weight: .heavy))
-                        .foregroundStyle(DirtTheme.ink)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(DirtTheme.wash)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                Button {
-                    incidents.applyPreview()
-                } label: {
-                    Text("Apply route")
-                        .font(.dirtUI(12, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(DirtTheme.orange)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 14)
-    }
+    // MARK: Routing progress
 
     private func workingStep(_ message: String) -> some View {
         VStack(spacing: 14) {
@@ -211,6 +166,7 @@ struct IncidentFlowOverlay: View {
             Text(message)
                 .font(.dirtUI(13, weight: .bold))
                 .foregroundStyle(DirtTheme.ink)
+            cancelButton("Cancel") { incidents.dismiss() }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)

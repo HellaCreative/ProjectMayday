@@ -100,6 +100,7 @@ struct RouteArrivalRestriction: Codable, Sendable, Equatable {
 struct RouteRequestOptions: Codable, Sendable {
     var ridePreferences: RidePreferences?
     var avoidEdgeIds: [String]?
+    var blockedStartEscapeToward: RouteCoordinate?
     var priorEdgeIds: [String]?
     var arrivalEdgeId: String?
     var backtrackFactor: Double?
@@ -127,6 +128,7 @@ struct RouteRequestOptions: Codable, Sendable {
 
     init(
         avoidEdgeIds: [String] = [],
+        blockedStartEscapeToward: RouteCoordinate? = nil,
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double? = nil,
@@ -144,6 +146,7 @@ struct RouteRequestOptions: Codable, Sendable {
         arrivalRestrictions: [RouteArrivalRestriction] = []
     ) {
         self.ridePreferences = RidePreferenceContext.current
+        self.blockedStartEscapeToward = blockedStartEscapeToward
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
         self.arrivalEdgeId = arrivalEdgeId
@@ -180,6 +183,7 @@ struct RouteRequest: Codable, Sendable {
         locations: [RouteLocation],
         allowUnknown: Bool,
         avoidEdgeIds: [String] = [],
+        blockedStartEscapeToward: RouteCoordinate? = nil,
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double? = nil,
@@ -209,7 +213,7 @@ struct RouteRequest: Codable, Sendable {
         let scopedPrefer = false
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
         let matchLimit = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
-        if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil, arrivalRestrictions.isEmpty,
+        if blockedStartEscapeToward == nil, avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil, arrivalRestrictions.isEmpty,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
            !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil,
@@ -218,6 +222,7 @@ struct RouteRequest: Codable, Sendable {
         } else {
             options = RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
+                blockedStartEscapeToward: blockedStartEscapeToward,
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,

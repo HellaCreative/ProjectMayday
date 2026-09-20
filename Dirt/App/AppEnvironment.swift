@@ -150,14 +150,16 @@ final class AppEnvironment {
 
         navigation.cueMode = cueSettings.mode
         navigation.onCueAnnounced = { [cueSettings] text, announceKey in
-            Task { @MainActor in
-                cueSettings.speakCueIfNeeded(text, announceKey: announceKey)
-            }
+            cueSettings.speakCueIfNeeded(text, announceKey: announceKey)
+        }
+        navigation.onCueValidityChanged = { [cueSettings] identities in
+            cueSettings.retainUpcomingCues(identities)
         }
         planner.onNavigationEnded = { [weak self] candidate in
+            self?.cueSettings.stopSpeaking()
+            self?.incidents.dismiss()
             Task { @MainActor in
                 guard let self else { return }
-                self.cueSettings.stopSpeaking()
                 await self.rideIntelligence.flushPendingIncidents()
                 guard let candidate else { return }
                 // Prompt when preference on, or first time with a meaningful ride.
