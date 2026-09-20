@@ -27,11 +27,12 @@ test("Geofabrik stamp covers every catalog province and state", () => {
   assert.deepEqual([...catalog].sort(), (
     "ab ak al ar az bc ca-n ca-s co ct de fl ga hi ia id il in ks ky la ma mb md me mi mn mo ms mt " +
     "nb nc nd ne nh nj nl-island nl-lab nm ns nt nu nv ny oh ok on-n on-s or pa pe qc-n qc-s ri sc sd sk " +
-    "tn tx ut va vt wa wi wv wy yt"
+    "tn tx-ne tx-nw tx-se tx-sw ut va vt wa wi wv wy yt"
   ).split(" ").sort());
   for (const [parent, children] of Object.entries({
     on: ["on-n", "on-s"], qc: ["qc-n", "qc-s"],
-    ca: ["ca-n", "ca-s"], nl: ["nl-island", "nl-lab"]
+    ca: ["ca-n", "ca-s"], nl: ["nl-island", "nl-lab"],
+    tx: ["tx-ne", "tx-nw", "tx-se", "tx-sw"]
   })) {
     assert.equal(catalog.includes(parent), false);
     assert.equal(OSM_REGION[parent].legacy, true);

@@ -469,7 +469,7 @@ final class GraphPackStore {
     }
 
     /// Split-province parents that `fabric-v4-20260917-02` replaces with halves.
-    nonisolated static let splitParentRegionIds: Set<String> = ["on", "qc", "ca", "nl"]
+    nonisolated static let splitParentRegionIds: Set<String> = ["on", "qc", "ca", "nl", "tx"]
 
     /// Maps a geographic region id onto a catalog id that is actually published.
     func resolveCatalogRegionId(_ regionID: String) -> String? {
@@ -521,6 +521,7 @@ final class GraphPackStore {
         case "qc": preferred = quebecHalf(for: coordinate)
         case "ca": preferred = californiaHalf(for: coordinate)
         case "nl": preferred = newfoundlandHalf(for: coordinate)
+        case "tx": preferred = texasQuarter(for: coordinate)
         default: preferred = nil
         }
         if let preferred, published.contains(preferred) { return preferred }
@@ -1067,7 +1068,7 @@ final class GraphPackStore {
         "nu": [],
         "ak": ["yt", "bc"],
         "al": ["fl", "ga", "ms", "tn"],
-        "ar": ["mo", "tn", "ms", "la", "tx", "ok"],
+        "ar": ["mo", "tn", "ms", "la", "tx", "ok", "tx-ne"],
         "az": ["ca", "ca-s", "nv", "ut", "nm"],
         "ca": ["or", "nv", "az", "ca-s", "ca-n"],
         "ca-s": ["ca-n", "ca", "az", "nv"],
@@ -1084,7 +1085,7 @@ final class GraphPackStore {
         "in": ["mi", "oh", "ky", "il"],
         "ks": ["ne", "mo", "ok", "co"],
         "ky": ["il", "in", "oh", "wv", "va", "tn", "mo"],
-        "la": ["tx", "ar", "ms"],
+        "la": ["tx", "ar", "ms", "tx-ne", "tx-se"],
         "ma": ["ri", "ct", "ny", "vt", "nh"],
         "md": ["va", "wv", "pa", "de"],
         "me": ["nh", "qc", "qc-s", "nb"],
@@ -1098,18 +1099,22 @@ final class GraphPackStore {
         "ne": ["sd", "ia", "mo", "ks", "co", "wy"],
         "nh": ["me", "ma", "vt", "qc", "qc-s"],
         "nj": ["ny", "pa", "de"],
-        "nm": ["az", "co", "ok", "tx"],
+        "nm": ["az", "co", "ok", "tx", "tx-nw"],
         "nv": ["or", "id", "ut", "az", "ca", "ca-s", "ca-n"],
         "ny": ["pa", "nj", "ct", "ma", "vt", "qc", "qc-s", "on-s", "on"],
         "oh": ["mi", "pa", "wv", "ky", "in"],
-        "ok": ["co", "ks", "mo", "ar", "tx", "nm"],
+        "ok": ["co", "ks", "mo", "ar", "tx", "nm", "tx-ne", "tx-nw"],
         "or": ["wa", "id", "nv", "ca", "ca-n"],
         "pa": ["ny", "nj", "de", "md", "wv", "oh"],
         "ri": ["ct", "ma"],
         "sc": ["nc", "ga"],
         "sd": ["nd", "mn", "ia", "ne", "wy", "mt"],
         "tn": ["ky", "va", "nc", "ga", "al", "ms", "ar", "mo"],
-        "tx": ["nm", "ok", "ar", "la"],
+        "tx": ["nm", "ok", "ar", "la", "tx-ne", "tx-nw", "tx-se", "tx-sw"],
+        "tx-ne": ["tx-nw", "tx-se", "tx-sw", "tx", "ok", "ar", "la"],
+        "tx-nw": ["tx-ne", "tx-se", "tx-sw", "tx", "nm", "ok"],
+        "tx-se": ["tx-ne", "tx-nw", "tx-sw", "tx", "la"],
+        "tx-sw": ["tx-ne", "tx-nw", "tx-se", "tx"],
         "ut": ["id", "wy", "co", "az", "nv"],
         "va": ["md", "wv", "ky", "tn", "nc"],
         "vt": ["ny", "ma", "nh", "qc", "qc-s"],
@@ -1187,7 +1192,8 @@ final class GraphPackStore {
             ("nh", "New Hampshire", 36822888), ("nj", "New Jersey", 79525284), ("nm", "New Mexico", 63689894), ("ny", "New York", 150764306),
             ("nc", "North Carolina", 60514508), ("nd", "North Dakota", 41562516), ("oh", "Ohio", 75789992), ("ok", "Oklahoma", 84001469),
             ("or", "Oregon", 116478694), ("pa", "Pennsylvania", 96295912), ("ri", "Rhode Island", 12129227), ("sc", "South Carolina", 89943638),
-            ("sd", "South Dakota", 28660212), ("tn", "Tennessee", 111948468), ("tx", "Texas", 215225269), ("ut", "Utah", 66130822),
+            ("sd", "South Dakota", 28660212), ("tn", "Tennessee", 111948468), ("tx", "Texas", 215225269),
+            ("tx-ne", "Texas Northeast", 250_000_000), ("tx-nw", "Texas Northwest", 250_000_000), ("tx-se", "Texas Southeast", 250_000_000), ("tx-sw", "Texas Southwest", 250_000_000), ("ut", "Utah", 66130822),
             ("vt", "Vermont", 21195470), ("va", "Virginia", 176209640), ("wa", "Washington", 137352437), ("wv", "West Virginia", 45884796),
             ("wi", "Wisconsin", 109146683), ("wy", "Wyoming", 43861302)
         ]
@@ -1768,6 +1774,7 @@ final class GraphPackStore {
         if id == "on" || id.hasPrefix("on-") { return "on" }
         if id == "ca" || id.hasPrefix("ca-") { return "ca" }
         if id == "nl" || id.hasPrefix("nl-") { return "nl" }
+        if id == "tx" || id.hasPrefix("tx-") { return "tx" }
         return id
     }
 
@@ -1781,6 +1788,10 @@ final class GraphPackStore {
 
     nonisolated static func californiaHalf(for coordinate: CLLocationCoordinate2D) -> String {
         coordinate.latitude >= 37.0 ? "ca-n" : "ca-s"
+    }
+
+    nonisolated static func texasQuarter(for coordinate: CLLocationCoordinate2D) -> String {
+        "tx-" + (coordinate.latitude >= 31.0 ? "n" : "s") + (coordinate.longitude >= -97.25 ? "e" : "w")
     }
 
     static func newfoundlandHalf(for coordinate: CLLocationCoordinate2D) -> String {
@@ -1927,6 +1938,10 @@ final class GraphPackStore {
             if !hits.contains(where: { $0 == "qc" || $0.hasPrefix("qc-") }), !hits.contains("ns") {
                 return newfoundlandHalf(for: coordinate)
             }
+        }
+
+        if hits.contains("tx"), !hits.contains(where: { usStateBounds[$0] != nil && provinceFamily($0) != "tx" }) {
+            return texasQuarter(for: coordinate)
         }
 
         // Within California — prefer published South/North halves.
@@ -2110,6 +2125,10 @@ final class GraphPackStore {
         "sd": (-104.1, 42.5, -96.4, 45.9),
         "tn": (-90.3, 35.0, -81.7, 36.7),
         "tx": (-106.6, 25.9, -93.5, 36.5),
+        "tx-ne": (-97.25, 31, -93.5, 36.5),
+        "tx-nw": (-106.6, 31, -97.25, 36.5),
+        "tx-se": (-97.25, 25.9, -93.5, 31),
+        "tx-sw": (-106.6, 25.9, -97.25, 31),
         "ut": (-114.0, 37.0, -109.0, 42.0),
         "va": (-83.7, 36.5, -75.2, 39.5),
         "vt": (-73.4, 42.7, -71.5, 45.0),

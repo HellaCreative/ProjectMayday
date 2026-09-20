@@ -96,3 +96,20 @@ test("a missing verified graph override fails closed", () => {
     else process.env.ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES = previous;
   }
 });
+
+test("Texas quarters own their cuts and preserve neighboring state ownership", () => {
+  const { provinceFamily } = require("./select");
+  const { polygonOwner } = require("../lib/region-polygons");
+  for (const [lon, lat, id] of [
+    [-97.7431,30.2672,"tx-sw"], [-95.3698,29.7604,"tx-se"],
+    [-96.797,32.777,"tx-ne"], [-101.831,35.222,"tx-nw"],
+    [-97.25,31,"tx-ne"], [-97.251,30.999,"tx-sw"],
+    [-97.249,30.999,"tx-se"], [-97.251,31.001,"tx-nw"],
+    [-106.485,31.761,"tx-nw"], [-106.651,35.084,"nm"],
+    [-97.516,35.467,"ok"], [-93.75,32.51,"la"]
+  ]) {
+    assert.equal(primaryRegionForPoint(lon,lat), id);
+    assert.equal(polygonOwner(lon,lat), id);
+    if (id.startsWith("tx-")) assert.equal(provinceFamily(id), "tx");
+  }
+});

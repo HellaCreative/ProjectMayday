@@ -146,6 +146,29 @@ struct PackFirstRoutingTests {
         )
     }
 
+    @Test func texasQuarterOwnershipAndCatalogAcquisitionStayTogether() {
+        let published: Set<String> = ["tx-ne", "tx-nw", "tx-se", "tx-sw", "nm", "ok", "ar", "la"]
+        let examples: [(Double, Double, String)] = [
+            (-97.7431, 30.2672, "tx-sw"), (-95.3698, 29.7604, "tx-se"),
+            (-96.797, 32.777, "tx-ne"), (-101.831, 35.222, "tx-nw"),
+            (-97.25, 31, "tx-ne"), (-97.251, 30.999, "tx-sw"),
+            (-97.249, 30.999, "tx-se"), (-97.251, 31.001, "tx-nw")
+        ]
+        for (lon, lat, expected) in examples {
+            let point = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            #expect(GraphPackStore.primaryRegionId(containing: point) == expected)
+            #expect(GraphPackStore.resolveCatalogRegionId("tx", published: published, coordinate: point) == expected)
+            #expect(GraphPackStore.resolveCatalogRegionId(expected, published: ["tx"], coordinate: point) == "tx")
+            #expect(GraphPackStore.provinceFamily(expected) == "tx")
+        }
+        let points = examples.prefix(2).map { CLLocationCoordinate2D(latitude: $0.1, longitude: $0.0) }
+        let required = GraphPackStore.requiredCatalogRoutingRegions(for: points, published: published)
+        #expect(required.contains("tx-sw"))
+        #expect(required.contains("tx-se"))
+        #expect(!required.contains("tx"))
+        #expect(!GraphPackStore.endpointsCrossProvince(points))
+    }
+
     @Test func halfOnlyFabricResolvesParentPrimaryAtKenora() {
         let nearHalifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
         let kenora = CLLocationCoordinate2D(latitude: 49.797954, longitude: -94.662943)

@@ -90,8 +90,23 @@ obsolete 64-pack count. That test now verifies the exact 67-member catalog and
 all four parent-to-split replacements; its nine-test file passes
 (`continental-factory-feature-tests.log`, `continental-roster-test.log`).
 These checks cover build contracts, not continental road-completion evidence.
-The registered continental roster currently has 67 packs and unsplit Texas;
-Texas and all other regions still require measured resource qualification.
+The original continental roster had 67 packs with unsplit Texas. Preliminary
+same-binary, default-app-label-budget host sizing failed on Austin–Houston Dirt:
+41.157 s total, 26.775 s preparation, 1.6 million labels, 2.18 GiB peak RSS
+(1.35 GiB physical footprint). Los Angeles–San Diego also reached the 1.6 million
+label limit: 31.311 s, 16.296 s preparation, about 1.47 GiB peak RSS (1.0 GB
+physical footprint). Both used Wander 50%, Unknown off and all three avoidances
+on. These measured pre-repair pack trials do not qualify either region or imply
+phone timings. Evidence: `texas-preflight/` and
+`region-preflight-ca-s-los-angeles-san-diego-dirt/`.
+Texas now has four candidate pieces, ownership cuts 31°N / 97.25°W and 0.25°
+overlap, replacing the monolithic published ID while retaining its legacy alias.
+The candidate roster is 70. The split is a measured sizing experiment, not yet
+accepted route or memory qualification. Its union covers the original outline
+within 1e-9 degrees; actual directed seam and same-pin riding tests remain required.
+Do not infer that smaller files fix search limits or join-memory use. Southern
+California's sizing failure also remains open. Retain the source and route settings;
+do not raise the application label or memory budget just to pass.
 The North America September 18 download completed after resuming the existing
 2.63 GB partial at `.build/fresh-fabric-20260919/source/north-america-260918.osm.pbf`; its checked
 prefix agrees with the newly downloaded bytes. Expected complete bytes:
@@ -113,21 +128,17 @@ benchmarks. Evidence: `batch-equivalence.json` and `batch-extraction/` under the
 continental evidence directory. Adopt batches of at most two, one heavy job at
 a time; retain the exact 2 km halo and complete relation semantics.
 
-`continue-continent.py` in that evidence directory is running as the overnight
-pipeline supervisor; inspect `pipeline-state.json` and process ownership before
-starting competing heavy work. The download has completed, the coordinated
-route-test hold has ended, and the supervisor stages/verifies the internal source
-copy, then runs checksum/timestamp-verified source preparation for the actual
-catalog with batches of two, followed by the resumable
-full pack/seam factory for candidate `fabric-v4-20260920-01`. It records errors
-and stops rather than publishing or continuing after a failed stage. A successful
-build ends awaiting route qualification; publication is still separately gated.
-Source preparation is complete: all 67 catalog IDs have checked regional extracts
-from OSM timestamp `2026-09-18T20:21:10Z`, totaling 17.77 GiB. The source-lock
-roster matches the actual catalog exactly. The factory has begun its serial
-pack build; no continental release is qualified or published at this checkpoint.
-Source lock: `continent/source-lock.json`; phase logs: `continent-source-preparation.log`
-and `continent-pack-build.log`. Do not duplicate these running jobs.
+The original `continue-continent.py` supervisor and its downstream followers
+were stopped at a region boundary for the legal-restriction repair and dense-region
+sizing failures. Inspect `pipeline-state.json`, `qualification-pipeline-state.json`,
+and `app-qualification-state.json` plus actual process ownership before restarting.
+Original source preparation completed all 67 checked regional extracts from the
+same OSM epoch (17.77 GiB); `source-lock-original67.json` preserves that checkpoint.
+The Texas-quarter source preparation reuses the 66 unaffected extracts and adds
+four new pieces from the identical parent. `texas-quarter-source-preparation.log`
+records this operation. No continental release is qualified or published.
+The resumable factory must use the corrected recipe and updated complete source
+lock. A successful build ends awaiting route qualification; publication remains gated.
 Continental building exposed an unresolved-only-turn defect before publication.
 A valid incoming road could lose its `only_*` restriction when the named exit
 could not be represented at the via junction. A failing four-node regression
@@ -142,7 +153,7 @@ blocks. Evidence: `unresolved-only-turn-*` and `ca-s-only-turn-*` in the contine
 evidence directory. This is not a blanket claim that every malformed source
 restriction is resolved. The factory scheduler was held while its current child
 finished; restart affected pack construction with the corrected recipe, retaining
-all 67 verified source extracts. No affected pack has been published.
+the verified source extracts. No affected pack has been published.
 
 The same evidence directory's `continue-qualification.py` waits for that exact
 supervisor to seal the whole candidate, then generates the continental fixture

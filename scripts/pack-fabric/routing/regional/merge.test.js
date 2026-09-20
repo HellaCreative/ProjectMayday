@@ -64,23 +64,24 @@ test("the road-border registry covers every catalog region and stays symmetric",
   assert.equal(shortestRegionPath("ut", "nm").length, 3, "Four Corners is not a road seam");
 });
 
-test("Swift and backend keep two-letter adjacency lockstep (subregions are extra)", () => {
+test("Swift and backend keep catalog and legacy adjacency in lockstep", () => {
   const swift = fs.readFileSync(
     path.resolve(__dirname, "../../../../Dirt/Routing/OnDevice/GraphPackStore.swift"),
     "utf8"
   );
-  const block = swift.match(/private static let roadReachableNeighbours:[\s\S]*?\n    \]/);
+  const block = swift.match(/private (?:nonisolated )?static let roadReachableNeighbours:[\s\S]*?\n    \]/);
   assert.ok(block, "Swift adjacency registry missing");
   const parsed = {};
   for (const line of block[0].split("\n")) {
-    const row = line.match(/^\s*"([a-z]{2})": \[(.*)\],?$/);
+    const row = line.match(/^\s*"([a-z-]+)": \[(.*)\],?$/);
     if (!row) continue;
-    parsed[row[1]] = [...row[2].matchAll(/"([a-z]{2})"/g)].map((match) => match[1]).sort();
+    parsed[row[1]] = [...row[2].matchAll(/"([a-z-]+)"/g)].map((match) => match[1]).sort();
   }
   const backend = Object.fromEntries(
     Object.entries(REGION_NEIGHBOURS)
-      .filter(([id]) => id.length === 2)
-      .map(([id, neighbors]) => [id, neighbors.filter((neighbor) => neighbor.length === 2).sort()])
+      // Retired experimental QC aliases are not entries in the app catalog.
+      .filter(([id]) => OSM_REGION[id])
+      .map(([id, neighbors]) => [id, [...neighbors].sort()])
   );
   assert.deepEqual(parsed, backend);
 });

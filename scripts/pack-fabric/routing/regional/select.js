@@ -57,6 +57,10 @@ const US_STATE_BBOX = {
   sd: [-104.1, 42.5, -96.4, 45.9],
   tn: [-90.3, 35.0, -81.7, 36.7],
   tx: [-106.6, 25.9, -93.5, 36.5],
+  "tx-ne": [-97.25, 31, -93.5, 36.5],
+  "tx-nw": [-106.6, 31, -97.25, 36.5],
+  "tx-se": [-97.25, 25.9, -93.5, 31],
+  "tx-sw": [-106.6, 25.9, -97.25, 31],
   ut: [-114.0, 37.0, -109.0, 42.0],
   va: [-83.7, 36.5, -75.2, 39.5],
   vt: [-73.4, 42.7, -71.5, 45.0],
@@ -136,6 +140,7 @@ function provinceFamily(regionId) {
   if (isOnRegion(id)) return "on";
   if (isCaRegion(id)) return "ca";
   if (isNlRegion(id)) return "nl";
+  if (id === "tx" || id.startsWith("tx-")) return "tx";
   return id;
 }
 
@@ -284,6 +289,10 @@ function primaryRegionForPoint(lon, lat) {
   const nlHit = [...ids].find((id) => isNlRegion(id));
   if (nlHit && (ids.has("nl-island") || ids.has("nl-lab") || ids.has("nl"))) {
     if (!qcHit && !ids.has("ns")) return newfoundlandHalfForPoint(lon, lat);
+  }
+
+  if (ids.has("tx") && ![...ids].some(id => US_STATE_IDS.has(id) && provinceFamily(id) !== "tx")) {
+    return `tx-${lat >= 31 ? "n" : "s"}${lon >= -97.25 ? "e" : "w"}`;
   }
 
   const caHit = [...ids].find((id) => isCaRegion(id));

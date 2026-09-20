@@ -53,6 +53,11 @@ enum RegionPolygons {
         if hits.contains("ns"), hits.contains("nb") {
             return lon >= -64.27 ? "ns" : "nb"
         }
+        let txPieces = hits.filter { $0.hasPrefix("tx-") }.sorted()
+        if !txPieces.isEmpty {
+            let owner = "tx-" + (lat >= 31.0 ? "n" : "s") + (lon >= -97.25 ? "e" : "w")
+            return txPieces.contains(owner) ? owner : txPieces[0]
+        }
         let onHalves = hits.filter { $0 == "on-s" || $0 == "on-n" }
         if !onHalves.isEmpty {
             if lat >= 46.0, onHalves.contains("on-n") { return "on-n" }

@@ -36,7 +36,10 @@ const REGION_TIMEZONE = {
   ny: "America/New_York", oh: "America/New_York", ok: "America/Chicago",
   or: "America/Los_Angeles", pa: "America/New_York", ri: "America/New_York",
   sc: "America/New_York", sd: "America/Chicago", tn: "America/Chicago",
-  tx: "America/Chicago", ut: "America/Denver", va: "America/New_York",
+  tx: "America/Chicago",
+  "tx-ne": "America/Chicago", "tx-nw": "America/Chicago",
+  "tx-se": "America/Chicago", "tx-sw": "America/Chicago",
+  ut: "America/Denver", va: "America/New_York",
   vt: "America/New_York", wa: "America/Los_Angeles", wi: "America/Chicago",
   wv: "America/New_York", wy: "America/Denver"
 };
