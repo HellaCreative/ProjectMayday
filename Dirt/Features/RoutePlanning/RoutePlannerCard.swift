@@ -581,14 +581,12 @@ struct RoutePlannerCard: View {
         surfaceDirtIsland
     }
 
-    /// Compact Surface island with breathing room between its label and CTA.
+    /// Compact Surface island: label at the left edge, CTA group at the right.
     private var surfaceDirtIsland: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: DirtSpace.tight) {
             Text("Surface")
                 .font(DirtType.rowTitle)
                 .foregroundStyle(DirtTheme.ink)
-            Spacer(minLength: DirtSpace.tight)
-                .frame(maxWidth: DirtSpace.group)
             Button {
                 openDefaultSettings()
             } label: {
@@ -601,7 +599,7 @@ struct RoutePlannerCard: View {
                 .font(DirtType.chip)
                 .fontWeight(.bold)
                 .foregroundStyle(DirtTheme.ink)
-                .frame(minWidth: DirtHit.dropdown, minHeight: DirtHit.min, alignment: .leading)
+                .frame(minWidth: DirtHit.dropdown, minHeight: DirtHit.min, alignment: .trailing)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
