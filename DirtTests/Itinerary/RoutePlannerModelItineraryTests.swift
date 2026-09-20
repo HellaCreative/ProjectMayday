@@ -7,6 +7,22 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
+    @Test func searchedWaypointAppendsToExistingPlanWithoutReplacingPins() async {
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.addPlanWaypoint(latitude: point(0).latitude, longitude: point(0).longitude)
+        model.addPlanWaypoint(latitude: point(0.1).latitude, longitude: point(0.1).longitude)
+        await model.waitForCanonicalBuildForTesting()
+        let previousIDs = model.itinerary.waypoints.map(\.id)
+        model.addPlanWaypoint(latitude: point(0.2).latitude, longitude: point(0.2).longitude)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.mode == .plan)
+        #expect(model.itinerary.waypoints.count == 3)
+        #expect(Array(model.itinerary.waypoints.prefix(2).map(\.id)) == previousIDs)
+        #expect(model.itinerary.waypoints.last?.coordinate == point(0.2))
+        #expect(model.stages.count == 2)
+    }
+
     @Test func completedLoopSignalsOverviewIndependentlyOfToast() async throws {
         let source = PlannerFakeRoutingSource()
         let map = MapState()

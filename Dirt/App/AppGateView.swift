@@ -38,6 +38,7 @@ struct AppGateView: View {
     private var showsProfileFixture: Bool {
         #if DEBUG
         ProcessInfo.processInfo.environment["DIRT_UI_TEST_PROFILE"] == "1"
+            || ProcessInfo.processInfo.environment["DIRT_UI_TEST_SEARCH"] == "1"
         #else
         false
         #endif

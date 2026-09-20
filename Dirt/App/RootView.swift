@@ -90,6 +90,14 @@ struct RootView: View {
         #endif
         return nil
     }()
+    @State private var locationSearch: LocationSearchModel = {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["DIRT_UI_TEST_SEARCH"] == "1" {
+            return LocationSearchModel(service: FixtureLocationSearchService())
+        }
+        #endif
+        return LocationSearchModel()
+    }()
     @State private var routeCardOpen = false
     /// The ride-settings panel must cover the dock and map controls while it is
     /// open, so its parent route card is promoted above those sibling layers.
@@ -98,7 +106,12 @@ struct RootView: View {
     @State private var portraitRouteSheetHeight: CGFloat = 0
     @State private var showRouteConfetti = false
     @State private var routeConfettiTask: Task<Void, Never>?
-    @State private var coachStep: CoachStep? = OnboardingPrefs.coachComplete ? nil : .openRoute
+    @State private var coachStep: CoachStep? = {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["DIRT_UI_TEST_SEARCH"] == "1" { return nil }
+        #endif
+        return OnboardingPrefs.coachComplete ? nil : .openRoute
+    }()
     /// Left↔right landscape keeps the same size; this ticket forces chrome to re-read
     /// island-side safe-area insets when the device flips.
     @State private var landscapeEdgeTicket: String = ""
@@ -331,6 +344,8 @@ struct RootView: View {
             handleNavigationPhaseChange(phase)
         }
         .modifier(KeepAwakeLifecycle())
+        .modifier(LocationSearchOverlay(model: locationSearch, app: app,
+            activeSheet: $activeSheet, routeCardOpen: $routeCardOpen))
         .overlay(alignment: .top) {
             if app.planner.showsWaypointPlacementConfirmation, !navActive {
                 VStack(spacing: 12) {
@@ -851,6 +866,20 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
 
+            if activeSheet == nil, !routeRideSettingsPresented {
+                VStack {
+                    HStack {
+                        if dockLeading { Spacer(minLength: 0) }
+                        searchButton
+                        if !dockLeading { Spacer(minLength: 0) }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .zIndex(2)
+            }
+
             // Side drawers behind the vertical dock (wash extends under the rail).
             if routeCardOpen {
                 RoutePlannerCard(
@@ -1332,6 +1361,19 @@ struct RootView: View {
         )
     }
 
+    private var searchButton: some View {
+        Button { locationSearch.isPresented = true } label: {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(DirtTheme.ink)
+                .frame(width: 50, height: 50)
+                .dirtGlassControl(tint: .white)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Search places")
+        .accessibilityHint("Find a place or address to route to or add as a waypoint")
+    }
+
     private var topChrome: some View {
         Group {
             if navActive {
@@ -1350,6 +1392,7 @@ struct RootView: View {
                 HStack(alignment: .top, spacing: 8) {
                     idleBrandStack
                     Spacer(minLength: 8)
+                    if activeSheet == nil, !routeRideSettingsPresented { searchButton }
                 }
             }
         }

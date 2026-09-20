@@ -295,6 +295,74 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testPlaceSearchSelectionAndErrors() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_SEARCH"] = "1"
+        app.launch()
+        let search = app.buttons["Search places"]
+        XCTAssertTrue(search.waitForExistence(timeout: 8))
+        search.tap()
+        let field = app.textFields["placeSearchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        if app.buttons["Continue"].exists { app.buttons["Continue"].tap() }
+        field.typeText("Porters")
+        let result = app.buttons.containing(.staticText, identifier: "Porters Lake").firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Search — portrait results and keyboard"
+        shot.lifetime = .keepAlways
+        add(shot)
+        result.tap()
+        XCTAssertTrue(app.buttons["Add waypoint"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Route here"].isHittable)
+        XCTAssertFalse(field.exists)
+        let preview = XCTAttachment(screenshot: app.screenshot())
+        preview.name = "Search — place actions"
+        preview.lifetime = .keepAlways
+        add(preview)
+        app.buttons["Add waypoint"].tap()
+        XCTAssertTrue(app.buttons["Plan a route"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Add waypoint"].exists)
+        search.tap()
+        field.typeText("Unavailable")
+        XCTAssertTrue(app.buttons["Try again"].waitForExistence(timeout: 4))
+        app.buttons["Clear search"].tap()
+        field.typeText("Nothing")
+        XCTAssertTrue(app.staticTexts["No places found. Try a nearby town or a fuller address."].waitForExistence(timeout: 4))
+        app.buttons["Cancel"].tap()
+        XCTAssertFalse(field.exists)
+    }
+
+    @MainActor
+    func testPlaceSearchLandscapeKeyboard() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_SEARCH"] = "1"
+        app.launch()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let rotated = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil)
+        guard XCTWaiter.wait(for: [rotated], timeout: 8) == .completed else {
+            throw XCTSkip("Existing simulator did not rotate; landscape requires an unlocked simulator/device check.")
+        }
+        let search = app.buttons["Search places"]
+        let field = app.textFields["placeSearchField"]
+        let result = app.buttons.containing(.staticText, identifier: "Porters Lake").firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 4))
+        search.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        field.typeText("Porters")
+        XCTAssertTrue(result.waitForExistence(timeout: 4))
+        XCTAssertTrue(result.isHittable)
+        let landscape = XCTAttachment(screenshot: app.screenshot())
+        landscape.name = "Search — landscape keyboard"
+        landscape.lifetime = .keepAlways
+        add(landscape)
+        app.buttons["Cancel"].tap()
+        XCTAssertFalse(field.exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
