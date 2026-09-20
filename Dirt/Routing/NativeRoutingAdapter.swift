@@ -35,6 +35,7 @@ nonisolated enum NativeRoutingAdapter {
         native.matchRadiusMeters = req.options?.matchLimitMeters ?? NativeRoutingAdapter.maximumMatchMeters
         let preferences = (req.options?.ridePreferences ?? RidePreferences()).normalized
         native.profile.avoidMajorHighways = preferences.avoidHighways
+        native.access.avoidFerries = preferences.avoidFerries
         native.profile.preferBackRoads = req.profile == .cleanest
         native.profile.wander = preferences.wander
         native.options.cityWall = preferences.avoidCities
@@ -44,6 +45,7 @@ nonisolated enum NativeRoutingAdapter {
         }
         return native
     }
+    static let ferriesAvoidedMessage = "No land-only connection was found. Allow ferries to try this ride. Your points are preserved."
     static func message(_ failure: RoutingFailure) -> String {
         switch failure {
         case .missingPacks(let ids): return "Download the routing packs for \(ids.joined(separator: ", ").uppercased()) to plan this ride."
@@ -51,6 +53,7 @@ nonisolated enum NativeRoutingAdapter {
         case .invalidRequest(let detail): return detail
         case .unsupported(let detail): return detail
         case .noMatch: return "A rider point is not close enough to a legally usable mapped road. Move the point onto the road."
+        case .ferriesAvoided: return ferriesAvoidedMessage
         case .noPath: return "The installed road network has no legal connection for these points and settings."
         case .resourceLimit: return "The route calculation reached its limit before it could finish. Your points are preserved."
         }
@@ -160,7 +163,7 @@ actor NativeRoutingSession {
         request.options.counter = counter
         let identity = "pack request seed=\(request.options.seed) wander=\(request.profile.wander) " +
             "style=\(request.profile.style.rawValue) unknown=\(request.access.allowUnknown) " +
-            "avoidCities=\(request.options.cityWall) avoidHighways=\(request.profile.avoidMajorHighways)"
+            "avoidCities=\(request.options.cityWall) avoidHighways=\(request.profile.avoidMajorHighways) avoidFerries=\(request.access.avoidFerries)"
         Task { @MainActor in RoutingDebugLog.shared.event(identity) }
         var prepared = 0, prepareDetail: String?
         do {

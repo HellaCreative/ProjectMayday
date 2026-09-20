@@ -90,7 +90,7 @@ public enum StagedRouter {
             }
         }
         let chains = try RegionConnectivity(neighbors: neighbors).chains(from: startRegion, to: endRegion,
-                                                                          roadNeighbors: roads)
+                                                                          roadNeighbors: roads, avoidFerries: request.access.avoidFerries)
         if chains.count == 1 {
             return try routeChain(request, chain: chains[0], repository: repository, budget: budget,
                 prepared: prepared, compassStore: compassStore, renewAfterCommittedStage: renewAfterCommittedStage)
@@ -239,6 +239,11 @@ public enum StagedRouter {
                         compassStore: compassStore, budget: attemptBudget)
                     hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
                     return try stitch([part0, part1], windows: windows)
+                } catch RoutingFailure.ferriesAvoided {
+                    // This handover may be on a ferry-dependent overlap stub;
+                    // another legal land handover can still complete the journey.
+                    lastError = RoutingFailure.ferriesAvoided
+                    continue
                 } catch RoutingFailure.noPath {
                     lastError = RoutingFailure.noPath
                     continue
@@ -401,6 +406,11 @@ public enum StagedRouter {
                     cursor = part.end.coordinate
                     advanced = true
                     break
+                } catch RoutingFailure.ferriesAvoided {
+                    // This handover may be on a ferry-dependent overlap stub;
+                    // another legal land handover can still complete the journey.
+                    lastError = RoutingFailure.ferriesAvoided
+                    continue
                 } catch RoutingFailure.noPath {
                     lastError = RoutingFailure.noPath
                     continue
@@ -485,6 +495,7 @@ public enum StagedRouter {
         for at in [node] + graph.coincidentSiblings(node) {
             for arc in graph.outgoing(at) {
                 guard graph.restrictionEdge(arc.edge) != incoming, graph.distance(arc.edge) > 0.01 else { continue }
+                if request.access.avoidFerries && graph.structure(arc.edge) == "ferry" { continue }
                 let code = graph.accessCode(arc.edge, forward: arc.forward)
                 let shortUnknown = request.profile.style != .cleanest && code == 1 && graph.distance(arc.edge) <= 100
                 guard request.access.permits(code, isStart: false, isEnd: false) || shortUnknown else { continue }
@@ -642,6 +653,8 @@ public enum StagedRouter {
             access: access)
         let points = anchors.compactMap { row -> HandoverCandidate? in
             guard row.coordinate.count == 2 else { return nil }
+            if access.avoidFerries && (row.edge.structureLeaf?.lowercased() == "ferry"
+                || (row.edge.crossingSeconds ?? 0) > 0) { return nil }
             let point = Coordinate(longitude: row.coordinate[0], latitude: row.coordinate[1])
             guard point.isValid else { return nil }
             let flags = stubFlags[row.osmNodeId] ?? (true, true)
@@ -672,8 +685,10 @@ public enum StagedRouter {
             currentGraph = try repository.open(shared, requireSeams: false, budget: budget).graph
         }
         let nextPack = try repository.open(next, requireSeams: false, budget: budget).graph
-        let currentIds = WeakComponents.ids(in: currentGraph, allowUnknown: access.includesUnknownConnectivity)
-        let nextIds = WeakComponents.ids(in: nextPack, allowUnknown: access.includesUnknownConnectivity)
+        let currentIds = access.avoidFerries ? try WeakComponents.landIDs(in: currentGraph, budget: budget)
+            : WeakComponents.ids(in: currentGraph, allowUnknown: access.includesUnknownConnectivity)
+        let nextIds = access.avoidFerries ? try WeakComponents.landIDs(in: nextPack, budget: budget)
+            : WeakComponents.ids(in: nextPack, allowUnknown: access.includesUnknownConnectivity)
         let originComponent = try originWeakComponent(
             origin: origin, graph: currentGraph, ids: currentIds, access: access, budget: budget)
             ?? giantComponentId(from: currentIds)
@@ -956,10 +971,11 @@ public enum StagedRouter {
         // Dirt/Balanced. Do not spend an entire window approaching a border road
         // that is connected only through one of those uncertain roads.
         let clean = request.profile.style == .cleanest
-        let components = WeakComponents.ids(in: graph,
-            allowUnknown: !clean && request.access.includesUnknownConnectivity)
+        let components = request.access.avoidFerries ? try WeakComponents.landIDs(in: graph, budget: budget)
+            : WeakComponents.ids(in: graph, allowUnknown: !clean && request.access.includesUnknownConnectivity)
         let checker = try reach ?? EndpointReachability(graph: graph, budget: budget) { edge in
-            !clean || graph.accessCode(edge, forward: true) == 0 || graph.accessCode(edge, forward: false) == 0
+            (!request.access.avoidFerries || graph.structure(edge) != "ferry")
+                && (!clean || graph.accessCode(edge, forward: true) == 0 || graph.accessCode(edge, forward: false) == 0)
         }
         reach = checker
         // Intent ranks matches, but the first direction can lead into a dead

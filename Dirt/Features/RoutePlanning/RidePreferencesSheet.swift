@@ -55,6 +55,7 @@ struct RidePreferencesSheet: View {
 
             Toggle("Avoid cities and towns", isOn: $draft.avoidCities)
             Toggle("Avoid highways", isOn: $draft.avoidHighways)
+            Toggle("Avoid ferries", isOn: $draft.avoidFerries)
         }
         .font(DirtType.rowTitle)
         .foregroundStyle(DirtTheme.ink)

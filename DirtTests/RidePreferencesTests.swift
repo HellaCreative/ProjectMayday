@@ -27,12 +27,13 @@ import Testing
             let native = try NativeRoutingAdapter.request(request)
             #expect(native.profile.wander == 0.5)
             #expect(native.profile.avoidMajorHighways)
+            #expect(native.access.avoidFerries)
             #expect(native.options.cityWall)
         }
     }
 
     @MainActor @Test func settingsAreCapturedByRequestsAndDoNotLeakToNextBuild() async throws {
-        let preferences = RidePreferences(wander: 0.25, avoidCities: false, avoidHighways: false)
+        let preferences = RidePreferences(wander: 0.25, avoidCities: false, avoidHighways: false, avoidFerries: false)
         let captured = await RidePreferenceContext.$current.withValue(preferences) {
             await Task.yield()
             return RouteRequestOptions()
@@ -49,12 +50,21 @@ import Testing
         }
         #expect(native.profile.wander == 0.25)
         #expect(!native.profile.avoidMajorHighways)
+        #expect(!native.access.avoidFerries)
         #expect(!native.options.cityWall)
     }
 
     @MainActor @Test func olderOptionsRemainDecodable() throws {
         let old = try JSONDecoder().decode(RouteRequestOptions.self, from: Data("{}".utf8))
         #expect(old.ridePreferences == nil)
+    }
+
+    @Test func preFerrySavedPreferencesPreserveExistingSettings() throws {
+        let json = Data(#"{"wander":0.9,"avoidCities":false,"avoidHighways":false,"preferDifferentRoads":true}"#.utf8)
+        let old = try JSONDecoder().decode(RidePreferences.self, from: json)
+        #expect(old.wander == 0.9 && !old.avoidCities && !old.avoidHighways)
+        #expect(old.preferDifferentRoads == true && old.avoidFerries)
+        #expect(try JSONDecoder().decode(RidePreferences.self, from: JSONEncoder().encode(old)) == old)
     }
 
     @Test func invalidWanderIsNormalized() {

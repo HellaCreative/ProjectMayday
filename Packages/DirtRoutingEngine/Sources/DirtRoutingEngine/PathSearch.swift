@@ -446,6 +446,7 @@ public struct PathSearch: Sendable {
             }
             for arc in arcs {
                 let e = arc.edge
+                if access.avoidFerries && pack.structure(e) == "ferry" { continue }
                 // Merely touching the endpoint of a shared road from an unrelated
                 // local road cannot supply its incoming-road identity to the next
                 // pack. Require a real traversal, not a zero-metre terminal arc.

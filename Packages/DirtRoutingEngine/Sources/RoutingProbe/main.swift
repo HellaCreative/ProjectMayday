@@ -129,6 +129,7 @@ do {
         request.profile.wander = min(1, max(0, wander))
     }
     request.profile.avoidMajorHighways = environment["DIRT_AVOID_HIGHWAYS"] != "0"
+    request.access.avoidFerries = environment["DIRT_AVOID_FERRIES"] != "0"
     request.profile.preferBackRoads = style == .cleanest
     request.mapZoom = zoom
     request.options.cityWall = environment["DIRT_NO_CITY_WALL"] != "1"
@@ -142,7 +143,7 @@ do {
         "mapZoom":zoom as Any? ?? NSNull(),"allowUnknown":request.access.allowUnknown,
         "requestedStart":[lonA,latA],"requestedEnd":[lonB,latB],
         "style":style.rawValue,"wander":request.profile.wander,
-        "avoidHighways":request.profile.avoidMajorHighways,"avoidCities":request.options.cityWall,
+        "avoidFerries":request.access.avoidFerries,"avoidHighways":request.profile.avoidMajorHighways,"avoidCities":request.options.cityWall,
         "maximumLabels":budgetLabels,"windowSeconds":seconds,"renewsAfterCommittedStage":stageLong]
     if let fuelUsable, let fuelFirst {
         var fuel = FuelRequirements(usableRangeMeters: fuelUsable, firstLegMaxMeters: fuelFirst)

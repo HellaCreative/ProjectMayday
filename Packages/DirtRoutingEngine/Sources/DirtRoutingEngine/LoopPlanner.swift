@@ -85,6 +85,8 @@ public struct LoopPlanner: Sendable {
         let outbound: ComputedRoute
         do {
             outbound = try engine.route(outboundRequest, budget: budget)
+        } catch RoutingFailure.ferriesAvoided {
+            throw RoutingFailure.ferriesAvoided
         } catch is RoutingFailure {
             throw LoopFailure.pinUnreachable
         }

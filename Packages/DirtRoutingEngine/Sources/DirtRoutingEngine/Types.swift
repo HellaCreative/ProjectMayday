@@ -36,6 +36,7 @@ public enum RoutingFailure: Error, Equatable, Sendable {
     case unsupported(String)
     case noMatch
     case noPath
+    case ferriesAvoided
     case resourceLimit(String)
 }
 

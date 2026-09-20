@@ -23,6 +23,7 @@ struct PlannedLoopRequest: Sendable {
     let avoidMotorways: Bool
     let preferBackRoads: Bool
     let seed: UInt64
+    var avoidFerries: Bool = true
 }
 
 struct PlannedLoop: Sendable {
@@ -199,6 +200,7 @@ final class PackRoutingSource: RoutingSource {
         engine.profile.avoidMajorHighways = request.avoidMotorways
         engine.profile.preferBackRoads = request.preferBackRoads
         engine.options.cityWall = request.avoidCities
+        engine.access.avoidFerries = request.avoidFerries
         let directories = try packs.routingDirectories(for: [
             request.start.locationCoordinate, request.far.locationCoordinate
         ])

@@ -38,15 +38,15 @@ public struct RoutingEngine: Sendable {
     /// Shared by ordinary routing and optional riding-area legs. A destination
     /// table depends on its exact graph, road position and cap, not the origin.
     func roadCompass(toward end: RoadMatch, budget: ComputationBudget,
-                     maxRemaining: Double) throws -> RoadCompass {
+                     maxRemaining: Double, avoidFerries: Bool = false) throws -> RoadCompass {
         try budget.check()
-        let key = "\(pack.nodeCount):\(pack.edgeCount):\(end.edge):\(end.alongMeters):\(maxRemaining)"
+        let key = "\(pack.nodeCount):\(pack.edgeCount):\(end.edge):\(end.alongMeters):\(maxRemaining):ferries=\(avoidFerries)"
         if let store = compassStore, let indexed = pack as? IndexedGraph {
             return .init(remaining: try store.remaining(for: indexed.cacheIdentity + ":" + key) {
-                try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: maxRemaining).remaining
+                try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: maxRemaining, avoidFerries: avoidFerries).remaining
             })
         }
-        return try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: maxRemaining)
+        return try RoadCompass.toward(end: end, pack: pack, budget: budget, maxRemaining: maxRemaining, avoidFerries: avoidFerries)
     }
 
     struct Candidate {
@@ -92,7 +92,16 @@ public struct RoutingEngine: Sendable {
                 && pack.accessCode(match.edge, forward: match.forward != false) == 0)
         }
         request.options.counter?.recordStage("match", since: matchStarted)
-        guard !starts.isEmpty, !ends.isEmpty else { throw RoutingFailure.noMatch }
+        guard !starts.isEmpty, !ends.isEmpty else {
+            if request.access.avoidFerries, request.options.arrivalEdgeID == nil,
+               request.options.requiredArrivalRoads.isEmpty {
+                var allowed = request.access; allowed.avoidFerries = false
+                let a = try matcher.matches(at: request.start, radius: radius, start: true, policy: allowed, budget: budget)
+                let b = try matcher.matches(at: request.end, radius: radius, start: false, policy: allowed, budget: budget)
+                if !a.isEmpty && !b.isEmpty { throw RoutingFailure.ferriesAvoided }
+            }
+            throw RoutingFailure.noMatch
+        }
         // JS `selectConnectedSnapPair`: score stays on each directed candidate;
         // connectivity is a later filter, not a rescore. Prefer the same weak
         // component so a closer island cannot steal the destination road.
@@ -102,9 +111,17 @@ public struct RoutingEngine: Sendable {
             let a = $0.element.0.score+$0.element.1.score, b = $1.element.0.score+$1.element.1.score
             return a == b ? $0.offset < $1.offset : a < b
         }.map(\.element)
-        let connected = pairs.filter {
+        var connected = pairs.filter {
             WeakComponents.of(match: $0.0, pack: pack, ids: components)
                 == WeakComponents.of(match: $0.1, pack: pack, ids: components)
+        }
+        if request.access.avoidFerries && !connected.isEmpty {
+            let land = try WeakComponents.landIDs(in: pack, budget: budget)
+            connected = connected.filter {
+                WeakComponents.of(match: $0.0, pack: pack, ids: land)
+                    == WeakComponents.of(match: $0.1, pack: pack, ids: land)
+            }
+            if connected.isEmpty { throw RoutingFailure.ferriesAvoided }
         }
         var reachability: EndpointReachability?
         var attempted = false
@@ -150,7 +167,7 @@ public struct RoutingEngine: Sendable {
         do {
             // Tables belong to this exact prepared graph, including its local numbering.
             compass = try roadCompass(toward: end, budget: budget,
-                maxRemaining: request.options.compassMaxRemaining)
+                maxRemaining: request.options.compassMaxRemaining, avoidFerries: request.access.avoidFerries)
         }
         catch is CancellationError { throw CancellationError() }
         catch { compass = nil }

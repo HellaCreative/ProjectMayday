@@ -19,6 +19,7 @@ public struct RoadMatch: Sendable, Equatable {
 
 public struct AccessPolicy: Sendable {
     public var allowUnknown = false
+    public var avoidFerries = false
     public var startIsCustomer = false
     public var endIsCustomer = false
     public init(allowUnknown: Bool = false, startIsCustomer: Bool = false, endIsCustomer: Bool = false) {
@@ -52,6 +53,7 @@ public struct RoadMatcher: Sendable {
         var matches: [RoadMatch] = []
         for (visited,e) in pack.candidates(near: point,radius: radius).enumerated() {
             if visited & 255 == 0 { try budget.check() }
+            if policy.avoidFerries && pack.structure(e) == "ferry" { continue }
             guard [true,false].contains(where: {
                 policy.permits(pack.accessCode(e,forward: $0),isStart: start,isEnd: !start)
             }) else { continue }
@@ -170,6 +172,30 @@ enum WeakComponents {
             }
         }
         return (0..<pack.nodeCount).map(find)
+    }
+    static func landIDs(in pack: any RoadGraph, budget: ComputationBudget) throws -> [Int] {
+        if let indexed = pack as? IndexedGraph { return try indexed.landComponentIDs(budget: budget) }
+        var parent = Array(0..<pack.nodeCount)
+        func find(_ i: Int) -> Int {
+            var n = i
+            while parent[n] != n { parent[n] = parent[parent[n]]; n = parent[n] }
+            return n
+        }
+        for edge in 0..<pack.edgeCount {
+            if edge & 4095 == 0 { try budget.check() }
+            if pack.structure(edge) == "ferry" { continue }
+            // Optimistic access includes short unknown connectors and endpoint
+            // roads. Disconnection proves no land route; connection proves nothing.
+            if [true, false].contains(where: { [0, 1, 3, 4].contains(pack.accessCode(edge, forward: $0)) }) {
+                let a = find(pack.endpoint(edge, from: true)), b = find(pack.endpoint(edge, from: false))
+                if a != b { parent[max(a, b)] = min(a, b) }
+            }
+        }
+        for node in parent.indices {
+            if node & 4095 == 0 { try budget.check() }
+            parent[node] = find(node)
+        }
+        return parent
     }
     static func of(match: RoadMatch, pack: any RoadGraph, ids: [Int]) -> Int {
         let node = pack.endpoint(match.edge, from: match.forward != false)

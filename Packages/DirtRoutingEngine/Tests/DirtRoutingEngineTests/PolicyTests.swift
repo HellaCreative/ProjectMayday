@@ -31,7 +31,8 @@ struct PolicyTests {
         func accessCode(_ edge: Int,forward: Bool) -> UInt8 { edgeAccess?[edge] ?? access }
         func surfaceLeaf(_ edge: Int) -> String { surfaces[edge] }
         func roadClass(_ edge: Int) -> String { roads[edge] }
-        func structure(_ edge: Int) -> String { "" }
+        var structures: [String]? = nil
+        func structure(_ edge: Int) -> String { structures?[edge] ?? "" }
         func polyline(_ edge: Int) -> [Coordinate] { [nodes[edges[edge].0],nodes[edges[edge].1]] }
     }
 

@@ -7,6 +7,39 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
+    @Test func navigationRecoveryRetainsExplicitFerryPermission() async throws {
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.ridePreferences = RidePreferences(wander: 0.75, avoidFerries: false)
+        _ = try await model.routeWhileNavigating(from: point(0), to: point(1))
+        #expect(source.routeRequests.last?.options?.ridePreferences == model.displayedRidePreferences)
+        #expect(source.routeRequests.last?.options?.ridePreferences?.avoidFerries == false)
+    }
+
+    @Test func ferryRetryPreservesPinsAndOnlyChangesFerryPreference() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        source.routeError = RoutingError.server(NativeRoutingAdapter.ferriesAvoidedMessage)
+        let model = makeModel(source: source)
+        model.ridePreferences = RidePreferences(wander: 0.75, avoidCities: true, avoidHighways: true)
+        model.apply(.replaceAll(waypoints: [point(0), point(0.5), point(1)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: false), source: "fromHere")
+        await model.waitForCanonicalBuildForTesting()
+        let before = model.itinerary.waypoints
+        #expect(model.canAllowFerries)
+        source.routeError = nil
+        model.allowFerriesAndRetry()
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints == before)
+        #expect(model.errorMessage == nil)
+        #expect(!model.displayedRidePreferences.avoidFerries)
+        #expect(model.displayedRidePreferences.wander == 0.75)
+        #expect(model.displayedRidePreferences.avoidHighways && model.displayedRidePreferences.avoidCities)
+        #expect(source.routeRequests.last?.options?.ridePreferences?.avoidFerries == false)
+    }
+
     @Test func profileRebuildReplacesDisplayedGeometryAtTheSameEndpoints() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }

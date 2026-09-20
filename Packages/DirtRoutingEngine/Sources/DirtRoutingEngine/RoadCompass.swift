@@ -38,7 +38,7 @@ public struct RoadCompass: Sendable {
 
     public static func toward(end: RoadMatch, pack: any RoadGraph,
                               budget: ComputationBudget,
-                              maxRemaining: Double = .infinity) throws -> RoadCompass {
+                              maxRemaining: Double = .infinity, avoidFerries: Bool = false) throws -> RoadCompass {
         let count = pack.nodeCount
         let arcs: ArcIndex
         if let indexed = pack as? IndexedGraph {
@@ -70,6 +70,7 @@ public struct RoadCompass: Sendable {
             if current.1 > maxRemaining { continue }
             for slot in Int(arcs.inStart[current.0])..<Int(arcs.inStart[current.0 + 1]) {
                 let arc = Int(arcs.inArcs[slot])
+                if avoidFerries && pack.structure(Int(arcs.outEdge[arc])) == "ferry" { continue }
                 let from = Int(arcs.outSource[arc]), meters = arcs.meters[arc]
                 guard meters.isFinite, meters >= 0 else { continue }
                 let candidate = current.1 + meters

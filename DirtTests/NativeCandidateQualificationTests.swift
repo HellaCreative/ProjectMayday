@@ -358,6 +358,64 @@ struct NativeCandidateQualificationTests {
         #expect(run == 0)
     }
 
+    @Test(.timeLimit(.minutes(10)))
+    func ferryChoiceOwnerRequestsThroughAppAdapter() async throws {
+        let session = NativeRoutingSession()
+        let cases: [(String, Double, Double, UInt64, Double, Bool)] = [
+            ("pei-bridge", -63.669072, 46.260319, 5275785009779777, 12, true),
+            ("quebec-mainland", -66.37367732134696, 50.21154046857525, 8923365313346608, 7.5, false),
+            ("labrador-mainland", -56.1224962260599, 52.75449672754457, 3345497217482049, 12.3, false),
+            ("newfoundland", -56.518567, 51.398736, 1223774934041503, 8.9, true)]
+        for (name, lon, lat, seed, zoom, highway) in cases {
+            let ids: [String]
+            switch name {
+            case "pei-bridge": ids = ["ns", "nb", "pe"]
+            case "newfoundland": ids = ["ns", "nl-island"]
+            case "quebec-mainland": ids = ["ns", "nb", "qc-s", "qc-n", "nl-island"]
+            default: ids = ["ns", "nb", "qc-s", "qc-n", "nl-island", "nl-lab"]
+            }
+            let directories = Dictionary(uniqueKeysWithValues: ids.map { ($0, root.appendingPathComponent($0)) })
+            for avoid in [true, false] {
+                let preferences = RidePreferences(wander: 0.5, avoidCities: true,
+                    avoidHighways: highway, avoidFerries: avoid)
+                let appRequest = RidePreferenceContext.$current.withValue(preferences) {
+                    RouteRequest(profile: .dirt, locations: [
+                        .init(latitude: name == "quebec-mainland" ? 44.764799 : 44.764845,
+                              longitude: name == "quebec-mainland" ? -63.340282 : -63.340271, label: "Start"),
+                        .init(latitude: lat, longitude: lon, label: "End")], allowUnknown: false,
+                        sessionSeed: seed, mapZoom: zoom)
+                }
+                let request = try NativeRoutingAdapter.request(appRequest)
+                #expect(request.access.avoidFerries == avoid)
+                let started = ContinuousClock.now
+                if name == "newfoundland" && avoid {
+                    do {
+                        _ = try await session.route(request, directories: directories)
+                        Issue.record("Ferry avoidance must require explicit opt-in for Newfoundland")
+                    } catch RoutingFailure.ferriesAvoided { }
+                    continue
+                }
+                let route = try await session.route(request, directories: directories)
+                #expect(route.limit == nil)
+                #expect(route.end.coordinate.distance(to: request.end) < 250)
+                #expect(route.start.coordinate.distance(to: request.start) < 250)
+                #expect(route.segments.allSatisfy { ![2,5].contains($0.access) })
+                if avoid { #expect(route.segments.allSatisfy { $0.structure != "ferry" }) }
+                if name == "pei-bridge" && avoid {
+                    #expect(route.segments.contains { $0.edgeID.hasPrefix("646650186:") || $0.edgeID.hasPrefix("w646650186:") })
+                }
+                if name == "newfoundland" { #expect(route.segments.contains { $0.structure == "ferry" }) }
+                for (a, b) in zip(route.segments, route.segments.dropFirst()) {
+                    #expect(try #require(a.geometry.last).distance(to: #require(b.geometry.first)) < 1)
+                }
+                verifyShortUnknownConnectors(route)
+                let response = NativeRoutingAdapter.response(route, style: .dirt)
+                #expect(try JSONDecoder().decode(RouteResponse.self, from: JSONEncoder().encode(response)).status == "complete")
+                report("ferry-choice-\(name)-avoid\(avoid)", started: started, route: route)
+            }
+        }
+    }
+
     private func report(_ name: String, started: ContinuousClock.Instant, route: ComputedRoute) {
         let d = started.duration(to: .now).components
         let seconds = Double(d.seconds) + Double(d.attoseconds) / 1e18

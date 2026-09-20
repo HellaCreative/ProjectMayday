@@ -205,7 +205,7 @@ final class RoutePlannerModel {
                     profile: selectedProfile, allowUnknown: selectedAllow,
                     wander: preferences.normalized.wander, avoidCities: preferences.avoidCities,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads,
-                    seed: UInt64.random(in: 1...9_007_199_254_740_991)))
+                    seed: UInt64.random(in: 1...9_007_199_254_740_991), avoidFerries: preferences.avoidFerries))
                 guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
                 let itinerary = reduce(RiderItinerary(), .replaceAll(
                     waypoints: [start, far, start],
@@ -329,7 +329,19 @@ final class RoutePlannerModel {
         let next = preferences.normalized
         guard next != displayedRidePreferences else { return }
         ridePreferences = next
-        apply(.rebuild, source: "ridePreferences")
+        if showingLoop { generateLoop() }
+        else { apply(.rebuild, source: "ridePreferences") }
+    }
+
+    var canAllowFerries: Bool {
+        displayedRidePreferences.avoidFerries && errorMessage == NativeRoutingAdapter.ferriesAvoidedMessage
+    }
+
+    func allowFerriesAndRetry() {
+        guard canAllowFerries else { return }
+        var preferences = displayedRidePreferences
+        preferences.avoidFerries = false
+        applyRidePreferences(preferences)
     }
 
     var showUnknownAck = false
@@ -3882,19 +3894,21 @@ final class RoutePlannerModel {
     ) async throws -> RouteResponse {
         let useProfile = profile ?? self.profile
         let useAllow = allowUnknown ?? self.allowUnknown
-        let request = RouteRequest(
-            profile: useProfile,
-            locations: [
-                RouteLocation(latitude: from.latitude, longitude: from.longitude, label: "A"),
-                RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "B")
-            ],
-            allowUnknown: useAllow,
-            avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: planningSessionSeed,
-            cleanMetroMultiplier: nil,
-            avoidMotorways: avoidMotorways,
-            preferBackRoads: preferBackRoads
-        )
+        let request = RidePreferenceContext.$current.withValue(displayedRidePreferences) {
+            RouteRequest(
+                profile: useProfile,
+                locations: [
+                    RouteLocation(latitude: from.latitude, longitude: from.longitude, label: "A"),
+                    RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "B")
+                ],
+                allowUnknown: useAllow,
+                avoidEdgeIds: avoidEdgeIds,
+                sessionSeed: planningSessionSeed,
+                cleanMetroMultiplier: nil,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
+            )
+        }
         return try await routingSourcePolicy.select(for: request).route(request)
     }
 

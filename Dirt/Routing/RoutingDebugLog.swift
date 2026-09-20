@@ -11,7 +11,7 @@ final class RoutingDebugLog {
 
     /// Device logs must prove which pack/corridor binary ran. Bump with each
     /// #34 corridor fix; Play cards quote this stamp.
-    static let diagnosticStamp = "labrador-landing-20260919c"
+    static let diagnosticStamp = "ferry-choice-20260919d"
 
     private let maxEntries = 1_200
     private var entries: [String] = []

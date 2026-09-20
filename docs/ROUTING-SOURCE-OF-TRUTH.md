@@ -17,7 +17,7 @@ to preserve unsuccessful behavior. The earlier engine replacement is historical;
 the active task does not authorize another engine rewrite, reverting the app,
 or changing its interface beyond the owner-requested progress
 notice, matching Your ride to the existing Fuel Range panel, and the requested
-pack download/update progress window.
+pack download/update progress window and Avoid ferries preference.
 
 ### Fresh regional build qualification (owner authorization, September 19)
 
@@ -487,11 +487,19 @@ route is never failed for the highway or city mileage a rider's own placement
 requires. The default only governs the ride the engine composes between the
 rider's chosen points. A successful highway/bridge waypoint replay proves that
 explicit endpoint intent is served; it does not qualify the engine’s unpinned
-bridge-versus-ferry choice. The owner’s western-PEI ferry preference concern
-remains under investigation. Ferries currently have crossing-time cost and
-bypass the road highway multiplier; no new blanket ferry or bridge penalty has
-been accepted or implemented. Respect the rider's settlement/highway avoidance and
-access settings. Small rural towns, necessary endpoint access, and real
+bridge-versus-ferry choice. Avoid ferries is a separate rider preference,
+defaulting to on for new builds. With it on, regional selection, matching and
+road search exclude ferry crossings, retaining land connections and necessary
+highway/bridge approaches. With it off, mapped legal ferries are available at
+the existing crossing cost; it is permission, not an instruction to add ferries.
+Do not retune Dirt, Balanced, Clean or Wander to implement this choice.
+If no land-only connection is established because of the excluded crossings,
+explain that and offer an explicit Allow ferries retry, preserving pins and other
+settings. Do not silently enable ferries or claim that a timeout proves one is
+necessary. A ferry pin still needs explicit ferry permission. Saved accepted
+geometry is preserved; adding the preference does not recalculate saved rides.
+Older preference snapshots must decode without losing their other values.
+Respect the rider's settlement/highway avoidance and access settings. Small rural towns, necessary endpoint access, and real
 geographic connections must remain distinguishable from an unnecessary trip
 through a large built-up area. Do not revive arbitrary geographic boxes or a
 paved-only corridor as product law.
@@ -936,6 +944,80 @@ US qualification remain open; the accepted trans-Canada planner ride does not
 establish US coverage.
 
 
+### Ferry-choice qualification — September 19
+
+The owner approved one Avoid ferries switch in Your ride, default on. It is
+carried through From here, Plan, Loop, saved preference decoding and navigation
+recovery. Ferry avoidance filters matching, exact road search, reverse guidance
+and regional road connections; guidance caches include the choice. Ferry-only
+connectivity produces an explicit Allow ferries retry, preserving pins and other
+settings. Legal access and Dirt/Balanced/Clean/Wander scoring are unchanged.
+The existing seven immutable packs already carry the required ferry and verified
+road-neighbor facts; this change requires native code, not new pack bytes.
+
+Initial Release host probes on MacBookPro17,1 / Apple M1 / 16 GiB use the owner's
+September 20 log endpoints/seeds, Wander 0.5, Unknown off, city avoidance on and
+the exact highway choices in that log. Each process is fresh; the OS file cache
+was not flushed. Evidence: `.build/ferry-choice-20260919/host-summary.log`,
+`host-inspection.json`, full segment/identity receipts and per-process `.time`
+files. These are not phone timings and precede final continuation-error guards
+and navigation preference mapping; final app qualification is recorded separately.
+
+| Owner request | Avoid ferries on | Off, same request | On peak RSS / footprint |
+| --- | --- | --- | --- |
+| PEI just beyond bridge, highways avoided | Bridge, 347.905 km, 53.3% dirt, 8.381 s | Ferry, 355.549 km, 42.1%, 12.048 s | 175 / 101 MiB |
+| Newfoundland | Explicit ferry permission needed, 0.307 s | Ferry route, 1,385.727 km, 2.328 s | 23 / 5 MiB for prompt |
+| East/north Quebec | Mainland, 3,544.405 km, 76.3%, 65.230 s | Ferry route, 2,277.410 km, 13.036 s | 917 / 751 MiB |
+| Labrador | Mainland, 2,925.359 km, 45.6%, 46.147 s | Ferry route, 1,613.466 km, 11.628 s | 761 / 606 MiB |
+
+All seven completed initial host routes have continuous joins, no reported prohibited or
+closed access, no search limit and uncertain-access connectors at most 51 m.
+Final land-handover screening also excludes ferry-dependent weak components,
+directed reachability and onward exits. The first app replay had exposed a
+90.220 s Quebec timeout because these checks still counted ferry connections.
+The corrected host Quebec replay completes in 43.848 s, 1,576.183 km, 61.3%
+known dirt, zero repeated roads or ferries, peak RSS 609 MiB / footprint 438 MiB.
+Labrador completes in 48.983 s, 2,925.359 km, 45.6%, peak RSS 862 MiB /
+footprint 606 MiB. Both have continuous joins, no prohibited access and uncertain
+connectors at most 45 m (`land-screened-inspection.json`).
+The additional default-settings Labrador host replay (both highway and ferry
+avoidance on) also completes, 50.939 s / 2,993.945 km / 45.8% dirt, with no ferry;
+it retains the same 6,915 m handover repeat (`labrador-defaults.json`).
+
+Final app replay uses NativeRoutingAdapter and NativeRoutingSession on the one
+existing iPhone 17 / iOS 26.5 simulator hosted by the same M1 Mac. Eight exact
+owner requests (four destinations, each switch state) pass in
+`land-handover-native.xcresult` / `.log`:
+
+| Request | Avoid ferries on | Off |
+| --- | --- | --- |
+| PEI beyond bridge, highways avoided | Bridge, 23.614 s / 349.367 km / 53.5% dirt | Ferry, 22.640 s / 355.605 km / 42.1% |
+| East/north Quebec | Mainland, 40.598 s / 1,470.904 km / 59.2% | Ferry, 12.902 s / 2,277.410 km / 47.8% |
+| Labrador | Mainland, 59.828 s / 2,925.359 km / 45.6% | Ferry, 26.635 s / 1,613.466 km / 41.0% |
+| Newfoundland | Explicit ferry permission prompt, 0.015 s | Ferry, 5.052 s / 1,385.727 km / 44.2% |
+
+Simulator process peak footprint reaches 555 MiB across this sequence; it is not
+a separate cold measurement for every case or a White measurement. Host/app
+stage choices can differ under their bounded search time slices. These times
+are not physical-device promises. Engine regression suite: 136 tests pass
+(`land-handover-engine-tests.log`). Earlier same-feature native run verified
+six preference tests, 27 planner tests and the six bridge-midpoint direction/style
+calculations (`qualified-native-3.xcresult`); its failed owner-route test was
+repaired and replayed as above, not counted as a passing run. Two preceding
+zero-test invocations are excluded from qualification. Final app build succeeds
+(`land-handover-app-build.log`), with no Swift warnings; Xcode still emits its
+standard skipped App Intents metadata notice. Diagnostic stamp:
+`ferry-choice-20260919d`. No pack bytes or production release changed.
+
+This does not establish overall quality: the mainland Labrador route repeats
+6,915 m of way `32987916` near longitude -68.39 / latitude 49.10–49.15 around a
+Quebec handover. Preserve this as a general split-handover regression. The
+previous 54 m repeated ferry-landing approach also remains when ferries are
+allowed. Long-route time, memory and handover quality still require
+review before declaring the seven-pack process ready for bulk expansion.
+When Avoid ferries is off, regional ranking is unchanged; this switch does not qualify the
+previously rejected region-count/first-result ordering as a general ride policy.
+
 ### Seven-pack exit checklist and repeatable expansion process
 
 Owner request, September 19: keep one running checklist here, so the lessons
@@ -947,9 +1029,9 @@ legal journey, or host speed with phone speed.
 
 | Remaining check | Current evidence / significance | Finish condition |
 | --- | --- | --- |
-| Labrador and Quebec journey selection | White now completes Labrador, but chooses unwanted ferry journeys for Labrador and Quebec. | Replace the rejected regional ordering/early-return shortcut; qualify riding-led connections, preserved pins and return journeys. |
-| PEI bridge versus ferry choice | Same-request replay proves highway avoidance switches bridge to ferry. | Qualify a general crossing-selection correction with avoidance on/off; retain useful ferries and normal highway avoidance. Bridge availability alone is insufficient. |
-| Ferry handover repetition | Labrador replay contains 54 m repeated road near the Quebec landing. | Diagnose and remove an artificial handover loop without inventing connections or weakening turn/access rules; retain any genuinely unavoidable approach. |
+| Labrador and Quebec journey selection | Avoid ferries host and app replays now take mainland roads; phone acceptance, return journeys and long-route quality remain open. | Qualify the explicit ferry choice, preserved pins, return journeys and riding-led connections. Do not accept region count as ride policy. |
+| PEI bridge versus ferry choice | App replay uses the bridge with both highway and ferry avoidance on; off retains the ferry choice. | Repeat on White and qualify return journeys, preserving useful ferries and normal highway avoidance. |
+| Handover repetition | Labrador has 54 m repeated road at the ferry landing and 6,915 m on the newly tested mainland Quebec handover. | Diagnose and remove an artificial handover loop without inventing connections or weakening turn/access rules; retain any genuinely unavoidable approach. |
 | Full final-version crossing matrix | Earlier 87 completions combine different engine revisions; latest integrated set covers eight calculations. | Rerun the relevant final set on one source revision and the same seven pack hashes: every neighbor pair, both permitted directions, Quebec split, bridge/ferry endpoints and multi-crossing journeys. |
 | Ordinary ride character and settings | Dirt/Wander owner results are promising; high dirt share is not universally attainable. | Dirt/Balanced/Clean, low/default/high Wander and supported Unknown settings preserve legal access, pins and honest surface reporting; inspect repeated roads and unnecessary town/highway visits. |
 | Device time and memory | PEI and Quebec remain slow; simulator Labrador improvement is not yet a White measurement. | Record first/repeated phone calculations, memory, useful progress and cancellation for each region and representative joined windows, especially QC-s. Compare against named workload targets, not pack size alone. |

@@ -434,6 +434,7 @@ struct RoutePlannerCard: View {
             }
             if let error = planner.errorMessage {
                 Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
+                ferryRecovery
             }
         }
     }
@@ -582,7 +583,7 @@ struct RoutePlannerCard: View {
         if !planner.isRouting {
             if planner.fromHereNeedsStartPin {
                 helperBox("Tap a mapped road near you for point 1. Point 2 stays where you put it.")
-            } else if planner.errorMessage != nil {
+            } else if planner.errorMessage != nil && !planner.canAllowFerries {
                 helperBox(fromHereRecoveryHint)
                 if planner.destination != nil {
                     Button {
@@ -1293,6 +1294,7 @@ struct RoutePlannerCard: View {
                 .font(.dirtUI(12, weight: .semibold))
                 .foregroundStyle(DirtTheme.danger)
                 .multilineTextAlignment(.center)
+            ferryRecovery
         } else if !planner.packRoutingWarnings.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(planner.packRoutingWarnings) { warning in
@@ -1303,6 +1305,15 @@ struct RoutePlannerCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder private var ferryRecovery: some View {
+        if planner.canAllowFerries {
+            Button("Allow ferries") { planner.allowFerriesAndRetry() }
+                .font(DirtType.cta)
+                .foregroundStyle(DirtTheme.action)
+                .frame(minHeight: DirtHit.min)
         }
     }
 

@@ -67,16 +67,16 @@ final class WeakComponentCache: @unchecked Sendable {
     private let lock = NSLock()
     private var strict: [Int]?
     private var allow: [Int]?
-    func ids(allowUnknown: Bool, build: () -> [Int]) -> [Int] {
+    func ids(allowUnknown: Bool, build: () throws -> [Int]) rethrows -> [Int] {
         lock.lock(); defer { lock.unlock() }
         if allowUnknown {
             if let allow { return allow }
-            let built = build()
+            let built = try build()
             allow = built
             return built
         }
         if let strict { return strict }
-        let built = build()
+        let built = try build()
         strict = built
         return built
     }

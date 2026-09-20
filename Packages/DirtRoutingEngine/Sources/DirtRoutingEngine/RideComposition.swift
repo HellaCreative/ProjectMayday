@@ -123,7 +123,7 @@ extension RoutingEngine {
         options.objective = .pavement
         options.preventLocalCircuits = request.profile.style == .dirt
         options.roadRemaining = try roadCompass(toward: end, budget: budget,
-            maxRemaining: options.compassMaxRemaining).remaining
+            maxRemaining: options.compassMaxRemaining, avoidFerries: request.access.avoidFerries).remaining
         return try PathSearch(pack: pack).search(start: start, end: end,
             policy: request.profile, access: request.access, options: options, budget: budget)
     }

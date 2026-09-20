@@ -258,10 +258,12 @@ public struct PackRepository: Sendable {
         let key = try preparationIdentity([region]) + "|roads"
         // Older sidecars have no transport summary; do not invent one from
         // geographic region names. Fresh sidecars bind it to verified bytes.
-        return try Self.inputs.neighborIDs(key) {
+        let ids = try Self.inputs.neighborIDs(key) {
             let summary = try JSONDecoder().decode(Summary.self, from: seamBytes(region))
-            return Set(summary.roadNeighbors ?? [])
+            // Empty string cannot be a region ID; cache missing metadata distinctly.
+            return summary.roadNeighbors.map(Set.init) ?? [""]
         }
+        return ids.contains("") ? nil : ids
     }
     func loadSeams(_ region: String) throws -> SeamDocument {
         let key = try preparationIdentity([region])
@@ -282,9 +284,18 @@ public struct RegionConnectivity: Sendable {
     /// Keep the ordinary connection as an alternative, but never let a ferry
     /// erase an available land/bridge corridor just because it crosses fewer packs.
     public func chains(from start: String, to end: String,
-                       roadNeighbors: [String:Set<String>]) throws -> [[String]] {
+                       roadNeighbors: [String:Set<String>], avoidFerries: Bool = false) throws -> [[String]] {
         let ordinary = try chain(from: start, to: end)
         let roads = roadNeighbors.map { (key, value) in (key, value.intersection(neighbors[key] ?? [])) }
+        if avoidFerries {
+            // Unclassified legacy links remain candidates; exact road search
+            // still excludes ferries. Missing metadata is not disconnection.
+            let landNeighbors = neighbors.mapValues { $0 }
+                .map { (id, links) in (id, roadNeighbors[id].map { links.intersection($0) } ?? links) }
+            guard let land = try? RegionConnectivity(neighbors: Dictionary(uniqueKeysWithValues: landNeighbors))
+                .chain(from: start, to: end) else { throw RoutingFailure.ferriesAvoided }
+            return [land]
+        }
         var alternatives = [ordinary]
         if let land = try? RegionConnectivity(neighbors: Dictionary(uniqueKeysWithValues: roads))
             .chain(from: start, to: end), land != ordinary {
