@@ -746,14 +746,15 @@ struct RoutePlannerCard: View {
             fuelCoverageNotices
             ferryNotice
             HStack(spacing: 8) {
+                continuePlanningButton
                 Button {
-                    planner.focusEntirePlannedRoute()
+                    planner.clearRoute()
                     isOpen = false
                 } label: {
-                    Label("View on map", systemImage: "map")
+                    Label("Close", systemImage: "xmark")
                 }
                 .buttonStyle(DirtSecondaryButtonStyle())
-                continuePlanningButton
+                .accessibilityHint("Closes the route preview and removes it from the map. Keeps the route in Saved.")
             }
         } else {
             SavedRoutesList(showImport: true)
