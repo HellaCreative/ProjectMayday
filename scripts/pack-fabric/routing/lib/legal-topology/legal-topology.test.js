@@ -54,8 +54,14 @@ test("an unresolved only-turn exit cannot open other turns from its known approa
       { type: "node", ref: 2, role: "via" }, { type: "way", ref: 12, role: "to" }],
       { type: "restriction", restriction: "only_right_turn" })]
   };
-  for (const compact of [false, true]) {
+  for (const detachedExit of [false, true]) for (const compact of [false, true]) {
     const source = structuredClone(input);
+    if (detachedExit) {
+      // The actual California source has a represented target road that no
+      // longer touches the relation's via node, rather than an excluded class.
+      source.nodes.push(node(5, 0.002, 0.001));
+      source.ways[2] = way(12, [4, 5], { highway: "residential" });
+    }
     if (compact) {
       source.nodeStore = new PackedOplNodeStore();
       for (const n of source.nodes) source.nodeStore.add(n);
