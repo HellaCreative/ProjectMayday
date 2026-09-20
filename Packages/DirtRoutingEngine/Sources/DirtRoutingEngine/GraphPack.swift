@@ -145,9 +145,9 @@ public final class GraphPack: Sendable {
         metadata = try graph.json(offset(60),offset(72),as: PackMetadata.self)
         sourceEpoch = try graph.json(offset(128),offset(132),as: PackMetadata.self).sourceEpoch
         // BinaryFile memoizes SHA256; reuse the same digest for identity and fields.
-        graphSHA256 = graph.sha256
-        let geometryDigest = geometry.sha256Digest()
-        geometrySHA256 = geometry.sha256
+        graphSHA256 = try graph.sha256
+        let geometryDigest = try geometry.sha256Digest()
+        geometrySHA256 = try geometry.sha256
         let identityAt = try offset(136)
         try graph.range(identityAt,32)
         guard geometryDigest == graph.data.subdata(in: identityAt..<(identityAt+32)) else {

@@ -186,17 +186,26 @@ public struct PathSearch: Sendable {
     let pack: any RoadGraph
     public init(pack: any RoadGraph) { self.pack = pack }
     struct State: Hashable {
-        let node: Int
-        let incoming: Int
-        let restrictions: [RestrictionProgress]
-        let bucket: Int
-        var unknownConnectorMeters: Double = 0
-        var simple: SimpleKey? { restrictions.isEmpty && unknownConnectorMeters == 0 ? SimpleKey(node: node, incoming: incoming, bucket: bucket) : nil }
+        private let node32: Int32
+        private let incoming32: Int32
+        private let restriction32: Int32
+        private let bucket32: Int32
+        var node: Int { Int(node32) }
+        var incoming: Int { Int(incoming32) }
+        var restrictionID: Int { Int(restriction32) }
+        var bucket: Int { Int(bucket32) }
+        var unknownConnectorMeters: Double
+        init(node: Int, incoming: Int, restrictionID: Int, bucket: Int, unknownConnectorMeters: Double = 0) {
+            node32 = Int32(node); incoming32 = Int32(incoming)
+            restriction32 = Int32(restrictionID); bucket32 = Int32(bucket)
+            self.unknownConnectorMeters = unknownConnectorMeters
+        }
+        var simple: SimpleKey? { restrictionID == 0 && unknownConnectorMeters == 0 ? SimpleKey(node: node32, incoming: incoming32, bucket: bucket32) : nil }
     }
     struct SimpleKey: Hashable {
-        let node: Int
-        let incoming: Int
-        let bucket: Int
+        let node: Int32
+        let incoming: Int32
+        let bucket: Int32
     }
     struct Arc {
         let target: Int
@@ -219,8 +228,19 @@ public struct PathSearch: Sendable {
         /// dirt completion). Drives deferred dirt-entry pressure.
         let pavedWithoutMeaningfulMeters: Double
         let peakProgress: Double
-        let parent: Int?
-        let arc: Arc?
+        private let parent32: Int32
+        var parent: Int? { parent32 < 0 ? nil : Int(parent32) }
+        let arcToken: UInt64
+        init(state: State, cost: Double, meters: Double, dirtMeters: Double,
+             contiguousDirtMeters: Double, achievedMeaningfulDirt: Bool,
+             pavedWithoutMeaningfulMeters: Double, peakProgress: Double,
+             parent: Int?, arcToken: UInt64) {
+            self.state = state; self.cost = cost; self.meters = meters; self.dirtMeters = dirtMeters
+            self.contiguousDirtMeters = contiguousDirtMeters
+            self.achievedMeaningfulDirt = achievedMeaningfulDirt
+            self.pavedWithoutMeaningfulMeters = pavedWithoutMeaningfulMeters
+            self.peakProgress = peakProgress; parent32 = Int32(parent ?? -1); self.arcToken = arcToken
+        }
     }
     struct Entry { let label: Int; let cost: Double }
 
@@ -293,21 +313,54 @@ public struct PathSearch: Sendable {
             ?? options.arrivalEdgeID.flatMap { pack.edge(matching: [$0]).map(pack.restrictionEdge) }
             ?? -1
         let carriedRestrictions = options.arrival?.restrictions ?? options.arrivalRestrictions
+        guard pack.nodeCount < Int(Int32.max)-2, pack.edgeCount < Int(Int32.max),
+              resolvedArrival >= -1, resolvedArrival < Int(Int32.max),
+              budget.maximumLabels < Int(Int32.max) else {
+            throw RoutingFailure.resourceLimit("search index width")
+        }
+        var restrictionSets: [[RestrictionProgress]] = [[]]
+        var restrictionIDs: [[RestrictionProgress]:Int] = [:]
+        func restrictionID(_ value: [RestrictionProgress]) -> Int {
+            if value.isEmpty { return 0 }
+            if let id = restrictionIDs[value] { return id }
+            let id = restrictionSets.count
+            restrictionSets.append(value); restrictionIDs[value] = id
+            return id
+        }
+        // Ordinary full-road arcs need only the exact road and direction.
+        // Fractional/exceptional arcs retain all original values separately.
+        let exceptionalBit: UInt64 = 1 << 63
+        var exceptionalArcs: [Arc] = []
+        func storeArc(_ arc: Arc) -> UInt64 {
+            if arc.lower == 0, arc.upper == arc.meters, arc.meters == pack.distance(arc.edge) {
+                return (UInt64(arc.edge + 1) << 1) | (arc.forward ? 1 : 0)
+            }
+            exceptionalArcs.append(arc)
+            return exceptionalBit | UInt64(exceptionalArcs.count - 1)
+        }
+        func storedArc(_ label: Label) -> Arc? {
+            let token = label.arcToken
+            guard token != 0 else { return nil }
+            if token & exceptionalBit != 0 { return exceptionalArcs[Int(token & ~exceptionalBit)] }
+            let edge = Int(token >> 1) - 1, meters = pack.distance(edge)
+            return Arc(target: label.state.node, edge: edge, forward: token & 1 != 0,
+                meters: meters, lower: 0, upper: meters)
+        }
         let initial = State(node: startNode,incoming: resolvedArrival,
-                            restrictions: carriedRestrictions,bucket: 0)
+                            restrictionID: restrictionID(carriedRestrictions),bucket: 0)
         var labels = ChunkedArray<Label>()
         labels.append(Label(state: initial,cost: 0,meters: 0,dirtMeters: 0,contiguousDirtMeters: 0,
                             achievedMeaningfulDirt: false,pavedWithoutMeaningfulMeters: 0,
-                            peakProgress: 0,parent: nil,arc: nil))
-        var bestSimple: [SimpleKey:Int] = [:]
-        var bestFull: [State:Int] = [:]
+                            peakProgress: 0,parent: nil,arcToken: 0))
+        var bestSimple: [SimpleKey:Int32] = [:]
+        var bestFull: [State:Int32] = [:]
         if let key = initial.simple { bestSimple[key] = 0 } else { bestFull[initial] = 0 }
         func bestIndex(_ state: State) -> Int? {
-            if let key = state.simple { return bestSimple[key] }
-            return bestFull[state]
+            if let key = state.simple { return bestSimple[key].map(Int.init) }
+            return bestFull[state].map(Int.init)
         }
         func storeBest(_ state: State, _ index: Int) {
-            if let key = state.simple { bestSimple[key] = index } else { bestFull[state] = index }
+            if let key = state.simple { bestSimple[key] = Int32(index) } else { bestFull[state] = Int32(index) }
         }
         let compass = options.roadRemaining
         func remaining(of node: Int) -> Double {
@@ -431,7 +484,7 @@ public struct PathSearch: Sendable {
                 }
                 for sibling in pack.coincidentSiblings(current.state.node) where sibling != current.state.node && sibling < pack.nodeCount {
                     let state = State(node: sibling,incoming: current.state.incoming,
-                                      restrictions: current.state.restrictions,bucket: current.state.bucket,
+                                      restrictionID: current.state.restrictionID,bucket: current.state.bucket,
                                       unknownConnectorMeters: current.state.unknownConnectorMeters)
                     if let previous = bestIndex(state), labels[previous].cost <= current.cost { continue }
                     if labels.count >= budget.maximumLabels { limit = "labels"; break search }
@@ -442,7 +495,7 @@ public struct PathSearch: Sendable {
                                         achievedMeaningfulDirt: current.achievedMeaningfulDirt,
                                         pavedWithoutMeaningfulMeters: current.pavedWithoutMeaningfulMeters,
                                         peakProgress: current.peakProgress,
-                                        parent: entry.label,arc: nil))
+                                        parent: entry.label,arcToken: 0))
                     storeBest(state, index)
                     heap.push(.init(label: index,cost: heapCost(current.cost, sibling)))
                 }
@@ -459,7 +512,7 @@ public struct PathSearch: Sendable {
                     || !pack.matches(current.state.incoming, identities: options.requiredArrivalRoads)) { continue }
                 if !options.avoidCircuitNodes.isEmpty, arc.target != endNode, options.avoidCircuitNodes.contains(arc.target) { continue }
                 let physicalEdge = pack.restrictionEdge(e)
-                if let previous = current.arc, previous.edge == e, current.state.node < pack.nodeCount { continue }
+                if let previous = storedArc(current), previous.edge == e, current.state.node < pack.nodeCount { continue }
                 if !avoid.isEmpty && membership(e) & 1 != 0 {
                     let leavingPin = current.state.node == startNode
                     let arrivingPin = arc.target == endNode
@@ -477,7 +530,7 @@ public struct PathSearch: Sendable {
                         var cursor: Int? = entry.label
                         var permittedEntry = false
                         while let i = cursor {
-                            if let previous = labels[i].arc, previous.meters > 0.01 {
+                            if let previous = storedArc(labels[i]), previous.meters > 0.01 {
                                 permittedEntry = pack.accessCode(previous.edge, forward: previous.forward) == 0
                                 break
                             }
@@ -497,10 +550,10 @@ public struct PathSearch: Sendable {
                 if policy.style == .cleanest && !policy.cleanEligible(pack: pack,edge: e,
                     endpoint: isStart || isEnd,pavedOnly: options.pavedOnly) { continue }
                 let nextRestrictions: [RestrictionProgress]
-                if current.state.node == startNode { nextRestrictions = current.state.restrictions }
-                else if physicalEdge == current.state.incoming && arc.meters <= 0.01 { nextRestrictions = current.state.restrictions }
+                if current.state.node == startNode { nextRestrictions = restrictionSets[current.state.restrictionID] }
+                else if physicalEdge == current.state.incoming && arc.meters <= 0.01 { nextRestrictions = restrictionSets[current.state.restrictionID] }
                 else {
-                    guard let state = pack.restrictionIndex.advance(current.state.restrictions,from: current.state.incoming,
+                    guard let state = pack.restrictionIndex.advance(restrictionSets[current.state.restrictionID],from: current.state.incoming,
                                                                    to: physicalEdge,at: current.state.node) else { continue }
                     nextRestrictions = state
                 }
@@ -509,7 +562,7 @@ public struct PathSearch: Sendable {
                     while let a = ancestor, depth < 128 {
                         if options.preventLocalCircuits, arc.meters > 0.01,
                            labels[a].state.node == arc.target { overlaps = true; break }
-                        if let previous = labels[a].arc, labels[a].state.incoming == physicalEdge,
+                        if let previous = storedArc(labels[a]), labels[a].state.incoming == physicalEdge,
                            min(previous.upper,arc.upper)-max(previous.lower,arc.lower) > 0.5 {
                             overlaps = true; break
                         }
@@ -676,13 +729,13 @@ public struct PathSearch: Sendable {
                 let band = banded
                     ? min(bandCount, max(0, Int(meters / (options.maximumMeters / Double(bandCount)))))
                     : bucket
-                let state = State(node: arc.target,incoming: physicalEdge,restrictions: nextRestrictions,bucket: band,
+                let state = State(node: arc.target,incoming: physicalEdge,restrictionID: restrictionID(nextRestrictions),bucket: band,
                                   unknownConnectorMeters: unknownConnectorMeters)
                 if banded {
                     var dominated = false
                     for b in 0...band {
                         let probe = State(node: arc.target,incoming: physicalEdge,
-                                          restrictions: nextRestrictions,bucket: b,unknownConnectorMeters: unknownConnectorMeters)
+                                          restrictionID: restrictionID(nextRestrictions),bucket: b,unknownConnectorMeters: unknownConnectorMeters)
                         if let previous = bestIndex(probe), labels[previous].cost <= cost {
                             dominated = true; break
                         }
@@ -697,7 +750,7 @@ public struct PathSearch: Sendable {
                                     contiguousDirtMeters: contiguousDirt,
                                     achievedMeaningfulDirt: achievedMeaningful,
                                     pavedWithoutMeaningfulMeters: pavedWithoutMeaningful,
-                                    peakProgress: peak,parent: entry.label,arc: arc))
+                                    peakProgress: peak,parent: entry.label,arcToken: storeArc(arc)))
                 storeBest(state, index)
                 heap.push(.init(label: index,cost: heapCost(cost, arc.target)))
                 if options.maximumMeters.isFinite, meters >= options.maximumMeters * 0.85 {
@@ -708,7 +761,7 @@ public struct PathSearch: Sendable {
         func reconstruct(_ chosen: Int) -> ComputedRoute? {
             guard labels[chosen].state.unknownConnectorMeters == 0 else { return nil }
             var path: [Arc] = [], cursor: Int? = chosen
-            while let i = cursor { if let arc = labels[i].arc { path.append(arc) }; cursor = labels[i].parent }
+            while let i = cursor { if let arc = storedArc(labels[i]) { path.append(arc) }; cursor = labels[i].parent }
             path.reverse()
             let meaningful = path.filter { $0.meters > 0.01 }
             var i = 0
@@ -748,7 +801,7 @@ public struct PathSearch: Sendable {
             guard let arrived else { return nil }
             var result = ComputedRoute(start: start,end: arrived,segments: segments,distanceMeters: labels[chosen].meters,
                                  searchCost: labels[chosen].cost,poppedLabels: pops,limit: limit,
-                                 arrivalRestrictions: labels[chosen].state.restrictions)
+                                 arrivalRestrictions: restrictionSets[labels[chosen].state.restrictionID])
             result.maneuvers = NavigationCues.make(route: result,graph: pack,access: access,arrival: options.arrival)
             return result
         }

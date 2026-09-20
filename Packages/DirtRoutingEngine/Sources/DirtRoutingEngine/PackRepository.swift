@@ -199,7 +199,7 @@ public struct PackRepository: Sendable {
         func verifiedArtifact(_ artifact: PackManifest.Artifact) throws -> BinaryFile {
             try budget.check()
             let file = try BinaryFile(url: root.appendingPathComponent(artifact.name))
-            guard file.data.count == artifact.bytes, file.sha256 == artifact.sha256 else {
+            guard file.data.count == artifact.bytes, try file.sha256 == artifact.sha256 else {
                 throw RoutingFailure.invalidPack("\(region)/\(artifact.name) identity mismatch")
             }
             try budget.check()
@@ -227,7 +227,7 @@ public struct PackRepository: Sendable {
             try manifest.validate()
             guard manifest.regionId == region else { throw RoutingFailure.invalidPack("wrong region") }
             let graph = try BinaryFile(url: root.appendingPathComponent(manifest.graph.name))
-            guard graph.data.count == manifest.graph.bytes, graph.sha256 == manifest.graph.sha256 else {
+            guard graph.data.count == manifest.graph.bytes, try graph.sha256 == manifest.graph.sha256 else {
                 throw RoutingFailure.invalidPack("planning graph identity mismatch")
             }
             return try GraphPack.nodeBounds(graph, budget: budget)
@@ -242,7 +242,7 @@ public struct PackRepository: Sendable {
             throw RoutingFailure.invalidPack("seam manifest identity")
         }
         let file = try BinaryFile(url: root.appendingPathComponent(artifact.name))
-        guard file.data.count == artifact.bytes, file.sha256 == artifact.sha256 else {
+        guard file.data.count == artifact.bytes, try file.sha256 == artifact.sha256 else {
             throw RoutingFailure.invalidPack("seam artifact identity mismatch")
         }
         return file.data

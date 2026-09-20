@@ -227,6 +227,45 @@ engine tests, but neither completed the real request. Both experiments were
 removed from the candidate; their patches and receipts are preserved under
 `bounded-composition-rejected*` and `california-bounded-composition-*`. No larger
 label limit, weaker riding settings or success assertion was substituted.
+An isolated highway-aware reverse-cost guidance trial also remains rejected.
+Its first real run exposed an obsolete direct-arc-array read; using the current
+mapped-column accessors fixed that experimental crash. The corrected run timed
+out at 60.015 s / 966,410,240 bytes kernel peak RSS. Reusing the identical guide
+for necessary-city recovery reduced wasted preparation, but still failed at
+1.6 million labels after 49.251 s / 1,316,913,152 bytes kernel peak RSS. These
+files remain outside the app candidate (`cost-guide-pinned-source/` and
+`california-pinned-guidance-*`). This does not justify repeating those trials or
+changing the rider's settings. Lossless search-record compaction is being tested
+separately; it is not accepted merely because its synthetic tests pass. The first
+isolated layout changes shrink labels from 160 to 120 bytes and ordinary keys
+from 24 to 12 bytes. All 142 engine tests pass, but the actual unchanged California
+Dirt request still hits 1.6 million labels: 34.030 s, 1,121,533,952 bytes kernel
+peak RSS (`california-compact-search-…-0`). Verifying mapped pack files through
+a bounded read buffer on the same open descriptor reduces that replay to
+924,254,208 bytes kernel peak RSS / 591,481,472 bytes physical footprint, with
+identical 1,851,571 pops and the same failure after 33.417 s (`…-1`). All 146
+engine tests pass, including digest equality across buffer boundaries, atomic
+path replacement, truncated-file rejection and retained mapping lifetime.
+The final lossless storage implementation (`compact-search2-source/`) also packs
+local indices and parents with checked 32-bit bounds: labels are 96 bytes versus
+160 previously; search keys are 12 versus 24. Its 146 engine tests pass. Real
+fresh-pack comparisons retain identical directed roads, distances, geometry and
+access receipts. California Clean uses 685,473,792 bytes kernel peak RSS versus
+986,759,168 (18.822 versus 18.211 s); Austin–Houston Dirt uses 690,094,080 versus
+886,161,408 bytes (34.957 versus 34.619 s). Physical footprints are respectively
+406,604,992 and 379,079,744 bytes. Independent audits pass pins, continuity, access,
+settings and repetition (`compact-storage-real-receipts.json`). These storage
+changes are included in the native candidate; route scoring and the app search
+limit remain unchanged. They are memory improvements, not demonstrated speedups.
+California Dirt at 1.6 million labels still fails, now using 852,262,912 bytes
+kernel RSS / 519,473,728 bytes footprint after 33.678 s. An explicitly separate
+2.4-million-label capacity diagnostic completes in 60.068 s, using 1,001,865,216
+bytes RSS / 621,907,648 footprint. It preserves the exact settings and requested
+pins, passes legal/continuity/repetition receipts, and returns 378.611 km with
+4.7% known dirt and 38.1% unknown surface. This is low dirt riding character and
+is not an app qualification pass: its capacity override is not enabled in the app.
+No percentage threshold or weaker settings was substituted. The time ceiling
+and published-candidate gates remain unchanged.
 Continental fixture generation now streams complete seam files and retains a
 bounded deterministic sample solely for choosing synthetic test endpoints;
 pack proofs are unchanged. Reader checks cover chunk boundaries, escaped Unicode,
