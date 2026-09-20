@@ -298,24 +298,24 @@ function buildGraphFromOsm(osm, options = {}) {
     const index = packedIndex(id);
     if (index >= 0 && touch[index] < 2) touch[index] += 1;
   }
-  const revisitingWays = new Set();
+  const revisitingWays = new Map();
   for (const way of ways) {
     const ids = (way.nodeIds || []).map(String);
     if (!ids.length) continue;
-    const seen = new Set();
+    const seen = new Set(), repeats = new Set();
+    let internalRevisit = false;
     for (let i = 0; i < ids.length; i += 1) {
       const id = ids[i];
       if (seen.has(id)) {
+        repeats.add(id);
         // An ordinary closed ring only repeats its first node at the end.
-        // Other revisits can create different curves with the same way/from/to
-        // identity. Keep their source shape nodes as real junctions so every
-        // piece is unambiguous, independently of another pack's clip boundary.
-        if (i !== ids.length - 1 || id !== ids[0]) revisitingWays.add(way);
+        if (i !== ids.length - 1 || id !== ids[0]) internalRevisit = true;
         continue;
       }
       seen.add(id);
       touchNode(id);
     }
+    if (internalRevisit) revisitingWays.set(way, repeats);
   }
 
   if (!packedNodes) {
@@ -328,8 +328,33 @@ function buildGraphFromOsm(osm, options = {}) {
       markSplit(ids[0], indexes ? indexes[0] : -1);
       markSplit(ids[ids.length - 1], indexes ? indexes[indexes.length - 1] : -1);
     }
+    const repeats = revisitingWays.get(way);
+    if (repeats) {
+      // Segment at intrinsic source revisits first. If two curves still share
+      // (way,from,to), one interior source node disambiguates each curved piece.
+      // Interior nodes occur only once in this way, so these new keys cannot
+      // collide. Complete OSM way order makes the rule independent of pack clips.
+      // Keeping every shape point would unnecessarily inflate dense phone packs.
+      const cuts = [];
+      for (let i = 0; i < ids.length; i += 1) {
+        if (i === 0 || i === ids.length - 1 || repeats.has(ids[i])) {
+          cuts.push(i); markSplit(ids[i], indexes ? indexes[i] : -1);
+        }
+      }
+      const spans = new Map();
+      for (let i = 1; i < cuts.length; i += 1) {
+        const a = cuts[i-1], b = cuts[i], key = `${ids[a]}:${ids[b]}`;
+        if (!spans.has(key)) spans.set(key, []);
+        spans.get(key).push([a,b]);
+      }
+      for (const sameEnds of spans.values()) if (sameEnds.length > 1) {
+        for (const [a,b] of sameEnds) if (b-a > 1) {
+          const middle = Math.floor((a+b)/2);
+          markSplit(ids[middle], indexes ? indexes[middle] : -1);
+        }
+      }
+    }
     for (let i = 0; i < ids.length; i += 1) {
-      if (revisitingWays.has(way)) markSplit(ids[i], indexes ? indexes[i] : -1);
       if (packedNodes && indexes[i] >= 0 && touch[indexes[i]] >= 2) markSplit(ids[i], indexes[i]);
       const node = nodeForId(ids[i], indexes ? indexes[i] : -1);
       if (node && isBarrierNode(node.tags || {})) markSplit(ids[i], indexes ? indexes[i] : -1);

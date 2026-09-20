@@ -153,12 +153,18 @@ All four individual Texas packs completed, but their joint seal failed on
 OSM way 717538889: it revisits the same two junctions along different curves,
 which the old builder assigned the same way/from/to identity. Both packs contain
 identical source geometry; this is a segment-identity defect, not mixed epochs.
-The factory now retains source shape nodes for ways with internal node revisits
-(ordinary closed rings are unchanged), preserving geometry and legal access.
+The factory now splits at internal source revisits and adds one interior source
+node only when two resulting curves still share an identity. Ordinary closed
+rings remain unchanged; geometry and legal access are preserved. An initial
+all-shape-node repair raised southwest Texas from 1.714 to 2.225 million nodes,
+so it was stopped at a region boundary and refined before continental rollout.
+The exact failing source way now needs four edges rather than eleven.
 Two actual-source regressions failed before the repair and now pass in both
-normal and compact input paths; all 41 focused legal/format/seam checks pass.
+normal and compact input paths; all 42 focused legal/format/seam checks pass,
+including 100 varied loop/retrace shapes. All 36 app pack-acquisition tests also
+pass on the existing simulator, including Texas quarter ownership and selection.
 Evidence: `texas-shared-road-mismatch.json`, `repeated-way-geometry-before.log`,
-`repeated-way-geometry-tests.log`. Rebuild the affected candidate recipe and
+`repeated-way-minimal-tests.log`, `texas-quarter-acquisition-tests.xcresult`. Rebuild the affected candidate recipe and
 repeat the actual seam seal and same-pin Texas route. No continental release
 is qualified or published.
 The resumable factory must use the corrected recipe and updated complete source
