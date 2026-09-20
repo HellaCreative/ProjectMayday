@@ -283,8 +283,30 @@ alone takes 15.603 s from the external drive. Kitchener–Barrie completes in
 known dirt, retaining the prior trial's exact roads. Independent road/resource
 receipts pass (`fixed-search-history-receipts.json`). These are host completion
 and memory results, not a claim that California's riding quality or phone speed
-is satisfactory. Full native-app cold/warm qualification remains required.
-Publication remains gated on the entire current candidate.
+is satisfactory. The first actual app replay at `456ae20` completes
+Kitchener–Barrie cold/warm in 42.840 / 18.895 s with identical roads and
+188 MB process-lifetime peak footprint, then Austin–Houston reaches the unchanged
+60-second window before completing. Evidence: `dense-storage-app-retry.xcresult`.
+The preceding `dense-storage-app-native-tests.xcresult` executed zero tests and
+is excluded; explicit Xcode command-line test selection fixes discovery, and
+both the focused runner and queued full app suite require actual route markers.
+Whole-module engine compilation now passes all 149 engine tests and the app
+build, keeping threaded object emission capped at two compiler threads so
+SwiftPM's debug object/index paths remain valid. In the actual simulator app,
+Kitchener–Barrie improves to 14.113 / 6.181 s cold/warm with identical roads;
+Austin–Houston now completes in 34.845 / 21.543 s with identical cold/warm roads,
+363.201 km, 12.6% known dirt and up to 330 MB process-lifetime footprint.
+California completes both runs at the 60-second window but fails the unchanged
+cold/warm road-equality assertion: 378.611 km / 4.7% known dirt becomes
+336.475 km / 0%. Both fit a 531 MB process-lifetime footprint. The warm run
+had found the same 4.7% candidate before selecting the zero-dirt alternative;
+investigate candidate selection rather than accepting that as random variation.
+Evidence: `whole-module-threaded-engine-tests.log`, `whole-module-app-build.xcresult`
+and `whole-module-app-native-tests.xcresult`. This compilation change is a
+verified app speed improvement, not full dense-route qualification. These
+are simulator measurements on the M1; file caches were not flushed and they
+are not physical-device timing claims.
+Publication remains gated on the entire current candidate and native-app checks.
 Continental fixture generation now streams complete seam files and retains a
 bounded deterministic sample solely for choosing synthetic test endpoints;
 pack proofs are unchanged. Reader checks cover chunk boundaries, escaped Unicode,
