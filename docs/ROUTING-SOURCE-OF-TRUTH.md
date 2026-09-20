@@ -2040,7 +2040,10 @@ the header and dismisses upward, matching the earlier fuel/settings presentation
 rather than rising from the bottom. While open, the panel sits above the map
 controls and dock so unrelated controls cannot overlap it; the DIRT header remains
 above it. Its Clean, Balanced and Dirt control uses larger type on the brand-orange
-track with a white selected segment. The Surface control in From Here, Loop and
+track with a sliding glass selected segment. The settings fit in one fixed panel
+without an internal scrolling surface. The panel enters from just beneath the
+header with a short, lightly damped spring, and its header has deliberate top
+clearance around the close control. The Surface control in From Here, Loop and
 Plan edits the defaults copied into newly created legs. Tapping an existing Plan
 leg's Dirt, Balanced or Clean badge opens the same panel for that leg alone. The
 panel contains style, Allow Unknown, Ride Wander, Avoid cities

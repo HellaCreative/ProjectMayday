@@ -65,12 +65,18 @@ struct RoutePlannerCard: View {
         reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
     }
 
+    private var rideSettingsAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.18)
+            : .spring(response: 0.34, dampingFraction: 0.92)
+    }
+
     /// Ride settings use the established map-panel motion: descend from the
     /// header, remain visually connected to the route controls, and dismiss
     /// upward. This intentionally avoids the system bottom-sheet metaphor.
     @ViewBuilder private var rideSettingsOverlay: some View {
         GeometryReader { geometry in
-            let topInset: CGFloat = landscapeDockLeading == nil ? 72 : 12
+            let topInset: CGFloat = landscapeDockLeading == nil ? 56 : 12
             VStack(spacing: 0) {
                 if showDefaultRideSettings {
                     RideSettingsPanel(
@@ -166,8 +172,8 @@ struct RoutePlannerCard: View {
         .overlay(alignment: .top) {
             rideSettingsOverlay
         }
-        .animation(.easeInOut(duration: 0.18), value: showDefaultRideSettings)
-        .animation(.easeInOut(duration: 0.18), value: selectedStage)
+        .animation(rideSettingsAnimation, value: showDefaultRideSettings)
+        .animation(rideSettingsAnimation, value: selectedStage)
         .onChange(of: showDefaultRideSettings) { _, _ in
             publishRideSettingsPresentation()
         }
@@ -498,14 +504,14 @@ struct RoutePlannerCard: View {
     }
 
     private func openDefaultSettings() {
-        withAnimation(.easeInOut(duration: 0.18)) {
+        withAnimation(rideSettingsAnimation) {
             selectedStage = nil
             showDefaultRideSettings = true
         }
     }
 
     private func openLegSettings(at index: Int) {
-        withAnimation(.easeInOut(duration: 0.18)) {
+        withAnimation(rideSettingsAnimation) {
             showDefaultRideSettings = false
             selectedStage = index
         }
@@ -1419,6 +1425,7 @@ private struct RideSettingsPanel: View {
     @State private var allowUnknown: Bool
     @State private var preferences: RidePreferences
     @State private var showUnknownWarning = false
+    @Namespace private var ridingStyleSelection
 
     init(
         title: String,
@@ -1441,78 +1448,77 @@ private struct RideSettingsPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             DirtSheetHeader(title: title, onClose: onClose)
-            ScrollView {
-                VStack(alignment: .leading, spacing: DirtSpace.group) {
-                    Text(scopeNote)
-                        .font(DirtType.helper)
+                .padding(.top, 12)
+            VStack(alignment: .leading, spacing: DirtSpace.group) {
+                Text(scopeNote)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                    Text("Riding style")
+                        .font(DirtType.sectionLabel)
                         .foregroundStyle(DirtTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                        Text("Riding style")
-                            .font(DirtType.sectionLabel)
-                            .foregroundStyle(DirtTheme.muted)
-                        ridingStyleSelector
-                    }
-                    .padding(DirtSpace.row)
-                    .dirtGroupingSurface()
-
-                    VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                        settingsToggle(
-                            "Allow unknown",
-                            detail: profile == .cleanest
-                                ? "Clean uses roads verified for motorcycle access."
-                                : "May include roads whose motorcycle access is not confirmed.",
-                            isOn: Binding(
-                                get: { allowUnknown },
-                                set: { value in
-                                    if value { showUnknownWarning = true }
-                                    else { allowUnknown = false }
-                                }
-                            )
-                        )
-                        .disabled(profile == .cleanest)
-                        .opacity(profile == .cleanest ? 0.55 : 1)
-
-                        Divider()
-
-                        VStack(alignment: .leading, spacing: DirtSpace.tight) {
-                            HStack {
-                                Text("Ride Wander")
-                                    .font(DirtType.rowTitle)
-                                Spacer()
-                                Text("\(Int((preferences.wander * 100).rounded()))%")
-                                    .font(DirtType.metricInline)
-                                    .monospacedDigit()
-                            }
-                            Slider(value: $preferences.wander, in: 0...1, step: 0.05)
-                                .tint(DirtTheme.orange)
-                                .accessibilityLabel("Ride Wander")
-                                .accessibilityValue("\(Int((preferences.wander * 100).rounded())) percent")
-                            Text("Higher values give DIRT more room to find an interesting ride.")
-                                .font(DirtType.helper)
-                                .foregroundStyle(DirtTheme.muted)
-                        }
-
-                        Divider()
-                        settingsToggle("Avoid cities and towns", isOn: $preferences.avoidCities)
-                        Divider()
-                        settingsToggle("Avoid highways", isOn: $preferences.avoidHighways)
-                        Divider()
-                        settingsToggle("Avoid ferries", isOn: $preferences.avoidFerries)
-                    }
-                    .padding(DirtSpace.row)
-                    .dirtGroupingSurface()
-
-                    Button("Done") {
-                        onSave(profile, allowUnknown, preferences.normalized)
-                    }
-                    .buttonStyle(DirtCTAStyle.brand())
+                    ridingStyleSelector
                 }
-                .padding(.horizontal, DirtSpace.group)
-                .padding(.top, DirtSpace.tight)
-                .padding(.bottom, DirtSpace.section)
+                .padding(DirtSpace.row)
+                .dirtGroupingSurface()
+
+                VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                    settingsToggle(
+                        "Allow unknown",
+                        detail: profile == .cleanest
+                            ? "Clean uses roads verified for motorcycle access."
+                            : "May include roads whose motorcycle access is not confirmed.",
+                        isOn: Binding(
+                            get: { allowUnknown },
+                            set: { value in
+                                if value { showUnknownWarning = true }
+                                else { allowUnknown = false }
+                            }
+                        )
+                    )
+                    .disabled(profile == .cleanest)
+                    .opacity(profile == .cleanest ? 0.55 : 1)
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: DirtSpace.tight) {
+                        HStack {
+                            Text("Ride Wander")
+                                .font(DirtType.rowTitle)
+                            Spacer()
+                            Text("\(Int((preferences.wander * 100).rounded()))%")
+                                .font(DirtType.metricInline)
+                                .monospacedDigit()
+                        }
+                        Slider(value: $preferences.wander, in: 0...1, step: 0.05)
+                            .tint(DirtTheme.orange)
+                            .accessibilityLabel("Ride Wander")
+                            .accessibilityValue("\(Int((preferences.wander * 100).rounded())) percent")
+                        Text("Higher values give DIRT more room to find an interesting ride.")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                    }
+
+                    Divider()
+                    settingsToggle("Avoid cities and towns", isOn: $preferences.avoidCities)
+                    Divider()
+                    settingsToggle("Avoid highways", isOn: $preferences.avoidHighways)
+                    Divider()
+                    settingsToggle("Avoid ferries", isOn: $preferences.avoidFerries)
+                }
+                .padding(DirtSpace.row)
+                .dirtGroupingSurface()
+
+                Button("Done") {
+                    onSave(profile, allowUnknown, preferences.normalized)
+                }
+                .buttonStyle(DirtCTAStyle.brand())
             }
+            .padding(.horizontal, DirtSpace.group)
+            .padding(.top, DirtSpace.tight)
+            .padding(.bottom, DirtSpace.section)
         }
         .background(
             DirtTheme.sheetMaterial,
@@ -1536,17 +1542,30 @@ private struct RideSettingsPanel: View {
         HStack(spacing: 3) {
             ForEach(RouteProfile.allCases) { item in
                 Button {
-                    profile = item
-                    if item == .cleanest { allowUnknown = false }
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                        profile = item
+                        if item == .cleanest { allowUnknown = false }
+                    }
                 } label: {
-                    Text(item.title)
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundStyle(DirtTheme.ink)
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                        .background(
-                            profile == item ? Color.white.opacity(0.94) : Color.clear,
-                            in: Capsule()
-                        )
+                    ZStack {
+                        if profile == item {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.white.opacity(0.62), lineWidth: 1)
+                                )
+                                .shadow(color: .black.opacity(0.14), radius: 4, y: 2)
+                                .matchedGeometryEffect(
+                                    id: "ride-style-glass",
+                                    in: ridingStyleSelection
+                                )
+                        }
+                        Text(item.title)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundStyle(DirtTheme.ink)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 42)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(profile == item ? .isSelected : [])
@@ -1554,7 +1573,6 @@ private struct RideSettingsPanel: View {
         }
         .padding(4)
         .background(DirtTheme.orange, in: Capsule())
-        .animation(.easeInOut(duration: 0.16), value: profile)
     }
 
     private func settingsToggle(
