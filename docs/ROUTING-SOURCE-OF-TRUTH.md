@@ -109,6 +109,14 @@ within 1e-9 degrees; actual directed seam and same-pin riding tests remain requi
 Do not infer that smaller files fix search limits or join-memory use. Southern
 California's sizing failure also remains open. Retain the source and route settings;
 do not raise the application label or memory budget just to pass.
+An opt-in cost-guidance experiment failed its first actual California replay:
+1.6 million labels in both runs. Guided search itself took 19.589 s versus
+13.405 s without guidance; its lower total reflected warm file opening, not a
+search speed improvement. Both exceeded 1 GiB peak RSS. Evidence:
+`cost-guide-ca-s-los-angeles-san-diego-dirt-{0,1}/`. The experiment remains off
+by default and is not an accepted app optimization. A focused refinement checks
+legal-access relaxations and unavoidable urban cost before deciding whether to
+retain it; pack sizing and complete candidate qualification remain required.
 The North America September 18 download completed after resuming the existing
 2.63 GB partial at `.build/fresh-fabric-20260919/source/north-america-260918.osm.pbf`; its checked
 prefix agrees with the newly downloaded bytes. Expected complete bytes:
@@ -137,8 +145,10 @@ and `app-qualification-state.json` plus actual process ownership before restarti
 Original source preparation completed all 67 checked regional extracts from the
 same OSM epoch (17.77 GiB); `source-lock-original67.json` preserves that checkpoint.
 The Texas-quarter source preparation reuses the 66 unaffected extracts and adds
-four new pieces from the identical parent. `texas-quarter-source-preparation.log`
-records this operation. No continental release is qualified or published.
+four new pieces from the identical parent. All 70 source extracts are now
+complete and hash-locked; `texas-quarter-source-preparation.log` records completion.
+The four Texas packs are being built and checked separately before resuming the
+whole candidate. No continental release is qualified or published.
 The resumable factory must use the corrected recipe and updated complete source
 lock. A successful build ends awaiting route qualification; publication remains gated.
 Continental building exposed an unresolved-only-turn defect before publication.
