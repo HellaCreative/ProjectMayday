@@ -61,11 +61,27 @@ prefix agrees with the newly downloaded bytes. Expected complete bytes:
 19,394,968,944; publisher MD5 `3b344803d19c468b54695dc3d92747f1`. Full checksum
 and OSM timestamp must pass before continental extraction. A bounded two-region
 single-process extraction mode is implemented in `prepare-common-source-lock.js`
-(`--batch-size 2`, default remains 1). Its real NS/PE equivalence/time/memory
-experiment is queued after the route matrix in `run-next-checks.sh` under the
-continental evidence directory. Do not adopt it broadly before that comparison;
-retain the 2 km halo and complete multipolygon/turn-restriction semantics.
-No new continental packs have been built or published at this checkpoint.
+(`--batch-size 2`, default remains 1). The real NS/PE comparison now passes:
+both extracted PBF hashes exactly equal the separately produced source files.
+Combined extraction took 598.111 s including output hashing, versus the earlier
+507.287 + 501.702 s individual extractions. Process peak RSS was 2,747,252,736
+bytes; peak physical footprint was 7,830,814,208 bytes on this 16 GiB M1.
+These are measured historical timings with background work, not isolated speed
+benchmarks. Evidence: `batch-equivalence.json` and `batch-extraction/` under the
+continental evidence directory. Adopt batches of at most two, one heavy job at
+a time; retain the exact 2 km halo and complete relation semantics.
+
+`continue-continent.py` in that evidence directory is running as the overnight
+pipeline supervisor; inspect `pipeline-state.json` and process ownership before
+starting competing heavy work. It waits for the current source download,
+requires the expected full length, invokes checksum/timestamp-verified source
+preparation for the actual catalog with batches of two, then runs the resumable
+full pack/seam factory for candidate `fabric-v4-20260920-01`. It records errors
+and stops rather than publishing or continuing after a failed stage. A successful
+build ends awaiting route qualification; publication is still separately gated.
+Source lock: `continent/source-lock.json`; phase logs: `continent-source-preparation.log`
+and `continent-pack-build.log`. No new continental packs have been built or
+published at this checkpoint. Do not duplicate these running jobs.
 
 The new same-binary 87-request matrix has completed (`final-matrix/` in the
 continental evidence directory): 77 pass the stronger shape/access/resource
