@@ -201,9 +201,21 @@ not a speed claim. Dirt remains unqualified at the same label limit and
 1,286,881,280 bytes sampled peak RSS. Evidence: `chunked-labels-*`.
 All four tighter Texas extracts are now complete and hash-locked from the same
 parent; the merged lock preserves all 66 unaffected source records exactly.
-The narrow pack rebuild and directed seam/route replay are in progress. The
-full continental factory continuation is gated on that sizing replay completing
-within the 1 GiB host memory ceiling; it cannot publish by itself.
+The narrower four-pack build passes all six directed seam-pair seals. Its seam
+sidecars total 108.34 MiB rather than approximately 2.2 GiB; no proofs were
+thinned. The first Austin–Houston replay reached both routing stages within
+939,261,952 bytes kernel peak RSS, then rejected a complete road because an
+optional comparison expired. That runtime defect now keeps a completed road's
+own completion status separate from `comparisonStopped` diagnostics; genuine
+incomplete roads, invalid data and cancellation still fail. The repaired replay
+completes in 34.619 s (35.06 s process wall time), 886,161,408 bytes kernel peak
+RSS and 500,878,720 bytes physical footprint. Independent receipts pass continuity,
+matching, settings, access, repeated-road and resource checks. Evidence:
+`texas-completion-replay-tx-austin-houston-dirt-0/`. This is a sizing/road-completion
+result on the M1 Mac, not phone performance or continental riding-quality
+qualification. California Dirt's search-limit failure remains unresolved.
+The full continental factory continuation can now resume with the corrected
+70-source lock; it cannot publish by itself.
 
 The seam JSON writer batches filesystem writes without removing or changing any
 proof. Complete UTF-8 output is byte-identical in the regression. This is a factory

@@ -391,13 +391,27 @@ public struct RoutingEngine: Sendable {
             catch RoutingFailure.resourceLimit { }
             catch let failure as RoutingFailure { incomplete = failure }
         }
+        return try finishDirtCandidates(candidates, incomplete: incomplete,
+            candidateLog: candidateLog, request: request, run: run)
+    }
+
+    /// An unfinished optional comparison does not invalidate a completed legal
+    /// road. Keep that diagnostic separate from the selected road's own limit.
+    func finishDirtCandidates(_ candidates: [Candidate], incomplete: RoutingFailure?,
+                              candidateLog: [String], request: RoutingRequest,
+                              run: (SearchOptions, ProfilePolicy?) throws -> ComputedRoute) throws -> ComputedRoute {
+        try Task.checkCancellation()
+        if let incomplete {
+            guard case .resourceLimit = incomplete else { throw incomplete }
+        }
         let summary = candidateLog.isEmpty ? nil : candidateLog.joined(separator: ",")
-        let limitNote = incomplete.map { "comparison incomplete: \($0)" }
+        let comparisonNote = incomplete.map { "comparisonStopped:\($0)" }
         if let selected = Self.chooseDirt(candidates) {
-            let repaired = repairLegShape(selected.route, request: request, run: run, policy: request.profile)
-            var result = repaired.route.reportingLimit(limitNote)
+            let repaired = try repairLegShape(selected.route, request: request, run: run, policy: request.profile)
+            try Task.checkCancellation()
+            var result = repaired.route
             let shape = "shape:\(repaired.before)->\(repaired.after)"
-            result.searchSummary = [summary, shape].compactMap { $0 }.joined(separator: ",")
+            result.searchSummary = [summary, shape, comparisonNote].compactMap { $0 }.joined(separator: ",")
             return result
         }
         if let incomplete { throw incomplete }
@@ -468,7 +482,7 @@ public struct RoutingEngine: Sendable {
         }
         let selected = Self.chooseBalanced(candidates) ?? candidates[0]
         var result = selected.route
-        let repaired = repairLegShape(result, request: request, run: run, policy: request.profile)
+        let repaired = try repairLegShape(result, request: request, run: run, policy: request.profile)
         result = repaired.route
         result.searchSummary = log.joined(separator: ",") + ",shape:\(repaired.before)->\(repaired.after)"
         return result
@@ -478,7 +492,7 @@ public struct RoutingEngine: Sendable {
         request: RoutingRequest,
         run: (SearchOptions, ProfilePolicy?) throws -> ComputedRoute,
         policy: ProfilePolicy?
-    ) -> (route: ComputedRoute, before: Int, after: Int) {
+    ) throws -> (route: ComputedRoute, before: Int, after: Int) {
         let before = RouteQuality.shapeFaults(route.segments)
         guard before.issueCount > 0 else { return (route, 0, 0) }
         var options = request.options
@@ -488,10 +502,11 @@ public struct RoutingEngine: Sendable {
         do {
             let fixed = try run(options, policy)
             let after = RouteQuality.shapeFaults(fixed.segments)
-            if after.issueCount < before.issueCount {
+            if fixed.limit == nil, after.issueCount < before.issueCount {
                 return (fixed, before.issueCount, after.issueCount)
             }
-        } catch { }
+        } catch is CancellationError { throw CancellationError() }
+        catch { }
         return (route, before.issueCount, before.issueCount)
     }
     static func chooseBalanced(_ candidates: [Candidate]) -> Candidate? {

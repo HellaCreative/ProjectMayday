@@ -3,6 +3,54 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct RoutingEngineTests {
+    @Test func cancellationCannotReturnACompletedComparisonCandidate() async throws {
+        let engine = try RoutingEngine(pack: pavedLine())
+        let completed = try engine.route(request)
+        let savedRequest = request
+        await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            do {
+                _ = try engine.finishDirtCandidates([
+                    .init(route: completed, width: .infinity, quality: .init(route: completed))
+                ], incomplete: .resourceLimit("time"), candidateLog: [], request: savedRequest) { _, _ in completed }
+                Issue.record("A cancelled request returned a route")
+            } catch is CancellationError { }
+            catch { Issue.record("Unexpected error: \(error)") }
+        }.value
+    }
+
+    @Test func completedDirtRoadSurvivesAnOptionalComparisonLimit() throws {
+        let engine = try RoutingEngine(pack: pavedLine())
+        let completed = try engine.route(request)
+        for reason in ["time", "labels"] {
+            let result = try engine.finishDirtCandidates([
+                .init(route: completed, width: .infinity, quality: .init(route: completed))
+            ], incomplete: .resourceLimit(reason), candidateLog: ["road"], request: request) { _, _ in
+                throw RoutingFailure.resourceLimit(reason)
+            }
+            #expect(result.limit == nil)
+            #expect(result.segments.map(\.edgeID) == completed.segments.map(\.edgeID))
+            #expect(result.start == completed.start)
+            #expect(result.end == completed.end)
+            #expect(result.searchSummary?.contains("comparisonStopped:") == true)
+            // A genuinely unfinished road must retain its failure marker.
+            let unfinished = completed.reportingLimit(reason)
+            let limited = try engine.finishDirtCandidates([
+                .init(route: unfinished, width: .infinity, quality: .init(route: unfinished))
+            ], incomplete: .resourceLimit(reason), candidateLog: [], request: request) { _, _ in completed }
+            #expect(limited.limit == reason)
+            #expect(throws: RoutingFailure.resourceLimit(reason)) {
+                try engine.finishDirtCandidates([], incomplete: .resourceLimit(reason),
+                    candidateLog: [], request: request) { _, _ in completed }
+            }
+        }
+        #expect(throws: RoutingFailure.invalidPack("broken")) {
+            try engine.finishDirtCandidates([
+                .init(route: completed, width: .infinity, quality: .init(route: completed))
+            ], incomplete: .invalidPack("broken"), candidateLog: [], request: request) { _, _ in completed }
+        }
+    }
+
     /// A straight paved road. Balanced can never land in its 45–55% dirt band here,
     /// so the corridor sequence runs all the way to its final, unbounded width.
     private var request: RoutingRequest {
