@@ -69,6 +69,17 @@ MD5/SHA-256 and copy timing. Source preparation independently checks that workin
 copy again before extraction. No extracted or built region was discarded.
 The pack build schedules larger source files first to expose large-region build
 resource failures early; catalog identity/order and required coverage are unchanged.
+Factory seam construction now uses sparse per-pack barrier/restriction lookups
+instead of scanning every legal record at each shared node. Weak ownership keeps
+the lookup lifetime with the immutable decoded pack. Thirty focused legal/seam
+tests pass, including via-way membership, duplicate participation and differing
+barrier decisions. A 12,000-node / 2,000-restriction / 500-barrier measurement
+changed 2,735→125 ms with all 23,998 proofs byte-identical; process footprint
+rose 96.5→113.0 MB in that synthetic workload. Actual existing NS–NB proof
+construction changed 361→255 ms, retaining all 758 proofs byte-identically and
+about 124.5 MB footprint. Evidence: `seam-index-*`, `seam-real-index-*`, and
+`seam-legal-index-tests.log`. These are factory microbenchmarks under background
+extraction, not isolated phone-routing improvements or qualification of new packs.
 Eight split outlines pass GEOS validity checks, and the four split unions cover
 their ON/QC/CA/NL parents within 1e-9 degrees of floating-point tolerance
 (`split-polygon-validity.json`, `split-coverage.json`, `split-covers-parent.json`).

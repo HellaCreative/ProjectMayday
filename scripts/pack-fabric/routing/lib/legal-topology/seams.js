@@ -8,6 +8,31 @@
 // release the cached rows with the pair and keep continent builds memory-safe.
 const seamCandidateCache = new WeakMap();
 const seamProofIdentities = new WeakMap();
+const legalIndices = new WeakMap();
+
+function legalIndex(pack) {
+  let index = legalIndices.get(pack);
+  if (index) return index;
+  index = { barriers: new Map(), viaNodes: new Map(), edges: new Map() };
+  const add = (map, key, value) => {
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(value);
+  };
+  for (const barrier of pack.barriers || []) {
+    const key = String(barrier.osmNodeId);
+    // Match the former first-row lookup even if malformed duplicate rows exist.
+    if (!index.barriers.has(key)) index.barriers.set(key, Number(barrier.decisionCode));
+  }
+  (pack.restrictions || []).forEach((row, i) => {
+    add(index.viaNodes, Number(row.viaNode), i);
+    for (const edge of new Set([row.fromEdge, row.toEdge, ...(row.viaEdges || [])].map(Number)))
+      add(index.edges, edge, i);
+  });
+  // Only sparse legal records are indexed, not every possible graph state.
+  // The decoded pack is immutable and weak ownership releases the index with it.
+  legalIndices.set(pack, index);
+  return index;
+}
 
 function haversineMeters(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
@@ -66,19 +91,16 @@ function edgeProofKey(proof) {
 }
 
 function barrierDecision(pack, osmNodeId) {
-  const row = (pack.barriers || []).find((barrier) => String(barrier.osmNodeId) === String(osmNodeId));
-  return row ? Number(row.decisionCode) : 0;
+  return legalIndex(pack).barriers.get(String(osmNodeId)) ?? 0;
 }
 
 function restrictionProofs(pack, node, incident) {
-  const relevant = new Set(incident);
-  return (pack.restrictions || [])
-    .filter((row) =>
-      Number(row.viaNode) === Number(node) ||
-      relevant.has(Number(row.fromEdge)) ||
-      relevant.has(Number(row.toEdge)) ||
-      (row.viaEdges || []).some((edge) => relevant.has(Number(edge)))
-    )
+  const index = legalIndex(pack);
+  const rows = new Set(index.viaNodes.get(Number(node)) || []);
+  for (const edge of incident)
+    for (const row of index.edges.get(edge) || []) rows.add(row);
+  return [...rows].sort((a, b) => a - b)
+    .map(i => pack.restrictions[i])
     .map((row) => ({
       osmRelationId: String(row.osmRelationId),
       kind: Number(row.kind),

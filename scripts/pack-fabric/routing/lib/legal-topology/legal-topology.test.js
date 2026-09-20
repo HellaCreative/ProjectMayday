@@ -19,7 +19,7 @@ const {
 } = require("./conditional");
 const { buildGraphFromOsm, countsFromGraph } = require("./osm-graph");
 const { legalSnap } = require("./snap");
-const { seamCandidates, assertSeamLegal } = require("./seams");
+const { seamCandidates, assertSeamLegal, restrictionProofs } = require("./seams");
 const { findPathV4 } = require("./find-path-v4");
 const { encodeFromOsmGraph, decodeGraphV4, rejectMixedContract, sha256, GRAPH_V4_MAGIC } = require("../pack-v4");
 const { decodeGeometryV1, GRAPH_MAGIC, unpackSurface } = require("../pack-v2");
@@ -378,6 +378,35 @@ test("V4 seams require identical OSM edge, access, layer and safety proof", () =
   changedAccess.edgeAccess[0] = 2;
   assert.equal(seamCandidates(pack, changedAccess).length, 0);
   assert.throws(() => assertSeamLegal(pack, changedAccess, candidates[0]));
+});
+
+test("seam restriction lookup retains via-node, incoming, outgoing and every via-way occurrence", () => {
+  const row = (id, fields) => ({ osmRelationId: String(id), kind: 0, only: false,
+    vehicleMask: 1, fromEdge: 0, toEdge: 1, viaNode: -1, viaEdges: [], viaWayIds: [], ...fields });
+  const pack = { osmWayIds: ["10", "11", "12", "13", "14"], restrictions: [
+    row(99, { viaNode: 8 }),
+    row(12, { fromEdge: 2 }),
+    row(21, { toEdge: 2, only: true }),
+    row(31, { viaEdges: [3, 2, 2], viaWayIds: ["13", "12", "12"] }),
+    row(44, { viaNode: 9, fromEdge: 3, toEdge: 4 })
+  ] };
+  const proofs = restrictionProofs(pack, 8, [2]);
+  assert.deepEqual(proofs.map(row => row.osmRelationId), ["12", "21", "31", "99"]);
+  assert.equal(proofs[1].only, true);
+  assert.deepEqual(proofs[2].viaWayIds, ["13", "12", "12"]);
+  assert.deepEqual(restrictionProofs(pack, 10, []), []);
+  const changedPack = { ...pack, restrictions: [row(55, { viaNode: 8, only: true })] };
+  assert.deepEqual(restrictionProofs(changedPack, 8, [2]).map(row => row.osmRelationId), ["55"]);
+  assert.deepEqual(restrictionProofs(pack, 8, [2]), proofs);
+});
+
+test("seam legal lookup cannot borrow barrier decisions from another pack", () => {
+  const { pack } = packed({ nodes: [node(1, 0, 0), node(2, 0.001, 0)],
+    ways: [way(10, [1, 2], { highway: "residential" })] });
+  const blocked = { ...pack, barriers: [{ osmNodeId: "1", decisionCode: 1 }] };
+  const rows = seamCandidates(pack, blocked);
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every(row => row.osmNodeId !== "1"));
 });
 
 test("15. deterministic identical hashes", () => {
