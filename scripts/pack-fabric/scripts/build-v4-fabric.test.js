@@ -32,6 +32,7 @@ test("release labels cannot conceal stale source bytes or missing city data", t 
   write(path.join(dir, "fuel.v1.json"), { schema: "fuel.v1", regionId: "ns", stations: [{ id: 1 }],
     sourceUpdatedAt: source.osmTimestamp, sourceSha256: source.sourceSha256 });
   write(path.join(riderDir, "rider-services.v1.json"), { schema: "rider-services.v1", regionId: "ns",
+    elements: ["campground", "lodging", "liquor"].map(category => ({ tags: { "dirt:category": category } })),
     counts: { campground: 1, lodging: 1, liquor: 1 }, sourceUpdatedAt: source.osmTimestamp, sourceSha256: source.sourceSha256 });
   const manifest = { schema: "pack-manifest.v2", fabricReleaseId: "fabric-v4-20260919-01", regionId: "ns",
     capabilities: ["legal-topology.v1"], sourceEpoch: lock.fabricEpoch, timezone: "America/Halifax",
@@ -43,6 +44,17 @@ test("release labels cannot conceal stale source bytes or missing city data", t 
   const reportFile = path.join(dir, "legal-topology-report.json");
   write(reportFile, report);
   assert.equal(verifyRegion(paths, "ns", manifest.fabricReleaseId, lock).fuelStations, 1);
+  const riderFile = path.join(riderDir, "rider-services.v1.json");
+  const rider = JSON.parse(fs.readFileSync(riderFile));
+  rider.elements.pop(); rider.counts.liquor = 0;
+  write(riderFile, rider);
+  assert.equal(verifyRegion(paths, "ns", manifest.fabricReleaseId, lock).riderServices.counts.liquor, 0);
+  rider.counts.liquor = 1; write(riderFile, rider);
+  assert.throws(() => verifyRegion(paths, "ns", manifest.fabricReleaseId, lock), /count does not match payload/);
+  delete rider.counts.liquor; write(riderFile, rider);
+  assert.throws(() => verifyRegion(paths, "ns", manifest.fabricReleaseId, lock), /count does not match payload/);
+  rider.counts.liquor = 0; write(riderFile, rider);
+
   report.provenance.factoryCommit = "original-build";
   report.provenance.factoryRecipe = { sha256: "c".repeat(64) };
   write(reportFile, report);

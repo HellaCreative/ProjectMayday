@@ -53,6 +53,11 @@ dependency manifests and tool versions instead of the entire application Git
 commit. Legacy artifacts retain their stricter historical commit check; they
 are not silently recertified. Seven focused reuse/publication tests pass,
 including changed-recipe rejection. Source-lock polygon changes fail closed.
+The per-region verifier also checks Rider Services counts against their actual
+elements. A present, source-locked category may have zero entries; missing or
+inconsistent category counts still fail. Five focused factory/service tests pass
+(`factory-empty-category.log`). Entirely empty payloads and fuel requirements
+retain their existing checks pending source evidence.
 The registered continental roster currently has 67 packs and unsplit Texas;
 Texas and all other regions still require measured resource qualification.
 The North America September 18 download resumes the existing 2.63 GB partial

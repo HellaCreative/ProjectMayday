@@ -159,9 +159,21 @@ function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factor
   if (rider.schema !== "rider-services.v1" || rider.regionId !== id) {
     throw new Error(`${id}: Rider Services identity mismatch`);
   }
-  for (const category of ["campground", "lodging", "liquor"]) {
-    if (!Number.isSafeInteger(rider.counts && rider.counts[category]) || rider.counts[category] <= 0) {
-      throw new Error(`${id}: Rider Services has no ${category} data`);
+  // A remote region can legitimately have no features in one category.
+  // Require a complete payload and exact counts, not invented nonzero data.
+  if (!Array.isArray(rider.elements) || rider.elements.length === 0) {
+    throw new Error(`${id}: Rider Services payload is missing or empty`);
+  }
+  const actualCounts = { campground: 0, lodging: 0, liquor: 0 };
+  for (const element of rider.elements) {
+    const category = element.tags?.["dirt:category"];
+    if (!Object.hasOwn(actualCounts, category)) throw new Error(`${id}: unknown Rider Services category`);
+    actualCounts[category]++;
+  }
+  for (const category of Object.keys(actualCounts)) {
+    if (!Number.isSafeInteger(rider.counts?.[category]) || rider.counts[category] < 0 ||
+        rider.counts[category] !== actualCounts[category]) {
+      throw new Error(`${id}: Rider Services ${category} count does not match payload`);
     }
   }
   if (rider.sourceUpdatedAt !== source.osmTimestamp) {
