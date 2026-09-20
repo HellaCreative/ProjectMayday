@@ -94,13 +94,21 @@ fresh seeds, Dirt should offer meaningfully different legal rides within the
 selected style and Wander setting. Saved rider routes retain their accepted
 geometry; newly generated routes are not required to reproduce an earlier line.
 
-The complete serial continental host matrix was restarted against source
-`deabed0` after the Halifax–Squamish metadata failure was repaired. It covers
-internal journeys in every region and
-style plus both directions and styles for every neighboring pair, with explicit
-settings, endpoint, legality, geometry, repeated-road, elapsed-time and RSS gates.
-The app matrix remains queued behind it so the two heavy jobs do not compete.
-The candidate is not qualified or published until both gates pass.
+The complete serial continental host matrix against routing source `deabed0`
+has finished: **1,165 cases, 1,115 passing, 50 failing**. It covers internal
+journeys in every region and style plus both directions and styles for every
+neighboring pair. Forty-seven cases exceed the 1 GiB host RSS gate; seven do not
+complete (six time limits and one label limit), with four cases in both groups.
+The incomplete responses also lack settings/endpoint/road receipt fields; those
+secondary audit failures do not independently establish altered settings or
+illegal roads. Exact final triage is recorded in
+`.build/continental-qualification-20260920/current-matrix-failure-triage-final.json`.
+The matrix supervisor has exited after recording `needs-repair`; restarting the
+unchanged resume command would only re-read the same failed receipts. Preserve
+these results, repair the measured bottlenecks, and replay affected cases before
+integrated qualification. The app matrix and immutable DEV publication remain
+pending. The 70 candidate packs and 155 neighbor pairs are built and sealed,
+but the continental release is not yet qualified or published.
 
 Continental preparation verification (September 20, evidence in
 `.build/continental-qualification-20260920`): all seven existing immutable

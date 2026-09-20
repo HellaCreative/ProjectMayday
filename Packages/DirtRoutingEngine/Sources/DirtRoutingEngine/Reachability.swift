@@ -75,12 +75,12 @@ struct ArcIndex: Sendable {
             + meters.count * MemoryLayout<Double>.stride
     }
 
-    init(nodeCount: Int, budget: ComputationBudget, outgoing: (Int) -> [RoadArc]) throws {
+    init(nodeCount: Int, arcCapacity: Int? = nil, budget: ComputationBudget, outgoing: (Int) -> [RoadArc]) throws {
         mapped = nil
         // Do not walk and materialize every outgoing list just to count it;
         // append in source order and grow the compact buffers as needed.
         guard nodeCount < Int(Int32.max) else { throw RoutingFailure.resourceLimit("arc index") }
-        let arcCount = nodeCount
+        let arcCount = max(0, arcCapacity ?? nodeCount)
         var outStart = [Int32](repeating: 0, count: nodeCount + 1)
         var outSource: [Int32] = [], outEdge: [Int32] = [], targets: [Int32] = []
         outSource.reserveCapacity(arcCount); outEdge.reserveCapacity(arcCount); targets.reserveCapacity(arcCount)

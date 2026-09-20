@@ -425,6 +425,23 @@ public final class RegionalGraph: RoadGraph {
         let p = owner(edge,edgeBases), n = nodeBases[p]+packs[p].endpoint(edge-edgeBases[p],from: from)
         return nodeAliases[n] ?? n
     }
+    /// The joined adjacency exposes every alias member's arcs at each sibling.
+    /// Count that expansion from packed degrees without materializing road lists.
+    func adjacencyCount(budget: ComputationBudget) throws -> Int {
+        var count = packs.reduce(0) { $0 + $1.arcCount }
+        for (index, members) in nodeMembers.values.enumerated() {
+            if index & 1023 == 0 { try budget.check() }
+            var degree = 0
+            for node in members {
+                let p = owner(node, nodeBases), local = node - nodeBases[p]
+                degree += Int(packs[p].nodeOffsets[local + 1] - packs[p].nodeOffsets[local])
+            }
+            count += (members.count - 1) * degree
+        }
+        guard count < Int(Int32.max) else { throw RoutingFailure.resourceLimit("arc index") }
+        return count
+    }
+
     public func outgoing(_ node: Int) -> [RoadArc] {
         let canonical = nodeAliases[node] ?? node
         var result: [RoadArc] = []

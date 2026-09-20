@@ -55,6 +55,25 @@ struct RegionalGraphTests {
         }
     }
 
+    @Test func joinedAdjacencyReservationPreservesEveryDirectedArc() throws {
+        let pack = try graph()
+        let joined = try RegionalGraph(graphs: [pack, pack], documents: documents(pack), budget: .init())
+        let count = try joined.adjacencyCount(budget: .init())
+        #expect(count == (0..<joined.nodeCount).reduce(0) { $0 + joined.outgoing($1).count })
+        let ordinary = try ArcIndex(nodeCount: joined.nodeCount, budget: .init()) { joined.outgoing($0) }
+        let reserved = try ArcIndex(nodeCount: joined.nodeCount, arcCapacity: count, budget: .init()) { joined.outgoing($0) }
+        #expect(reserved.outSource == ordinary.outSource)
+        #expect(reserved.inStart == ordinary.inStart)
+        #expect(reserved.inArcs == ordinary.inArcs)
+        for node in 0...joined.nodeCount { #expect(reserved.outStart[node] == ordinary.outStart[node]) }
+        for arc in 0..<count {
+            #expect(reserved.outEdge[arc] == ordinary.outEdge[arc])
+            #expect(reserved.targets[arc] == ordinary.targets[arc])
+            #expect(reserved.forward(arc) == ordinary.forward(arc))
+            #expect(reserved.distance(arc) == ordinary.distance(arc))
+        }
+    }
+
     @Test func sharedRoadDistanceConflictIdentifiesDataWithoutJoiningIt() throws {
         let original = try graph(), fixtures = ReferenceTests()
         let source = try BinaryFile(url: fixtures.fixture("legal-topology-restrictions.graph.v4.bin"))

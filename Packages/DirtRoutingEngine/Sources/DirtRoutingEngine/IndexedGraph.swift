@@ -39,7 +39,8 @@ public struct IndexedGraph: RoadGraph {
         if let pack = graph as? GraphPack {
             arcs = try ArcIndex(pack: pack, budget: budget)
         } else {
-            arcs = try ArcIndex(nodeCount: graph.nodeCount, budget: budget) { node in
+            let arcCapacity = try (graph as? RegionalGraph)?.adjacencyCount(budget: budget)
+            arcs = try ArcIndex(nodeCount: graph.nodeCount, arcCapacity: arcCapacity, budget: budget) { node in
                 graph.outgoing(node).map { arc in
                     arc.meters.isFinite ? arc : RoadArc(target: arc.target, edge: arc.edge,
                                                         forward: arc.forward, meters: graph.distance(arc.edge))
