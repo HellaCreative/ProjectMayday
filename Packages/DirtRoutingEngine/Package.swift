@@ -15,7 +15,7 @@ let package = Package(
                 // per-file compilation even when -O is explicitly enabled.
                 // Threaded emission preserves SwiftPM's per-file object/index
                 // outputs; cap compiler parallelism for the shared build host.
-                .unsafeFlags(["-O", "-whole-module-optimization", "-num-threads", "2",
+                .unsafeFlags(["-O", "-whole-module-optimization", "-disable-batch-mode", "-num-threads", "2",
                               "-cross-module-optimization"])
             ]
         ),

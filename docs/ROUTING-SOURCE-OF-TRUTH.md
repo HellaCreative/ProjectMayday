@@ -296,16 +296,32 @@ SwiftPM's debug object/index paths remain valid. In the actual simulator app,
 Kitchener–Barrie improves to 14.113 / 6.181 s cold/warm with identical roads;
 Austin–Houston now completes in 34.845 / 21.543 s with identical cold/warm roads,
 363.201 km, 12.6% known dirt and up to 330 MB process-lifetime footprint.
-California completes both runs at the 60-second window but fails the unchanged
-cold/warm road-equality assertion: 378.611 km / 4.7% known dirt becomes
-336.475 km / 0%. Both fit a 531 MB process-lifetime footprint. The warm run
-had found the same 4.7% candidate before selecting the zero-dirt alternative;
-investigate candidate selection rather than accepting that as random variation.
+That first California replay completed both runs at the 60-second window but
+failed the unchanged cold/warm road-equality assertion: 378.611 km / 4.7% known
+dirt became 336.475 km / 0%. Both fit a 531 MB process-lifetime footprint. The
+warm run had found the same 4.7% candidate before selecting the zero-dirt
+alternative. The comparator's absolute short-scrap preference caused this:
+1,009 m of incidental dirt outweighed several useful continuous dirt sections.
 Evidence: `whole-module-threaded-engine-tests.log`, `whole-module-app-build.xcresult`
 and `whole-module-app-native-tests.xcresult`. This compilation change is a
 verified app speed improvement, not full dense-route qualification. These
 are simulator measurements on the M1; file caches were not flushed and they
 are not physical-device timing claims.
+The focused correction prefers a completed ride containing continuous known
+dirt over an otherwise eligible candidate with none; existing scrap and other
+comparisons remain between rides in the same category. No percentage floor,
+access relaxation or new search allowance is introduced. The regression fails
+before the change (`dirt-quality-before.log`). All six real app cold/warm runs
+then pass, including exact directed-road equality: Kitchener–Barrie 13.927 /
+6.030 s, Austin–Houston 34.885 / 21.539 s, California 60.058 / 60.057 s. Route
+distances and known-dirt shares are respectively 204.000 km / 63.2%, 363.201 km /
+12.6%, and 378.611 km / 4.7%. Process-lifetime footprint peaks across that
+sequence are 192, 324 and 549 MB (`meaningful-dirt-app-native-tests.xcresult`).
+The final review also prevents ferries from joining separated short dirt pieces
+into one meaningful run; all 153 engine tests pass, including unknown-surface,
+segmented-run and ferry-boundary regressions (`meaningful-dirt-final-engine-tests.log`).
+California's minute-long calculation and low known-dirt share remain limitations;
+this is not a claim that all dense-region performance or riding quality is solved.
 Publication remains gated on the entire current candidate and native-app checks.
 Continental fixture generation now streams complete seam files and retains a
 bounded deterministic sample solely for choosing synthetic test endpoints;
@@ -890,6 +906,10 @@ repeated roads, closed circuits and short dirt scraps. If no better eligible
 alternative is proved within the bounded search, retain the completed ordinary
 ride. Percentage-based early exits in ordinary quality exploration are search
 hints, not permission to report disconnection or reject a completed ride.
+Among otherwise eligible Dirt candidates, an incidental short section must not
+make a ride containing useful continuous known dirt lose to a ride containing
+none. Unknown surfaces and dirt pieces separated by pavement, unknown surface
+or a ferry cannot be combined to invent a continuous known-dirt section.
 Balanced and Clean definitions remain unchanged.
 
 DIRT is a back-roads product. Avoid highways, divided highways, and major

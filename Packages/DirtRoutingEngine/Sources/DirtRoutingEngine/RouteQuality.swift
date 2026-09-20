@@ -25,6 +25,9 @@ public struct RouteQuality: Sendable {
     /// floor. Candidate selection prefers fewer scrap metres over a slightly
     /// higher dirt % built from orange blips.
     public var shortDirtScrapMeters: Double = 0
+    /// Known dirt in continuous runs of at least one kilometre. Unknown
+    /// surfaces and separated short scraps cannot supply this contribution.
+    public var meaningfulDirtMeters: Double = 0
     /// Paved metres before the first meaningful (≥1 km) dirt run. Dirt should
     /// take the first proper dirt turn, not a long paved dip first.
     public var leadingPavedMeters: Double = 0
@@ -38,6 +41,18 @@ public struct RouteQuality: Sendable {
         let roads = route.segments.filter { $0.structure != "ferry" }
         totalMeters = roads.reduce(0) { $0+$1.meters }
         guard totalMeters > 0 else { return }
+        // Retain ferry boundaries here even though surface percentages exclude
+        // ferry mileage: two small dirt pieces across water are not one run.
+        var continuousKnown = 0.0
+        for segment in route.segments {
+            if segment.structure != "ferry", segment.surface == .gravel || segment.surface == .loose {
+                continuousKnown += segment.meters
+            } else {
+                if continuousKnown >= 1_000 { meaningfulDirtMeters += continuousKnown }
+                continuousKnown = 0
+            }
+        }
+        if continuousKnown >= 1_000 { meaningfulDirtMeters += continuousKnown }
         var known = 0.0, unknown = 0.0, pavedRun = 0.0, walked = 0.0
         var sectionKnown = [Double](repeating: 0,count: 4), sectionTotal = sectionKnown
         for segment in roads {
@@ -85,7 +100,9 @@ public struct RouteQuality: Sendable {
                 knownRun += roads[i].meters
                 i += 1
             }
-            if knownRun >= 1_000 { foundMeaningful = true }
+            if knownRun >= 1_000 {
+                foundMeaningful = true
+            }
             let pavedBefore = start > 0 && roads[start - 1].surface == .paved
             let pavedAfter = i < roads.count && roads[i].surface == .paved
             if pavedBefore && pavedAfter && knownRun < 2_500 {
@@ -189,6 +206,12 @@ public struct RouteQuality: Sendable {
         return ab > 1 ? (ap*ap+ab*ab-pb*pb)/(2*ab) : 0
     }
     public static func prefersDirt(_ a: Self, over b: Self, widthA: Double, widthB: Double) -> Bool {
+        // A short incidental section must not erase all useful dirt from the
+        // ride. Apply the existing scrap preference among rides that both
+        // contain meaningful dirt (or neither does), not as a paved-only win.
+        if (a.meaningfulDirtMeters > 0) != (b.meaningfulDirtMeters > 0) {
+            return a.meaningfulDirtMeters > 0
+        }
         // Scraps that inflate dirt % lose to a slightly leaner continuous ride.
         if abs(a.shortDirtScrapMeters - b.shortDirtScrapMeters) > 400 {
             return a.shortDirtScrapMeters < b.shortDirtScrapMeters
