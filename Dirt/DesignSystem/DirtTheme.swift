@@ -405,6 +405,10 @@ private struct DirtGlassControlSurface: ViewModifier {
                 )
             }
         }
+        // The glass is decorative; its transparent pixels must still belong to
+        // the control. Preserve the native interactive glass press effect while
+        // keeping taps/holds off the MapLibre view beneath the full button.
+        .contentShape(.interaction, shape)
         .overlay {
             if bordered {
                 shape.strokeBorder(

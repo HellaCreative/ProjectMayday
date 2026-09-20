@@ -39,8 +39,21 @@ struct AppGateView: View {
         #if DEBUG
         ProcessInfo.processInfo.environment["DIRT_UI_TEST_PROFILE"] == "1"
             || ProcessInfo.processInfo.environment["DIRT_UI_TEST_SEARCH"] == "1"
+            || ProcessInfo.processInfo.environment["DIRT_UI_TEST_ZOOM_TOUCH"] == "1"
         #else
         false
+        #endif
+    }
+
+    @ViewBuilder private var mapFixtureOrRoot: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["DIRT_UI_TEST_ZOOM_TOUCH"] == "1" {
+            MapZoomTouchFixture()
+        } else {
+            RootView()
+        }
+        #else
+        RootView()
         #endif
     }
 
@@ -53,7 +66,7 @@ struct AppGateView: View {
                     onSubscribed: {}
                 )
             } else if showsProfileFixture {
-                RootView()
+                mapFixtureOrRoot
             } else if showsSplash {
                 AnimatedSplashView { splashFinished = true }
             } else if !introDone {

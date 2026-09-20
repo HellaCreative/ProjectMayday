@@ -363,6 +363,47 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testGlassZoomButtonsDoNotPlaceOrMoveMapPins() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_ZOOM_TOUCH"] = "1"
+        app.launch()
+        let touches = app.staticTexts["map-touch-count"]
+        let zooms = app.staticTexts["zoom-action-count"]
+        XCTAssertTrue(touches.waitForExistence(timeout: 8))
+        let clearMap = app.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.45))
+        clearMap.tap()
+        XCTAssertEqual(touches.label, "Map touches: 1", "The underlying map must accept real map taps")
+        var expectedZooms = 0
+        for standalone in [false, true] {
+            if standalone { app.buttons["Show standalone zoom"].tap() }
+            for identifier in ["map-zoom-in", "map-zoom-out"] {
+                let button = app.buttons[identifier]
+                XCTAssertTrue(button.isHittable)
+                // Both the glyph and the empty glass around it are the button.
+                for offset in [CGVector(dx: 0.5, dy: 0.5), CGVector(dx: 0.18, dy: 0.3),
+                               CGVector(dx: 0.82, dy: 0.7)] {
+                    button.coordinate(withNormalizedOffset: offset).tap()
+                    expectedZooms += 1
+                    XCTAssertEqual(zooms.label, "Zoom actions: \(expectedZooms)")
+                    XCTAssertEqual(touches.label, "Map touches: 1")
+                }
+                button.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.5)).press(forDuration: 0.8)
+                // A held button may activate on release; it must never reach map long-press.
+                XCTAssertEqual(touches.label, "Map touches: 1")
+                expectedZooms = Int(zooms.label.components(separatedBy: ": ").last ?? "") ?? expectedZooms
+            }
+        }
+        // Use a fresh location: tapping the original marker correctly selects
+        // that pin instead of invoking the map's placement callback again.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.35)).tap()
+        XCTAssertEqual(touches.label, "Map touches: 2", "Map interaction must remain available outside the buttons")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Glass zoom controls — touch isolation"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
