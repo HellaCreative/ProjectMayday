@@ -581,12 +581,14 @@ struct RoutePlannerCard: View {
         surfaceDirtIsland
     }
 
-    /// Surface label + profile menu as one left-hugging island. Tight, no spacer.
+    /// Surface label + profile menu share the row evenly so neither control
+    /// bunches against the leading edge.
     private var surfaceDirtIsland: some View {
         HStack(spacing: DirtSpace.tight) {
             Text("Surface")
                 .font(DirtType.rowTitle)
                 .foregroundStyle(DirtTheme.ink)
+                .frame(maxWidth: .infinity, alignment: .center)
             Button {
                 openDefaultSettings()
             } label: {
@@ -599,9 +601,10 @@ struct RoutePlannerCard: View {
                 .font(DirtType.chip)
                 .fontWeight(.bold)
                 .foregroundStyle(DirtTheme.ink)
-                .frame(minWidth: DirtHit.dropdown, minHeight: DirtHit.min, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .center)
                 .contentShape(Rectangle())
             }
+            .frame(maxWidth: .infinity)
             .buttonStyle(.plain)
             .accessibilityLabel("Default ride settings")
             .accessibilityValue(planner.profile.title)
@@ -617,8 +620,8 @@ struct RoutePlannerCard: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(minHeight: DirtHit.min, alignment: .leading)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: DirtHit.min)
     }
 
     /// Empty / error From here — always leave a next step (never red text alone).

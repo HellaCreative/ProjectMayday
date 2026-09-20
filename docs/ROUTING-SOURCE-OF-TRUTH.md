@@ -2046,6 +2046,8 @@ header with a short, lightly damped spring, and its header has deliberate top
 clearance around the close control. The Surface control in From Here, Loop and
 Plan edits the defaults copied into newly created legs. Tapping an existing Plan
 leg's Dirt, Balanced or Clean badge opens the same panel for that leg alone. The
+Surface label and its current-style control occupy equal, centered space in their
+launcher row rather than collecting at the leading edge. The
 panel contains style, Allow Unknown, Ride Wander, Avoid cities
 and towns, Avoid highways and Avoid ferries. Done applies the draft once and
 rebuilds only the selected Plan leg; the numbered leg button already focuses
