@@ -244,6 +244,28 @@ public struct PathSearch: Sendable {
     }
     struct Entry { let label: Int; let cost: Double }
 
+    /// Concrete storage keeps the very frequent ancestor reads specialized in
+    /// normal per-file app builds. Generic nested-array access otherwise pays
+    /// runtime type-metadata costs for each of those reads. Keep the same chunk
+    /// size, stable indices and payload accounting as the bounded history.
+    struct LabelHistory {
+        private var chunks: [[Label]] = []
+        private(set) var count = 0
+        mutating func append(_ label: Label) {
+            if count & 4095 == 0 {
+                var chunk: [Label] = []
+                chunk.reserveCapacity(4096)
+                chunks.append(chunk)
+            }
+            chunks[count >> 12].append(label)
+            count += 1
+        }
+        subscript(_ index: Int) -> Label {
+            precondition(index >= 0 && index < count)
+            return chunks[index >> 12][index & 4095]
+        }
+    }
+
     public func search(start: RoadMatch, end: RoadMatch, policy: ProfilePolicy,
                        access: AccessPolicy, options: SearchOptions = .init(),
                        budget: ComputationBudget = .init()) throws -> ComputedRoute {
@@ -359,7 +381,7 @@ public struct PathSearch: Sendable {
         }
         let initial = State(node: startNode,incoming: resolvedArrival,
                             restrictionID: restrictionID(carriedRestrictions),bucket: 0)
-        var labels = ChunkedArray<Label>()
+        var labels = LabelHistory()
         labels.append(Label(state: initial,cost: 0,meters: 0,dirtMeters: 0,contiguousDirtMeters: 0,
                             achievedMeaningfulDirt: false,pavedWithoutMeaningfulMeters: 0,
                             peakProgress: 0,parent: nil,arcToken: 0))

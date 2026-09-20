@@ -103,9 +103,32 @@ extremes, atomic file replacement, escaped Data lifetime, and 8,193 ordered seam
 records. An initial lifetime defect on tiny mapped files was caught and repaired;
 the failed test output is retained. Evidence: `inline-primitives-app-sample.txt`,
 `concrete-columns-build/engine-tests.log`, and `concrete-columns-fixed-build`.
-Fresh app build, dense app replay, and large-boundary memory qualification for
-this repair remain pending. Pack bytes and all routing controls are unchanged.
-Do not count the earlier WMO app timings as current Play-build qualification.
+The normal Debug app build passes. Kitchener–Barrie improves to 28.616 / 14.925 s
+cold/warm with the same 204 km and 63.2% known dirt, but Austin–Houston still
+reaches its 60 s limit, so California is not reached in that app test. Evidence:
+`concrete-columns-fixed-app-tests.xcresult`. The chunked-proof California internal
+SSD diagnostic completes in 54.951 s, with the same 138.534 km road hash and no
+known dirt, but its 1,676,902,400-byte RSS peak is worse than the preceding flat
+proof-list run. Chunking those proof lists is not a demonstrated improvement.
+Evidence: `california-chunked-concrete-internal-preflight`. Pack bytes and routing
+controls are unchanged. Do not count earlier WMO app timings as current Play
+qualification.
+
+The next same-request process sample identifies generic search-history access as
+a hot path. Merely forcing its generic helpers inline did not improve timing
+(29.158 → 30.207 s); that annotation experiment was removed. A concrete label
+history retaining the identical 4,096-record chunks, parent indices and payload
+limit completes the Debug host replay in 22.650 s, search 15.881 → 9.153 s. All
+1,045,321 examined labels, 204 km, 63.2% known dirt and directed-road SHA-256
+`69b71e25e5f17bbc67238b75a12aa800004002ae35d292debbd8a3e03c3f1f3b` agree.
+All 163 engine tests and the fresh normal app build pass. Through the app,
+Kitchener–Barrie improves from 28.616 / 14.925 s to 21.100 / 8.586 s cold/warm,
+with the same roads and dirt share. Austin–Houston still reaches the 60 s window,
+after 27.506 s of search and 3,485,395 pops, so the six-replay app test remains
+failed and California is not reached. These are simulator diagnostics, not phone
+timings. Evidence: `kitchener-concrete-debug-profile`,
+`kitchener-forced-inline-label-profile`, `kitchener-concrete-label-profile`,
+`concrete-label-build`, and `concrete-label-app-app-tests.xcresult`.
 
 Continental preparation verification (September 20, evidence in
 `.build/continental-qualification-20260920`): all seven existing immutable
