@@ -4,6 +4,22 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct PreparationMemoryTests {
+    @Test func chunkedSearchHistoryKeepsIndicesAndIndependentCopies() {
+        var history = ChunkedArray<Int>()
+        #expect(history.count == 0)
+        for i in 0..<10_003 { history.append(i * 7) }
+        #expect(history.count == 10_003)
+        for i in 0..<history.count { #expect(history[i] == i * 7) }
+        var branch = history
+        branch.append(-1)
+        history.append(-2)
+        #expect(branch[10_003] == -1)
+        #expect(history[10_003] == -2)
+        for i in 10_004..<20_007 { history.append(i * 7) }
+        #expect(branch.count == 10_004)
+        #expect(history[20_006] == 20_006 * 7)
+    }
+
     @Test func unrelatedRoadsAtSameCoordinatesCannotBecomeAJunction() throws {
         // Distinct source nodes can occupy the same map position at an
         // overpass, barrier or divided road. Only source topology joins them.

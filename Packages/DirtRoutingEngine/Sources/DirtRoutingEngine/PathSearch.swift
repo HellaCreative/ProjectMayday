@@ -295,9 +295,10 @@ public struct PathSearch: Sendable {
         let carriedRestrictions = options.arrival?.restrictions ?? options.arrivalRestrictions
         let initial = State(node: startNode,incoming: resolvedArrival,
                             restrictions: carriedRestrictions,bucket: 0)
-        var labels = [Label(state: initial,cost: 0,meters: 0,dirtMeters: 0,contiguousDirtMeters: 0,
+        var labels = ChunkedArray<Label>()
+        labels.append(Label(state: initial,cost: 0,meters: 0,dirtMeters: 0,contiguousDirtMeters: 0,
                             achievedMeaningfulDirt: false,pavedWithoutMeaningfulMeters: 0,
-                            peakProgress: 0,parent: nil,arc: nil)]
+                            peakProgress: 0,parent: nil,arc: nil))
         var bestSimple: [SimpleKey:Int] = [:]
         var bestFull: [State:Int] = [:]
         if let key = initial.simple { bestSimple[key] = 0 } else { bestFull[initial] = 0 }
