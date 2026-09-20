@@ -62,15 +62,17 @@ source hash. Known-place checks cover both sides, including Port aux Basques,
 Corner Brook, St Anthony, Red Bay and Happy Valley–Goose Bay.
 
 PEI diagnosis: the old packs already contain Confederation Bridge way
-`646650186`. Fewest-region acquisition and staged chain selection could exclude
-NB and retain only NS–PE ferry travel. New candidates carry verified road-neighbor
-metadata so acquisition retains both road/bridge and ferry alternatives. Staged
-alternatives now serve as fallbacks: try the fewest-region chain first and return
-the first complete legal journey; try another only if the earlier attempt cannot
-complete. Do not build additional whole journeys to compare after one is ready.
-Road-level Dirt, Balanced, Clean and Wander selection remains in place. This
-does not establish that the first corridor is the best bridge/ferry choice.
-This is a deliberate regional route-selection correction. Fresh-pack bridge and
+`646650186`. Earlier acquisition and staged selection could exclude NB and
+retain only NS–PE ferry travel. New candidates carry verified road-neighbor
+metadata so acquisition retains both road/bridge and ferry alternatives.
+Regional journey selection remains defective, as the subsequent White replays
+below demonstrate. Pack boundaries are storage details, not riding priorities.
+Choose connections to serve the ride, the rider's points, Dirt/Balanced/Clean,
+Wander and legal access. Region count and discovery order must not decide which
+journey is returned. Avoid unnecessary computation while preserving that intent.
+Prefer riding over unnecessary ferry travel; necessary or deliberately selected
+ferry crossings remain available. Bridge approaches belong to the crossing
+assessment along with the bridge itself. Fresh-pack bridge and
 ferry replays now complete in both directions. It is not an
 exhaustive search of every possible administrative chain.
 
@@ -309,9 +311,11 @@ qualifying this longer staged chain.
 Region-chain discovery now preserves the shortest distinct link bypass in
 addition to its ordinary and road-only chains. Prefix-preserving link deviations
 keep a landing-region detour from being hidden by the same inland alternative.
-At most three chains are available, ordered by region count. The owner’s latest
-direction removes mandatory comparison of complete regional journeys: return the
-first fully proved journey and retain the other chains only for failure recovery.
+The installed implementation exposes at most three chains. Its ordering and
+early-return shortcut is a known journey-selection defect, not an accepted
+product rule. The assistant incorrectly attributed that policy to the owner;
+that attribution is withdrawn. Removing unnecessary computation does not
+justify discarding better riding connections before evaluating them.
 Before searching the penultimate stage, a necessary-only connectivity preflight
 checks whether the final window can reach the destination from that handover.
 No new connector, endpoint relocation, access change or pack rebuild is involved.
@@ -330,16 +334,17 @@ connector is 51 m. It retains a 54 m repeated section at the Quebec ferry
 handover; this is disclosed, not counted as flawless ride quality. The initial repair still compared a longer mainland journey and exhausted its
 allotted time after already completing the ferry route. The simulator confirmed
 60.079 / 60.066 s totals, although the completed ferry route was ready after
-25.953 / 20.189 s. The owner subsequently directed removal of that extra
-whole-journey comparison. Verification of the first-completion change follows
-below; this earlier measurement is its baseline, not a speed-fix claim. Packs remain
+25.953 / 20.189 s. The assistant removed further whole-journey comparison
+using an ordering shortcut that the owner has rejected. The measurements below
+record that implementation's timing and completion only; they do not qualify
+its journey-selection policy. Packs remain
 `fabric-v4-20260919-01`; production and the installed White build are unchanged
 by the investigation.
 
-The first-completion implementation is now qualified locally. All 131 engine
-tests pass, including no extra journey after success, fallback after a failed
-chain, honest limits when every attempt fails, and cancellation without starting
-another alternative. The serial iPhone 17 / iOS 26.5 Debug simulator run on
+The installed implementation passed 131 engine tests, covering its return
+behavior, failure recovery, honest limits and cancellation. Tests that exercise
+its ordering/early-return behavior describe the implementation, not accepted
+riding policy; they must be revised with the journey-selection repair. The serial iPhone 17 / iOS 26.5 Debug simulator run on
 Apple M1 passes both integrated tests / eight calculations: bridge midpoint in
 both directions and all three styles, plus the owner Labrador request first/warm.
 Labrador totals fall from 60.079 / 60.066 s to 25.621 / 18.462 s, with no limit
@@ -361,8 +366,12 @@ verified as development-only, installed and launched successfully on White
 `6c8814d2dc1ef9a16be8981ce68a1b81f703c040a1268e1f588766be4ea7e8b3`. The same fresh
 seven-pack release remains selected; app data was not uninstalled. Evidence:
 `white-build.log`, `white-build-receipt.json`, `white-install.json` and
-`white-launch.json` in the Labrador evidence directory. Owner route acceptance
-of this replacement is pending. Previous installed source `d3457f9` and main
+`white-launch.json` in the Labrador evidence directory. The subsequent owner
+log confirms Labrador completion in 23.074 s, but rejects the journey choice.
+Two Quebec requests also went through Newfoundland with highway avoidance off:
+2,277.410 km in 11.018 s and 3,767.621 km in 16.643 s. The mainland chain was
+not attempted. These results support connectivity on the returned paths and
+identify a journey-selection failure; they are not acceptance of that policy. Previous installed source `d3457f9` and main
 checkpoint `62332ff` remain recoverable. This candidate changes regional
 recovery/return behavior, not highway/ferry penalties, riding styles, fuel,
 the interface or published packs.
@@ -938,7 +947,7 @@ legal journey, or host speed with phone speed.
 
 | Remaining check | Current evidence / significance | Finish condition |
 | --- | --- | --- |
-| Owner Labrador journey | Native repair completes locally; old White build failed. | New White build completes the exact request, preserves the pin, and passes return-direction replay. |
+| Labrador and Quebec journey selection | White now completes Labrador, but chooses unwanted ferry journeys for Labrador and Quebec. | Replace the rejected regional ordering/early-return shortcut; qualify riding-led connections, preserved pins and return journeys. |
 | PEI bridge versus ferry choice | Same-request replay proves highway avoidance switches bridge to ferry. | Qualify a general crossing-selection correction with avoidance on/off; retain useful ferries and normal highway avoidance. Bridge availability alone is insufficient. |
 | Ferry handover repetition | Labrador replay contains 54 m repeated road near the Quebec landing. | Diagnose and remove an artificial handover loop without inventing connections or weakening turn/access rules; retain any genuinely unavoidable approach. |
 | Full final-version crossing matrix | Earlier 87 completions combine different engine revisions; latest integrated set covers eight calculations. | Rerun the relevant final set on one source revision and the same seven pack hashes: every neighbor pair, both permitted directions, Quebec split, bridge/ferry endpoints and multi-crossing journeys. |

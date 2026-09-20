@@ -103,9 +103,9 @@ public enum StagedRouter {
         }
     }
 
-    /// Alternatives are recovery paths, not mandatory complete-journey comparisons.
-    /// A failed attempt cannot renew the shared window; reserve time for fallback.
-    /// Once a whole legal journey is proved, return it without searching another.
+    /// Existing early-return implementation, pending journey-selection repair.
+    /// The owner rejects using storage boundaries/discovery order to choose a ride.
+    /// Preserve bounded failure recovery and cancellation when replacing it.
     static func firstCompletedConnection(_ chains: [[String]], budget: ComputationBudget,
         build: ([String], ComputationBudget) throws -> ComputedRoute) throws -> ComputedRoute {
         var outcomes: [String] = []

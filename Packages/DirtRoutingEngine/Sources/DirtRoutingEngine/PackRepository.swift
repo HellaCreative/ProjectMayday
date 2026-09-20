@@ -317,8 +317,8 @@ public struct RegionConnectivity: Sendable {
             a.count == b.count ? a.lexicographicallyPrecedes(b) : a.count < b.count
         }
         if let bypass = bypasses.sorted(by: fewerRegions).first { alternatives.append(bypass) }
-        // Try fewer regions first; later chains are fallbacks if legal routing
-        // cannot complete the earlier one. Road-level style selection is unchanged.
+        // Known defect: this storage-based ordering can hide a preferable riding
+        // connection. It is not product policy; see the routing source of truth.
         return alternatives.sorted(by: fewerRegions)
     }
 
