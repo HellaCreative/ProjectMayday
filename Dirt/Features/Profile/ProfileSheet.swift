@@ -34,8 +34,7 @@ struct ProfileSheet: View {
         VStack(spacing: 0) {
             DirtSheetHeader(
                 title: "Profile",
-                titleFont: .system(.title2, design: .default, weight: .bold),
-                onClose: closeProfile
+                titleFont: .system(.title2, design: .default, weight: .bold)
             )
 
             ScrollView {
@@ -98,6 +97,7 @@ struct ProfileSheet: View {
             .scrollEdgeEffectStyle(.soft, for: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityAction(.escape, closeProfile)
         .onAppear { displayName = supabase.displayName }
         .onChange(of: supabase.displayName) { _, name in
             if !showEditName {
@@ -331,7 +331,8 @@ struct ProfileSheet: View {
 
     private var rideSettingsSheet: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Keep-awake & contribute", onClose: { showRideSettings = false })
+            DirtSheetHeader(title: "Keep-awake & contribute")
+                .padding(.top, DirtSpace.group)
             ScrollView {
                 VStack(alignment: .leading, spacing: DirtSpace.inner) {
                     Toggle("Keep device awake while using this app", isOn: $keepAwakeWhileUsing)
@@ -371,9 +372,13 @@ struct ProfileSheet: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
+            Button("Done") { showRideSettings = false }
+                .buttonStyle(DirtCTAStyle.brand())
+                .padding(.horizontal, DirtSpace.group)
+                .padding(.bottom, DirtSpace.group)
         }
         .background(DirtTheme.sheetMaterial)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.65), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(DirtTheme.sheetMaterial)
         .onChange(of: keepAwakeWhileUsing) { _, _ in
@@ -390,10 +395,9 @@ struct ProfileSheet: View {
         VStack(spacing: 0) {
             DirtSheetHeader(
                 title: "Legal",
-                titleFont: .system(.title2, design: .default, weight: .bold),
-                onClose: { showLegal = false }
+                titleFont: .system(.title2, design: .default, weight: .bold)
             )
-            .padding(.top, DirtSpace.row)
+            .padding(.top, DirtSpace.group)
 
             ScrollView {
                 VStack(spacing: DirtSpace.group) {
@@ -444,9 +448,13 @@ struct ProfileSheet: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
+            Button("Done") { showLegal = false }
+                .buttonStyle(DirtCTAStyle.brand())
+                .padding(.horizontal, DirtSpace.group)
+                .padding(.bottom, DirtSpace.group)
         }
         .background(DirtTheme.sheetMaterial)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.65), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(DirtTheme.sheetMaterial)
         .sheet(isPresented: $showLicences) {
@@ -483,7 +491,8 @@ struct ProfileSheet: View {
 
     private var editNameSheet: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Screen name", onClose: { showEditName = false })
+            DirtSheetHeader(title: "Screen name")
+                .padding(.top, DirtSpace.group)
             VStack(alignment: .leading, spacing: DirtSpace.inner) {
                 TextField("Screen name", text: $displayName)
                     .textInputAutocapitalization(.never)
@@ -766,7 +775,8 @@ private struct ProfileFuelSettingsSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Fuel notifications", onClose: { dismiss() })
+            DirtSheetHeader(title: "Fuel notifications")
+                .padding(.top, DirtSpace.group)
             ScrollView {
                 VStack(alignment: .leading, spacing: DirtSpace.group) {
                     VStack(alignment: .leading, spacing: DirtSpace.inner) {
@@ -846,7 +856,7 @@ private struct ProfileFuelSettingsSheet: View {
             }
         }
         .background(DirtTheme.sheetMaterial)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.65), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(DirtTheme.sheetMaterial)
     }

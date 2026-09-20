@@ -245,21 +245,53 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
-    func testProfileIsAFullScreenDestination() throws {
+    func testProfileSupplementaryPanelsAndLayersDismissal() throws {
         let app = XCUIApplication()
         app.launchEnvironment["DIRT_UI_TEST_PROFILE"] = "1"
         app.launch()
-
-        XCTAssertTrue(app.staticTexts["Profile"].waitForExistence(timeout: 5))
-        let close = app.buttons["Close"]
-        XCTAssertTrue(close.exists)
-        let route = app.buttons["Route"]
-        XCTAssertFalse(route.isHittable, "The full-screen Profile destination must block interaction with the map dock")
-
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Profile — Full-screen Destination"
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        XCTAssertTrue(app.staticTexts["Profile"].firstMatch.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Close"].exists)
+        let profileHeader = app.staticTexts["Profile"].firstMatch.frame
+        for title in ["Fuel notifications", "Keep-awake & contribute", "Legal"] {
+            let entry = app.buttons[title]
+            if !entry.isHittable { app.scrollViews.firstMatch.swipeUp() }
+            XCTAssertTrue(entry.waitForExistence(timeout: 3))
+            entry.tap()
+            let done = app.buttons["Done"]
+            XCTAssertTrue(done.waitForExistence(timeout: 3))
+            XCTAssertFalse(app.buttons["Close"].exists)
+            XCTAssertTrue(done.isHittable)
+            let heading = app.staticTexts[title].firstMatch
+            XCTAssertGreaterThan(heading.frame.minY, profileHeader.minY)
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "Profile — " + title
+            shot.lifetime = .keepAlways
+            add(shot)
+            done.tap()
+        }
+        app.buttons["Fuel notifications"].tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 3))
+        let heading = app.staticTexts["Fuel notifications"].firstMatch
+        heading.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)))
+        XCTAssertTrue(app.buttons["Legal"].waitForExistence(timeout: 3))
+        app.buttons["Layers"].tap()
+        XCTAssertTrue(app.staticTexts["Downloaded maps"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Clear All"].exists)
+        XCTAssertFalse(app.buttons["Close"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Layers — Downloaded Maps"
+        shot.lifetime = .keepAlways
+        add(shot)
+        let handle = app.descendants(matching: .any)["Resize sheet"].firstMatch
+        XCTAssertTrue(handle.exists)
+        handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)))
+        XCTAssertFalse(app.staticTexts["Downloaded maps"].isHittable)
+        app.buttons["Group"].tap()
+        XCTAssertTrue(app.staticTexts["Groups"].waitForExistence(timeout: 3))
+        let groupShot = XCTAttachment(screenshot: app.screenshot())
+        groupShot.name = "Groups — Primary Panel"
+        groupShot.lifetime = .keepAlways
+        add(groupShot)
     }
 
     @MainActor

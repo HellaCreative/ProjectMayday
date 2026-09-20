@@ -9,6 +9,8 @@ struct LayersSheet: View {
     @State private var busyPacks: Set<String> = []
     @State private var packError: String?
     @State private var pendingDeleteID: String?
+    @State private var confirmClearAll = false
+    @State private var clearingAll = false
 
     @AppStorage(MapStyleCatalog.preferenceKey) private var styleIDRaw = MapStyleID.shortbreadRich.rawValue
     @AppStorage("dirt.layers.fuel") private var showFuel = false
@@ -24,7 +26,7 @@ struct LayersSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Layers", onClose: onClose)
+            DirtSheetHeader(title: "Layers")
             layersList
         }
     }
@@ -116,8 +118,23 @@ struct LayersSheet: View {
 
     private var downloadedMapsCard: some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
-            DirtSectionLabel(title: "Downloaded maps")
-            Text("Installed when a route needs them. Update or delete packs already on this phone — DIRT does not browse a download storefront.")
+            HStack {
+                DirtSectionLabel(title: "Downloaded maps")
+                Spacer(minLength: DirtSpace.inner)
+                Button("Clear All", role: .destructive) { confirmClearAll = true }
+                    .font(DirtType.chip.weight(.semibold))
+                    .foregroundStyle(DirtTheme.danger)
+                    .buttonStyle(.plain)
+                    .frame(minHeight: DirtHit.min)
+                    .disabled(app.graphPacks.installedManagementRows.isEmpty || clearingAll
+                        || !busyPacks.isEmpty || !app.graphPacks.managementInFlight.isEmpty)
+            }
+            if clearingAll {
+                ProgressView("Clearing downloaded maps…")
+                    .font(DirtType.helper)
+                    .tint(DirtTheme.orange)
+            }
+            Text("Maps download when a route needs them. Deleted maps can be downloaded again.")
                 .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -172,6 +189,7 @@ struct LayersSheet: View {
                             .accessibilityLabel("Delete \(row.title)")
                         }
                         .font(DirtType.chip)
+                        .disabled(clearingAll)
                     }
                 }
             }
@@ -183,6 +201,12 @@ struct LayersSheet: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
+        .confirmationDialog("Clear all downloaded maps?", isPresented: $confirmClearAll, titleVisibility: .visible) {
+            Button("Clear All", role: .destructive) { clearDownloadedMaps() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Removes all \(app.graphPacks.installedManagementRows.count) downloaded maps from this phone. Your saved rides stay. Maps will need to download again before offline routing.")
+        }
         .confirmationDialog(
             deleteConfirmTitle,
             isPresented: Binding(
@@ -209,6 +233,22 @@ struct LayersSheet: View {
         guard let id = pendingDeleteID else { return "Delete pack?" }
         let title = app.graphPacks.displayTitle(forRegionId: id)
         return "Delete \(title)?"
+    }
+
+    private func clearDownloadedMaps() {
+        guard !clearingAll, busyPacks.isEmpty, app.graphPacks.managementInFlight.isEmpty else { return }
+        let ids = app.graphPacks.installedManagementRows.map(\.id)
+        clearingAll = true
+        packError = nil
+        Task { @MainActor in
+            defer { clearingAll = false }
+            let failures = await DownloadedMapsRemoval.remove(ids) { id in
+                try await app.graphPacks.deleteRegion(id)
+            }
+            if !failures.isEmpty {
+                packError = "Could not clear \(failures.count) map(s). \(failures[0])"
+            }
+        }
     }
 
     private func managePack(_ id: String, update: Bool) {
@@ -263,4 +303,18 @@ private enum RiderServiceDot {
 /// Opaque islands on Layers’ thin glass. Local to this sheet — not a DirtTheme token change.
 private enum LayersGlass {
     static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.94)
+}
+
+/// A batch uses the same guarded removal as an individual map. A failed map
+/// remains installed; the rest of the requested batch can still finish.
+@MainActor
+enum DownloadedMapsRemoval {
+    static func remove(_ ids: [String], using remove: (String) async throws -> Void) async -> [String] {
+        var failures: [String] = []
+        for id in ids {
+            do { try await remove(id) }
+            catch { failures.append("\(id): \(error.localizedDescription)") }
+        }
+        return failures
+    }
 }

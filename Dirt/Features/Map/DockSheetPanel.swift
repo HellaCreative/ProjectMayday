@@ -75,7 +75,7 @@ enum DockSheetContentHeightKey: PreferenceKey {
 
 /// Panel that sits *behind* the dock — portrait (bottom) or landscape (side).
 /// Profile and Groups can drag like a system sheet: slide up for more, slide
-/// down, swipe to close. Layers stays a fixed full-height panel.
+/// down, swipe to close. Layers opens tall with the same swipe-to-close handle.
 struct DockSheetPanel<Content: View>: View {
     /// Fixed height as a fraction of the screen, or the **collapsed** detent when
     /// `expandedHeightFraction` is set. Also the **maximum** when `fitsContent` is true.
@@ -114,6 +114,7 @@ struct DockSheetPanel<Content: View>: View {
             }
         }
         .allowsHitTesting(true)
+        .accessibilityAction(.escape, onDismiss)
         .onPreferenceChange(DockSheetContentHeightKey.self) { measuredContentHeight = $0 }
     }
 
@@ -185,6 +186,7 @@ struct DockSheetPanel<Content: View>: View {
             .accessibilityLabel("Resize sheet")
             .accessibilityHint("Slide up for more, slide down to close")
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: "Close") { onDismiss() }
     }
 
     private var sheetDrag: some Gesture {

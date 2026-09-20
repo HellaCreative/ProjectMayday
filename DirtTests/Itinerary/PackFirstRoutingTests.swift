@@ -799,6 +799,27 @@ struct PackFirstRoutingTests {
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("current/nb/graph.v4.bin").path))
     }
 
+    @Test func bulkMapRemovalDeletesAllRevisionsAndReportsFailuresWithoutStopping() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for path in ["old/ns", "current/ns", "current/nb", "current/pe"] {
+            try FileManager.default.createDirectory(at: root.appendingPathComponent(path), withIntermediateDirectories: true)
+            try Data([1]).write(to: root.appendingPathComponent(path + "/graph.v4.bin"))
+        }
+        var attempted: [String] = []
+        let failures = await DownloadedMapsRemoval.remove(["ns", "nb", "pe"]) { id in
+            attempted.append(id)
+            if id == "nb" { throw CocoaError(.fileWriteNoPermission) }
+            try GraphPackStore.removeInstalledRevisions(regionID: id, cacheRoot: root)
+        }
+        #expect(attempted == ["ns", "nb", "pe"])
+        #expect(failures.count == 1 && failures[0].hasPrefix("nb:"))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("old/ns").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("current/ns").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("current/pe").path))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("current/nb/graph.v4.bin").path))
+    }
+
     @Test func checksumMismatchHandlingRemainsFailClosed() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("dirt-pack-fail-closed-\(UUID().uuidString).bin")

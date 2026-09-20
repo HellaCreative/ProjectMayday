@@ -90,7 +90,11 @@ struct GroupsSheet: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DirtSpace.section)
+        .padding(DirtSpace.row)
+        .dirtGroupingSurface()
+        .padding(.horizontal, DirtSpace.group)
+        .padding(.top, DirtSpace.tight)
+        .padding(.bottom, DirtSpace.section)
         .background(
             GeometryReader { geo in
                 Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
@@ -124,7 +128,7 @@ struct GroupsSheet: View {
 
     private var groupList: some View {
         ScrollView {
-            VStack(spacing: DirtSpace.inner) {
+            VStack(spacing: DirtSpace.group) {
                 Text("Share an invite code. Start sharing to put live positions on the map.")
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
@@ -237,7 +241,7 @@ struct GroupsSheet: View {
                         .fontWeight(.bold)
                         .foregroundStyle(DirtTheme.ink)
                     Text(groupMeta(group))
-                        .font(DirtType.metricInline)
+                        .font(DirtType.helper)
                         .foregroundStyle(DirtTheme.muted)
                 }
                 Spacer(minLength: DirtSpace.tight)
@@ -259,11 +263,8 @@ struct GroupsSheet: View {
             }
             .padding(.horizontal, DirtSpace.row)
             .frame(minHeight: DirtHit.control)
-            .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
-                    .stroke(DirtTheme.hairline, lineWidth: 1)
-            )
+            .padding(.vertical, DirtSpace.tight)
+            .dirtGroupingSurface()
             .contentShape(RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -290,26 +291,30 @@ struct GroupDetailView: View {
     private var groups: GroupsViewModel { app.groups }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("\(group.memberCount) riders · \(group.liveCount) sharing")
-                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-                Spacer()
-            }
-            if let invite = group.inviteCode {
-                Button {
-                    UIPasteboard.general.string = invite.lowercased()
-                    app.planner.toast = "Invite code copied"
-                } label: {
-                    HStack {
-                        Label("Invite a rider", systemImage: "person.badge.plus")
-                        Spacer()
-                        Text(invite.lowercased()).monospaced()
-                        Image(systemName: "doc.on.doc")
-                    }.font(DirtType.rowTitle).frame(minHeight: 44)
+        VStack(alignment: .leading, spacing: DirtSpace.group) {
+            VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                HStack {
+                    Text("\(group.memberCount) riders · \(group.liveCount) sharing")
+                        .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+                    Spacer()
                 }
-                .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
+                if let invite = group.inviteCode {
+                    Button {
+                        UIPasteboard.general.string = invite.lowercased()
+                        app.planner.toast = "Invite code copied"
+                    } label: {
+                        HStack {
+                            Label("Invite a rider", systemImage: "person.badge.plus")
+                            Spacer()
+                            Text(invite.lowercased()).monospaced()
+                            Image(systemName: "doc.on.doc")
+                        }.font(DirtType.rowTitle).frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
+                }
             }
+            .padding(DirtSpace.row)
+            .dirtGroupingSurface()
             ScrollView {
                 VStack(spacing: DirtSpace.inner) {
                     ForEach(rosterMembers) { member in riderRow(member) }
@@ -343,6 +348,8 @@ struct GroupDetailView: View {
             }
         }
         .padding(.horizontal, DirtSpace.group)
+        .padding(.top, DirtSpace.tight)
+        .padding(.bottom, DirtSpace.group)
         .task(id: groups.members.map { "\($0.id):\(locationKey($0)):\($0.isLive)" }.joined()) {
             // Resolve actual live locations serially. Offline rows never masquerade as current.
             for member in groups.members where member.isLive && locationKeys[member.id] != locationKey(member) {
@@ -408,10 +415,11 @@ struct GroupDetailView: View {
                         .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
                 }
                 .foregroundStyle(DirtTheme.ink)
-                .padding(.horizontal, 8).frame(minHeight: 62)
+                .padding(.horizontal, DirtSpace.row).frame(minHeight: 62)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityValue(expanded ? "Expanded" : "Collapsed")
             if expanded {
+                Divider().padding(.horizontal, DirtSpace.row)
                 HStack(spacing: 8) {
                     if own {
                         Menu {
@@ -443,8 +451,8 @@ struct GroupDetailView: View {
                         } label: { Label("Route to rider", systemImage: "arrow.triangle.turn.up.right.diamond") }
                     }
                 }
-                .font(.caption.weight(.semibold)).buttonStyle(.plain).tint(DirtTheme.action)
-                .frame(minHeight: 44).padding(.horizontal, 10).padding(.bottom, 6)
+                .font(DirtType.chip.weight(.semibold)).buttonStyle(.plain).tint(DirtTheme.action)
+                .frame(minHeight: DirtHit.min).padding(.horizontal, DirtSpace.row).padding(.vertical, DirtSpace.tight)
                 .disabled(!own && (!member.isLive || member.latitude == nil || member.longitude == nil))
                 if own && groups.isWaitingForLocation {
                     Text("Waiting for GPS").font(DirtType.helper).padding(8)
@@ -452,7 +460,7 @@ struct GroupDetailView: View {
             }
         }
         .padding(.vertical, DirtSpace.tight)
-        .background(expanded ? DirtTheme.wash : DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+        .dirtGroupingSurface()
         .overlay {
             RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
                 .stroke(own ? DirtTheme.orange.opacity(0.45) : DirtTheme.hairline, lineWidth: 1)

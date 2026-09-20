@@ -759,6 +759,7 @@ struct RootView: View {
             DockSheetPanel(
                 heightFraction: 0.92,
                 expandedHeightFraction: 0.92,
+                showsDragIndicator: true,
                 landscapeDockLeading: landscapeDockLeading,
                 landscapeHasIslandColumn: landscapeHasIslandColumn,
                 material: .thinMaterial,
