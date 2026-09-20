@@ -56,7 +56,7 @@ struct MapLibreMapView: UIViewRepresentable {
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero, styleURL: state.styleURL)
         mapView.delegate = context.coordinator
-        // We own contentInset (landscape drawer + nav look-ahead). Auto-adjust
+        // We own contentInset (navigation look-ahead). Auto-adjust
         // fights those values and can yank the camera while following.
         // Prefer MLNMapView.automaticallyAdjustsContentInset over the deprecated
         // UIViewController.automaticallyAdjustsScrollViewInsets path in MapLibre.
@@ -208,6 +208,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var appliedPinSelectionGeneration = -1
         private var appliedNavigatingLock: Bool?
         private var appliedCameraID: UUID?
+        private var appliedOverlayInsets: UIEdgeInsets = .zero
         private var routeBuildSequenceID: UUID?
         private var importedRouteBuildStepCount = 0
         private var pendingRouteBuildSteps: [MapState.RouteBuildCameraStep] = []
@@ -679,10 +680,19 @@ struct MapLibreMapView: UIViewRepresentable {
             syncDebugGraph(style: style)
         }
 
-        /// MapLibre recenters immediately when contentInset changes — only write
-        /// when the inset actually moved, or course-up follow looks like a flick.
+        /// Planning panels are overlays, not camera commands. Persistent insets
+        /// recenter MapLibre even when the rider merely switches a dock tab.
+        /// Reserve them for navigation; explicit planning fits use edge padding.
         private func applyContentInsets(on mapView: MLNMapView) {
-            var insets = state.overlayContentInsets
+            if appliedOverlayInsets != state.overlayContentInsets {
+                appliedOverlayInsets = state.overlayContentInsets
+                if let pending = state.pendingRouteCompletionCameraID,
+                   pending == state.camera?.id {
+                    // The final leg list may resize during the completion fit.
+                    appliedCameraID = nil
+                }
+            }
+            var insets = state.isNavigating ? state.overlayContentInsets : .zero
             if state.isNavigating,
                state.navigationCameraMode == .detail,
                state.followMode != .off,
@@ -1043,9 +1053,8 @@ struct MapLibreMapView: UIViewRepresentable {
                 }
                 // Portrait used a huge bottom inset for the tall nav panel — that
                 // collapses the visible map to nothing in landscape and breaks PiP overview.
-                // Planning: sheet / drawer already live in `contentInset` via
-                // `overlayContentInsets` — only add soft chrome so the line clears
-                // brand + Packs/fit/recenter chips (do not double-count the sheet).
+                // Planning applies sheet clearance only to this explicit fit;
+                // opening or closing an ordinary panel must not move the map.
                 let landscape = mapView.bounds.width > mapView.bounds.height
                 let insets: UIEdgeInsets
                 if state.isNavigating, landscape {
@@ -1053,19 +1062,14 @@ struct MapLibreMapView: UIViewRepresentable {
                 } else if state.isNavigating {
                     insets = UIEdgeInsets(top: 100, left: 48, bottom: 280, right: 48)
                 } else {
-                    let overlay = state.overlayContentInsets
-                    let sheetOpen =
-                        overlay.bottom > 1 || overlay.left > 1 || overlay.right > 1
-                    // No sheet: clear the portrait dock. Sheet open: clear control chips.
-                    let bottomChrome: CGFloat = sheetOpen ? 64 : 120
-                    insets = UIEdgeInsets(top: 88, left: 40, bottom: bottomChrome, right: 40)
+                    insets = planningCameraInsets(for: mapView)
                 }
                 // Cancel queued leg framing before starting the final overview.
                 // Pitch must be applied first: writing it after bounds cancels
                 // the fit animation and leaves the camera at the last pin.
                 cancelRouteBuildCameraPlayback()
                 applyPitch(on: mapView, animated: false)
-                let fittedInsets = mapView.contentInset
+                let fittedInsets = state.overlayContentInsets
                 let fitRunID = UUID()
                 routeOverviewFitRunID = fitRunID
                 mapView.setVisibleCoordinateBounds(
@@ -1079,7 +1083,7 @@ struct MapLibreMapView: UIViewRepresentable {
                               self.state.pendingRouteCompletionCameraID == camera.id else { return }
                         // The completed leg list can resize the planner while
                         // the camera moves. Refit using its settled footprint.
-                        if mapView.contentInset != fittedInsets {
+                        if self.state.overlayContentInsets != fittedInsets {
                             self.appliedCameraID = nil
                             self.syncCamera(mapView: mapView)
                             return
@@ -1212,7 +1216,10 @@ struct MapLibreMapView: UIViewRepresentable {
             let overlay = state.overlayContentInsets
             let sheetOpen = overlay.bottom > 1 || overlay.left > 1 || overlay.right > 1
             let bottomChrome: CGFloat = sheetOpen ? 64 : 120
-            return UIEdgeInsets(top: 88, left: 40, bottom: bottomChrome, right: 40)
+            return UIEdgeInsets(
+                top: overlay.top + 88, left: overlay.left + 40,
+                bottom: overlay.bottom + bottomChrome, right: overlay.right + 40
+            )
         }
 
         private func applyPitch(on mapView: MLNMapView, animated: Bool) {
