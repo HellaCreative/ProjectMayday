@@ -977,12 +977,7 @@ struct RootView: View {
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 50, height: 50)
-                .background(DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-                )
+                .dirtGlassControl(tint: DirtTheme.chrome)
         }
         .accessibilityLabel("Show entire planned route")
     }
@@ -1001,12 +996,7 @@ struct RootView: View {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 50, height: 50)
-                .background(DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-                )
+                .dirtGlassControl(tint: DirtTheme.chrome)
         }
         .accessibilityLabel("Follow my location")
     }
@@ -1181,7 +1171,8 @@ struct RootView: View {
         .dirtDenseChrome()
         .background {
             ZStack {
-                Rectangle().fill(DirtTheme.navigationSurface)
+                Rectangle().fill(DirtTheme.chromeMaterial)
+                Rectangle().fill(DirtTheme.chromeScrim)
             }
         }
         .clipShape(
@@ -1510,7 +1501,10 @@ struct RootView: View {
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .padding(.bottom, max(homeIndicatorInset, 10))
-        .background(DirtTheme.navigationSurface)
+        .background {
+            Rectangle().fill(DirtTheme.chromeMaterial)
+                .overlay(DirtTheme.chromeScrim)
+        }
         .shadow(color: .black.opacity(0.14), radius: 16, y: -4)
         .padding(.bottom, -homeIndicatorInset)
 
@@ -1546,7 +1540,7 @@ struct RootView: View {
         /// `onOrange` is 6.80:1 on the orange fill; white is 2.61:1 and fails.
         var foreground: Color {
             switch self {
-            case .open: .white
+            case .open: DirtTheme.onOrange
             case .armed: DirtTheme.orange
             case .idle: .white
             }
@@ -1637,7 +1631,9 @@ struct RootView: View {
             .padding(.vertical, 6)
             .background {
                 if state == .open {
-                    shape.fill(DirtTheme.orange).matchedGeometryEffect(id: "dock-selection", in: dockSelection)
+                    shape.fill(.clear)
+                        .dirtGlassControl(tint: DirtTheme.orange, interactive: false)
+                        .matchedGeometryEffect(id: "dock-selection", in: dockSelection)
                 }
             }
             .overlay(shape.stroke(state.stroke, lineWidth: state.strokeWidth))

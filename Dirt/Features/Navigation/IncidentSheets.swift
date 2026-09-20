@@ -78,7 +78,7 @@ struct IncidentFlowOverlay: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(.black.opacity(0.08), lineWidth: 1)
+                                .stroke(DirtTheme.hairline, lineWidth: 1)
                         )
                     }
                 }
@@ -137,7 +137,7 @@ struct IncidentFlowOverlay: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(.black.opacity(0.08), lineWidth: 1)
+                                .stroke(DirtTheme.hairline, lineWidth: 1)
                         )
                     }
                 }

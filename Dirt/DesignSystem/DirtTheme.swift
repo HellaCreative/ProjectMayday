@@ -49,20 +49,18 @@ enum DirtTheme {
     static let orangeSoft = Color(dirtHex: 0xFFB35C)
     static let navigationSurface = Color(dirtHex: 0x202820)
     static let chrome = Color(dirtHex: 0x16181C)
-    static let chromeBorder = Color.white.opacity(0.12)
+    static let chromeBorder = Color.white.opacity(0.55)
     static let ink = Color(dirtLight: 0x16181C, dark: 0xF2F4F7)
     static let muted = Color(dirtLight: 0x616872, dark: 0x9AA3AE)
     static let sheet = Color(dirtLight: 0xFFFFFF, dark: 0x1B1E23, opacity: 0.97)
     static let wash = Color(dirtLight: 0xF1F2F4, dark: 0x262A31)
 
     /// Hairline that separates a sheet or control from the map behind it.
-    static let hairline = Color(dirtLight: 0x16181C, dark: 0xFFFFFF, opacity: 0.10)
+    static let hairline = Color.white.opacity(0.65)
 
     // MARK: - Surfaces over live map
 
-    /// Dock and modal sheets. Thin glass so the map still reads underneath —
-    /// the Layers look is the sheet standard. Groupings sit on `groupingFill`,
-    /// not on a second material.
+    /// Dock and modal sheets retain map context beneath frosted content groups.
     static let sheetMaterial: Material = .thinMaterial
     /// Map controls and dock: thin material carrying a dark scrim, so white glyphs
     /// keep contrast over snow, water, and satellite imagery alike.
@@ -70,9 +68,8 @@ enum DirtTheme {
     /// Scrim strength over `chromeMaterial`; tuned to hold ≥4.5:1 for white glyphs.
     static let chromeScrim = Color(dirtHex: 0x16181C, opacity: 0.72)
 
-    /// Opaque islands on thin glass. Sections, segments, and cards use this so
-    /// they contrast off the map showing through the sheet — not more glass.
-    static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.94)
+    /// Readable translucent backing for cards and sections on the map sheets.
+    static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.72)
     /// Rows and cards on a glass sheet. Same fill as `groupingFill` — one language.
     static let rowFill = groupingFill
     /// Nav HUD primary text on chrome (Figma `--panel/2`).
@@ -301,42 +298,39 @@ extension View {
             .shadow(color: shadow ? .black.opacity(0.16) : .clear, radius: 14, y: 6)
     }
 
-    /// Opaque grouping on thin glass (cards, sections, unselected segments).
+    /// Frosted content group; controls above it use the native interactive glass layer.
     func dirtGroupingSurface(radius: CGFloat = DirtRadius.control) -> some View {
-        background(DirtTheme.groupingFill, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(DirtTheme.hairline, lineWidth: 1)
-            )
+        background {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(.regularMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .fill(DirtTheme.groupingFill.opacity(0.35))
+                }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(DirtTheme.hairline, lineWidth: 1)
+                .allowsHitTesting(false)
+        }
     }
 
-    /// Dark glass used by map controls, the dock, and the brand chip. `tint` replaces
-    /// the scrim for selected states so brand orange stays solid and unmistakable.
-    /// A tint replaces the scrimmed glass with a solid orange fill, which can only carry
-    /// dark glyphs — so the foreground is decided here rather than at the call site, where
-    /// the two used to drift apart. Callers should not set their own `foregroundStyle`;
-    /// an inner one wins over this and reintroduces white on orange.
+    /// Shared light, orange, and dark glass. Only the surface changes; callers own
+    /// the action, geometry, labels, and accessibility semantics.
+    func dirtGlassControl(
+        radius: CGFloat = DirtRadius.control,
+        tint: Color? = nil,
+        interactive: Bool = true
+    ) -> some View {
+        modifier(DirtGlassControlSurface(radius: radius, tint: tint, interactive: interactive))
+    }
+
     func dirtChromeSurface(
         radius: CGFloat = DirtRadius.control,
         tint: Color? = nil
     ) -> some View {
         foregroundStyle(tint == nil ? Color.white : DirtTheme.onOrange)
-        .background {
-            ZStack {
-                if let tint {
-                    Rectangle().fill(tint)
-                } else {
-                    Rectangle().fill(DirtTheme.chromeMaterial)
-                    Rectangle().fill(DirtTheme.chromeScrim)
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.22), radius: 10, y: 3)
+            .dirtGlassControl(radius: radius, tint: tint ?? DirtTheme.chrome)
     }
 
     /// Keeps dense map chrome from breaking its fixed 50 pt boxes at accessibility sizes.
@@ -350,6 +344,35 @@ extension View {
     func dirtSheetContent() -> some View {
         scrollContentBackground(.hidden)
             .toolbarBackground(.hidden, for: .navigationBar)
+    }
+}
+
+private struct DirtGlassControlSurface: ViewModifier {
+    let radius: CGFloat
+    let tint: Color?
+    let interactive: Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        Group {
+            if reduceTransparency {
+                content.background(tint ?? Color(uiColor: .systemBackground), in: shape)
+            } else {
+                content.glassEffect(
+                    .regular.tint(tint?.opacity(0.82)).interactive(interactive),
+                    in: shape
+                )
+            }
+        }
+        .overlay {
+            shape.strokeBorder(
+                Color.white.opacity(contrast == .increased ? 0.95 : 0.65),
+                lineWidth: contrast == .increased ? 1.5 : 1
+            )
+            .allowsHitTesting(false)
+        }
     }
 }
 
@@ -404,9 +427,9 @@ struct DirtCTAStyle: ButtonStyle {
             .padding(.vertical, DirtSpace.inner)
             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
             .padding(.horizontal, DirtSpace.row)
-            .background(fill.opacity(configuration.isPressed ? 0.78 : 1))
             .foregroundStyle(foreground)
-            .clipShape(RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
+            .dirtGlassControl(radius: DirtRadius.chip, tint: fill)
+            .opacity(configuration.isPressed ? 0.85 : 1)
             .opacity(isEnabled ? 1 : 0.45)
             .contentShape(RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
             .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
@@ -434,11 +457,7 @@ struct DirtSecondaryButtonStyle: ButtonStyle {
                 .padding(.vertical, DirtSpace.inner)
                 .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                 .foregroundStyle(foreground)
-                .background(DirtTheme.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                        .stroke(DirtTheme.hairline, lineWidth: 1)
-                )
+                .dirtGlassControl()
                 .opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.45)
                 .contentShape(RoundedRectangle(cornerRadius: DirtRadius.control))
         }
@@ -465,16 +484,8 @@ struct DirtChipStyle: ButtonStyle {
                 .font(DirtType.chip)
                 .padding(.horizontal, dense ? DirtSpace.inner : DirtSpace.row)
                 .frame(minHeight: dense ? 34 : DirtHit.min)
-                .background(isActive ? DirtTheme.orange : DirtTheme.groupingFill)
                 .foregroundStyle(isActive ? DirtTheme.onOrange : DirtTheme.ink)
-                .clipShape(RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous)
-                        .stroke(
-                            isActive ? DirtTheme.onOrange.opacity(0.25) : DirtTheme.hairline,
-                            lineWidth: 1
-                        )
-                )
+                .dirtGlassControl(radius: DirtRadius.chip, tint: isActive ? DirtTheme.orange : nil)
                 .opacity(isEnabled ? (configuration.isPressed ? 0.82 : 1) : 0.45)
                 .contentShape(RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
                 .animation(.easeOut(duration: 0.16), value: configuration.isPressed)

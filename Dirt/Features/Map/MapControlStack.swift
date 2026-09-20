@@ -166,10 +166,9 @@ struct MapControlStack: View {
         } label: {
             Image(systemName: increase ? "plus" : "minus")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.black)
+                .foregroundStyle(DirtTheme.ink)
                 .frame(width: 50, height: 50)
-                .background(.white, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(white: 0.6), lineWidth: 1))
+                .dirtGlassControl()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(increase ? "Zoom in" : "Zoom out")
@@ -188,14 +187,9 @@ struct MapControlStack: View {
         } label: {
             Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
                 .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(navigationOverviewActive ? DirtTheme.onOrange : .white)
                 .frame(width: 50, height: 50)
-                .background(navigationOverviewActive ? DirtTheme.orange : DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-                )
+                .dirtGlassControl(tint: navigationOverviewActive ? DirtTheme.orange : DirtTheme.chrome)
         }
         .accessibilityLabel(
             navigationOverviewActive
@@ -213,13 +207,8 @@ struct MapControlStack: View {
             Text(app.mapState.view3D ? "2D" : "3D")
                 .font(.dirtMono(12, weight: .bold))
                 .frame(width: 50, height: 50)
-                .foregroundStyle(.white)
-                .background(app.mapState.view3D ? DirtTheme.orange : DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-                )
+                .foregroundStyle(app.mapState.view3D ? DirtTheme.onOrange : .white)
+                .dirtGlassControl(tint: app.mapState.view3D ? DirtTheme.orange : DirtTheme.chrome)
         }
         .accessibilityLabel(app.mapState.view3D ? "Switch to top-down 2D" : "Toggle 3D view")
         .accessibilityIdentifier("map-view-mode")
@@ -232,14 +221,9 @@ struct MapControlStack: View {
         } label: {
             Image(systemName: "speaker.wave.2")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(cuesOpen ? DirtTheme.onOrange : .white)
                 .frame(width: 50, height: 50)
-                .background(cuesOpen ? DirtTheme.orange : DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-                )
+                .dirtGlassControl(tint: cuesOpen ? DirtTheme.orange : DirtTheme.chrome)
         }
         .accessibilityLabel(
             "Navigation cues: \(app.cueSettings.mode.menuLabel.lowercased()), audio \(app.cueSettings.audioEnabled ? "on" : "off")"
@@ -258,17 +242,10 @@ struct MapControlStack: View {
                 .foregroundStyle(.white)
                 .rotationEffect(.degrees(-app.mapState.mapBearing))
                 .frame(width: 50, height: 50)
-                .background(DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(
-                            app.mapState.isNorthUp ? Color(dirtHex: 0x0354A6).opacity(0.55) : DirtTheme.chromeBorder,
-                            lineWidth: 1
-                        )
-                )
+                .dirtGlassControl(tint: DirtTheme.chrome)
         }
         .accessibilityLabel("Compass, reset north")
+        .accessibilityValue(app.mapState.isNorthUp ? "North up" : "Map rotated")
     }
 
     private var riderStatusButton: some View {
@@ -278,14 +255,9 @@ struct MapControlStack: View {
         } label: {
             Image(systemName: "person.crop.circle")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(sharingOpen || app.groups.isSharing ? DirtTheme.onOrange : .white)
                 .frame(width: 50, height: 50)
-                .background(sharingOpen || app.groups.isSharing ? DirtTheme.orange : DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-                )
+                .dirtGlassControl(tint: sharingOpen || app.groups.isSharing ? DirtTheme.orange : DirtTheme.chrome)
         }
         .accessibilityLabel("Open group sharing controls")
         .accessibilityIdentifier("rider-status")
@@ -300,12 +272,7 @@ struct MapControlStack: View {
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 50, height: 50)
-                .background(DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-                )
+                .dirtGlassControl(tint: DirtTheme.chrome)
         }
         .accessibilityLabel("Show entire planned route")
         .accessibilityIdentifier("planned-route-overview")
@@ -331,14 +298,9 @@ struct MapControlStack: View {
         } label: {
             Image(systemName: "dot.scope")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(recenterHighlighted ? DirtTheme.onOrange : .white)
                 .frame(width: 50, height: 50)
-                .background(recenterHighlighted ? DirtTheme.orange : DirtTheme.chrome)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-                )
+                .dirtGlassControl(tint: recenterHighlighted ? DirtTheme.orange : DirtTheme.chrome)
         }
         .accessibilityLabel("Follow my location")
         .accessibilityHint(
@@ -560,14 +522,7 @@ struct MapZoomControls: View {
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(DirtTheme.ink)
                 .frame(width: DirtHit.control, height: DirtHit.control)
-                .background(
-                    DirtTheme.sheetMaterial,
-                    in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                        .stroke(DirtTheme.hairline, lineWidth: 1)
-                )
+                .dirtGlassControl()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(increase ? "Zoom in" : "Zoom out")

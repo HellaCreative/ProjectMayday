@@ -45,17 +45,7 @@ struct LayersSheet: View {
                                     .fontWeight(.bold)
                                     .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                                     .foregroundStyle(selected ? DirtTheme.onOrange : DirtTheme.ink)
-                                    .background(
-                                        selected ? DirtTheme.orange : LayersGlass.groupingFill,
-                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .stroke(
-                                                selected ? DirtTheme.onOrange.opacity(0.25) : DirtTheme.hairline,
-                                                lineWidth: 1
-                                            )
-                                    )
+                                    .dirtGlassControl(radius: 10, tint: selected ? DirtTheme.orange : nil)
                                     .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             }
                             .buttonStyle(.plain)
@@ -109,11 +99,7 @@ struct LayersSheet: View {
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .dirtGroupingSurface()
     }
 
     private var downloadedMapsCard: some View {
@@ -196,11 +182,7 @@ struct LayersSheet: View {
         }
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LayersGlass.groupingFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
+        .dirtGroupingSurface()
         .confirmationDialog("Clear all downloaded maps?", isPresented: $confirmClearAll, titleVisibility: .visible) {
             Button("Clear All", role: .destructive) { clearDownloadedMaps() }
             Button("Cancel", role: .cancel) {}
@@ -301,9 +283,7 @@ private enum RiderServiceDot {
 }
 
 /// Opaque islands on Layers’ thin glass. Local to this sheet — not a DirtTheme token change.
-private enum LayersGlass {
-    static let groupingFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.94)
-}
+
 
 /// A batch uses the same guarded removal as an individual map. A failed map
 /// remains installed; the rest of the requested batch can still finish.

@@ -35,7 +35,14 @@ Group related controls clearly, retain map context on map surfaces and use adapt
 
 ## Elevation & Depth
 
-Use native system material rather than simulated glass. The planner demonstrates `thinMaterial` for its map sheet and `regularMaterial` for tab and control groups, with semantic hairlines and translucent selected surfaces. Reuse the shared surface helpers where appropriate.
+September 20 owner refinement: use native iOS glass for light, brand-orange and
+dark controls, with white edge highlights in place of grey control/card borders.
+`dirtGlassControl` owns this treatment and the solid Reduce Transparency fallback.
+`dirtGroupingSurface` uses frosted regular material with a readable backing;
+sheets keep their existing thin material. Keep existing layout, typography,
+actions, hit targets, and route-tab motion. Orange controls use dark foregrounds;
+dark controls use white foregrounds. Route line colors and semantic warning/status
+colors are independent of decorative surface borders.
 
 ## Shapes
 

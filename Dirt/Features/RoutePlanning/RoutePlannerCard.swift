@@ -442,8 +442,9 @@ struct RoutePlannerCard: View {
             GeometryReader { geometry in
                 let tabWidth = max(0, (geometry.size.width - 12) / 4)
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(DirtTheme.orange)
+                    .fill(.clear)
                     .frame(width: tabWidth, height: geometry.size.height)
+                    .dirtGlassControl(radius: 10, tint: DirtTheme.orange, interactive: false)
                     .keyframeAnimator(
                         initialValue: CGSize(width: 1, height: 1),
                         trigger: reduceMotion ? 0 : selectedPlanningTab
