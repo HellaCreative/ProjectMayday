@@ -60,10 +60,10 @@ inconsistent category counts still fail. Five focused factory/service tests pass
 retain their existing checks pending source evidence.
 The registered continental roster currently has 67 packs and unsplit Texas;
 Texas and all other regions still require measured resource qualification.
-The North America September 18 download resumes the existing 2.63 GB partial
-at `.build/fresh-fabric-20260919/source/north-america-260918.osm.pbf`; its checked
+The North America September 18 download completed after resuming the existing
+2.63 GB partial at `.build/fresh-fabric-20260919/source/north-america-260918.osm.pbf`; its checked
 prefix agrees with the newly downloaded bytes. Expected complete bytes:
-19,394,968,944; publisher MD5 `3b344803d19c468b54695dc3d92747f1`. Full checksum
+19,394,968,944 (downloaded); publisher MD5 `3b344803d19c468b54695dc3d92747f1`. Full checksum
 and OSM timestamp must pass before continental extraction. A bounded two-region
 single-process extraction mode is implemented in `prepare-common-source-lock.js`
 (`--batch-size 2`, default remains 1). The real NS/PE comparison now passes:
@@ -78,8 +78,8 @@ a time; retain the exact 2 km halo and complete relation semantics.
 
 `continue-continent.py` in that evidence directory is running as the overnight
 pipeline supervisor; inspect `pipeline-state.json` and process ownership before
-starting competing heavy work. It waits for the current source download,
-requires the expected full length, invokes checksum/timestamp-verified source
+starting competing heavy work. The download has completed, the coordinated
+route-test hold has ended, and it is running checksum/timestamp-verified source
 preparation for the actual catalog with batches of two, then runs the resumable
 full pack/seam factory for candidate `fabric-v4-20260920-01`. It records errors
 and stops rather than publishing or continuing after a failed stage. A successful
@@ -88,21 +88,37 @@ Source lock: `continent/source-lock.json`; phase logs: `continent-source-prepara
 and `continent-pack-build.log`. No new continental packs have been built or
 published at this checkpoint. Do not duplicate these running jobs.
 
-The new same-binary 87-request matrix has completed (`final-matrix/` in the
-continental evidence directory): 77 pass the stronger shape/access/resource
-checks. Six failures use the earlier synthetic restricted parking endpoint in
-the NB–QC fixture; the separately preserved corrected public-road approach
-passes all six style/direction requests in `public-approach-matrix/` (2.19–9.03 s).
-These do not repair or erase the original restricted-endpoint issue. Four NS–QC
-Balanced/Clean requests complete but repeat 1,305 / 2,280 m outbound and
-656 / 937 m returning. They remain explicit shape failures. Together the exact
-public-road connectivity fixtures still complete in all 87 cases, but only
-83/87 pass this shape audit. The published files have not changed. These are
-Apple M1/16 GiB host measurements, with background Xcode indexing and source
-download active, not isolated speed benchmarks or physical-phone acceptance.
-Twelve focused factory/gate tests pass; actual candidate publication rejects the
-failed matrix before catalog mutation or upload. Route qualification remains
-failed pending diagnosis/repair and the other acceptance checks below.
+The final same-binary host matrix now passes **89/89** requests
+(`handover-integrated-matrix/` in the continental evidence directory), and the
+publication verifier independently accepts those receipts. It covers the 87
+public-road fixtures in all three styles and both directions, plus the owner's
+mainland Labrador request and PEI bridge request with highway avoidance on.
+Six unchanged requests reuse exact same-binary/same-input focused receipts;
+the other 83 were freshly executed. The earlier restricted parking endpoint is
+preserved as a separate unresolved fixture; its corrected public-road approach
+is explicitly named, not silently substituted for an owner pin.
+
+Generated regional handovers now stop at the first already-ridden road with
+verified identical source topology and a permitted onward continuation in the
+next window. They do not force the route onward to an arbitrary generated pin.
+Incoming direction and turn state are checked; an active via-way restriction
+cannot be discarded. This does not move rider pins or alter surface/access
+scoring. Restriction replay is linear and only the accepted prefix is copied.
+The 137-test engine suite passes, including segmented and multi-road approaches
+and the unchanged active-restriction rejection assertions.
+
+The four NS–QC Balanced/Clean repeated-road failures (1,305 / 2,280 / 656 /
+937 m) now pass the same 100 m maximum-repeat audit. Mainland Labrador falls
+from 6,915 m of repeated road to zero; final replay is 59.270 s / 2,731.935 km /
+42.0% known dirt. This changes generated road selection and is not a speed
+claim or a guarantee of identical riding character. PEI with both avoidances on
+uses the required bridge in 7.640 s. Maximum process RSS across the matrix is
+907,296,768 bytes (about 865 MiB), on Apple M1 / 16 GiB with background indexing.
+These are host measurements, not physical-phone acceptance or isolated cold/warm
+benchmarks. Pack bytes and the installed White build remain unchanged; a new
+native build is required for this handover repair. Exact requests, full road
+receipts, timing/memory output and probe hashes are retained in the matrix.
+Other app/device and continental acceptance checks below remain outstanding.
 
 Every region, including small provinces, receives the same source, feature,
 connectivity, actual-route and memory checks. Test legal road crossings in both
@@ -1084,9 +1100,10 @@ zero-test invocations are excluded from qualification. Final app build succeeds
 standard skipped App Intents metadata notice. Diagnostic stamp:
 `ferry-choice-20260919d`. No pack bytes or production release changed.
 
-This does not establish overall quality: the mainland Labrador route repeats
-6,915 m of way `32987916` near longitude -68.39 / latitude 49.10–49.15 around a
-Quebec handover. Preserve this as a general split-handover regression. The
+That app build repeated 6,915 m of way `32987916` near longitude -68.39 /
+latitude 49.10–49.15. The subsequent shared-road handover repair above removes
+that repeat in the final host replay; updated app/phone acceptance is pending.
+Preserve the exact request as a general split-handover regression. The
 previous 54 m repeated ferry-landing approach also remains when ferries are
 allowed. Long-route time, memory and handover quality still require
 review before declaring the seven-pack process ready for bulk expansion.
@@ -1108,14 +1125,14 @@ legal journey, or host speed with phone speed.
 | --- | --- | --- |
 | Labrador and Quebec journey selection | Avoid ferries host and app replays now take mainland roads; phone acceptance, return journeys and long-route quality remain open. | Qualify the explicit ferry choice, preserved pins, return journeys and riding-led connections. Do not accept region count as ride policy. |
 | PEI bridge versus ferry choice | App replay uses the bridge with both highway and ferry avoidance on; off retains the ferry choice. | Repeat on White and qualify return journeys, preserving useful ferries and normal highway avoidance. |
-| Handover repetition | Labrador has 54 m repeated road at the ferry landing and 6,915 m on the newly tested mainland Quebec handover. | Diagnose and remove an artificial handover loop without inventing connections or weakening turn/access rules; retain any genuinely unavoidable approach. |
-| Full final-version crossing matrix | Earlier 87 completions combine different engine revisions; latest integrated set covers eight calculations. | Rerun the relevant final set on one source revision and the same seven pack hashes: every neighbor pair, both permitted directions, Quebec split, bridge/ferry endpoints and multi-crossing journeys. |
+| Handover repetition | Mainland Labrador now has zero repeated road in the final host replay; the earlier 54 m ferry approach remains separately recorded. | Confirm the repaired mainland handover through the app and inspect the short ferry approach without weakening turn/access rules. |
+| Full final-version crossing matrix | Final same-binary host matrix passes 89/89 and its publication gate; pack hashes are unchanged. | Keep these receipts and rerun against the new continental pack bytes; finish app/device acceptance separately. |
 | Ordinary ride character and settings | Dirt/Wander owner results are promising; high dirt share is not universally attainable. | Dirt/Balanced/Clean, low/default/high Wander and supported Unknown settings preserve legal access, pins and honest surface reporting; inspect repeated roads and unnecessary town/highway visits. |
 | Device time and memory | PEI and Quebec remain slow; simulator Labrador improvement is not yet a White measurement. | Record first/repeated phone calculations, memory, useful progress and cancellation for each region and representative joined windows, especially QC-s. Compare against named workload targets, not pack size alone. |
 | Download and update interruptions | Published download/verification/reuse path passed; exhaustive interrupted-update coverage is not established. | Test missing/update/decline/cancel/interrupted/corrupt/mixed-version cases; preserve valid installed data and rider intent; retry and offline reuse work without live-route fallback. |
 | Planner and navigation handoff | Earlier edit and save-decoding tests passed; newest candidate needs combined acceptance. | Insert/move/delete a crossing waypoint, cancel/replan, save/reopen and Start preserve the accepted route; stale replies cannot replace it. |
 | Fuel and optional places | Fresh fuel ships with graph packs; other places remain separate. | Verify offline fuel display/notifications and separate place layers; notification on/off produces identical roads and no automatic stops. Missing optional places cannot block routing. |
-| Restricted endpoint approaches | A synthetic destination-only parking approach remains unresolved; several earlier long QC profile results repeat road. | Reproduce, classify and repair relevant access/route-quality failures, then replay without broader snapping or relaxed prohibitions. |
+| Restricted endpoint approaches | A synthetic destination-only parking approach remains unresolved. The earlier long QC repeated-road failures now pass the final host audit. | Reproduce, classify and repair relevant access/route-quality failures, then replay without broader snapping or relaxed prohibitions. |
 
 Repeatable process to carry to every remaining region:
 

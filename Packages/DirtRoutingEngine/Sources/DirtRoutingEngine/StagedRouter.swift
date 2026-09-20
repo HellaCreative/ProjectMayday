@@ -507,46 +507,58 @@ public enum StagedRouter {
     }
 
     /// A generated border target is not a rider waypoint. If the previous
-    /// junction already has the same incoming road in the next graph, hand over
-    /// there instead of forcing a ride down the last road solely to reach a pin.
+    /// route already has the same incoming road in the next graph, hand over
+    /// there instead of forcing a ride to an arbitrary generated pin.
     /// The next search decides whether that road is useful for the onward ride.
     static func handoverBeforeFinalRoad(_ route: ComputedRoute, request: RoutingRequest,
                                        graph: any RoadGraph, nextGraph: any RoadGraph,
                                        budget: ComputationBudget) throws -> ComputedRoute {
         guard route.limit == nil, route.segments.count > 1 else { return route }
-        let prefix = Array(route.segments.dropLast())
-        guard let last = prefix.last, last.access == 0, let point = last.geometry.last,
-              point.distance(to: route.start.coordinate) > 1 else { return route }
-        let matches = try RoadMatcher(pack: nextGraph).matches(at: point, radius: 1, start: true,
-            policy: request.access, limit: 64, budget: budget)
-        guard matches.contains(where: { nextGraph.matches($0.edge, identities: [graph.identity(of: last.edge)]) && $0.forward == last.forward
-                && canContinueForward($0, graph: nextGraph, request: request) }) else {
-            return route
-        }
-        // Recover the legal prefix state from the already proved path. Never
-        // truncate a via-way restriction into an unrestricted regional start.
+        // Handover targets are generated planning aids, not rider pins. Pass
+        // control at the first already-ridden, source-identical road the next
+        // window can legally continue. Driving farther toward an arbitrary
+        // target can create a spur that the next window immediately reverses.
+        let cuts = 1..<route.segments.count
         var active = request.options.arrival?.restrictions ?? request.options.arrivalRestrictions
-        for i in prefix.indices.dropFirst() {
-            if i & 255 == 0 { try budget.check() }
-            let prior = prefix[i-1], segment = prefix[i]
-            guard let advanced = graph.restrictionIndex.advance(active,
-                from: graph.restrictionEdge(prior.edge), to: graph.restrictionEdge(segment.edge),
-                at: graph.endpoint(segment.edge, from: segment.forward)) else { return route }
-            active = advanced
+        for cut in cuts {
+            try budget.check()
+            let last = route.segments[cut - 1]
+            // Replay each transition once. Never erase an active via-way
+            // sequence when crossing into another graph's local numbering.
+            if cut > 1 {
+                let prior = route.segments[cut - 2]
+                guard let advanced = graph.restrictionIndex.advance(active,
+                    from: graph.restrictionEdge(prior.edge), to: graph.restrictionEdge(last.edge),
+                    at: graph.endpoint(last.edge, from: last.forward)) else { return route }
+                active = advanced
+            }
+            guard active.isEmpty, last.access == 0, let point = last.geometry.last,
+                  point.distance(to: route.start.coordinate) > 1 else { continue }
+            let identity: Set<String> = [graph.identity(of: last.edge)]
+            guard nextGraph.candidates(near: point, radius: 1).contains(where: {
+                nextGraph.matches($0, identities: identity)
+            }) else { continue }
+            let matches = try RoadMatcher(pack: nextGraph).matches(at: point, radius: 1, start: true,
+                policy: request.access, limit: 64, budget: budget)
+            guard matches.contains(where: { nextGraph.matches($0.edge, identities: [graph.identity(of: last.edge)]) && $0.forward == last.forward
+                    && canContinueForward($0, graph: nextGraph, request: request) }) else {
+                continue
+            }
+            let prefix = Array(route.segments.prefix(cut))
+            let geometry = graph.polyline(last.edge)
+            let length = zip(geometry, geometry.dropFirst()).reduce(0.0) { $0 + $1.0.distance(to: $1.1) }
+            let end = RoadMatch(edge: last.edge, coordinate: point, distanceMeters: 0,
+                alongMeters: last.forward ? length : 0, geometryMeters: length, forward: last.forward)
+            var result = ComputedRoute(start: route.start, end: end, segments: prefix,
+                distanceMeters: prefix.reduce(0) { $0+$1.meters }, searchCost: route.searchCost,
+                poppedLabels: route.poppedLabels, arrivalRestrictions: active)
+            result.searchSummary = "handover-before-final-road[\(route.searchSummary ?? "-")]"
+            result.qualityUrbanBoxes = route.qualityUrbanBoxes
+            result.maneuvers = NavigationCues.make(route: result, graph: graph, access: request.access,
+                                                 arrival: request.options.arrival)
+            return result
         }
-        guard active.isEmpty else { return route }
-        let geometry = graph.polyline(last.edge)
-        let length = zip(geometry, geometry.dropFirst()).reduce(0.0) { $0 + $1.0.distance(to: $1.1) }
-        let end = RoadMatch(edge: last.edge, coordinate: point, distanceMeters: 0,
-            alongMeters: last.forward ? length : 0, geometryMeters: length, forward: last.forward)
-        var result = ComputedRoute(start: route.start, end: end, segments: prefix,
-            distanceMeters: prefix.reduce(0) { $0+$1.meters }, searchCost: route.searchCost,
-            poppedLabels: route.poppedLabels, arrivalRestrictions: active)
-        result.searchSummary = "handover-before-final-road[\(route.searchSummary ?? "-")]"
-        result.qualityUrbanBoxes = route.qualityUrbanBoxes
-        result.maneuvers = NavigationCues.make(route: result, graph: graph, access: request.access,
-                                             arrival: request.options.arrival)
-        return result
+        return route
     }
 
     /// Try a fresh continuation before charging the ordinary repeat penalty.

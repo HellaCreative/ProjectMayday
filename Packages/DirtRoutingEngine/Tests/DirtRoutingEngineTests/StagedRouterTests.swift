@@ -133,12 +133,31 @@ struct StagedRouterTests {
             let end = RoadMatch(edge: 2, coordinate: request.end, distanceMeters: 0, alongMeters: 100, geometryMeters: 100, forward: true)
             let route = try PathSearch(pack: graph).search(start: start, end: end, policy: request.profile,
                 access: request.access, options: request.options)
+            var nextGraph = graph
+            nextGraph.wayIDs = [-1, 1, 2] // The first incoming road is not shared.
             let result = try StagedRouter.handoverBeforeFinalRoad(route, request: request, graph: graph,
-                nextGraph: graph, budget: .init())
+                nextGraph: nextGraph, budget: .init())
             #expect(result.segments.count == (restricted ? 3 : 2))
             #expect(result.distanceMeters == (restricted ? 300 : 200))
             #expect(result.end.coordinate == graph.coordinate(node: restricted ? 3 : 2))
         }
+    }
+
+    @Test(arguments: [[Int64(10),20,20,20], [Int64(10),20,30,40]])
+    func generatedHandoverDoesNotRequireAnArbitrarySharedApproach(wayIDs: [Int64]) throws {
+        var graph = UnknownConnectorTests.Graph(lengths: [100,100,100,100], access: [0,0,0,0])
+        graph.wayIDs = wayIDs
+        var request = RoutingRequest(start: graph.coordinate(node: 0), end: graph.coordinate(node: 4), style: .dirt)
+        request.options.objective = .distance
+        let route = try PathSearch(pack: graph).search(
+            start: .init(edge: 0, coordinate: request.start, distanceMeters: 0, alongMeters: 0, geometryMeters: 100, forward: true),
+            end: .init(edge: 3, coordinate: request.end, distanceMeters: 0, alongMeters: 100, geometryMeters: 100, forward: true),
+            policy: request.profile, access: request.access, options: request.options)
+        let handover = try StagedRouter.handoverBeforeFinalRoad(route, request: request, graph: graph,
+            nextGraph: graph, budget: .init())
+        #expect(handover.segments.map(\.edge) == [0])
+        #expect(handover.distanceMeters == 100)
+        #expect(handover.end.coordinate == graph.coordinate(node: 1))
     }
 
     @Test func sharedInteriorContinuesWhenTheApproachRoadIsLocalToOnePack() throws {

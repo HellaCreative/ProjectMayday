@@ -7,6 +7,7 @@ struct UnknownConnectorTests {
         let lengths: [Double]
         let access: [UInt8]
         var restrictions: [TurnRestriction] = []
+        var wayIDs: [Int64] = []
         var nodeCount: Int { lengths.count + 1 }
         var edgeCount: Int { lengths.count }
         var urbanCores: [GeographicBox] { [] }
@@ -21,6 +22,7 @@ struct UnknownConnectorTests {
         func endpoint(_ edge: Int, from: Bool) -> Int { from ? edge : edge+1 }
         func restrictionEdge(_ edge: Int) -> Int { edge }
         func edgeID(_ edge: Int) -> String { "connector-\(edge)" }
+        func osmWayID(_ edge: Int) -> Int64 { wayIDs.isEmpty ? Int64(edge) : wayIDs[edge] }
         func distance(_ edge: Int) -> Double { lengths[edge] }
         func attributes(_ edge: Int) -> UInt16 { 0 }
         func crossingTime(_ edge: Int) -> Double { 0 }
