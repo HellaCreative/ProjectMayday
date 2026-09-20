@@ -135,6 +135,14 @@ a Golden Gate midpoint and the owner Halifax–Squamish pressure test. These are
 prepared requests, not passing results; synthetic endpoints are explicitly
 identified and do not replace owner pins. App/delivery qualification and DEV
 publication follow after the actual results are reviewed and repaired.
+The named plan also includes Albuquerque–Portland (Maine), all three styles,
+on an explicitly supplied twelve-state corridor. This is a diagnostic long-US
+search, not proof of the app's automatic pack acquisition. Its ten-minute process
+ceiling is a stop condition, not a phone-latency target. The old Labrador app
+fixture now sets ferry permission explicitly and no longer asserts that the
+engine must avoid considering the mainland; its landing, continuity, legal
+access and successful-completion checks remain. That app fixture awaits replay
+with the new continental bytes.
 
 Continental coverage preflight found D.C. outside both the Maryland and Virginia
 clip outlines. The Maryland pack now includes OSM administrative relations

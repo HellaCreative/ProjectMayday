@@ -263,6 +263,9 @@ struct NativeCandidateQualificationTests {
         request.profile.wander = 0.5
         request.options.cityWall = true
         request.profile.avoidMajorHighways = true
+        // Replay the owner's historical ferry-permitted request explicitly;
+        // new rides default to avoiding ferries in the app preference adapter.
+        request.access.avoidFerries = false
         for run in 0...1 {
             let started = ContinuousClock.now
             let route = try await session.route(request, directories: directories)
@@ -278,8 +281,8 @@ struct NativeCandidateQualificationTests {
             #expect(response.status == "complete")
             #expect(route.limit == nil)
             #expect(response.warnings?.contains { $0.code == "search_incomplete" } != true)
-            // The usable ferry journey returns without attempting the longer mainland chain.
-            #expect(route.searchSummary?.contains("ns+nb+qc-s+qc-n+nl-lab") == false)
+            // Qualify the actual landing and legal journey above. Which other
+            // regional connections were considered is not a riding requirement.
             report("owner-labrador-run\(run)", started: started, route: route)
         }
     }
