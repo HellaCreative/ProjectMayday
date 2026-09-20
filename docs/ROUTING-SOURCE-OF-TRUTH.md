@@ -101,6 +101,8 @@ phone timings. Evidence: `texas-preflight/` and
 `region-preflight-ca-s-los-angeles-san-diego-dirt/`.
 Texas now has four candidate pieces, ownership cuts 31°N / 97.25°W and 0.25°
 overlap, replacing the monolithic published ID while retaining its legacy alias.
+Reproduce the unchanged administrative-outline split with
+`node scripts/pack-fabric/scripts/split-grid-polygons.js tx 31 -97.25 0.25`.
 The candidate roster is 70. The split is a measured sizing experiment, not yet
 accepted route or memory qualification. Its union covers the original outline
 within 1e-9 degrees; actual directed seam and same-pin riding tests remain required.

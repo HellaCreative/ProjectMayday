@@ -468,7 +468,7 @@ final class GraphPackStore {
         return shortestRegionPath(from: start, to: end, allowedRegionIds: allowedRegionIds)
     }
 
-    /// Split-province parents that `fabric-v4-20260917-02` replaces with halves.
+    /// Parent aliases replaced by published province/state pieces in split fabrics.
     nonisolated static let splitParentRegionIds: Set<String> = ["on", "qc", "ca", "nl", "tx"]
 
     /// Maps a geographic region id onto a catalog id that is actually published.
