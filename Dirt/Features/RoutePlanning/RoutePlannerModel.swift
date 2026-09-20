@@ -143,7 +143,7 @@ final class RoutePlannerModel {
     }
     var showingLoop = false
     var loopFar: RouteCoordinate?
-    var loopSummary: String?
+    private(set) var routeCompletionID: UUID?
     private var loopRunID: UUID?
 
     func selectLoop() {
@@ -152,7 +152,6 @@ final class RoutePlannerModel {
         loopFar = nil
         fuelPlanningStatus = nil
         isAssemblingRoute = false
-        loopSummary = nil
         locationService.requestWhenInUse()
         locationService.startUpdates()
         refreshMap()
@@ -174,13 +173,19 @@ final class RoutePlannerModel {
             errorMessage = "Drop a pin to define distance and direction of loop."
             return
         }
+        generateLoop(start: start, far: far)
+    }
+
+    /// Endpoint resolution is separate so the completion flow is also testable
+    /// without asking Core Location for a live rider position.
+    func generateLoop(start: RouteCoordinate, far: RouteCoordinate) {
+        guard navigation.phase == .idle, !isRouting else { return }
         invalidateInFlightRoutes()
         let runID = UUID()
         loopRunID = runID
         isRouting = true
         isAssemblingRoute = true
         errorMessage = nil
-        loopSummary = nil
         fuelPlanningStatus = "Creating loop"
         let target = loopTargetMeters(start: start, far: far)
         let selectedProfile = profile, selectedAllow = allowUnknown
@@ -242,13 +247,11 @@ final class RoutePlannerModel {
                 self.built = built
                 self.destination = start
                 self.routeIdentity = "loop:\(runID.uuidString)"
-                if outAndBack {
-                    self.loopSummary = "Ride \(Int(result.distanceMeters / 1000)) km · only way back is the way you came, \(Int((result.reriddenMeters / 1000).rounded())) km repeated"
-                } else {
-                    self.loopSummary = "Ride \(Int(result.distanceMeters / 1000)) km · \(Int(result.reriddenMeters)) m re-ridden"
-                }
-                self.toast = "Loop ready"
-                self.mapState.fit(built.legs.flatMap { $0.response.coordinates })
+                self.isRouting = false
+                self.isAssemblingRoute = false
+                self.fuelPlanningStatus = nil
+                self.refreshMap()
+                self.announceRouteReadyIfComplete()
             } catch is CancellationError {
                 return
             } catch {
@@ -2298,6 +2301,8 @@ final class RoutePlannerModel {
 
     /// Invalidate every in-flight planner route (clear / mode convert / wipe).
     private func invalidateInFlightRoutes(cancelPlanRebuildTask: Bool = true) {
+        routeCompletionID = nil
+        mapState.cancelRouteBuildCamera()
         waypointPlacement = nil
         waypointMove = nil
         showsWaypointPlacementConfirmation = false
@@ -2946,7 +2951,6 @@ final class RoutePlannerModel {
         }
         invalidateInFlightRoutes()
         loopRunID = nil
-        loopSummary = nil
         destination = nil
         destinationName = nil
         fromHereResponse = nil
@@ -2984,7 +2988,6 @@ final class RoutePlannerModel {
             showingLoop = false
             loopRunID = nil
             loopFar = nil
-            loopSummary = nil
             errorMessage = nil
             fuelPlanningStatus = nil
             isAssemblingRoute = false
@@ -3804,9 +3807,11 @@ final class RoutePlannerModel {
     /// replacing the success message shown to the rider.
     @discardableResult
     func frameCompletedRouteForCelebration() -> Bool {
-        guard routePlanIsCompleteSuccess, canFocusEntirePlannedRoute else { return false }
+        guard !isAssemblingRoute, routePlanIsCompleteSuccess,
+              canFocusEntirePlannedRoute else { return false }
+        mapState.selectPlannerPin(nil)
         refreshMap()
-        mapState.fit(allCoordinates)
+        mapState.fitCompletedRoute(allCoordinates)
         RoutingDebugLog.shared.event(
             "map focus scope=route_completion stages=\(stages.count) points=\(allCoordinates.count)"
         )
@@ -4988,6 +4993,7 @@ final class RoutePlannerModel {
             return
         }
         toast = Self.routeReadyToast
+        if navigation.phase == .idle { routeCompletionID = UUID() }
     }
 
     /// True when every hop that should have geometry succeeded.

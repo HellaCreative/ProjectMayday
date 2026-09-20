@@ -26,7 +26,7 @@ struct RiderItineraryTests {
             avoidHighways: true,
             avoidFerries: false
         )
-        initial.legs[0].ridePreferences = preferences
+        initial.setRidePreferencesForAllLegs(preferences)
         let originalEndID = initial.waypoints[1].id
         let oldLegID = try #require(initial.legs.first?.id)
 

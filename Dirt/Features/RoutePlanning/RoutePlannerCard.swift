@@ -495,9 +495,6 @@ struct RoutePlannerCard: View {
                 }
                 .font(.subheadline).tint(DirtTheme.action)
             }
-            if let summary = planner.loopSummary {
-                Text(summary).font(DirtType.helper).foregroundStyle(DirtTheme.ink)
-            }
             if let error = planner.errorMessage {
                 Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
                 ferryRecovery

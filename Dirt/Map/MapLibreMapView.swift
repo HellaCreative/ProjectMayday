@@ -213,6 +213,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var pendingRouteBuildSteps: [MapState.RouteBuildCameraStep] = []
         private var routeBuildCameraIsMoving = false
         private var routeBuildCameraRunID = UUID()
+        private var routeOverviewFitRunID = UUID()
         private var followApplied: MapState.FollowMode?
         private var followGenerationApplied = -1
         private var annotations: [DirtAnnotation] = []
@@ -697,6 +698,12 @@ struct MapLibreMapView: UIViewRepresentable {
                 || abs(current.bottom - insets.bottom) > 0.5
                 || abs(current.right - insets.right) > 0.5
             guard changed else { return }
+            if let pending = state.pendingRouteCompletionCameraID,
+               pending == state.camera?.id {
+                // Changing contentInset can cancel MapLibre's active fit without
+                // a completion callback. Reissue it in this same sync pass.
+                appliedCameraID = nil
+            }
             // animated:false still updates immediately; avoid completion churn.
             mapView.contentInset = insets
         }
@@ -1053,8 +1060,33 @@ struct MapLibreMapView: UIViewRepresentable {
                     let bottomChrome: CGFloat = sheetOpen ? 64 : 120
                     insets = UIEdgeInsets(top: 88, left: 40, bottom: bottomChrome, right: 40)
                 }
-                mapView.setVisibleCoordinateBounds(bounds, edgePadding: insets, animated: true, completionHandler: nil)
+                // Cancel queued leg framing before starting the final overview.
+                // Pitch must be applied first: writing it after bounds cancels
+                // the fit animation and leaves the camera at the last pin.
+                cancelRouteBuildCameraPlayback()
                 applyPitch(on: mapView, animated: false)
+                let fittedInsets = mapView.contentInset
+                let fitRunID = UUID()
+                routeOverviewFitRunID = fitRunID
+                mapView.setVisibleCoordinateBounds(
+                    bounds, edgePadding: insets,
+                    animated: !UIAccessibility.isReduceMotionEnabled
+                ) { [weak self, weak mapView] in
+                    DispatchQueue.main.async {
+                        guard let self, let mapView,
+                              self.routeOverviewFitRunID == fitRunID,
+                              self.state.camera?.id == camera.id,
+                              self.state.pendingRouteCompletionCameraID == camera.id else { return }
+                        // The completed leg list can resize the planner while
+                        // the camera moves. Refit using its settled footprint.
+                        if mapView.contentInset != fittedInsets {
+                            self.appliedCameraID = nil
+                            self.syncCamera(mapView: mapView)
+                            return
+                        }
+                        self.state.completeRouteOverview(cameraID: camera.id)
+                    }
+                }
             case .applyViewMode:
                 applyPitch(on: mapView, animated: true)
             case .resetNorth:

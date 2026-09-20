@@ -136,6 +136,23 @@ final class MapState {
     private(set) var groupMarkerGeneration = 0
     private(set) var hasFuelReplacementCandidates = false
     private(set) var camera: (id: UUID, command: CameraCommand)?
+    private(set) var pendingRouteCompletionCameraID: UUID?
+    private(set) var completedRouteOverviewID: UUID?
+
+    func fitCompletedRoute(_ coordinates: [RouteCoordinate]) {
+        guard coordinates.count > 1 else { return }
+        fit(coordinates)
+        pendingRouteCompletionCameraID = camera?.id
+    }
+
+    /// Only the still-current camera request may celebrate. A new focus or
+    /// rider gesture invalidates an interrupted completion overview.
+    func completeRouteOverview(cameraID: UUID) {
+        guard camera?.id == cameraID, pendingRouteCompletionCameraID == cameraID,
+              routeBuildCameraSequence == nil else { return }
+        pendingRouteCompletionCameraID = nil
+        completedRouteOverviewID = cameraID
+    }
     /// Ordered camera story for a pin-triggered route build. The coordinator
     /// consumes every step, so fast fuel responses cannot overwrite one another.
     private(set) var routeBuildCameraSequence: RouteBuildCameraSequence?
@@ -462,6 +479,7 @@ final class MapState {
 
     /// Start the leg-by-leg planning camera at the rider's first anchor.
     func beginRouteBuildCamera(at coordinate: RouteCoordinate) {
+        pendingRouteCompletionCameraID = nil
         stopFollowingForOverview()
         routeBuildCameraSequence = RouteBuildCameraSequence(
             id: UUID(),
@@ -478,6 +496,7 @@ final class MapState {
 
     /// Rider gestures and deliberate camera controls always win immediately.
     func cancelRouteBuildCamera() {
+        pendingRouteCompletionCameraID = nil
         routeBuildCameraSequence = nil
     }
 

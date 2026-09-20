@@ -1445,9 +1445,25 @@ They require isolated cold/repeated runs and separate physical-device targets
 before phone acceptance; no whole-journey deadline follows from them.
 
 When a complete route succeeds, restore and frame the full assembled route before
-the success confetti begins. This overview releases location following and uses the
-planner's current map insets. Partial builds and individual leg updates do not force
-an overview or trigger the completion celebration.
+the success confetti begins. From Here, Plan and Loop publish an explicit completion
+event independent of transient toast text (including the automatic long-route split
+notice). Loop publishes only after both legs are committed and build flags cleared.
+The map cancels queued leg framing, releases location following, and applies pitch
+before fitting the route with the planner's current insets. Confetti waits for the
+native map fit completion callback; if the completed leg list resized the planner,
+refit before acknowledging completion. Superseded camera requests cannot celebrate.
+Partial builds do not trigger the completion celebration. The redundant Loop
+“Ride … km · … m re-ridden” summary is removed; leg rows and aggregate ride stats
+remain the completed-route presentation.
+
+Completion repair verification (September 20): the DIRT Dev simulator build and
+seven focused tests pass on existing device
+`CC6035EE-9C03-48A2-ACBA-DDE3B068642A`, with parallel testing disabled. Coverage
+includes Loop success/repeated success/failure, ordinary route framing, stale
+camera callbacks, and a real MapLibre view whose planner inset grows during the
+fit; every loop coordinate remains inside the visible map before completion is
+acknowledged. Evidence: `.build/route-completion-20260920/focused-tests-3.xcresult`.
+Physical-device animation and confetti acceptance remain to be checked.
 
 For any retained server computation, test concurrent requests, bounded admission,
 per-request memory, cancellations, and cold behavior on the actual service class.

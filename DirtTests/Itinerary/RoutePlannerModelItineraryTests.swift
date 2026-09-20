@@ -7,6 +7,47 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
+    @Test func completedLoopSignalsOverviewIndependentlyOfToast() async throws {
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        let firstCompletion = try #require(model.routeCompletionID)
+        #expect(model.stages.count == 2)
+        #expect(!model.isRouting)
+        #expect(model.toast == RoutePlannerModel.routeReadyToast)
+        model.toast = nil
+        #expect(model.routeCompletionID == firstCompletion)
+        #expect(model.frameCompletedRouteForCelebration())
+        guard let camera = map.camera, case let .fit(coordinates) = camera.command else {
+            Issue.record("Completed loop must request a full-route overview")
+            return
+        }
+        #expect(coordinates.contains(point(0)))
+        #expect(coordinates.contains(point(1)))
+        #expect(coordinates.first == coordinates.last)
+        #expect(map.completedRouteOverviewID == nil)
+        map.completeRouteOverview(cameraID: camera.id)
+        #expect(map.completedRouteOverviewID == camera.id)
+
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.routeCompletionID != firstCompletion)
+    }
+
+    @Test func failedLoopDoesNotSignalCompletion() async {
+        let source = PlannerFakeRoutingSource()
+        source.routeError = RoutingError.server("Test failure")
+        let model = makeModel(source: source)
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.routeCompletionID == nil)
+        #expect(!model.frameCompletedRouteForCelebration())
+    }
+
     @Test func navigationRecoveryRetainsExplicitFerryPermission() async throws {
         let source = PlannerFakeRoutingSource()
         let model = makeModel(source: source)
@@ -1102,6 +1143,18 @@ private final class PlannerFakeRoutingSource: RoutingSource {
             maneuvers: nil, warnings: nil,
             dirtPercentValue: nil, pavedPercentValue: nil
         )
+    }
+
+    func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
+        func leg(_ from: RouteCoordinate, _ to: RouteCoordinate) async throws -> RouteResponse {
+            try await route(RouteRequest(profile: request.profile, locations: [
+                RouteLocation(latitude: from.latitude, longitude: from.longitude, label: "start"),
+                RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "end")
+            ], allowUnknown: request.allowUnknown))
+        }
+        return try await PlannedLoop(far: request.far,
+            outbound: leg(request.start, request.far), inbound: leg(request.far, request.start),
+            reriddenMeters: 0, returnMeters: 0)
     }
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {

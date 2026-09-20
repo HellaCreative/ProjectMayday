@@ -564,19 +564,23 @@ struct RootView: View {
             .onChange(of: isLandscape) { _, _ in
                 refreshLandscapeEdgeTicket()
             }
-            .onChange(of: app.planner.toast) { _, newValue in
-                guard newValue == RoutePlannerModel.routeReadyToast else { return }
+            .onChange(of: app.planner.routeCompletionID) { _, completionID in
+                guard completionID != nil else { return }
                 routeConfettiTask?.cancel()
                 showRouteConfetti = false
-                let framedRoute = app.planner.frameCompletedRouteForCelebration()
                 routeConfettiTask = Task { @MainActor in
-                    if framedRoute && !reduceMotion {
-                        try? await Task.sleep(for: .milliseconds(350))
-                    }
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        showRouteConfetti = true
-                    }
+                    // Let the completed leg list establish the map's insets.
+                    await Task.yield()
+                    guard !Task.isCancelled,
+                          app.planner.routeCompletionID == completionID else { return }
+                    app.planner.frameCompletedRouteForCelebration()
+                }
+            }
+            .onChange(of: app.mapState.completedRouteOverviewID) { _, overviewID in
+                guard overviewID != nil else { return }
+                routeConfettiTask?.cancel()
+                showRouteConfetti = true
+                routeConfettiTask = Task { @MainActor in
                     try? await Task.sleep(for: .seconds(1.6))
                     guard !Task.isCancelled else { return }
                     withAnimation(.easeOut(duration: 0.25)) {
