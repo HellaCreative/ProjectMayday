@@ -125,6 +125,16 @@ build ends awaiting route qualification; publication is still separately gated.
 Source lock: `continent/source-lock.json`; phase logs: `continent-source-preparation.log`
 and `continent-pack-build.log`. No new continental packs have been built or
 published at this checkpoint. Do not duplicate these running jobs.
+The same evidence directory's `continue-qualification.py` waits for that exact
+supervisor to seal the whole candidate, then generates the continental fixture
+matrix and runs/independently verifies serial native replays. Inspect
+`qualification-pipeline-state.json` before launching competing work. It stops on
+failure and does not publish. Its named input plan retains the seven-pack owner
+requests and adds Kitchener–Barrie, D.C.–Virginia, Texas, both California halves,
+a Golden Gate midpoint and the owner Halifax–Squamish pressure test. These are
+prepared requests, not passing results; synthetic endpoints are explicitly
+identified and do not replace owner pins. App/delivery qualification and DEV
+publication follow after the actual results are reviewed and repaired.
 
 Continental coverage preflight found D.C. outside both the Maryland and Virginia
 clip outlines. The Maryland pack now includes OSM administrative relations
