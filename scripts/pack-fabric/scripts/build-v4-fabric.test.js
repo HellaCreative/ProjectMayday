@@ -43,6 +43,17 @@ test("release labels cannot conceal stale source bytes or missing city data", t 
   const reportFile = path.join(dir, "legal-topology-report.json");
   write(reportFile, report);
   assert.equal(verifyRegion(paths, "ns", manifest.fabricReleaseId, lock).fuelStations, 1);
+  report.provenance.factoryCommit = "original-build";
+  report.provenance.factoryRecipe = { sha256: "c".repeat(64) };
+  write(reportFile, report);
+  // An unrelated app commit no longer rebuilds identical factory output.
+  assert.equal(verifyRegion(paths, "ns", manifest.fabricReleaseId, lock,
+    { factoryCommit: "later-app-change", recipe: { sha256: "c".repeat(64) } }).fuelStations, 1);
+  assert.throws(() => verifyRegion(paths, "ns", manifest.fabricReleaseId, lock,
+    { recipe: { sha256: "d".repeat(64) } }), /different factory recipe/);
+  // Legacy packs have no recipe receipt: retain their original strict check.
+  assert.throws(() => verifyRegion(paths, "ns", manifest.fabricReleaseId, lock,
+    { factoryCommit: "later-app-change" }), /different factory commit/);
   report.provenance.sourceSha256 = "b".repeat(64);
   write(reportFile, report);
   assert.throws(() => verifyRegion(paths, "ns", manifest.fabricReleaseId, lock), /actual source sourceSha256/);

@@ -17,6 +17,7 @@ const { buildPackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 const { geofabrikSource } = require("../routing/registry/geofabrik");
 const { regionTimezone } = require("../routing/registry/timezones");
 const { build: buildUrban } = require("./pack-region-urban");
+const { factoryRecipe } = require("./factory-recipe");
 
 const FABRIC = path.join(__dirname, "..");
 const DIRT = path.join(FABRIC, "../..");
@@ -52,15 +53,18 @@ async function main() {
   const source = geofabrikSource(regionId);
   const timezone = regionTimezone(regionId);
   const sourceLock = loadSourceLock(regionId);
+  const recipe = factoryRecipe(regionId);
   const legalRoot = process.env.OSM_LEGAL_ROOT
     ? path.resolve(process.env.OSM_LEGAL_ROOT)
     : path.join(FABRIC, "data-raw", "osm-legal");
   const legalDir = path.join(legalRoot, source.slug);
   const provenancePath = path.join(legalDir, "provenance.v1.json");
+  const recipePath = path.join(legalDir, "factory-recipe.json");
   const existingProvenance = fs.existsSync(provenancePath)
     ? JSON.parse(fs.readFileSync(provenancePath, "utf8"))
     : null;
   const extractDone = fs.existsSync(path.join(legalDir, "legal-topology.opl")) &&
+    fs.existsSync(recipePath) && JSON.parse(fs.readFileSync(recipePath, "utf8")).sha256 === recipe.sha256 &&
     (!sourceLock || provenanceMatches(existingProvenance, sourceLock.region));
   if (!extractDone) {
     const extract = spawnSync("bash", [path.join(__dirname, "extract-region-osm.sh"), regionId], {
@@ -68,6 +72,7 @@ async function main() {
       env: { ...process.env, DIRT_V4_SOURCE_LOCK: sourceLock ? sourceLock.path : "" }
     });
     if (extract.status !== 0) throw new Error("extract-region-osm.sh failed");
+    fs.writeFileSync(recipePath, JSON.stringify(recipe) + "\n");
   } else {
     console.warn("reusing source-locked lossless extract", legalDir);
   }
@@ -78,6 +83,7 @@ async function main() {
     throw new Error(`legal extract for ${regionId} does not match the source lock`);
   }
   provenance.factoryCommit = spawnSync("git", ["rev-parse", "HEAD"], { cwd: DIRT, encoding: "utf8" }).stdout.trim();
+  provenance.factoryRecipe = recipe;
   provenance.sourceEpoch = sourceLock ? sourceLock.lock.fabricEpoch : `geofabrik:${provenance.osmTimestamp}`;
   provenance.sourceLock = sourceLock ? path.basename(sourceLock.path) : null;
   provenance.regionId = regionId;

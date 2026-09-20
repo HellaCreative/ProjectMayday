@@ -16,6 +16,7 @@ const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 const { validateGeometry } = require("./prepare-v4-polygons");
 const { clipGeojsonPath } = require("./fetch-admin-polygon");
 const { readTopologySealMetaSync } = require("./topology-meta");
+const { factoryRecipe } = require("./factory-recipe");
 
 const FABRIC = path.join(__dirname, "..");
 const DIRT = path.resolve(FABRIC, "../..");
@@ -110,7 +111,7 @@ function readJSON(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
-function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factoryCommit = null } = {}) {
+function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factoryCommit = null, recipe = null } = {}) {
   const dir = path.join(paths.packRoot, id);
   const manifest = readJSON(path.join(dir, "pack-manifest.v2.json"));
   validatePackManifestV2(manifest, { requireSeams });
@@ -146,7 +147,10 @@ function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factor
       report.provenance.urbanSourceIdentity?.sha256 !== source.sourceSha256) {
     throw new Error(`${id}: missing source-locked city/town data`);
   }
-  if (factoryCommit && report.provenance.factoryCommit !== factoryCommit) {
+  if (recipe && report.provenance.factoryRecipe?.sha256 !== recipe.sha256) {
+    throw new Error(`${id}: pack was built by a different factory recipe`);
+  }
+  if (!recipe && factoryCommit && report.provenance.factoryCommit !== factoryCommit) {
     throw new Error(`${id}: pack was built by a different factory commit`);
   }
 
@@ -179,6 +183,7 @@ function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factor
     packManifest: manifest,
     legalTopologyReport: fileIdentity(reportFile),
     legalCounts: report.counts,
+    factoryRecipe: report.provenance.factoryRecipe || null,
     fuelStations: fuel.stations.length,
     riderServices: {
       ...fileIdentity(riderFile),
@@ -225,6 +230,10 @@ function main() {
     const polygon = clipGeojsonPath(id);
     if (!polygon) throw new Error(`admin polygon missing ${id}; run prepare-v4-polygons.js`);
     validateGeometry(polygon, id);
+    const lockedPolygon = lock.regions[id].extraction?.polygonSha256;
+    if (lockedPolygon && shaFile(polygon) !== lockedPolygon) {
+      throw new Error(`${id}: extraction polygon differs from source lock; prepare a new source`);
+    }
   }
 
   const paths = {
@@ -243,6 +252,7 @@ function main() {
   const measurements = path.join(options.root, "measurements");
   fs.mkdirSync(measurements, { recursive: true });
   const factoryCommit = gitHead();
+  const recipes = Object.fromEntries(options.regions.map(id => [id, factoryRecipe(id)]));
   let records = [];
   for (let index = 0; index < options.regions.length; index += 1) {
     const id = options.regions[index];
@@ -250,7 +260,7 @@ function main() {
     assertDiskSpace(options.root, id);
     let record = null;
     try {
-      record = verifyRegion(paths, id, options.releaseId, lock, { factoryCommit });
+      record = verifyRegion(paths, id, options.releaseId, lock, { recipe: recipes[id] });
       console.log(`[${index + 1}/${options.regions.length}] verified ${id} (resume)`);
     } catch (_) {
       console.log(`[${index + 1}/${options.regions.length}] building ${id} from ${lock.fabricEpoch}`);
@@ -274,7 +284,7 @@ function main() {
         DIRT_V4_FUEL_PATH: fuelOut,
         OSM_LEGAL_ROOT: paths.legalRoot
       }, { attempts: 2, measurements: path.join(measurements, `${id}-graph`) });
-      record = verifyRegion(paths, id, options.releaseId, lock, { factoryCommit });
+      record = verifyRegion(paths, id, options.releaseId, lock, { recipe: recipes[id] });
       safeCleanWork(paths, source);
       console.log(`[${index + 1}/${options.regions.length}] sealed ${id}`);
     }
@@ -302,7 +312,7 @@ function main() {
     }
     topology = { ...fileIdentity(topologyFile), pairs: topologyDoc.pairs.length };
     records = options.regions.map((id) =>
-      verifyRegion(paths, id, options.releaseId, lock, { requireSeams: true, factoryCommit })
+      verifyRegion(paths, id, options.releaseId, lock, { requireSeams: true, recipe: recipes[id] })
     );
   }
 

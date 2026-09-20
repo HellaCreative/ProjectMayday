@@ -43,6 +43,22 @@ authorized build/test/DEV-publication work. Production remains unchanged.
 Overnight follow-ups are resumption checks, not an eight-hour estimate for the
 seven packs or a guarantee of continental completion by morning.
 
+Continental preparation verification (September 20, evidence in
+`.build/continental-qualification-20260920`): all seven existing immutable
+packs pass a fresh `verifyRegion` audit, including graph/geometry/fuel/seams,
+source provenance and separate Rider Services. The focused factory baseline
+passes 22 tests. This verifies artifacts, not all routes or phone acceptance.
+The factory now keys new-build reuse to build-source bytes, clip polygon,
+dependency manifests and tool versions instead of the entire application Git
+commit. Legacy artifacts retain their stricter historical commit check; they
+are not silently recertified. Seven focused reuse/publication tests pass,
+including changed-recipe rejection. Source-lock polygon changes fail closed.
+The registered continental roster currently has 67 packs and unsplit Texas;
+Texas and all other regions still require measured resource qualification.
+A dated North America parent download has begun; its downloaded checksum and
+OSM timestamp must pass before any regional extraction. No new continental
+packs have been built or published at this checkpoint.
+
 Every region, including small provinces, receives the same source, feature,
 connectivity, actual-route and memory checks. Test legal road crossings in both
 permitted directions, internal split crossings, ferries, and the Confederation

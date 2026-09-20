@@ -133,9 +133,10 @@ function verifyLocalCandidate(options) {
   };
   const uploads = [];
   for (const id of expectedIds) {
-    verifyRegion({ packRoot: path.join(options.root, "packs"), riderRoot: path.join(options.root, "rider-services") },
-      id, options.candidate, lock, { requireSeams: true, factoryCommit: release.factoryCommit });
     const releaseRegion = release.regions.find((row) => row.id === id);
+    verifyRegion({ packRoot: path.join(options.root, "packs"), riderRoot: path.join(options.root, "rider-services") },
+      id, options.candidate, lock, { requireSeams: true, factoryCommit: release.factoryCommit,
+        recipe: releaseRegion?.factoryRecipe });
     const dir = path.join(options.root, "packs", id);
     const manifest = readJSON(path.join(dir, "pack-manifest.v2.json"));
     validatePackManifestV2(manifest, { requireSeams: true });
