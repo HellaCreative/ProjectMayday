@@ -354,11 +354,18 @@ weakened to claim it absent. Evidence: `first-completion-engine-tests.log`,
 `first-completion-native.xcresult`, `first-completion.json`, `.time`, and
 `first-completion-audit.json` under the Labrador evidence directory.
 
-The prepared native candidate stamp is `labrador-landing-20260919c`. It requires
-an Xcode Play build to test on White; no replacement was installed during this
-investigation. Existing installed source `d3457f9` and main checkpoint `62332ff`
-remain recoverable. This candidate changes regional recovery/return behavior,
-not highway/ferry penalties, riding styles, fuel, the interface or published packs.
+At the owner's subsequent explicit request, native source `f33b58b` was built,
+verified as development-only, installed and launched successfully on White
+(iPhone 16, iOS 26.6.2), as DIRT Dev 2 (45), stamp
+`labrador-landing-20260919c`. Binary SHA-256:
+`6c8814d2dc1ef9a16be8981ce68a1b81f703c040a1268e1f588766be4ea7e8b3`. The same fresh
+seven-pack release remains selected; app data was not uninstalled. Evidence:
+`white-build.log`, `white-build-receipt.json`, `white-install.json` and
+`white-launch.json` in the Labrador evidence directory. Owner route acceptance
+of this replacement is pending. Previous installed source `d3457f9` and main
+checkpoint `62332ff` remain recoverable. This candidate changes regional
+recovery/return behavior, not highway/ferry penalties, riding styles, fuel,
+the interface or published packs.
 
 Controlled western-PEI host replay isolates highway avoidance: identical
 start `-63.340289,44.764859`, destination `-64.090674,46.888514`, seed
@@ -918,6 +925,84 @@ phone preparation costs. Apply the resulting repeatable process to other
 regions only after this set passes. The earlier Texas–Moab failure and broader
 US qualification remain open; the accepted trans-Canada planner ride does not
 establish US coverage.
+
+
+### Seven-pack exit checklist and repeatable expansion process
+
+Owner request, September 19: keep one running checklist here, so the lessons
+from the Atlantic/Quebec qualification become the process for every subsequent
+province/state. Status: ready for focused owner testing, **not yet cleared for
+bulk expansion**. The seven packs are NS, NB, PEI, Newfoundland island, Labrador,
+Quebec south and Quebec north. Do not equate stored seam proofs with a completed
+legal journey, or host speed with phone speed.
+
+| Remaining check | Current evidence / significance | Finish condition |
+| --- | --- | --- |
+| Owner Labrador journey | Native repair completes locally; old White build failed. | New White build completes the exact request, preserves the pin, and passes return-direction replay. |
+| PEI bridge versus ferry choice | Same-request replay proves highway avoidance switches bridge to ferry. | Qualify a general crossing-selection correction with avoidance on/off; retain useful ferries and normal highway avoidance. Bridge availability alone is insufficient. |
+| Ferry handover repetition | Labrador replay contains 54 m repeated road near the Quebec landing. | Diagnose and remove an artificial handover loop without inventing connections or weakening turn/access rules; retain any genuinely unavoidable approach. |
+| Full final-version crossing matrix | Earlier 87 completions combine different engine revisions; latest integrated set covers eight calculations. | Rerun the relevant final set on one source revision and the same seven pack hashes: every neighbor pair, both permitted directions, Quebec split, bridge/ferry endpoints and multi-crossing journeys. |
+| Ordinary ride character and settings | Dirt/Wander owner results are promising; high dirt share is not universally attainable. | Dirt/Balanced/Clean, low/default/high Wander and supported Unknown settings preserve legal access, pins and honest surface reporting; inspect repeated roads and unnecessary town/highway visits. |
+| Device time and memory | PEI and Quebec remain slow; simulator Labrador improvement is not yet a White measurement. | Record first/repeated phone calculations, memory, useful progress and cancellation for each region and representative joined windows, especially QC-s. Compare against named workload targets, not pack size alone. |
+| Download and update interruptions | Published download/verification/reuse path passed; exhaustive interrupted-update coverage is not established. | Test missing/update/decline/cancel/interrupted/corrupt/mixed-version cases; preserve valid installed data and rider intent; retry and offline reuse work without live-route fallback. |
+| Planner and navigation handoff | Earlier edit and save-decoding tests passed; newest candidate needs combined acceptance. | Insert/move/delete a crossing waypoint, cancel/replan, save/reopen and Start preserve the accepted route; stale replies cannot replace it. |
+| Fuel and optional places | Fresh fuel ships with graph packs; other places remain separate. | Verify offline fuel display/notifications and separate place layers; notification on/off produces identical roads and no automatic stops. Missing optional places cannot block routing. |
+| Restricted endpoint approaches | A synthetic destination-only parking approach remains unresolved; several earlier long QC profile results repeat road. | Reproduce, classify and repair relevant access/route-quality failures, then replay without broader snapping or relaxed prohibitions. |
+
+Repeatable process to carry to every remaining region:
+
+1. **Lock the source and region list.** Record actual OSM timestamp, file hash,
+   boundary hash, tool/source versions and a new immutable candidate identity.
+   Reuse the retained locked source where applicable; never splice incompatible
+   dates into adjacent packs or relabel old data as fresh.
+2. **Prove the geography and splits.** Check known towns, islands, landing roads,
+   coastlines and both sides of each split. Measure each region and joined window
+   before deciding a split is adequate. Keep factory boundaries, catalog and app
+   region lookup consistent; unpublished parents must not replace halves.
+3. **Build all required facts.** Preserve original road/junction identities,
+   shapes, surfaces, direction, motorcycle restrictions, barriers, ramps,
+   overpasses, tunnels, ferries and towns. Fuel belongs to the routing download;
+   campground/lodging/liquor stay independently installable. Missing OSM facts
+   remain unknown, never fabricated permission or dirt.
+4. **Verify bytes and features.** Run factory/legal checks, paired graph/geometry
+   hashes, fuel/manifest validation and exact matching-grid checks. Compare feature
+   counts with the input, and investigate unexpected losses rather than treating
+   a successful build as acceptance.
+5. **Verify every neighboring connection.** Preserve and merge road and ferry
+   seam proofs and source identity; check legal directions and intermediate
+   landing regions. Inspect connectivity out of each handover, not just a shared
+   road in both files. Distinct overpass nodes must stay distinct.
+6. **Route through the actual system.** Repeat short/long, reverse, split,
+   border/bridge/ferry and obstacle journeys on immutable candidate files, all
+   styles and relevant settings. Include known owner failures as permanent
+   regression requests. Compare shape, legal access, completion, repeats, time
+   and memory; after a failure, repair its actual layer and rerun affected cases.
+7. **Verify delivery and the phone.** Publish only an immutable DEV candidate
+   within authorization, verify downloaded hashes and app acquisition/reuse,
+   then qualify cold/warm/offline/edit/save/start and resource behavior on named
+   hardware. A host-only completion does not clear a pack for riders.
+8. **Approve and preserve rollback.** Record exact accepted source, pack hashes,
+   test results, exceptions and owner acceptance. Promote only approved bytes;
+   keep the previous release. Later OSM updates repeat these checks and compare
+   against the prior accepted journeys.
+
+Already implemented: source locking, resumable factory, graph/geometry/fuel
+checks, source-proven seams, feature inventory, derived matching-grid validation,
+immutable DEV publication and download verification; focused engine/app tests
+and serial route matrices also exist. Evidence and tooling are referenced in
+section 1 and `scripts/pack-fabric/scripts/build-v4-fabric.js` /
+`ship-v4-candidate.js`. **Not yet demonstrated as one enforced release gate:**
+all final-version journeys, resource targets and owner acceptance automatically
+blocking publication together. Wire the repeatable automated subset into one
+pass/fail qualification step before bulk expansion; physical acceptance remains
+explicit. Do not claim every item above is already automated.
+
+No finite matrix can guarantee perfect OSM coverage or prove every possible
+journey. The objective is a reproducible build with detected regressions and
+honest limits, so routine routing-code repairs do not trigger another blanket
+pack rebuild. Expand only after the outstanding Atlantic/Quebec blockers and
+qualification checks above are resolved, in measured batches with neighboring
+crossings qualified together.
 
 
 Work in `/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt`. The current task began at
