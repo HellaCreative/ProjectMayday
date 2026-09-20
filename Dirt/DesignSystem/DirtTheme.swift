@@ -505,6 +505,7 @@ struct DirtSheetHeader: View {
     var onBack: (() -> Void)?
     /// Shown when the surface owns the screen and needs an explicit escape.
     var onClose: (() -> Void)?
+    var trailingSummary: String?
 
     var body: some View {
         HStack(spacing: DirtSpace.inner) {
@@ -528,6 +529,14 @@ struct DirtSheetHeader: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
 
+            if let trailingSummary {
+                Text(trailingSummary)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let onClose {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
@@ -539,7 +548,7 @@ struct DirtSheetHeader: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
-            } else if onBack != nil {
+            } else if onBack != nil && trailingSummary == nil {
                 Color.clear.frame(width: DirtHit.min, height: DirtHit.min)
                     .accessibilityHidden(true)
             }

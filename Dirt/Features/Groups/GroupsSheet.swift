@@ -20,7 +20,10 @@ struct GroupsSheet: View {
         VStack(spacing: 0) {
             DirtSheetHeader(
                 title: groups.selectedGroup?.name ?? "Groups",
-                onBack: groups.selectedGroup == nil ? nil : { groups.closeDetail() }
+                onBack: groups.selectedGroup == nil ? nil : { groups.closeDetail() },
+                trailingSummary: groups.selectedGroup.map {
+                    "\($0.memberCount) riders · \($0.liveCount) sharing"
+                }
             )
 
             Group {
@@ -292,29 +295,22 @@ struct GroupDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DirtSpace.group) {
-            VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                HStack {
-                    Text("\(group.memberCount) riders · \(group.liveCount) sharing")
-                        .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-                    Spacer()
+            if let invite = group.inviteCode {
+                Button {
+                    UIPasteboard.general.string = invite.lowercased()
+                    app.planner.toast = "Invite code copied"
+                } label: {
+                    HStack {
+                        Label("Invite a rider", systemImage: "person.badge.plus")
+                        Spacer()
+                        Text(invite.lowercased()).monospaced()
+                        Image(systemName: "doc.on.doc")
+                    }.font(DirtType.rowTitle).frame(minHeight: 44)
                 }
-                if let invite = group.inviteCode {
-                    Button {
-                        UIPasteboard.general.string = invite.lowercased()
-                        app.planner.toast = "Invite code copied"
-                    } label: {
-                        HStack {
-                            Label("Invite a rider", systemImage: "person.badge.plus")
-                            Spacer()
-                            Text(invite.lowercased()).monospaced()
-                            Image(systemName: "doc.on.doc")
-                        }.font(DirtType.rowTitle).frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
-                }
+                .buttonStyle(.plain).foregroundStyle(DirtTheme.action)
+                .padding(DirtSpace.row)
+                .dirtGroupingSurface()
             }
-            .padding(DirtSpace.row)
-            .dirtGroupingSurface()
             ScrollView {
                 VStack(spacing: DirtSpace.inner) {
                     ForEach(rosterMembers) { member in riderRow(member) }
