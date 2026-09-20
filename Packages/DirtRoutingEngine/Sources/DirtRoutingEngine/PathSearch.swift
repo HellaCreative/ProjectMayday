@@ -330,9 +330,12 @@ public struct PathSearch: Sendable {
         // Ordinary full-road arcs need only the exact road and direction.
         // Fractional/exceptional arcs retain all original values separately.
         let exceptionalBit: UInt64 = 1 << 63
-        var exceptionalArcs: [Arc] = []
+        var exceptionalArcs = ChunkedArray<Arc>()
+        func compactArc(_ arc: Arc) -> Bool {
+            arc.lower == 0 && arc.upper == arc.meters && arc.meters == pack.distance(arc.edge)
+        }
         func storeArc(_ arc: Arc) -> UInt64 {
-            if arc.lower == 0, arc.upper == arc.meters, arc.meters == pack.distance(arc.edge) {
+            if compactArc(arc) {
                 return (UInt64(arc.edge + 1) << 1) | (arc.forward ? 1 : 0)
             }
             exceptionalArcs.append(arc)
@@ -345,6 +348,14 @@ public struct PathSearch: Sendable {
             let edge = Int(token >> 1) - 1, meters = pack.distance(edge)
             return Arc(target: label.state.node, edge: edge, forward: token & 1 != 0,
                 meters: meters, lower: 0, upper: meters)
+        }
+        func historyFits(labelCount: Int, exceptionalCount: Int) -> Bool {
+            ChunkedArray<Label>.payloadBytes(forCount: labelCount)
+                + ChunkedArray<Arc>.payloadBytes(forCount: exceptionalCount)
+                <= budget.maximumSearchHistoryBytes
+        }
+        guard historyFits(labelCount: 1, exceptionalCount: 0) else {
+            throw RoutingFailure.resourceLimit("search history bytes")
         }
         let initial = State(node: startNode,incoming: resolvedArrival,
                             restrictionID: restrictionID(carriedRestrictions),bucket: 0)
@@ -488,6 +499,9 @@ public struct PathSearch: Sendable {
                                       unknownConnectorMeters: current.state.unknownConnectorMeters)
                     if let previous = bestIndex(state), labels[previous].cost <= current.cost { continue }
                     if labels.count >= budget.maximumLabels { limit = "labels"; break search }
+                    if !historyFits(labelCount: labels.count + 1, exceptionalCount: exceptionalArcs.count) {
+                        limit = "search history bytes"; break search
+                    }
                     let index = labels.count
                     labels.append(.init(state: state,cost: current.cost,meters: current.meters,
                                         dirtMeters: current.dirtMeters,
@@ -560,13 +574,18 @@ public struct PathSearch: Sendable {
                 do {
                     var ancestor: Int? = entry.label, depth = 0, overlaps = false
                     while let a = ancestor, depth < 128 {
+                        let ancestorLabel = labels[a]
                         if options.preventLocalCircuits, arc.meters > 0.01,
-                           labels[a].state.node == arc.target { overlaps = true; break }
-                        if let previous = storedArc(labels[a]), labels[a].state.incoming == physicalEdge,
+                           ancestorLabel.state.node == arc.target { overlaps = true; break }
+                        // Most preceding roads are unrelated. Check the retained
+                        // legal road identity before decoding its interval; both
+                        // conditions remain required, in the same 128-step window.
+                        if ancestorLabel.state.incoming == physicalEdge,
+                           let previous = storedArc(ancestorLabel),
                            min(previous.upper,arc.upper)-max(previous.lower,arc.lower) > 0.5 {
                             overlaps = true; break
                         }
-                        ancestor = labels[a].parent; depth += 1
+                        ancestor = ancestorLabel.parent; depth += 1
                     }
                     if overlaps { continue }
                 }
@@ -745,6 +764,10 @@ public struct PathSearch: Sendable {
                     continue
                 }
                 if labels.count >= budget.maximumLabels { limit = "labels"; break search }
+                if !historyFits(labelCount: labels.count + 1,
+                                exceptionalCount: exceptionalArcs.count + (compactArc(arc) ? 0 : 1)) {
+                    limit = "search history bytes"; break search
+                }
                 let index = labels.count
                 labels.append(.init(state: state,cost: cost,meters: meters,dirtMeters: dirt,
                                     contiguousDirtMeters: contiguousDirt,

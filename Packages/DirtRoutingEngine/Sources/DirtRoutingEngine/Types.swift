@@ -60,14 +60,20 @@ private final class CalculationCancellation: @unchecked Sendable {
 /// One absolute monotonic deadline covers preparation and every attempt in a
 /// window. Only a completed, committed stage may start another window.
 public struct ComputationBudget: Sendable {
+    public static let defaultMaximumLabels = 2_400_000
     let deadline: ContinuousClock.Instant
     public let maximumLabels: Int
+    /// Fixed history allowance from the former 160-byte × 1.6M label layout.
+    /// Compact labels may use more entries without increasing this allowance.
+    public let maximumSearchHistoryBytes: Int
     private let windowSeconds: Double
     private let cancellation: CalculationCancellation
-    public init(seconds: Double = 18, maximumLabels: Int = 1_600_000) {
+    public init(seconds: Double = 18, maximumLabels: Int = ComputationBudget.defaultMaximumLabels,
+                maximumSearchHistoryBytes: Int = 256_000_000) {
         let seconds = seconds.isFinite ? max(0, seconds) : 18
         deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
         self.maximumLabels = max(1, maximumLabels)
+        self.maximumSearchHistoryBytes = max(0, maximumSearchHistoryBytes)
         windowSeconds = seconds
         cancellation = CalculationCancellation()
     }
@@ -77,16 +83,17 @@ public struct ComputationBudget: Sendable {
     }
     public func limited(to seconds: Double) -> Self {
         .init(deadline: min(deadline,ContinuousClock.now.advanced(by: .seconds(max(0,seconds)))),
-              maximumLabels: maximumLabels, windowSeconds: windowSeconds, cancellation: cancellation)
+              maximumLabels: maximumLabels, maximumSearchHistoryBytes: maximumSearchHistoryBytes, windowSeconds: windowSeconds, cancellation: cancellation)
     }
     func afterCommittedStage() throws -> Self {
         try cancellation.check()
         return .init(deadline: .now.advanced(by: .seconds(windowSeconds)),
-                     maximumLabels: maximumLabels, windowSeconds: windowSeconds, cancellation: cancellation)
+                     maximumLabels: maximumLabels, maximumSearchHistoryBytes: maximumSearchHistoryBytes, windowSeconds: windowSeconds, cancellation: cancellation)
     }
-    private init(deadline: ContinuousClock.Instant, maximumLabels: Int,
+    private init(deadline: ContinuousClock.Instant, maximumLabels: Int, maximumSearchHistoryBytes: Int,
                  windowSeconds: Double, cancellation: CalculationCancellation) {
         self.deadline = deadline; self.maximumLabels = maximumLabels
+        self.maximumSearchHistoryBytes = maximumSearchHistoryBytes
         self.windowSeconds = windowSeconds; self.cancellation = cancellation
     }
     func check() throws {

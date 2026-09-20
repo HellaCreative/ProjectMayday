@@ -36,7 +36,7 @@ let compact = environment["DIRT_PROBE_COMPACT"] == "1"
 let started = ContinuousClock.now
 // Default to the phone label limit; explicit overrides are experiments only.
 let configuredLabels = environment["DIRT_MAX_LABELS"].flatMap(Int.init)
-let budgetLabels = configuredLabels ?? 1_600_000
+let budgetLabels = configuredLabels ?? ComputationBudget.defaultMaximumLabels
 var budget = ComputationBudget(seconds: seconds, maximumLabels: budgetLabels)
 let counter = SearchCounter()
 let preparedGraphs = PreparedGraphStore()
@@ -145,7 +145,7 @@ do {
         "requestedStart":[lonA,latA],"requestedEnd":[lonB,latB],
         "style":style.rawValue,"wander":request.profile.wander,
         "avoidFerries":request.access.avoidFerries,"avoidHighways":request.profile.avoidMajorHighways,"avoidCities":request.options.cityWall,
-        "maximumLabels":budgetLabels,"windowSeconds":seconds,"renewsAfterCommittedStage":stageLong]
+        "maximumLabels":budgetLabels,"maximumSearchHistoryBytes":budget.maximumSearchHistoryBytes,"windowSeconds":seconds,"renewsAfterCommittedStage":stageLong]
     if let fuelUsable, let fuelFirst {
         var fuel = FuelRequirements(usableRangeMeters: fuelUsable, firstLegMaxMeters: fuelFirst)
         fuel.ensureDestinationEscape = environment["DIRT_FUEL_ESCAPE"] != "0"

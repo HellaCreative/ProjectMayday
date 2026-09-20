@@ -110,7 +110,9 @@ accepted route or memory qualification. Its union covers the original outline
 within 1e-9 degrees; actual directed seam and same-pin riding tests remain required.
 Do not infer that smaller files fix search limits or join-memory use. Southern
 California's sizing failure also remains open. Retain the source and route settings;
-do not raise the application label or memory budget just to pass.
+do not substitute an arbitrary larger timeout or memory allocation merely to pass.
+Search capacity changes must be tied to measured storage savings and explicit
+byte limits; the same end-to-end resource gates still apply.
 An opt-in cost-guidance experiment failed its first actual California replay:
 1.6 million labels in both runs. Guided search itself took 19.589 s versus
 13.405 s without guidance; its lower total reflected warm file opening, not a
@@ -255,17 +257,34 @@ access receipts. California Clean uses 685,473,792 bytes kernel peak RSS versus
 886,161,408 bytes (34.957 versus 34.619 s). Physical footprints are respectively
 406,604,992 and 379,079,744 bytes. Independent audits pass pins, continuity, access,
 settings and repetition (`compact-storage-real-receipts.json`). These storage
-changes are included in the native candidate; route scoring and the app search
-limit remain unchanged. They are memory improvements, not demonstrated speedups.
+changes are included in the native candidate; route scoring remains unchanged.
+They are memory improvements, not demonstrated speedups.
 California Dirt at 1.6 million labels still fails, now using 852,262,912 bytes
 kernel RSS / 519,473,728 bytes footprint after 33.678 s. An explicitly separate
 2.4-million-label capacity diagnostic completes in 60.068 s, using 1,001,865,216
 bytes RSS / 621,907,648 footprint. It preserves the exact settings and requested
 pins, passes legal/continuity/repetition receipts, and returns 378.611 km with
-4.7% known dirt and 38.1% unknown surface. This is low dirt riding character and
-is not an app qualification pass: its capacity override is not enabled in the app.
-No percentage threshold or weaker settings was substituted. The time ceiling
-and published-candidate gates remain unchanged.
+4.7% known dirt and 38.1% unknown surface. This is low dirt riding character, and that diagnostic alone did not qualify the
+app or justify an arbitrary larger allocation. No percentage floor or weaker
+settings was substituted.
+The subsequent candidate keeps a fixed 256,000,000-byte history allowance—the
+former 160-byte × 1.6-million-label payload—and permits up to 2.4 million compact
+labels within it. It accounts for allocated chunks of both ordinary history and
+exceptional fractional-road records; explicit smaller label limits remain honored.
+The 60-second app window and 1 GiB host qualification ceiling are unchanged.
+Attempts and committed stages preserve the same memory allowance. A hot-loop
+repair also checks an ancestor's road identity before decoding its interval,
+retaining the identical 128-step repeat/circuit checks. All 149 engine tests pass.
+With the actual default fixed-byte policy and unchanged rider settings, the fresh
+California Dirt request completes in 60.063 s, 1,009,745,920 bytes kernel peak RSS /
+614,780,544 bytes footprint, 378.611 km and 4.7% known dirt. Its cold preparation
+alone takes 15.603 s from the external drive. Kitchener–Barrie completes in
+14.172 s, 301,760,512 bytes RSS / 144,640,064 bytes footprint, 204.000 km and 63.2%
+known dirt, retaining the prior trial's exact roads. Independent road/resource
+receipts pass (`fixed-search-history-receipts.json`). These are host completion
+and memory results, not a claim that California's riding quality or phone speed
+is satisfactory. Full native-app cold/warm qualification remains required.
+Publication remains gated on the entire current candidate.
 Continental fixture generation now streams complete seam files and retains a
 bounded deterministic sample solely for choosing synthetic test endpoints;
 pack proofs are unchanged. Reader checks cover chunk boundaries, escaped Unicode,

@@ -9,6 +9,12 @@ struct ChunkedArray<Element> {
 
     init() {}
 
+    static func payloadBytes(forCount count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        let capacity = ((count - 1) / Self.size + 1) * Self.size
+        return capacity * MemoryLayout<Element>.stride
+    }
+
     mutating func append(_ element: Element) {
         if count & (Self.size - 1) == 0 {
             var chunk: [Element] = []
