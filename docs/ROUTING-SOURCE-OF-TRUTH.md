@@ -99,10 +99,12 @@ physical footprint). Both used Wander 50%, Unknown off and all three avoidances
 on. These measured pre-repair pack trials do not qualify either region or imply
 phone timings. Evidence: `texas-preflight/` and
 `region-preflight-ca-s-los-angeles-san-diego-dirt/`.
-Texas now has four candidate pieces, ownership cuts 31°N / 97.25°W and 0.25°
-overlap, replacing the monolithic published ID while retaining its legacy alias.
+Texas now has four candidate pieces, ownership cuts 31°N / 97.25°W,
+replacing the monolithic published ID while retaining its legacy alias.
+The current sizing trial removes the extra 0.25° polygon overlap; the source
+extractor retains its 2 km halo and complete source-way/restriction semantics.
 Reproduce the unchanged administrative-outline split with
-`node scripts/pack-fabric/scripts/split-grid-polygons.js tx 31 -97.25 0.25`.
+`node scripts/pack-fabric/scripts/split-grid-polygons.js tx 31 -97.25 0`.
 The candidate roster is 70. The split is a measured sizing experiment, not yet
 accepted route or memory qualification. Its union covers the original outline
 within 1e-9 degrees; actual directed seam and same-pin riding tests remain required.
@@ -164,9 +166,34 @@ normal and compact input paths; all 42 focused legal/format/seam checks pass,
 including 100 varied loop/retrace shapes. All 36 app pack-acquisition tests also
 pass on the existing simulator, including Texas quarter ownership and selection.
 Evidence: `texas-shared-road-mismatch.json`, `repeated-way-geometry-before.log`,
-`repeated-way-minimal-tests.log`, `texas-quarter-acquisition-tests.xcresult`. Rebuild the affected candidate recipe and
-repeat the actual seam seal and same-pin Texas route. No continental release
-is qualified or published.
+`repeated-way-minimal-tests.log`, `texas-quarter-acquisition-tests.xcresult`.
+All four compact-repair Texas packs subsequently built and all six seam pairs
+sealed successfully. The wide-overlap sidecars total about 2.2 GiB, however,
+and Austin–Houston failed before search: 69.165 s, zero searches and 2.13 GiB
+sampled process-tree peak RSS (`texas-quarter-replay-tx-austin-houston-dirt-0`).
+That is a preparation/resource failure, not proof of disconnected roads. The
+wide-overlap source and results are retained. The zero-extra-overlap outline
+union has less than 1e-9 square degrees of missing area; eight geometry/writer
+checks pass. New four-piece source extraction and directed seam/route replays
+are required before accepting the tighter design. The other 66 checked sources
+remain reusable. No continental release is qualified or published.
+
+Raw-pack preparation now borrows its existing mapped outgoing-road columns and
+allocates only the reverse adjacency lookup; joined graphs retain their composed
+columns. All 138 engine tests pass, including exact directed-arc and reverse-order
+comparison on four legal-topology fixtures. California Clean on the same old
+pre-repair pack retains the exact edge hash and distance: sampled process-tree
+peak RSS 1,269,334,016 → 1,099,005,952 bytes; total route time 30.058 → 30.617 s;
+index preparation 1.105 → 0.438 s. These host measurements do not establish phone
+speed or Dirt completion, and still exceed the 1 GiB qualification ceiling.
+Evidence: `california-style-diagnostic-ca-s-los-angeles-san-diego-cleanest-0`
+and `mapped-adjacency-ca-s-los-angeles-san-diego-cleanest-0`.
+The native probe now records distinct search states and superseded queue entries
+to separate unavoidable exploration from duplicated label work.
+
+The seam JSON writer batches filesystem writes without removing or changing any
+proof. Complete UTF-8 output is byte-identical in the regression. This is a factory
+I/O improvement; it does not reduce delivered data or claim faster phone routing.
 The resumable factory must use the corrected recipe and updated complete source
 lock. A successful build ends awaiting route qualification; publication remains gated.
 Continental building exposed an unresolved-only-turn defect before publication.

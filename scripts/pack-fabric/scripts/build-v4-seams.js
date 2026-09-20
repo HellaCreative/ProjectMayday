@@ -4,6 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { BufferedJSONFile } = require("./buffered-json-file");
 const { decodeGraphV4 } = require("../routing/lib/pack-v4");
 const { validatePackManifestV2, SEAM_CAPABILITY } = require("../routing/lib/pack-manifest-v2");
 const { seamCandidates, assertSeamLegal, edgeProofKey } = require("../routing/lib/legal-topology/seams");
@@ -43,10 +44,8 @@ function checkpointPath(output) {
  */
 function writeTopologyDocument(file, doc) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const fd = fs.openSync(file, "w");
-  const ws = (chunk) => {
-    fs.writeSync(fd, chunk);
-  };
+  const writer = new BufferedJSONFile(file);
+  const ws = chunk => writer.write(chunk);
   try {
     ws("{");
     ws(`"schemaVersion":${JSON.stringify(doc.schemaVersion)}`);
@@ -84,7 +83,7 @@ function writeTopologyDocument(file, doc) {
     }
     ws("]}\n");
   } finally {
-    fs.closeSync(fd);
+    writer.close();
   }
 }
 
@@ -212,10 +211,8 @@ function isRoadConnection(row) {
 function writeSeamSidecar(file, sidecar) {
   // Compact streamed write — pretty-printed CA-scale neighbor arrays exceed
   // JSON.stringify string limits the same way checkpoints do.
-  const fd = fs.openSync(file, "w");
-  const ws = (chunk) => {
-    fs.writeSync(fd, chunk);
-  };
+  const writer = new BufferedJSONFile(file);
+  const ws = chunk => writer.write(chunk);
   try {
     ws("{");
     ws(`"schemaVersion":${JSON.stringify(sidecar.schemaVersion)}`);
@@ -238,7 +235,7 @@ function writeSeamSidecar(file, sidecar) {
     }
     ws("}}\n");
   } finally {
-    fs.closeSync(fd);
+    writer.close();
   }
 }
 
