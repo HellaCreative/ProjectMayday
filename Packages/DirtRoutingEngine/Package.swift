@@ -10,13 +10,10 @@ let package = Package(
         .target(
             name: "DirtRoutingEngine",
             swiftSettings: [
-                // Keep the phone/Play engine optimized across its source files,
-                // just like the Release host probe. Xcode's Debug default is
-                // per-file compilation even when -O is explicitly enabled.
-                // Threaded emission preserves SwiftPM's per-file object/index
-                // outputs; cap compiler parallelism for the shared build host.
-                .unsafeFlags(["-O", "-whole-module-optimization", "-disable-batch-mode", "-num-threads", "2",
-                              "-cross-module-optimization"])
+                // Preserve Xcode's compilation/output model. Forcing WMO here
+                // omits per-file App Intents metadata on a fresh Play build.
+                // Hot generic helpers expose their bodies for specialization.
+                .unsafeFlags(["-O", "-cross-module-optimization"])
             ]
         ),
         .executableTarget(name: "RoutingProbe", dependencies: ["DirtRoutingEngine"]),

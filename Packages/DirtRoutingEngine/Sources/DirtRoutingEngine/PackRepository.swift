@@ -55,7 +55,8 @@ public struct InstalledRoutingPack: Sendable {
     public let manifest: PackManifest
     public let graph: GraphPack
     public let fuelData: Data
-    public let seamsData: Data?
+    let seamsFile: BinaryFile?
+    public var seamsData: Data? { seamsFile?.data }
 }
 
 final class VerifiedPackReceipts: @unchecked Sendable {
@@ -96,7 +97,7 @@ private final class RoutingInputCache: @unchecked Sendable {
     private let lock = NSLock()
     private var graphs: [String: WeakGraph] = [:]
     private var seams: [(String, SeamDocument)] = []
-    private var neighbors: [(String, Set<String>)] = []
+    private var seamMetadata: [(String, SeamJSONReader.Metadata)] = []
     func graph(_ key: String) -> GraphPack? {
         lock.lock(); defer { lock.unlock() }
         return graphs[key]?.value
@@ -118,31 +119,15 @@ private final class RoutingInputCache: @unchecked Sendable {
         if seams.count > 2 { seams.removeFirst(seams.count - 2) }
         return document
     }
-    func neighborIDs(_ key: String, build: () throws -> Set<String>) rethrows -> Set<String> {
+    func metadata(_ key: String, build: () throws -> SeamJSONReader.Metadata) rethrows -> SeamJSONReader.Metadata {
         lock.lock()
-        if let hit = neighbors.first(where: { $0.0 == key }) { lock.unlock(); return hit.1 }
+        if let hit = seamMetadata.first(where: { $0.0 == key }) { lock.unlock(); return hit.1 }
         lock.unlock()
         let ids = try build()
         lock.lock(); defer { lock.unlock() }
-        neighbors.append((key, ids))
-        if neighbors.count > 128 { neighbors.removeFirst(neighbors.count - 128) }
+        seamMetadata.append((key, ids))
+        if seamMetadata.count > 128 { seamMetadata.removeFirst(seamMetadata.count - 128) }
         return ids
-    }
-}
-
-private struct SeamNeighborNames: Decodable {
-    struct Key: CodingKey {
-        let stringValue: String
-        var intValue: Int? { nil }
-        init?(stringValue: String) { self.stringValue = stringValue }
-        init?(intValue: Int) { return nil }
-    }
-    enum Field: String, CodingKey { case neighbors }
-    let ids: Set<String>
-    init(from decoder: Decoder) throws {
-        let root = try decoder.container(keyedBy: Field.self)
-        let neighbors = try root.nestedContainer(keyedBy: Key.self, forKey: .neighbors)
-        ids = Set(neighbors.allKeys.map(\.stringValue))
     }
 }
 
@@ -190,9 +175,9 @@ public struct PackRepository: Sendable {
         let identity = try preparationIdentity([region])
         if let graph = Self.inputs.graph(identity) {
             let fuel = try Data(contentsOf: root.appendingPathComponent(manifest.fuel.name), options: .mappedIfSafe)
-            let seams = try manifest.seams.map { try Data(contentsOf: root.appendingPathComponent($0.name), options: .mappedIfSafe) }
+            let seams = try manifest.seams.map { try BinaryFile(url: root.appendingPathComponent($0.name)) }
             try budget.check()
-            return .init(manifest: manifest, graph: graph, fuelData: fuel, seamsData: seams)
+            return .init(manifest: manifest, graph: graph, fuelData: fuel, seamsFile: seams)
         }
         let receipt = "\(region)|\(manifest.graph.sha256)|\(manifest.geometry.sha256)|\(manifest.fuel.sha256)"
         let alreadyVerified = Self.verified.contains(receipt)
@@ -212,10 +197,10 @@ public struct PackRepository: Sendable {
         guard graph.metadata.regionId == region else { throw RoutingFailure.invalidPack("graph region mismatch") }
         guard graph.sourceEpoch == manifest.sourceEpoch else { throw RoutingFailure.invalidPack("graph source epoch mismatch") }
         let fuel = try verifiedArtifact(manifest.fuel).data
-        let seams = try manifest.seams.map { try verifiedArtifact($0).data }
+        let seams = try manifest.seams.map { try verifiedArtifact($0) }
         Self.verified.insert(receipt)
         Self.inputs.remember(graph, key: identity)
-        return .init(manifest: manifest,graph: graph,fuelData: fuel,seamsData: seams)
+        return .init(manifest: manifest,graph: graph,fuelData: fuel,seamsFile: seams)
     }
     func planningEnvelope(_ region: String, budget: ComputationBudget) throws -> GeographicBox {
         try budget.check()
@@ -233,7 +218,7 @@ public struct PackRepository: Sendable {
             return try GraphPack.nodeBounds(graph, budget: budget)
         }
     }
-    private func seamBytes(_ region: String) throws -> Data {
+    private func seamFile(_ region: String) throws -> BinaryFile {
         guard let root = directories[region] else { throw RoutingFailure.missingPacks([region]) }
         let manifest = try JSONDecoder().decode(PackManifest.self,
             from: Data(contentsOf: root.appendingPathComponent("pack-manifest.v2.json")))
@@ -245,30 +230,27 @@ public struct PackRepository: Sendable {
         guard file.data.count == artifact.bytes, try file.sha256 == artifact.sha256 else {
             throw RoutingFailure.invalidPack("seam artifact identity mismatch")
         }
-        return file.data
+        return file
     }
-    func seamNeighborIDs(_ region: String) throws -> Set<String> {
+    private func metadata(_ region: String, budget: ComputationBudget) throws -> SeamJSONReader.Metadata {
         let key = try preparationIdentity([region])
-        return try Self.inputs.neighborIDs(key) {
-            try JSONDecoder().decode(SeamNeighborNames.self, from: seamBytes(region)).ids
+        return try Self.inputs.metadata(key) {
+            try SeamJSONReader.read(seamFile(region), budget: budget, metadataOnly: true).metadata
         }
     }
-    func roadNeighborIDs(_ region: String) throws -> Set<String>? {
-        struct Summary: Decodable { let roadNeighbors: [String]? }
-        let key = try preparationIdentity([region]) + "|roads"
+    func seamNeighborIDs(_ region: String, budget: ComputationBudget = .init(seconds: 60)) throws -> Set<String> {
+        try metadata(region, budget: budget).neighborIDs
+    }
+    func roadNeighborIDs(_ region: String, budget: ComputationBudget = .init(seconds: 60)) throws -> Set<String>? {
         // Older sidecars have no transport summary; do not invent one from
         // geographic region names. Fresh sidecars bind it to verified bytes.
-        let ids = try Self.inputs.neighborIDs(key) {
-            let summary = try JSONDecoder().decode(Summary.self, from: seamBytes(region))
-            // Empty string cannot be a region ID; cache missing metadata distinctly.
-            return summary.roadNeighbors.map(Set.init) ?? [""]
-        }
-        return ids.contains("") ? nil : ids
+        return try metadata(region, budget: budget).roadNeighbors
     }
-    func loadSeams(_ region: String) throws -> SeamDocument {
-        let key = try preparationIdentity([region])
+    func loadSeams(_ region: String, retaining neighbors: Set<String>? = nil,
+                   budget: ComputationBudget = .init(seconds: 60)) throws -> SeamDocument {
+        let key = try preparationIdentity([region]) + "|neighbors=" + (neighbors?.sorted().joined(separator: ",") ?? "*")
         return try Self.inputs.document(key) {
-            try JSONDecoder().decode(SeamDocument.self, from: seamBytes(region))
+            try SeamJSONReader.read(seamFile(region), budget: budget, retaining: neighbors).document
         }
     }
     func graphBytes(_ region: String) -> Int {

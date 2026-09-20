@@ -2,9 +2,50 @@ import Foundation
 import CryptoKit
 import Darwin
 
+/// Keep the actual load concrete even in Xcode's per-file compilation mode.
+/// A generic loadUnaligned otherwise performs runtime type-metadata work for
+/// every column access. All graph integers use the same little-endian contract.
+@usableFromInline protocol PackedInteger: FixedWidthInteger {
+    static func loadLittleEndian(_ pointer: UnsafeRawPointer) -> Self
+}
+extension UInt8: PackedInteger {
+    @usableFromInline static func loadLittleEndian(_ p: UnsafeRawPointer) -> UInt8 { p.loadUnaligned(as: UInt8.self) }
+}
+extension Int8: PackedInteger {
+    @usableFromInline static func loadLittleEndian(_ p: UnsafeRawPointer) -> Int8 { p.loadUnaligned(as: Int8.self) }
+}
+extension UInt16: PackedInteger {
+    @usableFromInline static func loadLittleEndian(_ p: UnsafeRawPointer) -> UInt16 { UInt16(littleEndian: p.loadUnaligned(as: UInt16.self)) }
+}
+extension Int16: PackedInteger {
+    @usableFromInline static func loadLittleEndian(_ p: UnsafeRawPointer) -> Int16 { Int16(littleEndian: p.loadUnaligned(as: Int16.self)) }
+}
+extension UInt32: PackedInteger {
+    @usableFromInline static func loadLittleEndian(_ p: UnsafeRawPointer) -> UInt32 { UInt32(littleEndian: p.loadUnaligned(as: UInt32.self)) }
+}
+extension Int32: PackedInteger {
+    @usableFromInline static func loadLittleEndian(_ p: UnsafeRawPointer) -> Int32 { Int32(littleEndian: p.loadUnaligned(as: Int32.self)) }
+}
+extension UInt64: PackedInteger {
+    @usableFromInline static func loadLittleEndian(_ p: UnsafeRawPointer) -> UInt64 { UInt64(littleEndian: p.loadUnaligned(as: UInt64.self)) }
+}
+extension Int64: PackedInteger {
+    @usableFromInline static func loadLittleEndian(_ p: UnsafeRawPointer) -> Int64 { Int64(littleEndian: p.loadUnaligned(as: Int64.self)) }
+}
+
 /// Retains mapped bytes, not a decoded copy of each regional graph array.
-final class BinaryFile: @unchecked Sendable {
-    let data: Data
+@usableFromInline final class BinaryFile: @unchecked Sendable {
+    @usableFromInline let data: Data
+    /// Original mmap address; `data` owns its lifetime. Never escape a temporary
+    /// Data.withUnsafeBytes pointer for the in-memory fixture initializer.
+    @usableFromInline let mappedBaseAddress: UnsafeRawPointer?
+    private final class Mapping {
+        let address: UnsafeMutableRawPointer
+        let count: Int
+        init(address: UnsafeMutableRawPointer, count: Int) { self.address = address; self.count = count }
+        deinit { _ = munmap(address, count) }
+    }
+    private let mapping: Mapping?
     private let source: FileHandle?
     private let digestLock = NSLock()
     private var cachedDigest: Data?
@@ -23,29 +64,56 @@ final class BinaryFile: @unchecked Sendable {
         let size = Int(info.st_size)
         if size == 0 {
             data = Data()
+            mappedBaseAddress = nil
+            mapping = nil
         } else {
             let address = mmap(nil, size, PROT_READ, MAP_PRIVATE, handle.fileDescriptor, 0)
             guard let address, address != MAP_FAILED else {
                 throw RoutingFailure.invalidPack("cannot map local file")
             }
+            let owner = Mapping(address: address, count: size)
+            mapping = owner
+            // Data may copy short inputs into inline storage and immediately
+            // invoke its deallocator. Retain the mapping independently for
+            // direct reads; exported large Data also retains it via this closure.
             data = Data(bytesNoCopy: address, count: size,
-                        deallocator: .custom { pointer, count in _ = munmap(pointer, count) })
+                        deallocator: .custom { [owner] _, _ in withExtendedLifetime(owner) {} })
+            mappedBaseAddress = UnsafeRawPointer(address)
         }
         source = handle
     }
-    init(data: Data) { self.data = data; source = nil }
+    init(data: Data) { self.data = data; source = nil; mappedBaseAddress = nil; mapping = nil }
+    /// Read a bounded slice from the descriptor that was verified, without
+    /// faulting the whole mapped JSON artifact into resident memory.
+    func copiedBytes(at offset: Int, count: Int) throws -> Data {
+        try range(offset, count)
+        guard let source else { return data.subdata(in: offset..<(offset + count)) }
+        var result = Data(count: count)
+        try result.withUnsafeMutableBytes { bytes in
+            var copied = 0
+            while copied < count {
+                let n = pread(source.fileDescriptor, bytes.baseAddress!.advanced(by: copied),
+                              count - copied, off_t(offset + copied))
+                if n < 0 && errno == EINTR { continue }
+                guard n > 0 else { throw RoutingFailure.invalidPack("incomplete streamed artifact") }
+                copied += n
+            }
+        }
+        return result
+    }
     func range(_ offset: Int, _ count: Int, stride: Int = 1) throws {
         guard offset >= 0, count >= 0, stride > 0, offset <= data.count,
               count <= (data.count - offset) / stride else {
             throw RoutingFailure.invalidPack("section outside file")
         }
     }
-    func read<T: FixedWidthInteger>(_ offset: Int, as: T.Type = T.self) throws -> T {
+    func read<T: PackedInteger>(_ offset: Int, as: T.Type = T.self) throws -> T {
         try range(offset, 1, stride: MemoryLayout<T>.size)
         return unchecked(offset, as: T.self)
     }
-    func unchecked<T: FixedWidthInteger>(_ offset: Int, as: T.Type = T.self) -> T {
-        data.withUnsafeBytes { T(littleEndian: $0.loadUnaligned(fromByteOffset: offset, as: T.self)) }
+    @inlinable func unchecked<T: PackedInteger>(_ offset: Int, as: T.Type = T.self) -> T {
+        if let mappedBaseAddress { return T.loadLittleEndian(mappedBaseAddress.advanced(by: offset)) }
+        return data.withUnsafeBytes { T.loadLittleEndian($0.baseAddress!.advanced(by: offset)) }
     }
     func json<T: Decodable>(_ start: Int, _ end: Int, as type: T.Type) throws -> T {
         try range(start, end - start)
@@ -97,15 +165,15 @@ final class BinaryFile: @unchecked Sendable {
 
 }
 
-struct MappedColumn<T: FixedWidthInteger>: Sendable {
-    let file: BinaryFile
-    let offset: Int
-    let count: Int
+struct MappedColumn<T: PackedInteger>: Sendable {
+    @usableFromInline let file: BinaryFile
+    @usableFromInline let offset: Int
+    @usableFromInline let count: Int
     init(file: BinaryFile, offset: Int, count: Int) throws {
         try file.range(offset, count, stride: MemoryLayout<T>.size)
         self.file = file; self.offset = offset; self.count = count
     }
-    subscript(_ i: Int) -> T {
+    @inlinable subscript(_ i: Int) -> T {
         precondition(i >= 0 && i < count)
         return file.unchecked(offset + i * MemoryLayout<T>.size)
     }

@@ -1,6 +1,29 @@
 import Foundation
 
 struct SeamDocument: Decodable, Sendable {
+    /// Two coordinates belong inline with each proof, not in a separate heap
+    /// allocation per shared road. Keep the JSON pair contract exact.
+    struct Point: Decodable, Sendable, Equatable {
+        let longitude: Double
+        let latitude: Double
+        var count: Int { 2 }
+        subscript(_ index: Int) -> Double {
+            precondition(index == 0 || index == 1)
+            return index == 0 ? longitude : latitude
+        }
+        init(_ values: [Double]) {
+            precondition(values.count == 2)
+            longitude = values[0]; latitude = values[1]
+        }
+        init(from decoder: any Decoder) throws {
+            var values = try decoder.unkeyedContainer()
+            longitude = try values.decode(Double.self)
+            latitude = try values.decode(Double.self)
+            guard values.isAtEnd else {
+                throw DecodingError.dataCorruptedError(in: values, debugDescription: "seam coordinate requires two values")
+            }
+        }
+    }
     struct EdgeProof: Decodable, Hashable, Sendable {
         let osmWayId: String
         let fromOsmNodeId: String
@@ -48,19 +71,73 @@ struct SeamDocument: Decodable, Sendable {
         }
     }
     struct Anchor: Decodable, Sendable {
-        let coordinate: [Double]
+        static let verifiedProof = "shared-osm-node-way-edge-legal-topology.v1"
+        let coordinate: Point
         let gapMeters: Double
         let osmNodeId: String
         let osmWayId: String
         let proof: String
         let edge: EdgeProof
         let barrierDecision: UInt8
+        private enum CodingKeys: String, CodingKey {
+            case coordinate, gapMeters, osmNodeId, osmWayId, proof, edge, barrierDecision
+        }
+        init(coordinate: [Double], gapMeters: Double, osmNodeId: String, osmWayId: String,
+             proof: String, edge: EdgeProof, barrierDecision: UInt8) {
+            self.coordinate = Point(coordinate); self.gapMeters = gapMeters
+            self.osmNodeId = osmNodeId; self.osmWayId = osmWayId
+            self.proof = proof == Self.verifiedProof ? Self.verifiedProof : proof
+            self.edge = edge; self.barrierDecision = barrierDecision
+        }
+        init(from decoder: any Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            coordinate = try values.decode(Point.self, forKey: .coordinate)
+            gapMeters = try values.decode(Double.self, forKey: .gapMeters)
+            osmNodeId = try values.decode(String.self, forKey: .osmNodeId)
+            osmWayId = try values.decode(String.self, forKey: .osmWayId)
+            let decodedProof = try values.decode(String.self, forKey: .proof)
+            // Preserve unknown proof strings so the legal validator rejects them.
+            // Share the one valid long string instead of retaining a million copies.
+            proof = decodedProof == Self.verifiedProof ? Self.verifiedProof : decodedProof
+            edge = try values.decode(EdgeProof.self, forKey: .edge)
+            barrierDecision = try values.decode(UInt8.self, forKey: .barrierDecision)
+        }
+    }
+    /// Large overlap proofs grow in fixed chunks. A flat Array can temporarily
+    /// retain both its old and doubled storage while decoding a split boundary.
+    struct Anchors: RandomAccessCollection, Decodable, Sendable, ExpressibleByArrayLiteral {
+        private var storage = ChunkedArray<Anchor>()
+        init() {}
+        init(_ anchors: [Anchor]) { for anchor in anchors { storage.append(anchor) } }
+        init(arrayLiteral elements: Anchor...) { self.init(elements) }
+        init(from decoder: any Decoder) throws {
+            var values = try decoder.unkeyedContainer()
+            while !values.isAtEnd { storage.append(try values.decode(Anchor.self)) }
+        }
+        var startIndex: Int { 0 }
+        var endIndex: Int { storage.count }
+        subscript(_ position: Int) -> Anchor { storage[position] }
+        func index(after index: Int) -> Int { index + 1 }
+        func index(before index: Int) -> Int { index - 1 }
+        mutating func append(_ anchor: Anchor) { storage.append(anchor) }
     }
     let schemaVersion: String
     let fabricReleaseId: String
     let sourceEpoch: String
     let regionId: String
-    let neighbors: [String:[Anchor]]
+    let neighbors: [String:Anchors]
+
+    init(schemaVersion: String, fabricReleaseId: String, sourceEpoch: String,
+         regionId: String, neighbors: [String:[Anchor]]) {
+        self.init(schemaVersion: schemaVersion, fabricReleaseId: fabricReleaseId,
+                  sourceEpoch: sourceEpoch, regionId: regionId,
+                  chunkedNeighbors: neighbors.mapValues(Anchors.init))
+    }
+    init(schemaVersion: String, fabricReleaseId: String, sourceEpoch: String,
+         regionId: String, chunkedNeighbors: [String:Anchors]) {
+        self.schemaVersion = schemaVersion; self.fabricReleaseId = fabricReleaseId
+        self.sourceEpoch = sourceEpoch; self.regionId = regionId; neighbors = chunkedNeighbors
+    }
 }
 
 /// One continuous search over separately mapped regional files. Only independently
@@ -81,13 +158,14 @@ public final class RegionalGraph: RoadGraph {
     public convenience init(packs installed: [InstalledRoutingPack], budget: ComputationBudget = .init(seconds: 60)) throws {
         guard !installed.isEmpty else { throw RoutingFailure.missingPacks([]) }
         let release = installed[0].manifest.fabricReleaseId, epoch = installed[0].manifest.sourceEpoch
+        let includedRegions = Set(installed.map { $0.manifest.regionId })
         var documents: [SeamDocument] = []
         for item in installed {
             guard item.manifest.fabricReleaseId == release, item.manifest.sourceEpoch == epoch else {
                 throw RoutingFailure.invalidPack("regional release/epoch mismatch")
             }
-            guard let data = item.seamsData else { throw RoutingFailure.invalidPack("regional seam data missing") }
-            let document = try JSONDecoder().decode(SeamDocument.self,from: data)
+            guard let file = item.seamsFile else { throw RoutingFailure.invalidPack("regional seam data missing") }
+            let document = try SeamJSONReader.read(file, budget: budget, retaining: includedRegions).document
             guard document.schemaVersion == "dirt-cross-pack-seams.v2", document.regionId == item.manifest.regionId,
                   document.sourceEpoch == epoch, document.fabricReleaseId == release else {
                 throw RoutingFailure.invalidPack("regional seam identity mismatch")
@@ -202,9 +280,12 @@ public final class RegionalGraph: RoadGraph {
             let proof: String
         }
         var reciprocal = [[String: Set<ReciprocalProof>]]()
-        for document in documents {
+        for (index, document) in documents.enumerated() {
             var neighbors: [String: Set<ReciprocalProof>] = [:]
             for (neighbor, anchors) in document.neighbors {
+                // Each pair is validated once, left < right, against the right
+                // member's reciprocal set. The other set is never consulted.
+                guard let other = regionIndices[neighbor], other < index else { continue }
                 var rows = Set<ReciprocalProof>()
                 for (index, anchor) in anchors.enumerated() {
                     if index & 1023 == 0 { try budget.check() }

@@ -81,11 +81,11 @@ public enum StagedRouter {
                                                budget: budget, prepared: prepared, access: request.access, start: true)
         let endRegion = try containingRegion(request.end, regions: unique, repository: repository,
                                              budget: budget, prepared: prepared, access: request.access, start: false)
-        let neighbors = try neighborMap(unique, repository: repository)
+        let neighbors = try neighborMap(unique, repository: repository, budget: budget)
         var roads: [String:Set<String>] = [:]
         for id in unique {
             try budget.check()
-            if let roadNeighbors = try repository.roadNeighborIDs(id) {
+            if let roadNeighbors = try repository.roadNeighborIDs(id, budget: budget) {
                 roads[id] = roadNeighbors.intersection(Set(unique))
             }
         }
@@ -156,7 +156,7 @@ public enum StagedRouter {
             // belt, so chainLocalAim returns the rider destination.
             let toward = try chainLocalAim(windows: windows, stageIndex: 0, next: destPack,
                                            finalDestination: request.end, repository: repository,
-                                           currentShared: originPack)
+                                           currentShared: originPack, budget: budget)
             let prepareStarted = ContinuousClock.now
             let graphs = try prepared.indexedWindows(windows, repository: repository, budget: budget)
             request.options.counter?.recordStage("prepareWindows", since: prepareStarted)
@@ -290,7 +290,8 @@ public enum StagedRouter {
                     next: next,
                     finalDestination: request.end,
                     repository: repository,
-                    currentShared: shared
+                    currentShared: shared,
+                    budget: budget
                 )
                 candidates = try handoverCandidates(
                     from: shared,
@@ -579,11 +580,12 @@ public enum StagedRouter {
         }
     }
 
-    static func neighborMap(_ regions: [String], repository: PackRepository) throws -> [String:Set<String>] {
+    static func neighborMap(_ regions: [String], repository: PackRepository,
+                            budget: ComputationBudget = .init(seconds: 60)) throws -> [String:Set<String>] {
         let wanted = Set(regions)
         var map: [String:Set<String>] = [:]
         for id in regions {
-            let present = try repository.seamNeighborIDs(id).intersection(wanted)
+            let present = try repository.seamNeighborIDs(id, budget: budget).intersection(wanted)
             map[id, default: []].formUnion(present)
             for neighbor in present { map[neighbor, default: []].insert(id) }
         }
@@ -652,8 +654,8 @@ public enum StagedRouter {
                                    searchGraph: (any RoadGraph)? = nil,
                                    budget: ComputationBudget = .init(seconds: 120),
                                    access: AccessPolicy = .init()) throws -> [Coordinate] {
-        let anchors = try repository.loadSeams(shared).neighbors[next]
-            ?? repository.loadSeams(next).neighbors[shared]
+        let anchors = try repository.loadSeams(shared, retaining: [next], budget: budget).neighbors[next]
+            ?? repository.loadSeams(next, retaining: [shared], budget: budget).neighbors[shared]
             ?? []
         // Keep every seam row; water-like / stub demotion is a rank key, not an
         // exclude. Prefer seams in the *origin's* weak component of the search
@@ -685,7 +687,7 @@ public enum StagedRouter {
     /// weak component (aligns with hopLooksLive). Next-side stub = not in next
     /// pack giant (onward commitment).
     static func stubIslandFlags(origin: Coordinate, shared: String, next: String,
-                                anchors: [SeamDocument.Anchor],
+                                anchors: SeamDocument.Anchors,
                                 repository: PackRepository,
                                 searchGraph: (any RoadGraph)?,
                                 budget: ComputationBudget,
@@ -774,12 +776,13 @@ public enum StagedRouter {
         next: String,
         finalDestination: Coordinate,
         repository: PackRepository,
-        currentShared: String? = nil
+        currentShared: String? = nil,
+        budget: ComputationBudget = .init(seconds: 60)
     ) throws -> Coordinate {
         let raw: Coordinate
         if stageIndex + 2 < windows.count, let following = windows[stageIndex + 2].last {
-            let anchors = try repository.loadSeams(next).neighbors[following]
-                ?? repository.loadSeams(following).neighbors[next]
+            let anchors = try repository.loadSeams(next, retaining: [following], budget: budget).neighbors[following]
+                ?? repository.loadSeams(following, retaining: [next], budget: budget).neighbors[next]
                 ?? []
             let points = anchors.compactMap { row -> Coordinate? in
                 guard row.coordinate.count == 2 else { return nil }
@@ -791,8 +794,8 @@ public enum StagedRouter {
             raw = finalDestination
         }
         guard let shared = currentShared else { return raw }
-        let currentAnchors = try repository.loadSeams(shared).neighbors[next]
-            ?? repository.loadSeams(next).neighbors[shared]
+        let currentAnchors = try repository.loadSeams(shared, retaining: [next], budget: budget).neighbors[next]
+            ?? repository.loadSeams(next, retaining: [shared], budget: budget).neighbors[shared]
             ?? []
         let currentPoints = currentAnchors.compactMap { row -> Coordinate? in
             guard row.coordinate.count == 2 else { return nil }

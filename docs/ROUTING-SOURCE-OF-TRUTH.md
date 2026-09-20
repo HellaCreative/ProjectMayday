@@ -56,6 +56,57 @@ one journey. All 155 neighboring-pair seam checks and the full native/app route
 matrix remain in progress or queued; the candidate is not yet sealed, qualified,
 published or installed on White. The existing DEV release remains active.
 
+Continental split-memory finding (September 20): the completed California
+north/south seam pair contains 579,250 proofs, reflecting its broad 0.25° extra
+overlap. An isolated, complete California seam view was extracted from the
+factory checkpoint without dropping proof records; it is diagnostic input,
+not a separately qualified or published fabric. The default-budget San
+Jose–Salinas Dirt request exceeded a 2 GiB sampled-RSS safety ceiling before
+searching. A process sample located whole-file JSON decoding in regional join.
+The first bounded streamed-reader version retained the exact Halifax–Saint
+Stephen directed-road hash on the existing seven-pack fabric; later compact
+storage changes require their own integrated qualification.
+Its California replay reduces kernel peak RSS to 1,329,610,752 bytes and peak
+physical footprint to 940,921,664 bytes, but still times out at 60.202 s before
+search: pack opening 26.384 s, join 33.808 s. This is an unresolved qualification
+failure, not a completed memory repair. Evidence: `california-seam-memory-preflight`,
+`california-streamed-seam-preflight` and `streamed-seam-compatibility` under the
+continental evidence directory. No published pack, routing permission, search
+budget, or phone installation has changed.
+
+The compact proof representation and one-sided reciprocal lookup subsequently
+measured 1,311,326,208 bytes kernel peak RSS / 749,392,256 bytes physical footprint
+on the same external-drive replay. It still timed out at 60.026 s before search
+(open 26.534 s, join 32.319 s). A byte-for-byte, hash-verified copy on the internal
+SSD completed in 54.851 s (open 3.199 s, join 22.216 s, index 5.384 s), with
+1,569,669,120 bytes peak RSS / 825,119,744 bytes physical footprint. The completed
+138.534 km route contains no known dirt. These diagnostic comparisons isolate a
+storage contribution, not physical-phone performance or acceptable ride quality;
+both remain above the continental RSS gate. Evidence: `california-compact-seam-preflight`,
+`california-compact-seam-internal-preflight`, and `california-internal-input-copy.json`.
+
+A fresh normal Debug app build now passes after removing package-forced WMO.
+The six-replay dense app test does not pass: Kitchener–Barrie completes cold/warm
+in 44.283 / 18.802 s with the same 204 km, 63.2% known-dirt route, but Austin–Houston
+reaches its 60 s calculation limit. California is not reached by that test after
+the thrown Texas failure. Evidence: `streamed-seam-clean-build` and
+`streamed-seam-clean-app-tests.xcresult`. Exposing only chunked-label operations
+for cross-file optimization did not recover the earlier WMO speed. Exposing
+generic mapped-column and priority-queue operations also made no material
+difference (Kitchener 43.453 / 18.730 s); its Texas attempt failed again, with a
+three-second process sample during that attempt rather than a clean timing run.
+That sample identifies repeated generic integer-load metadata work during
+seam endpoint reachability. The current repair uses concrete signed/unsigned
+little-endian loads and an explicitly retained mapping, and stores large proof
+lists in fixed chunks. All 163 engine tests pass, including unaligned integer
+extremes, atomic file replacement, escaped Data lifetime, and 8,193 ordered seam
+records. An initial lifetime defect on tiny mapped files was caught and repaired;
+the failed test output is retained. Evidence: `inline-primitives-app-sample.txt`,
+`concrete-columns-build/engine-tests.log`, and `concrete-columns-fixed-build`.
+Fresh app build, dense app replay, and large-boundary memory qualification for
+this repair remain pending. Pack bytes and all routing controls are unchanged.
+Do not count the earlier WMO app timings as current Play-build qualification.
+
 Continental preparation verification (September 20, evidence in
 `.build/continental-qualification-20260920`): all seven existing immutable
 packs pass a fresh `verifyRegion` audit, including graph/geometry/fuel/seams,
@@ -303,9 +354,13 @@ Kitchener–Barrie cold/warm in 42.840 / 18.895 s with identical roads and
 The preceding `dense-storage-app-native-tests.xcresult` executed zero tests and
 is excluded; explicit Xcode command-line test selection fixes discovery, and
 both the focused runner and queued full app suite require actual route markers.
-Whole-module engine compilation now passes all 149 engine tests and the app
-build, keeping threaded object emission capped at two compiler threads so
-SwiftPM's debug object/index paths remain valid. In the actual simulator app,
+A whole-module compilation experiment passed 149 engine tests and an
+incremental app build, but subsequent addition of the streamed seam reader
+exposed the missing per-file `.swiftconstvalues` output again. Its claimed build
+qualification is withdrawn: stale outputs concealed the problem. Package-level
+whole-module flags have been removed in accordance with the build rule below;
+hot generic storage is being specialized explicitly and fresh app verification
+is required. During the earlier experiment in the actual simulator app,
 Kitchener–Barrie improves to 14.113 / 6.181 s cold/warm with identical roads;
 Austin–Houston now completes in 34.845 / 21.543 s with identical cold/warm roads,
 363.201 km, 12.6% known dirt and up to 330 MB process-lifetime footprint.
@@ -316,8 +371,8 @@ warm run had found the same 4.7% candidate before selecting the zero-dirt
 alternative. The comparator's absolute short-scrap preference caused this:
 1,009 m of incidental dirt outweighed several useful continuous dirt sections.
 Evidence: `whole-module-threaded-engine-tests.log`, `whole-module-app-build.xcresult`
-and `whole-module-app-native-tests.xcresult`. This compilation change is a
-verified app speed improvement, not full dense-route qualification. These
+and `whole-module-app-native-tests.xcresult`. These speed measurements belong to the rejected compilation configuration
+and do not qualify a fresh Xcode Play build. They remain comparison evidence. These
 are simulator measurements on the M1; file caches were not flushed and they
 are not physical-device timing claims.
 The focused correction prefers a completed ride containing continuous known
