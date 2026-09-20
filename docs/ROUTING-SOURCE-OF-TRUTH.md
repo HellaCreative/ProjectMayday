@@ -2898,3 +2898,10 @@ The first harness attempt used the wrong accessibility element type; the next
 exposed a second-drag timing/redraw issue in the simplified harness. The final
 harness reproduces the planner's confirmation redraw and passes the complete
 sequence. This is simulator gesture evidence, not physical-device acceptance.
+
+White delivery: the accepted-runtime checkout at `5f9ff7e` includes the loop /
+pin-placement repair (`2740013` on main) and Saved-route Close. Device build,
+installation and launch succeeded; receipts are in
+`.build/loop-edit-20260920/{white-build.log,white-build-receipt.json,white-install.json,white-launch.json}`.
+The unaccepted compact-index experiment is excluded. Physical interaction and
+route acceptance remain for the owner; the seven-pack catalog is unchanged.
