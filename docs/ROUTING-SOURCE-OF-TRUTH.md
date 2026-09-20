@@ -61,13 +61,24 @@ retain their existing checks pending source evidence.
 Source verification now computes the publisher MD5 and source-lock SHA-256 in
 one streamed read. Thirteen focused source/factory/publication tests pass,
 including multi-buffer and empty-file hash agreement (`factory-single-read.log`).
-The already-running source check began before this change and is not restarted.
+The old two-pass source check was interrupted after measured USB throughput
+(37 MB/s) exposed an avoidable repeated-read bottleneck. The supervisor now
+stages a publisher-checksummed working copy on the internal SSD; the original
+download is preserved. `internal-source-copy.json` records both paths, bytes,
+MD5/SHA-256 and copy timing. Source preparation independently checks that working
+copy again before extraction. No extracted or built region was discarded.
 The pack build schedules larger source files first to expose large-region build
 resource failures early; catalog identity/order and required coverage are unchanged.
 Eight split outlines pass GEOS validity checks, and the four split unions cover
 their ON/QC/CA/NL parents within 1e-9 degrees of floating-point tolerance
 (`split-polygon-validity.json`, `split-coverage.json`, `split-covers-parent.json`).
 This is geographic outline coverage, not proof of every road connection.
+All 67 clip outlines pass GEOS validity (`all-polygon-validity.json`). The
+broader factory feature suite passed 79 of 80 checks; its only failure was an
+obsolete 64-pack count. That test now verifies the exact 67-member catalog and
+all four parent-to-split replacements; its nine-test file passes
+(`continental-factory-feature-tests.log`, `continental-roster-test.log`).
+These checks cover build contracts, not continental road-completion evidence.
 The registered continental roster currently has 67 packs and unsplit Texas;
 Texas and all other regions still require measured resource qualification.
 The North America September 18 download completed after resuming the existing
@@ -89,8 +100,9 @@ a time; retain the exact 2 km halo and complete relation semantics.
 `continue-continent.py` in that evidence directory is running as the overnight
 pipeline supervisor; inspect `pipeline-state.json` and process ownership before
 starting competing heavy work. The download has completed, the coordinated
-route-test hold has ended, and it is running checksum/timestamp-verified source
-preparation for the actual catalog with batches of two, then runs the resumable
+route-test hold has ended, and the supervisor stages/verifies the internal source
+copy, then runs checksum/timestamp-verified source preparation for the actual
+catalog with batches of two, followed by the resumable
 full pack/seam factory for candidate `fabric-v4-20260920-01`. It records errors
 and stops rather than publishing or continuing after a failed stage. A successful
 build ends awaiting route qualification; publication is still separately gated.

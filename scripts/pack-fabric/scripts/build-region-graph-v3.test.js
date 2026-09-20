@@ -23,7 +23,20 @@ test("Geofabrik stamp covers every catalog province and state", () => {
   assert.equal(geofabrikSource("ca").slug, "california");
   assert.equal(geofabrikSource("tx").country, "us");
   assert.equal(OSM_REGION.pe.slug, "prince-edward-island");
-  assert.equal(require("../routing/registry/geofabrik").catalogRegionIds().length, 64);
+  const catalog = require("../routing/registry/geofabrik").catalogRegionIds();
+  assert.deepEqual([...catalog].sort(), (
+    "ab ak al ar az bc ca-n ca-s co ct de fl ga hi ia id il in ks ky la ma mb md me mi mn mo ms mt " +
+    "nb nc nd ne nh nj nl-island nl-lab nm ns nt nu nv ny oh ok on-n on-s or pa pe qc-n qc-s ri sc sd sk " +
+    "tn tx ut va vt wa wi wv wy yt"
+  ).split(" ").sort());
+  for (const [parent, children] of Object.entries({
+    on: ["on-n", "on-s"], qc: ["qc-n", "qc-s"],
+    ca: ["ca-n", "ca-s"], nl: ["nl-island", "nl-lab"]
+  })) {
+    assert.equal(catalog.includes(parent), false);
+    assert.equal(OSM_REGION[parent].legacy, true);
+    for (const child of children) assert.equal(OSM_REGION[child].sourceSlug, OSM_REGION[parent].slug);
+  }
   assert.equal(OSM_REGION.on.legacy, true);
   assert.equal(OSM_REGION["on-s"].sourceSlug, "ontario");
   assert.equal(OSM_REGION["on-n"].sourceSlug, "ontario");
