@@ -4,14 +4,15 @@ import Foundation
 enum IndexColumn: Sendable {
     case mapped(MappedColumn<Int32>)
     case owned([Int32])
+    case compact(CompactArcColumn)
     var count: Int {
-        switch self { case .mapped(let data): data.count; case .owned(let data): data.count }
+        switch self { case .mapped(let data): data.count; case .owned(let data): data.count; case .compact(let data): data.count }
     }
     var ownedBytes: Int {
-        switch self { case .mapped: 0; case .owned(let data): data.count * MemoryLayout<Int32>.stride }
+        switch self { case .mapped: 0; case .owned(let data): data.count * MemoryLayout<Int32>.stride; case .compact(let data): data.ownedBytes }
     }
     subscript(_ index: Int) -> Int32 {
-        switch self { case .mapped(let data): data[index]; case .owned(let data): data[index] }
+        switch self { case .mapped(let data): data[index]; case .owned(let data): data[index]; case .compact(let data): data[index] }
     }
 }
 
@@ -19,10 +20,10 @@ enum IndexColumn: Sendable {
 /// lends its mapped forward columns; joined graphs own their composed columns.
 struct ArcIndex: Sendable {
     let outStart: IndexColumn
-    let outSource: [Int32]
+    let outSource: CompactArcColumn
     let outEdge: IndexColumn
     let inStart: [Int32]
-    let inArcs: [Int32]
+    let inArcs: CompactArcColumn
     let targets: IndexColumn
     let forwards: [Bool]
     let meters: [Double]
@@ -38,7 +39,7 @@ struct ArcIndex: Sendable {
         outStart = .mapped(pack.nodeOffsets)
         outEdge = .mapped(pack.arcEdges)
         targets = .mapped(pack.targets)
-        outSource = []; forwards = []; meters = []
+        outSource = .init(); forwards = []; meters = []
         var starts = [Int32](repeating: 0, count: pack.nodeCount + 1)
         for arc in 0..<pack.arcCount {
             if arc & 4095 == 0 { try budget.check() }
@@ -46,7 +47,7 @@ struct ArcIndex: Sendable {
         }
         for node in 0..<pack.nodeCount { starts[node + 1] += starts[node] }
         var fill = starts
-        var incoming = [Int32](repeating: 0, count: pack.arcCount)
+        var incoming = CompactArcColumn(repeating: 0, count: pack.arcCount, maximumValue: Int32(pack.arcCount))
         for arc in 0..<pack.arcCount {
             if arc & 4095 == 0 { try budget.check() }
             let target = Int(pack.targets[arc])
@@ -73,7 +74,7 @@ struct ArcIndex: Sendable {
     }
     var ownedAdjacencyBytes: Int {
         outStart.ownedBytes + outEdge.ownedBytes + targets.ownedBytes
-            + outSource.count * MemoryLayout<Int32>.stride
+            + outSource.ownedBytes
             + forwards.count * MemoryLayout<Bool>.stride
             + meters.count * MemoryLayout<Double>.stride
     }
@@ -100,7 +101,7 @@ struct ArcIndex: Sendable {
         guard nodeCount < Int(Int32.max) else { throw RoutingFailure.resourceLimit("arc index") }
         let arcCount = max(0, arcCapacity ?? nodeCount)
         var outStart = [Int32](repeating: 0, count: nodeCount + 1)
-        var outSource: [Int32] = [], outEdge: [Int32] = [], targets: [Int32] = []
+        var outSource = CompactArcColumn(), outEdge = CompactArcColumn(), targets = CompactArcColumn()
         outSource.reserveCapacity(arcCount); outEdge.reserveCapacity(arcCount); targets.reserveCapacity(arcCount)
         var forwards: [Bool] = [], meters: [Double] = []
         forwards.reserveCapacity(arcCount)
@@ -120,15 +121,15 @@ struct ArcIndex: Sendable {
         }
         for node in 0..<nodeCount { inStart[node + 1] += inStart[node] }
         var fill = inStart
-        var inArcs = [Int32](repeating: 0, count: Int(inStart[nodeCount]))
+        var inArcs = CompactArcColumn(repeating: 0, count: Int(inStart[nodeCount]), maximumValue: Int32(outSource.count))
         for arc in targets.indices where targets[arc] >= 0 {
             let target = Int(targets[arc])
             inArcs[Int(fill[target])] = Int32(arc)
             fill[target] += 1
         }
-        self.outStart = .owned(outStart); self.outSource = outSource; self.outEdge = .owned(outEdge)
+        self.outStart = .owned(outStart); self.outSource = outSource; self.outEdge = .compact(outEdge)
         self.inStart = inStart; self.inArcs = inArcs
-        self.targets = .owned(targets); self.forwards = forwards; self.meters = meters
+        self.targets = .compact(targets); self.forwards = forwards; self.meters = meters
     }
 }
 

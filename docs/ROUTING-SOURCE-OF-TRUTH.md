@@ -3342,3 +3342,55 @@ coverage and legal/feature facts across the old and new California union.
 Preserve all failed receipts and old datasets. Keep the 60-second/1-GiB gates
 unchanged. Continental publication and final integrated host/app/download/
 catalog qualification remain pending. No device build or installation occurred.
+
+
+September 21, 10:57 UTC heartbeat and owner follow-up: the expanded private
+California/Arizona/Nevada/Oregon trial finished **56 of 60 passing**. All seven
+neighbor pairs sealed. Four route requests failed: California south→Arizona in
+Dirt/Balanced/Clean and California south→north Dirt. All exceeded the 1 GiB RSS
+gate; the Arizona Dirt request also timed out. These are the remaining known
+focused failures, not proof that the final continental release has passed.
+
+`compact-arc-columns/` records a runtime storage repair: owned adjacency source,
+edge, target and reverse-arc indices use three bytes where representable, with
+an exact -1 sentinel and Int32 fallback for larger or other signed values.
+Mapped pack columns remain borrowed; no road, direction, alias, access rule,
+score, pin or limit changes. All **189 engine tests pass**, including width
+boundaries, signed promotion, copy isolation, invalid targets and the existing
+directed/mapped/seam topology comparisons. Exact source and probe hashes,
+patch, tests and raw failed/completed receipts are retained.
+
+The four-case replay now passes three requests: California south→Arizona
+Balanced 36.11 s / 1001.1 MiB, Clean 56.30 s / 923.2 MiB, and California
+south→north Dirt 52.92 s / 726.1 MiB. All three retain the prior selected-road
+hash, distance and matched endpoints. California south→Arizona Dirt remains a
+60.03-second timeout, now at 839.7 MiB RSS. Preparation varies substantially;
+these are memory/acceptance improvements, not a general speed claim. Its
+receipt shows large road-compass/riding-area preparation with only 520 search
+pops; investigate that actual time cost next rather than raising limits.
+
+Richard requested that unaffected qualification proceed independently instead
+of waiting for California. California occupies two catalog packs, so there are
+**68 other regional packs**, not 69. `unaffected-regions/verify-artifacts.js`
+checks their actual artifact hashes, source identity, legal reports, fuel and
+separate Rider Services against the sealed 70-region release records. It does
+not replace historical provenance with the current build identity. Its serial
+supervisor follows the completed four-case replay; read `artifacts.json` for
+per-region results. The selected app-check supervisor then uses only existing
+simulator CC6035EE-9C03-48A2-ACBA-DDE3B068642A, with parallel testing disabled.
+It checks pack acquisition plus Quebec cold/warm, Confederation Bridge both
+directions/styles, Ontario seed variety/response persistence, and cross-Canada
+routing. These are representative app checks, not exhaustive 68-region app
+coverage. Source hashes and actual execution markers prevent empty or stale
+runs from masquerading as passing evidence.
+
+Do not edit runtime source during the queued/running app check or start a second
+heavy job. Inspect `unaffected-regions/app-state.json`, its logs/result bundle,
+`artifacts.json` and `pipeline-state.json` before resuming. Review app results
+before accepting the compact-column runtime broadly. Next retain valid
+unaffected evidence, repair the remaining California→Arizona Dirt time failure,
+and prove owned-road/legal-feature coverage of the narrower California union.
+Final complete host/app/catalog/download gates and immutable DEV publication
+remain pending. Published-download verification applies only after the actual
+complete candidate is uploaded; no partial catalog has been activated. The
+seven-pack rollback and all original continental datasets remain intact.
