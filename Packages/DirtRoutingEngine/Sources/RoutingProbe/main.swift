@@ -242,7 +242,7 @@ do {
         if stageLong, let packRepository {
             // Mirror NativeRoutingSession: one prepared store + one compass store
             // across staged windows so prepare and compass are not rebuilt per hop.
-            let compassStore = RoadCompassStore()
+            let compassStore = RoadCompassStore(capacity: 2)
             result = try StagedRouter.route(request, repository: packRepository, regions: regionList,
                                            budget: budget, prepared: preparedGraphs,
                                            compassStore: compassStore, renewAfterCommittedStage: true)
@@ -250,7 +250,7 @@ do {
             // Mirror the app’s non-staged recreational composition as well.
             request.options.composeDirtRide = environment["DIRT_COMPOSE_RIDE"] != "0"
             // The app keeps one compass store per routing session; mirror it.
-            result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore()).route(request,budget: budget)
+            result = try RoutingEngine(pack: indexed,compassStore: RoadCompassStore(capacity: 2)).route(request,budget: budget)
         } else {
             throw RoutingFailure.invalidRequest("no prepared graph")
         }
