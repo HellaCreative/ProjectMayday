@@ -89,15 +89,28 @@ struct RegionalGraphTests {
         #expect(count == (0..<joined.nodeCount).reduce(0) { $0 + joined.outgoing($1).count })
         let ordinary = try ArcIndex(nodeCount: joined.nodeCount, budget: .init()) { joined.outgoing($0) }
         let reserved = try ArcIndex(nodeCount: joined.nodeCount, arcCapacity: count, budget: .init()) { joined.outgoing($0) }
+        let borrowed = try ArcIndex(regional: joined, budget: .init())
         #expect(reserved.outSource == ordinary.outSource)
+        #expect(borrowed.outSource == ordinary.outSource)
+        #expect(borrowed.inStart == ordinary.inStart)
+        #expect(borrowed.inArcs == ordinary.inArcs)
+        #expect(borrowed.meters.isEmpty)
+        #expect(reserved.ownedAdjacencyBytes - borrowed.ownedAdjacencyBytes == count * MemoryLayout<Double>.stride)
         #expect(reserved.inStart == ordinary.inStart)
         #expect(reserved.inArcs == ordinary.inArcs)
-        for node in 0...joined.nodeCount { #expect(reserved.outStart[node] == ordinary.outStart[node]) }
+        for node in 0...joined.nodeCount {
+            #expect(reserved.outStart[node] == ordinary.outStart[node])
+            #expect(borrowed.outStart[node] == ordinary.outStart[node])
+        }
         for arc in 0..<count {
             #expect(reserved.outEdge[arc] == ordinary.outEdge[arc])
             #expect(reserved.targets[arc] == ordinary.targets[arc])
             #expect(reserved.forward(arc) == ordinary.forward(arc))
             #expect(reserved.distance(arc) == ordinary.distance(arc))
+            #expect(borrowed.outEdge[arc] == ordinary.outEdge[arc])
+            #expect(borrowed.targets[arc] == ordinary.targets[arc])
+            #expect(borrowed.forward(arc) == ordinary.forward(arc))
+            #expect(borrowed.distance(arc) == ordinary.distance(arc))
         }
     }
 

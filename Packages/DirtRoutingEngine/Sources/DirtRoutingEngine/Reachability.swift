@@ -27,12 +27,14 @@ struct ArcIndex: Sendable {
     let forwards: [Bool]
     let meters: [Double]
     private let mapped: GraphPack?
+    private let distanceGraph: RegionalGraph?
 
     /// Borrow the already validated adjacency columns. Only the reverse lookup
     /// needs storage; source, direction and length are exact edge-column reads.
     init(pack: GraphPack, budget: ComputationBudget) throws {
         try budget.check()
         mapped = pack
+        distanceGraph = nil
         outStart = .mapped(pack.nodeOffsets)
         outEdge = .mapped(pack.arcEdges)
         targets = .mapped(pack.targets)
@@ -65,6 +67,7 @@ struct ArcIndex: Sendable {
         return pack.edgeFrom[Int(pack.arcEdges[arc])] == source(arc)
     }
     func distance(_ arc: Int) -> Double {
+        if let distanceGraph { return distanceGraph.distance(Int(outEdge[arc])) }
         guard let pack = mapped else { return meters[arc] }
         return Double(pack.meters[Int(pack.arcEdges[arc])])
     }
@@ -76,7 +79,22 @@ struct ArcIndex: Sendable {
     }
 
     init(nodeCount: Int, arcCapacity: Int? = nil, budget: ComputationBudget, outgoing: (Int) -> [RoadArc]) throws {
+        try self.init(nodeCount: nodeCount, arcCapacity: arcCapacity, distanceGraph: nil,
+                      budget: budget, outgoing: outgoing)
+    }
+
+    /// A joined arc retains the original edge identity, whose mapped distance
+    /// already exists. Borrow it instead of copying a Double for every directed
+    /// arc (including the extra arcs exposed at seam aliases).
+    init(regional: RegionalGraph, budget: ComputationBudget) throws {
+        try self.init(nodeCount: regional.nodeCount, arcCapacity: regional.adjacencyCount(budget: budget),
+                      distanceGraph: regional, budget: budget, outgoing: regional.outgoing)
+    }
+
+    private init(nodeCount: Int, arcCapacity: Int?, distanceGraph: RegionalGraph?,
+                 budget: ComputationBudget, outgoing: (Int) -> [RoadArc]) throws {
         mapped = nil
+        self.distanceGraph = distanceGraph
         // Do not walk and materialize every outgoing list just to count it;
         // append in source order and grow the compact buffers as needed.
         guard nodeCount < Int(Int32.max) else { throw RoutingFailure.resourceLimit("arc index") }
@@ -85,14 +103,16 @@ struct ArcIndex: Sendable {
         var outSource: [Int32] = [], outEdge: [Int32] = [], targets: [Int32] = []
         outSource.reserveCapacity(arcCount); outEdge.reserveCapacity(arcCount); targets.reserveCapacity(arcCount)
         var forwards: [Bool] = [], meters: [Double] = []
-        forwards.reserveCapacity(arcCount); meters.reserveCapacity(arcCount)
+        forwards.reserveCapacity(arcCount)
+        if distanceGraph == nil { meters.reserveCapacity(arcCount) }
         var inStart = [Int32](repeating: 0, count: nodeCount + 1)
         for node in 0..<nodeCount {
             if node & 4095 == 0 { try budget.check() }
             for arc in outgoing(node) {
                 let target = arc.target >= 0 && arc.target < nodeCount ? arc.target : -1
                 outSource.append(Int32(node)); outEdge.append(Int32(arc.edge)); targets.append(Int32(target))
-                forwards.append(arc.forward); meters.append(arc.meters)
+                forwards.append(arc.forward)
+                if distanceGraph == nil { meters.append(arc.meters) }
                 if target >= 0 { inStart[target + 1] += 1 }
             }
             guard outSource.count < Int(Int32.max) else { throw RoutingFailure.resourceLimit("arc index") }

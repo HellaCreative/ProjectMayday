@@ -43,9 +43,10 @@ public struct IndexedGraph: RoadGraph {
         // Nearby coordinates must not invent extra junctions (e.g. overpasses).
         if let pack = graph as? GraphPack {
             arcs = try ArcIndex(pack: pack, budget: budget)
+        } else if let regional = graph as? RegionalGraph {
+            arcs = try ArcIndex(regional: regional, budget: budget)
         } else {
-            let arcCapacity = try (graph as? RegionalGraph)?.adjacencyCount(budget: budget)
-            arcs = try ArcIndex(nodeCount: graph.nodeCount, arcCapacity: arcCapacity, budget: budget) { node in
+            arcs = try ArcIndex(nodeCount: graph.nodeCount, budget: budget) { node in
                 graph.outgoing(node).map { arc in
                     arc.meters.isFinite ? arc : RoadArc(target: arc.target, edge: arc.edge,
                                                         forward: arc.forward, meters: graph.distance(arc.edge))

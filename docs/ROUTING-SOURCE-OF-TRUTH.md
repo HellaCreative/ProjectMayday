@@ -3004,3 +3004,39 @@ all eight measurements and this limitation. The next serial replay covers only
 the 20 previously failed cases; broader final host/app qualification remains
 required. The 70-region candidate is still unpublished, the seven-pack release
 is retained, and this heartbeat does not install anything on White.
+
+
+Joined arc-distance storage (September 21 continuation): the streamed-geometry
+20-case replay is complete: 1 passes (Pennsylvania→Ohio Clean), 19 remain failed.
+Sixteen exceed the unchanged 1 GiB RSS ceiling and five are incomplete (four
+time, one labels), with overlap. Missing-route/setting receipts on incomplete
+results are downstream audit failures, not separate pack defects. No completed
+route in that replay fails the repeated-road check.
+
+Regional adjacency now borrows each directed arc's distance from its original
+mapped edge instead of duplicating a Double per arc. Generic graphs retain their
+existing distances; source/target/direction, reverse lookup, seam proof and all
+routing rules are unchanged. All 174 engine tests pass; the joined-graph test
+checks every arc and exactly eight fewer owned bytes per directed arc.
+Evidence: `.build/continental-qualification-20260920/borrowed-joined-distances/`
+contains source/probe hashes, patch, requests, receipts, paired/reverse-order
+measurements and `accepted-review.json`.
+
+Florida→Georgia Balanced peak RSS is 996.1/1,020.0 MB with borrowing versus
+1,099.0/1,116.4 MB before; physical footprint is 462.2/482.6 MB versus
+587.7/587.6 MB. Both diagnostic borrowed runs pass the unchanged gates and retain
+the same roads, 42,373.5 m and 5,544 pops. California north→south remains above
+the RSS ceiling; its measured RSS reduction is inconsistent, and one run of each
+variant times out. Completed California results retain 154,377 m, the road digest
+and 312,874 pops. Preparation and run order dominate elapsed time, so this is
+accepted as an owned-storage reduction, not a speed guarantee or final release
+qualification. No pack rebuild, legal relaxation, scoring change, phone install,
+or publication is included.
+
+Next serial checkpoint: `borrowed-joined-distances/remaining-failures` replays only
+the 19 latest failures using the recorded final-source probe; inspect its state,
+qualification and live process before launching more heavy work. Remaining
+California south→Arizona Dirt evidence also shows substantial compass/riding-area
+work with only 1,006 search pops; Michigan/Ontario and Texas/Oklahoma failures
+instead reach millions of search labels. Treat those as separate runtime causes.
+Broader final host/app qualification and DEV publication checks remain required.
