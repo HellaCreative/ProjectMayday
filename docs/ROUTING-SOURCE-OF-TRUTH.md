@@ -3133,3 +3133,29 @@ an entire matrix without an affected change. Next focus is unnecessary repeated
 connectivity work and the expensive necessary-city distance search. Final
 integrated host/app/catalog/download qualification and DEV publication remain
 outstanding. No device build/install occurred on this heartbeat.
+
+
+Land-first connectivity continuation: for Avoid Ferries requests, a connected
+land component already proves the same optimistic weak connectivity. Route
+matching now builds the broader weak table only when no land pair connects and
+it must distinguish a necessary ferry from genuine disconnection. Candidate
+order, legal search and both failure messages remain unchanged; all 181 engine
+tests pass, including ferry opt-in/bridge alternatives and disconnected-road
+error classification.
+
+`land-first-connectivity/` records two final-source, unsampled measurements.
+Florida→Georgia Dirt now passes at 42.49 seconds / 1,009.8 MB RSS, retaining its
+roads, 61,862.5 m and 46,358 pops. California south→Arizona Balanced retains its
+roads and 28,148 pops but still fails RSS at 1,118.3 MB. No general speed claim:
+preparation and resident pages vary. Replay the affected runtime subset on this
+final probe, importing these two exact request/receipt/probe-verified results.
+
+For the remaining million-label cases, Balanced first requests objective
+`distance`; after city exclusion proves impossible, the existing necessary-city
+fallback still charges 120 times ordinary distance through urban cores. The
+previous plain road-distance bound omitted that cost and did not fix the flood.
+Investigate a proven optimistic distance-cost bound including the existing city
+penalty, with safe endpoint/alias handling, rather than changing scores, access,
+label ceilings or rider intent. This is a next investigation, not an implemented
+or verified fix. Pipeline-state.json names the serial replay and exact evidence.
+The continental release remains unpublished and the seven-pack rollback intact.

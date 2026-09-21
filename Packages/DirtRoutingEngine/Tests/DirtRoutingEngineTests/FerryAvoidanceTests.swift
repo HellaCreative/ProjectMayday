@@ -49,6 +49,17 @@ struct FerryAvoidanceTests {
         #expect(try engine.route(request).segments.contains { $0.structure == "ferry" })
     }
 
+    @Test func disconnectedRoadsDoNotMisreportANecessaryFerry() throws {
+        var roads = graph(land: false)
+        roads.structures = ["", "", ""]
+        roads.edgeAccess = [0, 2, 0]
+        let pack = try IndexedGraph(roads)
+        var request = RoutingRequest(start: roads.nodes[0], end: roads.nodes[3], style: .balanced)
+        request.matchRadiusMeters = 100
+        request.access.avoidFerries = true
+        #expect(throws: RoutingFailure.noPath) { try RoutingEngine(pack: pack).route(request) }
+    }
+
     @Test func stagedHandoverCannotClaimFerryDependentContinuation() throws {
         let pack = try IndexedGraph(graph(land: false))
         var request = RoutingRequest(start: pack.coordinate(node: 0), end: pack.coordinate(node: 3), style: .dirt)

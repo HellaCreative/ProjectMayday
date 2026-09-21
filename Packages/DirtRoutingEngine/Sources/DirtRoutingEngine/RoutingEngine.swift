@@ -112,23 +112,39 @@ public struct RoutingEngine: Sendable {
         // JS `selectConnectedSnapPair`: score stays on each directed candidate;
         // connectivity is a later filter, not a rescore. Prefer the same weak
         // component so a closer island cannot steal the destination road.
-        let components = WeakComponents.ids(in: pack, allowUnknown: request.access.includesUnknownConnectivity)
         var lastFailure: RoutingFailure = .noPath
         let pairs = starts.flatMap { start in ends.map { (start,$0) } }.enumerated().sorted {
             let a = $0.element.0.score+$0.element.1.score, b = $1.element.0.score+$1.element.1.score
             return a == b ? $0.offset < $1.offset : a < b
         }.map(\.element)
-        var connected = pairs.filter {
-            WeakComponents.of(match: $0.0, pack: pack, ids: components)
-                == WeakComponents.of(match: $0.1, pack: pack, ids: components)
-        }
-        if request.access.avoidFerries && !connected.isEmpty {
-            let land = try WeakComponents.landIDs(in: pack, budget: budget)
-            connected = connected.filter {
-                WeakComponents.of(match: $0.0, pack: pack, ids: land)
-                    == WeakComponents.of(match: $0.1, pack: pack, ids: land)
+        func connectedPairs(_ ids: ComponentIDs) -> [(RoadMatch, RoadMatch)] {
+            pairs.filter {
+                WeakComponents.of(match: $0.0, pack: pack, ids: ids)
+                    == WeakComponents.of(match: $0.1, pack: pack, ids: ids)
             }
-            if connected.isEmpty { throw RoutingFailure.ferriesAvoided }
+        }
+        var connected: [(RoadMatch, RoadMatch)]
+        if request.access.avoidFerries && request.access.includesUnknownConnectivity {
+            // Land components use the same optimistic access codes as the weak
+            // table and are its subset. A connected land pair already passed
+            // both checks; only build the broader table to distinguish the
+            // ferry-only error from a genuinely disconnected road network.
+            connected = connectedPairs(try WeakComponents.landIDs(in: pack, budget: budget))
+            if connected.isEmpty {
+                let weak = WeakComponents.ids(in: pack, allowUnknown: true)
+                if !connectedPairs(weak).isEmpty { throw RoutingFailure.ferriesAvoided }
+            }
+        } else {
+            connected = connectedPairs(WeakComponents.ids(in: pack,
+                allowUnknown: request.access.includesUnknownConnectivity))
+            if request.access.avoidFerries && !connected.isEmpty {
+                let land = try WeakComponents.landIDs(in: pack, budget: budget)
+                connected = connected.filter {
+                    WeakComponents.of(match: $0.0, pack: pack, ids: land)
+                        == WeakComponents.of(match: $0.1, pack: pack, ids: land)
+                }
+                if connected.isEmpty { throw RoutingFailure.ferriesAvoided }
+            }
         }
         var reachability: EndpointReachability?
         var attempted = false
