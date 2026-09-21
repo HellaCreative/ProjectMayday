@@ -70,6 +70,7 @@ public struct IndexedGraph: RoadGraph {
         }
         return edges.sorted()
     }
+    var hasCanonicalPackTopology: Bool { graph is GraphPack || graph is RegionalGraph }
     public var nodeCount: Int { graph.nodeCount }
     public var edgeCount: Int { graph.edgeCount }
     public var urbanCores: [GeographicBox] { graph.urbanCores }

@@ -3159,3 +3159,37 @@ penalty, with safe endpoint/alias handling, rather than changing scores, access,
 label ceilings or rider intent. This is a next investigation, not an implemented
 or verified fix. Pipeline-state.json names the serial replay and exact evidence.
 The continental release remains unpublished and the seven-pack rollback intact.
+
+
+City-cost distance bound (September 21, 05:53 UTC heartbeat): the land-first
+replay finished 2 passes / 12 failures. Runtime work now addresses the distance
+baseline's city-cost flood without changing the accepted scoring rules.
+
+The distance search on canonical pack topology, with one destination and the
+city wall disabled, now uses an optimistic reverse cost bound containing the
+existing urban multiplier. Endpoint roads cost zero in that bound to safely
+relax partial geometry; turn and endpoint/unknown access are relaxed, while
+hard directional closures and explicit ferry avoidance remain binding. It stops
+when a start-side node's minimum is finalized and clamps unfinished values to
+that minimum, rather than mistaking tentative distances for proven bounds.
+The normal legal search, all style/personality scores and runtime gates remain.
+
+All 183 engine tests pass, including city-detour cost, endpoint relaxation,
+unfinished-frontier clamping, hard closures, unknown access, ferries and source
+oracle distances. Final evidence is `city-distance-bound-access/`; the initial
+less selective experiment remains separately in `city-distance-bound/`.
+Michigan→Ontario Balanced now passes at 45.62 seconds / 759.4 MB RSS with 642,455
+pops, versus the previous 60-second failure at 2,703,360 pops. Texas northeast→
+Oklahoma Balanced now passes at 15.88 seconds / 513.3 MB with 40,742 pops versus
+the previous 2,983,730-pop label limit. Ontario→Michigan Balanced still times out
+at 60.03 seconds / 2,796,032 pops and remains unresolved. NS short Dirt/Balanced/
+Clean controls all pass with identical road digests/distances/pops; their first
+cold run is not a speed comparison.
+
+The affected runtime replay imports those three exact final-source measurements
+and rechecks the other previously failing cases plus the Michigan→Ontario Clean
+control. Read pipeline-state.json, live processes and the replay qualification
+before starting heavy work. Remaining California RSS/preparation and Ontario
+reverse search need attention, then final integrated host/app/download/catalog
+qualification. The complete 70-region candidate remains unpublished; no app
+catalog, installed phone build, pack bytes or rollback release changed.

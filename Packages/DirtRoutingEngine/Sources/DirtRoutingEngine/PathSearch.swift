@@ -429,9 +429,26 @@ public struct PathSearch: Sendable {
             guard node >= 0, node < compass.count else { return .infinity }
             return compass[node]
         }
+        let cores = UrbanCores.boxes(in: pack)
+        let blockingCores = cores.filter { !$0.contains(start.coordinate) && !$0.contains(end.coordinate) }
+        let canonicalTopology = pack is GraphPack || pack is RegionalGraph
+            || (pack as? IndexedGraph)?.hasCanonicalPackTopology == true
+        var cityBound: [Double]?
+        if options.objective == .distance, !options.cityWall, options.additionalEnds.isEmpty,
+           canonicalTopology, !blockingCores.isEmpty {
+            let began = ContinuousClock.now
+            cityBound = try RoadCompass.cityDistanceLowerBound(start: start, end: end, pack: pack,
+                cores: blockingCores, multiplier: policy.style == .cleanest ? (policy.avoidMajorHighways ? 10 : 2) : 120,
+                avoidFerries: access.avoidFerries, budget: budget)
+            options.counter?.recordStage("cityDistanceBound", since: began)
+        }
         func heapCost(_ pathCost: Double, _ node: Int) -> Double {
             let geoKm = point(node).distance(to: end.coordinate) / 1000
             if options.objective == .distance {
+                if let cityBound {
+                    let bound = node >= 0 && node < cityBound.count ? cityBound[node] : 0
+                    return pathCost + (bound.isFinite ? bound / 1000 : 0)
+                }
                 return pathCost + geoKm
             }
             let left = remaining(of: node)
@@ -475,7 +492,6 @@ public struct PathSearch: Sendable {
         let startHighway = start.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(start.edge)))
         let endHighway = end.distanceMeters < 18 && ["motorway","trunk","arterial"].contains(ProfilePolicy.tier(pack.roadClass(end.edge)))
         let resource = options.objective == .balancedResource
-        let cores = UrbanCores.boxes(in: pack)
         let avoid = options.avoidEdges
         let prior = options.priorEdges
         let repeated = options.repeatEdges

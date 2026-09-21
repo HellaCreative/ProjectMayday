@@ -76,6 +76,76 @@ public struct RoadCompass: Sendable {
         return remaining[node]
     }
 
+    /// Optimistic cost-to-go for the distance objective after a necessary-city
+    /// crossing. Keep the existing city tax, while relaxing endpoint/unknown
+    /// access and turn state. Hard directional closures and ferry avoidance stay.
+    /// Endpoint roads cost zero here: their virtual arcs use partial decoded
+    /// geometry, so a full-road cost cannot safely bound them.
+    static func cityDistanceLowerBound(start: RoadMatch, end: RoadMatch,
+                                      pack: any RoadGraph, cores: [GeographicBox],
+                                      multiplier: Double, avoidFerries: Bool = false,
+                                      budget: ComputationBudget) throws -> [Double] {
+        let arcs: ArcIndex
+        if let indexed = pack as? IndexedGraph { arcs = try indexed.arcIndex(budget: budget) }
+        else if let raw = pack as? GraphPack { arcs = try ArcIndex(pack: raw, budget: budget) }
+        else { arcs = try ArcIndex(nodeCount: pack.nodeCount, budget: budget) { pack.outgoing($0).map {
+            .init(target: $0.target, edge: $0.edge, forward: $0.forward,
+                  meters: $0.meters.isFinite ? $0.meters : pack.distance($0.edge))
+        } } }
+        var remaining = [Double](repeating: .infinity, count: pack.nodeCount)
+        var urban = [UInt8](repeating: 0, count: pack.edgeCount)
+        var heap = CompassHeap()
+        for node in [pack.endpoint(end.edge, from: true), pack.endpoint(end.edge, from: false)] {
+            if remaining[node] != 0 { remaining[node] = 0; heap.push(node: node, meters: 0) }
+        }
+        let startNodes = [pack.endpoint(start.edge, from: true), pack.endpoint(start.edge, from: false)]
+        var ceiling = Double.infinity
+        var pops = 0
+        while let current = heap.pop() {
+            if pops & 255 == 0 { try budget.check() }
+            pops += 1
+            let node = Int(current.node)
+            if current.meters != remaining[node] { continue }
+            if startNodes.contains(node) {
+                // Every unsettled node costs at least this finalized minimum.
+                // Clamp tentative values below instead of treating them as exact;
+                // distant regions need not be flooded to guide this request.
+                ceiling = current.meters
+                break
+            }
+            for slot in Int(arcs.inStart[node])..<Int(arcs.inStart[node + 1]) {
+                let arc = Int(arcs.inArcs[slot]), edge = Int(arcs.outEdge[arc]), from = arcs.source(arc)
+                // Destination/customer/unknown access stays optimistic; roads
+                // prohibited in this direction can never be part of legal search.
+                let code = pack.accessCode(edge, forward: arcs.forward(arc))
+                guard code == 0 || code == 1 || code == 3 || code == 4 else { continue }
+                if avoidFerries && pack.structure(edge) == "ferry" { continue }
+                var cost = arcs.distance(arc)
+                if edge == start.edge || edge == end.edge { cost = 0 }
+                else {
+                    if urban[edge] == 0 {
+                        let a = pack.coordinate(node: pack.endpoint(edge, from: true))
+                        let b = pack.coordinate(node: pack.endpoint(edge, from: false))
+                        urban[edge] = cores.contains { $0.intersects(a, b) } ? 2 : 1
+                    }
+                    if urban[edge] == 2 { cost *= multiplier }
+                }
+                guard cost.isFinite, cost >= 0 else { continue }
+                let candidate = current.meters + cost
+                if candidate < remaining[from] {
+                    remaining[from] = candidate; heap.push(node: from, meters: candidate)
+                }
+            }
+        }
+        if ceiling.isFinite {
+            for node in remaining.indices {
+                if node & 4095 == 0 { try budget.check() }
+                remaining[node] = min(remaining[node], ceiling)
+            }
+        }
+        return remaining
+    }
+
     public static func toward(end: RoadMatch, pack: any RoadGraph,
                               budget: ComputationBudget,
                               maxRemaining: Double = .infinity, avoidFerries: Bool = false) throws -> RoadCompass {
