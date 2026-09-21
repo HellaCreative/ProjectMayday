@@ -3306,10 +3306,39 @@ identities are recorded in `build-identity.json`. The existing candidate and
 registry files are not overwritten; the trial release is marked partial and
 must never be published.
 
-Inspect `candidate/progress.json`, `build.log`, `routes/qualification.json` and
-the live process before resuming. If the trial helps, compare all affected road
-coverage/features and prove neighboring Arizona/Nevada/Oregon seams in both
-directions before considering candidate replacement. Preserve every failed
-receipt and all old datasets. Keep the 60-second/1-GiB gates unchanged.
-Continental publication and final integrated host/app/download/catalog
-qualification remain pending. No device build or installation occurred.
+September 21, 09:56 UTC continuation: both private California packs and their
+reciprocal split seam built successfully. **14 of the 15 route checks pass**,
+with no request-coverage omissions. South→north Dirt remains over the 1 GiB
+RSS gate at 1,052.8 MiB / 25.99 s. North→south Dirt passes narrowly at
+1,015.3 MiB / 25.57 s. The other split crossings finish in 13.04–15.52 s /
+935.9–953.3 MiB; all three internal styles and Golden Gate bridge checks pass.
+These are private trial results, not continental release acceptance. The
+minute-long LA→San Diego Dirt calculation still passes its existing request
+limits and remains a disclosed speed limitation. No gate was relaxed.
+
+`california-narrow-trial/neighbors/` now contains separate copies of these two
+packs plus the unchanged Arizona, Nevada and Oregon packs. The two-region
+candidate and its 15 receipts remain preserved. The serial
+`resume-and-qualify.py` supervisor verifies source/artifact/feature identities,
+builds reciprocal seams among the five regions, then runs 60 unchanged internal,
+neighbor-crossing and bridge requests with the accepted engine. Check the live
+process and `pipeline-state.json` before any other heavy operation.
+
+The initial reuse preflight correctly stopped on a recipe hash mismatch. The
+archived `recipe-differences.json` identifies exactly one changed input for all
+three reused neighbors: `qualify-v4-routes.js` added persistent installed-pack
+verification receipts. No graph/fuel/feature-producing script or toolchain
+changed. `seal-neighbors.js` accepts only those two exact reviewed versions of
+that validation script; any other input/tool change stops the trial. It verifies
+packs against their original recorded recipes and preserves those historical
+hashes. `recipe-reuse-review.json` records this evidence; no dataset date or
+factory provenance was relabeled, and no unnecessary neighbor rebuild runs.
+
+After the 60 checks, inspect `neighbors/routes/qualification.json` and remaining
+resource failures. The borderline California Dirt cases need more memory
+headroom; do not rerun until passing or restart the rejected borrowing/cache
+experiments. Before promoting trial bytes, also compare affected owned-road
+coverage and legal/feature facts across the old and new California union.
+Preserve all failed receipts and old datasets. Keep the 60-second/1-GiB gates
+unchanged. Continental publication and final integrated host/app/download/
+catalog qualification remain pending. No device build or installation occurred.
