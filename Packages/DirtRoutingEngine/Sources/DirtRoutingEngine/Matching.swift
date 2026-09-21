@@ -150,13 +150,39 @@ public struct RoadMatcher: Sendable {
     }
 }
 
+/// Component roots are node identities. Keep exact 32-bit identities when the
+/// graph fits, with an Int fallback rather than truncating a larger graph.
+struct ComponentIDs: RandomAccessCollection, MutableCollection, Sendable {
+    private var compact: [Int32]
+    private var wide: [Int]
+    init(nodeCount: Int) {
+        if nodeCount <= Int(Int32.max) {
+            compact = (0..<nodeCount).map(Int32.init); wide = []
+        } else {
+            compact = []; wide = Array(0..<nodeCount)
+        }
+    }
+    var startIndex: Int { 0 }
+    var endIndex: Int { compact.isEmpty ? wide.count : compact.count }
+    var ownedBytes: Int { compact.count * MemoryLayout<Int32>.stride + wide.count * MemoryLayout<Int>.stride }
+    func index(after i: Int) -> Int { i + 1 }
+    func index(before i: Int) -> Int { i - 1 }
+    subscript(i: Int) -> Int {
+        get { compact.isEmpty ? wide[i] : Int(compact[i]) }
+        set {
+            if compact.isEmpty { wide[i] = newValue }
+            else { compact[i] = Int32(newValue) }
+        }
+    }
+}
+
 enum WeakComponents {
-    static func ids(in pack: any RoadGraph, allowUnknown: Bool) -> [Int] {
+    static func ids(in pack: any RoadGraph, allowUnknown: Bool) -> ComponentIDs {
         if let indexed = pack as? IndexedGraph { return indexed.weakComponentIDs(allowUnknown: allowUnknown) }
         return compute(in: pack, allowUnknown: allowUnknown)
     }
-    static func compute(in pack: any RoadGraph, allowUnknown: Bool) -> [Int] {
-        var parent = Array(0..<pack.nodeCount)
+    static func compute(in pack: any RoadGraph, allowUnknown: Bool) -> ComponentIDs {
+        var parent = ComponentIDs(nodeCount: pack.nodeCount)
         func find(_ i: Int) -> Int {
             var n = i
             while parent[n] != n { parent[n] = parent[parent[n]]; n = parent[n] }
@@ -171,11 +197,12 @@ enum WeakComponents {
                 if a != b { parent[max(a,b)] = min(a,b) }
             }
         }
-        return (0..<pack.nodeCount).map(find)
+        for node in parent.indices { parent[node] = find(node) }
+        return parent
     }
-    static func landIDs(in pack: any RoadGraph, budget: ComputationBudget) throws -> [Int] {
+    static func landIDs(in pack: any RoadGraph, budget: ComputationBudget) throws -> ComponentIDs {
         if let indexed = pack as? IndexedGraph { return try indexed.landComponentIDs(budget: budget) }
-        var parent = Array(0..<pack.nodeCount)
+        var parent = ComponentIDs(nodeCount: pack.nodeCount)
         func find(_ i: Int) -> Int {
             var n = i
             while parent[n] != n { parent[n] = parent[parent[n]]; n = parent[n] }
@@ -197,7 +224,7 @@ enum WeakComponents {
         }
         return parent
     }
-    static func of(match: RoadMatch, pack: any RoadGraph, ids: [Int]) -> Int {
+    static func of(match: RoadMatch, pack: any RoadGraph, ids: ComponentIDs) -> Int {
         let node = pack.endpoint(match.edge, from: match.forward != false)
         guard node >= 0, node < ids.count else { return -1 }
         return ids[node]

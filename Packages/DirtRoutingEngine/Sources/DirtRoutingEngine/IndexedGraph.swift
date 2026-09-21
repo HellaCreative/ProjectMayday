@@ -101,13 +101,13 @@ public struct IndexedGraph: RoadGraph {
     public func osmNodeID(_ node: Int) -> Int64 { graph.osmNodeID(node) }
     public func coincidentSiblings(_ node: Int) -> [Int] { graph.coincidentSiblings(node) }
     private let landCache = WeakComponentCache()
-    func landComponentIDs(budget: ComputationBudget) throws -> [Int] {
+    func landComponentIDs(budget: ComputationBudget) throws -> ComponentIDs {
         try budget.check()
         return try landCache.ids(allowUnknown: true) {
             try WeakComponents.landIDs(in: graph, budget: budget)
         }
     }
-    func weakComponentIDs(allowUnknown: Bool) -> [Int] {
+    func weakComponentIDs(allowUnknown: Bool) -> ComponentIDs {
         weakCache.ids(allowUnknown: allowUnknown) {
             WeakComponents.compute(in: graph, allowUnknown: allowUnknown)
         }

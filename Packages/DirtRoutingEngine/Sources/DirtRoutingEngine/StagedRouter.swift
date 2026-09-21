@@ -919,7 +919,7 @@ public enum StagedRouter {
     }
 
     /// Weak-component id of the best match at `origin`, when matching succeeds.
-    static func originWeakComponent(origin: Coordinate, graph: any RoadGraph, ids: [Int],
+    static func originWeakComponent(origin: Coordinate, graph: any RoadGraph, ids: ComponentIDs,
                                     access: AccessPolicy, budget: ComputationBudget) throws -> Int? {
         let indexed: IndexedGraph
         if let warm = graph as? IndexedGraph {
@@ -934,7 +934,7 @@ public enum StagedRouter {
         return WeakComponents.of(match: match, pack: indexed, ids: ids)
     }
 
-    static func giantComponentId(from ids: [Int]) -> Int {
+    static func giantComponentId(from ids: ComponentIDs) -> Int {
         var sizes: [Int: Int] = [:]
         for id in ids { sizes[id, default: 0] += 1 }
         return sizes.max(by: { $0.value < $1.value })?.key ?? 0

@@ -149,9 +149,9 @@ final class ArcIndexCache: @unchecked Sendable {
 /// Lazy weak-component tables: only the allowUnknown mode a request needs is built.
 final class WeakComponentCache: @unchecked Sendable {
     private let lock = NSLock()
-    private var strict: [Int]?
-    private var allow: [Int]?
-    func ids(allowUnknown: Bool, build: () throws -> [Int]) rethrows -> [Int] {
+    private var strict: ComponentIDs?
+    private var allow: ComponentIDs?
+    func ids(allowUnknown: Bool, build: () throws -> ComponentIDs) rethrows -> ComponentIDs {
         lock.lock(); defer { lock.unlock() }
         if allowUnknown {
             if let allow { return allow }

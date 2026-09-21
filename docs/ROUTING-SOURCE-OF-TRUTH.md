@@ -3106,3 +3106,30 @@ No candidate bytes, scoring, access rules, runtime gates or installed app catalo
 changed. Continental publication remains blocked pending remaining runtime
 repairs and final host/app/download qualification. See pipeline-state.json for
 the current serial experiment and resumption instructions before heavy work.
+
+
+Compact connectivity roots (September 21, 04:52 UTC heartbeat): the completed
+bidirectional replay retains 1 pass / 13 failures. California/Florida mostly
+finish but exceed RSS; Michigan/Ontario Balanced and Texas northeast/Oklahoma
+Balanced still exhaust time/labels. The sealed candidate is unchanged.
+
+Weak and land connectivity tables now retain exact node roots in four bytes
+instead of eight where representable, with an Int fallback for larger graphs.
+Root compression reuses the original table rather than allocating a second full
+result. The access modes and ferry exclusions are unchanged. All 180 engine tests
+pass, including independent flood-fill comparisons on source-topology fixtures,
+access/ferry component boundaries, cache separation and value semantics.
+
+`compact-components/` contains final source/probe identity, patch, tests and three
+targeted measurements. California south→Arizona Balanced and Florida→Georgia
+Dirt retain exact road digests, distances and search pops. Florida RSS fell from
+1,230 MB to 1,149 MB, but remains above the ceiling. California south→north Clean
+still fails; 50.34 of its 60 seconds went to preparation. The California/Arizona
+run includes a one-second process sample and is diagnostic, not final acceptance.
+Peak physical footprint fell in all three comparisons, while RSS and preparation
+remain variable. This is an exact storage reduction, not a release qualification
+or general speed claim. Thirteen latest failing cases remain open; do not repeat
+an entire matrix without an affected change. Next focus is unnecessary repeated
+connectivity work and the expensive necessary-city distance search. Final
+integrated host/app/catalog/download qualification and DEV publication remain
+outstanding. No device build/install occurred on this heartbeat.
