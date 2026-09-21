@@ -3,6 +3,27 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct RoutingEngineTests {
+    @Test func waypointContinuationRanksBothLegalDirectionsTowardNextPin() throws {
+        let graph = try IndexedGraph(PolicyTests.Line(nodes: [
+            .init(longitude: -0.01, latitude: 0), .init(longitude: 0.02, latitude: 0),
+            .init(longitude: 0.02, latitude: 0.02), .init(longitude: -0.01, latitude: 0.02)
+        ], edges: [(0,1),(1,2),(2,3),(3,0)],
+            surfaces: Array(repeating: "asphalt", count: 4), roads: Array(repeating: "tertiary", count: 4)))
+        var request = RoutingRequest(start: .init(longitude: 0.005, latitude: 0),
+            end: .init(longitude: -0.009, latitude: 0), style: .cleanest)
+        request.options.arrivalEdgeID = graph.identity(of: 0)
+        request.matchRadiusMeters = 80
+        let route = try RoutingEngine(pack: graph).route(request)
+        #expect(route.start.edge == 0)
+        #expect(route.start.coordinate.distance(to: request.start) < 1)
+        #expect(route.segments.first?.forward == false)
+        #expect(route.distanceMeters < 2_000, "A continuation must not choose a loop simply because its stored forward arc sorts first")
+
+        request.options.continuationForward = true
+        let directed = try RoutingEngine(pack: graph).route(request)
+        #expect(directed.segments.first?.forward == true, "Explicit directed seam continuation must remain binding")
+    }
+
     @Test func cancellationCannotReturnACompletedComparisonCandidate() async throws {
         let engine = try RoutingEngine(pack: pavedLine())
         let completed = try engine.route(request)

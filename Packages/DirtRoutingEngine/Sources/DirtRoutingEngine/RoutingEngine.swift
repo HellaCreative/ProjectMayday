@@ -71,8 +71,12 @@ public struct RoutingEngine: Sendable {
         // carriageway on the short NS comparison.
         let intent = request.start.bearing(to: request.end)*180 / .pi
         let matchStarted = ContinuousClock.now
+        // A rider waypoint carries the exact road, but may depart in either
+        // legal direction. Keep destination intent when ranking those directions;
+        // otherwise the stored forward arc wins a tie and can send the rider back
+        // around a long circuit. Explicit directed seam handovers stay binding.
         let startCandidates = try matcher.matches(at: request.start,radius: radius,start: true,policy: request.access,
-            intent: request.options.arrivalEdgeID == nil ? intent : nil,
+            intent: request.options.continuationForward == nil ? intent : nil,
             limit: request.options.arrivalEdgeID == nil ? 12 : 64,budget: budget)
         // A staged continuation already has an exact incoming road and position.
         // Do not rematch it onto a nearby parallel road in the next window.

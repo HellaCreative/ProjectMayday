@@ -2840,8 +2840,12 @@ footprint is 683.8–686.5 MB versus 722.4–726.2 MB before. Host peak RSS vari
 across runs (compact 1,134.6–1,151.6 MB; before 1,097.0–1,187.9 MB), so this
 is an owned-storage improvement, not proof that the RSS gate passes or that
 routing is faster. Review receipt: `compact-index/accepted-review.json` beneath
-`.build/continental-qualification-20260920`. The remaining 30 failures require
-replay on this source before final integrated qualification. White still uses
+`.build/continental-qualification-20260920`. The remaining 30-case replay has now finished: 10 pass and 20 still fail.
+Nineteen exceed the host RSS gate; four do not complete (three time limits,
+one label limit), with overlap. Its receipts are in
+`compact-index/remaining-failures`; this is still a diagnostic subset, not
+release qualification. Further runtime repairs and final integrated
+qualification remain required. White still uses
 the preceding accepted runtime; this heartbeat does not install an app. The
 70-region candidate remains unpublished and the release thresholds are unchanged.
 
@@ -2866,8 +2870,7 @@ Completed-loop edit repair (September 20): the owner log at 22:44:49 and
 22:45:07 showed confirmed insertions followed by `pack loop` generation, which
 replaced the edited itinerary with fresh `[start, far, start]` pins. Completed
 loop edits now use the normal canonical rebuild path. The Loop tab remains, the
-original far pin is tracked by identity instead of array position, and all
-interior rider pins remain draggable. Per-leg settings also use this path, so
+original far pin is tracked by identity instead of array position. Per-leg settings also use this path, so
 editing one leg does not rerun the original whole-loop defaults. Changing build
 defaults alone no longer regenerates an existing loop. The generator still owns
 initial loop creation; this repair changes no road scoring or pack bytes.
@@ -2908,3 +2911,54 @@ installation and launch succeeded; receipts are in
 `.build/loop-edit-20260920/{white-build.log,white-build-receipt.json,white-install.json,white-launch.json}`.
 The unaccepted compact-index experiment is excluded. Physical interaction and
 route acceptance remain for the owner; the seven-pack catalog is unchanged.
+
+Owner follow-up pin/loop investigation (September 20, 23:48–23:51 phone log):
+the new insertions now commit three/four legs, but the last return leg reports
+17.9% recent-road backtracking. The exact real-pack replay reproduces its
+152,666.9 m last leg. Carrying an arrival road suppressed directional intent;
+with both travel directions legal and no explicit direction requirement, the
+stored forward match won a tie and headed away from the next pin. The fix keeps
+next-pin intent when ranking those directions while preserving the exact arrival
+road/coordinate filter, turn restrictions and explicit directed seam handovers.
+An independent four-road fixture reproduces a 9,562.8 m detour instead of the
+short direct continuation before this change.
+
+A separate experiment restored the initial loop repeat factor across all earlier
+legs. It reduced repeated roads but increased this last leg to 287,742.9 m;
+it was rejected and removed. No loop-repeat cost or ordinary scoring change is
+included in the repair. The experiment patch/results are retained only as
+rejected evidence in `.build/pin-edit-20260920/`.
+
+All canonical rider pins, including Loop start/end and From Here/search pins
+following a failed build, are editable while planning. Dragging needs no prior
+selection tap; the map's long press yields to the pin. Drop previews, pan/zoom,
+explicit pin-tap snapping, No/refine, and Yes/rebuild remain the interaction.
+Moving From Here's start records the explicit origin; moving its destination
+updates the same itinerary rather than replacing its pin identities.
+
+The exact campground pin (44.405386,-65.249239) is about 1 m from a mapped,
+through-permitted road. The dated pack contains a 36-node permitted-road
+component behind OSM gate 3512469223 on Jeremys Bay Campground Road (way
+344511521). Its source has only `barrier=gate` and a CanVec source tag, without
+motorcycle/access/locked permissions. The factory's existing ambiguous-gate
+policy therefore fails closed. This explains a connectivity failure despite
+visible campground roads; it is not a missed map snap. No source data, gate
+permission or legal rule has been changed. Evidence: `.build/pin-edit-20260920/`
+contains nearby roads, component/boundary audits and the original gate OPL tags.
+Final main-source verification: all 171 engine tests and 65 planner/builder/
+settings tests pass. The two real-map UI checks pass: unselected hold-and-drag
+and repeated drag/zoom followed by explicit pin tap. Evidence is in
+`.build/pin-edit-20260920/{engine-after.log,model-final.xcresult,gestures.xcresult}`.
+The dated NS replay now yields 66,220.3 m for the last leg instead of 152,666.9 m.
+The integrated edited return legs are 121,200.9 m, 67,378.2 m and 66,220.3 m;
+shared roads still exist, so this is not a zero-repeat or oval-shape guarantee.
+The initial loop replay matches the owner's logged outbound/inbound distances;
+its original seed/geometry were not logged, so exact initial geometry identity
+is not claimed. Requests and segment receipts are retained alongside
+`direction-fixed-summary.json`.
+
+The focused phone checkout is `ea4e5b8` (on the previously delivered `5f9ff7e`),
+containing these eight app/engine/test-file changes without unrelated continental
+memory changes. Its device build and installation succeeded; launch receipt and
+physical acceptance status are recorded in the same evidence directory. The
+seven-pack catalog is unchanged. Physical acceptance remains pending.

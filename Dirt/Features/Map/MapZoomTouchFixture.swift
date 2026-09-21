@@ -72,7 +72,9 @@ struct MapZoomTouchFixture: View {
         mapTouches += 1
         app.mapState.setPlannerMarkers([.init(id: testsPlacement ? "waypoint-draft" : "fixture-pin", latitude: coordinate.latitude,
             longitude: coordinate.longitude, label: testsPlacement ? "+" : "1", kind: .destination)])
-        if testsPlacement { app.mapState.selectPlannerPin("waypoint-draft") }
+        if testsPlacement && ProcessInfo.processInfo.environment["DIRT_UI_TEST_UNSELECTED_PIN"] != "1" {
+            app.mapState.selectPlannerPin("waypoint-draft")
+        }
     }
 }
 #endif

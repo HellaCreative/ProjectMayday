@@ -57,7 +57,7 @@ nonisolated enum NativeRoutingAdapter {
         case .unsupported(let detail): return detail
         case .noMatch: return "A rider point is not close enough to a legally usable mapped road. Move the point onto the road."
         case .ferriesAvoided: return ferriesAvoidedMessage
-        case .noPath: return "The installed road network has no legal connection for these points and settings."
+        case .noPath: return "No connected route was found for these points and settings. Hold and drag a pin to another road, then tap it to confirm."
         case .resourceLimit: return "The route calculation reached its limit before it could finish. Your points are preserved."
         }
     }

@@ -7,6 +7,65 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
+    @Test func everyLoopWaypointCanBeMovedWithoutRegeneratingLoop() async throws {
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.mode = .plan
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        let ids = model.itinerary.waypoints.map(\.id)
+        #expect(map.plannerMarkers.filter { $0.id.hasPrefix("wp:") }.allSatisfy { !$0.isLocked })
+        for (index, id) in ids.enumerated() {
+            let moved = point(Double(index) * 0.2 + 0.1)
+            let marker = "wp:\(id.uuidString)"
+            let before = model.itinerary.waypoints.map(\.coordinate)
+            model.moveWaypoint(markerID: marker, to: moved.locationCoordinate)
+            #expect(model.itinerary.waypoints.map(\.coordinate) == before)
+            #expect(!model.showsWaypointPlacementConfirmation)
+            model.requestWaypointPlacementConfirmation(markerID: marker, snappedCoordinate: moved.locationCoordinate)
+            model.confirmWaypointPlacement()
+            await model.waitForCanonicalBuildForTesting()
+            #expect(model.itinerary.waypoints[index].coordinate == moved)
+            #expect(model.itinerary.waypoints.map(\.id) == ids)
+        }
+        #expect(source.loopRequestCount == 1)
+    }
+
+    @Test func failedFromHereDestinationAndStartRemainEditable() async throws {
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.mode = .fromHere
+        source.routeError = RoutingError.server("No legal connection")
+        model.apply(.replaceAll(waypoints: [point(0), point(1)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: true), source: "fromHere")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.errorMessage != nil)
+        let ids = model.itinerary.waypoints.map(\.id)
+        #expect(map.plannerMarkers.filter { $0.id.hasPrefix("wp:") }.allSatisfy { !$0.isLocked })
+        source.routeError = nil
+        for index in [1, 0] {
+            let moved = point(index == 1 ? 0.8 : 0.2)
+            let marker = "wp:\(ids[index].uuidString)"
+            model.moveWaypoint(markerID: marker, to: moved.locationCoordinate)
+            #expect(!model.showsWaypointPlacementConfirmation)
+            model.requestWaypointPlacementConfirmation(markerID: marker, snappedCoordinate: moved.locationCoordinate)
+            model.keepMovingWaypoint()
+            #expect(model.itinerary.waypoints[index].coordinate != moved)
+            model.requestWaypointPlacementConfirmation(markerID: marker, snappedCoordinate: moved.locationCoordinate)
+            model.confirmWaypointPlacement()
+            await model.waitForCanonicalBuildForTesting()
+            #expect(model.itinerary.waypoints[index].coordinate == moved)
+            #expect(model.itinerary.waypoints.map(\.id) == ids)
+            #expect(model.mode == .fromHere)
+        }
+        #expect(model.fromHereStartOverride == point(0.2))
+        #expect(model.destination == point(0.8))
+        #expect(model.errorMessage == nil)
+    }
+
     @Test func searchedWaypointAppendsToExistingPlanWithoutReplacingPins() async {
         let source = PlannerFakeRoutingSource()
         let model = makeModel(source: source)

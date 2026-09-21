@@ -90,6 +90,7 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
+        longPress.delegate = context.coordinator
         mapView.addGestureRecognizer(longPress)
         tap.require(toFail: longPress)
 
@@ -197,7 +198,7 @@ struct MapLibreMapView: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, MLNMapViewDelegate {
+    final class Coordinator: NSObject, MLNMapViewDelegate, UIGestureRecognizerDelegate {
         private let state: MapState
         private var styleLoaded = false
         private var appliedStyleGeneration = -1
@@ -1387,8 +1388,8 @@ struct MapLibreMapView: UIViewRepresentable {
                 ?? DirtPlannerPinView(reuseIdentifier: reuseID)
             view.configure(for: dirtAnnotation)
             view.applySelectionChrome(dirtAnnotation.markerID == state.selectedPlannerPinID, animated: false)
-            // Custom pan drag (tap-select then drag). MapLibre's built-in drag
-            // requires a long-press, which feels like the map is stealing the gesture.
+            // The pin owns its drag immediately, including hold-then-drag,
+            // so the map cannot reinterpret the gesture as a new waypoint.
             view.isDraggable = false
             view.hostMapView = mapView
             if state.isNavigating || dirtAnnotation.isLocked {
@@ -1538,6 +1539,18 @@ struct MapLibreMapView: UIViewRepresentable {
             case .map:
                 RoutingDebugLog.shared.event("map tap result=map\(suffix)")
             }
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            // A hold beginning on an editable pin belongs to its own drag, even
+            // before the pin has been selected. Do not start the map's long press.
+            guard gestureRecognizer is UILongPressGestureRecognizer else { return true }
+            var view = touch.view
+            while let current = view {
+                if let pin = current as? DirtPlannerPinView, pin.onDragEnded != nil { return false }
+                view = current.superview
+            }
+            return true
         }
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -1931,7 +1944,7 @@ final class DirtAnnotation: MLNPointAnnotation {
 
 /// Teardrop stage pin: dark body + orange circle + white number,
 /// bottom-anchored so the pin tip sits on the map coordinate.
-/// A selected, editable waypoint owns its one-finger pan. Map gestures must
+/// An editable waypoint owns its one-finger pan, without a prior selection tap. Map gestures must
 /// not cancel it after it has begun; system cancellation still ends the drag.
 private final class DirtPinPanGestureRecognizer: UIPanGestureRecognizer {
     override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
@@ -1956,7 +1969,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
     private var savedMapRotateEnabled = true
 
     weak var hostMapView: MLNMapView?
-    /// Tap-select before drag — fires even when MapLibre's map tap never reaches us.
+    /// Explicit tap asks to confirm a pending move; drag does not require selection.
     var onTapped: ((String) -> Void)?
     var onDragBegan: ((String) -> Void)?
     var onDragEnded: ((String, CLLocationCoordinate2D) -> Void)?
@@ -2143,7 +2156,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
         if gestureRecognizer is UITapGestureRecognizer {
             return onTapped != nil
         }
-        return isSelectedForEditing && onDragEnded != nil && annotation.kind != .fuel
+        return !annotation.isLocked && onDragEnded != nil && annotation.kind != .fuel
     }
 
     @objc private func handlePinTap(_ gesture: UITapGestureRecognizer) {
@@ -2194,7 +2207,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
 
         switch gesture.state {
         case .began:
-            guard isSelectedForEditing else { return }
+            guard !dirtAnnotation.isLocked else { return }
             RoutingDebugLog.shared.event("map pinPan begin markerID=\(dirtAnnotation.markerID)")
             dragOrigin = dirtAnnotation.coordinate
             isCustomDragging = true

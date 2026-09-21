@@ -424,12 +424,32 @@ final class DirtUITests: XCTestCase {
         XCTAssertEqual(taps.label, "Placement taps: 0", "Zoom must leave placement open")
         pin.tap()
         XCTAssertEqual(taps.label, "Placement taps: 1", "Only tapping the pin requests confirmation")
-        print("PLACEMENT_PIN_AFTER_TAP: \(pin.debugDescription)")
         pin.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).press(forDuration: 0.2, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.6)))
         XCTAssertEqual(drags.label, "Pin drags: 2")
         XCTAssertEqual(taps.label, "Placement taps: 1")
         pin.tap()
         XCTAssertEqual(taps.label, "Placement taps: 2")
+    }
+
+    @MainActor
+    func testUnselectedWaypointAcceptsHoldAndDragWithoutMapPinDrop() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_ZOOM_TOUCH"] = "1"
+        app.launchEnvironment["DIRT_UI_TEST_PIN_PLACEMENT"] = "1"
+        app.launchEnvironment["DIRT_UI_TEST_UNSELECTED_PIN"] = "1"
+        app.launch()
+        let drags = app.staticTexts["pin-drag-count"]
+        XCTAssertTrue(drags.waitForExistence(timeout: 8))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.45)).tap()
+        let pin = app.buttons["+"].firstMatch
+        XCTAssertTrue(pin.waitForExistence(timeout: 5))
+        pin.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).press(forDuration: 0.8,
+            thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)))
+        XCTAssertEqual(drags.label, "Pin drags: 1")
+        XCTAssertEqual(app.staticTexts["map-touch-count"].label, "Map touches: 1")
+        XCTAssertEqual(app.staticTexts["placement-tap-count"].label, "Placement taps: 0")
+        pin.tap()
+        XCTAssertEqual(app.staticTexts["placement-tap-count"].label, "Placement taps: 1")
     }
 
     @MainActor

@@ -887,6 +887,10 @@ final class RoutePlannerModel {
             break
         }
         itinerary = nextItinerary
+        if mode == .fromHere, case .move(let id, let coordinate) = action {
+            if id == itinerary.waypoints.first?.id { fromHereStartOverride = coordinate }
+            if id == itinerary.waypoints.last?.id { destination = coordinate }
+        }
         RoutingDebugLog.shared.event(
             ItineraryLog.line(action: action, before: before, after: itinerary, source: source)
         )
@@ -2640,8 +2644,7 @@ final class RoutePlannerModel {
         }
         switch mode {
         case .fromHere:
-            // B relocates via long-press on the map (road-snapped) — pins are not draggable.
-            return
+            movePlanStyleWaypoint(markerID: markerID, snapped: snapped)
         case .saved:
             // Saved overview: B is movable; A is the stored track start (display only).
             guard markerID == "dest" else { return }
@@ -3214,7 +3217,7 @@ final class RoutePlannerModel {
                     )
                 )
             } else {
-                markers.append(contentsOf: canonicalMarkers(riderPinsLocked: true))
+                markers.append(contentsOf: canonicalMarkers())
             }
         case .saved:
             // Show both endpoints so a loaded route has visible first + second pins.
@@ -3241,7 +3244,7 @@ final class RoutePlannerModel {
                 )
             }
         case .plan:
-            markers.append(contentsOf: canonicalMarkers(riderPinsLocked: false))
+            markers.append(contentsOf: canonicalMarkers())
         }
         if showingLoop, itinerary.waypoints.isEmpty, let far = loopFar {
             markers.append(
@@ -3312,7 +3315,7 @@ final class RoutePlannerModel {
         )
     }
 
-    private func canonicalMarkers(riderPinsLocked: Bool) -> [MapState.Marker] {
+    private func canonicalMarkers() -> [MapState.Marker] {
         var markers = itinerary.waypoints.enumerated().map { index, waypoint in
             MapState.Marker(
                 id: "wp:\(waypoint.id.uuidString)",
@@ -3320,7 +3323,7 @@ final class RoutePlannerModel {
                 longitude: waypointMove?.id == waypoint.id ? waypointMove!.coordinate.longitude : waypoint.coordinate.longitude,
                 label: "\(index + 1)",
                 kind: index == 0 ? .start : (index == itinerary.waypoints.count - 1 ? .destination : .stage),
-                isLocked: showingLoop ? (index == 0 || index == itinerary.waypoints.count - 1) : riderPinsLocked
+                isLocked: false
             )
         }
         var fuelOrdinal = 0
