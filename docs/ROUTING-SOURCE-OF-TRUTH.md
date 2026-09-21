@@ -3585,3 +3585,14 @@ verified installation. The bar is installation progress, not byte-transfer speed
 37 focused acquisition/progress tests pass on the existing single simulator
 (`acquisition-progress-fix.xcresult`). These app fixes are not installed on the
 phone yet; full long-route/device acceptance remains outstanding.
+
+September 21 19:20:55 UTC: scoped release `fabric-v4-20260921-01` passed the
+entire 1,126-case final matrix, with zero route failures and zero coverage
+failures, on probe `c58170aaba27ee1bc4ecd3a070c1170458b7dc3806c8e14977b4cb9221c362c6`.
+Identity-bound evidence is `scoped-dev-68/qualification-app-cache-2/`.
+Scope is 68 regions / 150 neighboring pairs; California remains excluded.
+`deliver-app-parity.py` advanced automatically to `scoped-dev-publication`;
+the publisher revalidates local evidence before immutable upload and downloaded
+hash verification. Publication completion, app catalog activation, published app
+checks and phone installation are not yet established. The existing activation
+tail remains queued; do not restart qualification or create competing jobs.
