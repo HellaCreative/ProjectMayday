@@ -3697,3 +3697,30 @@ leg assembly without duplicate guide routing, then measure the actual planner.
 A changed runtime requires a new identity and affected app/runtime evidence;
 never overwrite the passed pack qualification. California and physical riding
 acceptance remain outstanding.
+
+September 21 23:48 UTC: the handover forward-replay repair, optional staged
+observer and ordered app bridge are now integrated in source. The new app build
+passes 61 focused planner/builder/bridge tests on the existing simulator.
+A real Moncton–Charlottetown two-pack route delivers started, stage0, stage1,
+completed in order before returning; observed and ordinary calls have identical
+geometry, distance and arrival identity (202,628.297 m). Engine coverage remains
+the 195 passing combined tests. New source-bound evidence:
+planner-streaming-prototype/integrated-runtime-identity.json,
+app-bridge-tests.xcresult and app-bridge-state.json. The observer is not yet used
+by the planner, so duplicate guidance remains and phone approval is still false.
+This is a new runtime identity; the immutable publication's older qualification
+receipts remain unchanged. The waiting phone tail still verifies the older
+identity and must be superseded with honest new runtime/app evidence before
+approval, not have its check bypassed.
+
+The next legal-boundary helper is private in
+planner-streaming-prototype/package/{Sources,Tests}/DirtRoutingEngine*/
+EditableRouteBoundary*.swift. Four targeted regressions pass: no generated cut
+inside an active via-way restriction, no endpoint inside an unknown-access
+connector, exact partial final-road position, and fail-closed incomplete or
+unverifiable input. It uses whole-segment boundaries near the desired distance,
+so segment geometry and metadata do not need approximate clipping. It has not
+been integrated or connected to the planner. Next implement the buffered
+roughly-800km leg accumulator, capture proof before each graph is evicted,
+consume the ordered stream with retry/cancellation resets, and measure the
+actual workflow. Do not replay the completed baseline unchanged.

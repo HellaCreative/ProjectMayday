@@ -19,6 +19,42 @@ struct NativeCandidateQualificationTests {
             .appendingPathComponent("scripts/pack-fabric/routing/candidates/fabric-v4-20260917-02/packs")
     }
 
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_STREAM_BRIDGE"] == "1"),
+          .timeLimit(.minutes(5)))
+    func publishedTwoPackProgressDrainsBeforeReturningTheSameRoute() async throws {
+        let store = GraphPackStore()
+        await store.refreshCatalog()
+        for id in ["nb", "pe"] { try #require(store.hasCompleteNativePack(id)) }
+        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+        let request = RouteRequest(profile: .cleanest, locations: [
+            .init(latitude: 46.0878, longitude: -64.7782, label: "Moncton"),
+            .init(latitude: 46.2382, longitude: -63.1316, label: "Charlottetown")
+        ], allowUnknown: false, sessionSeed: 8026290980254235,
+            avoidMotorways: false, preferBackRoads: false)
+        let original = try await source.route(request)
+        var events: [String] = []
+        var stages: [RouteResponse] = []
+        var completed: RouteResponse?
+        let observed = try await source.route(request) { event in
+            switch event {
+            case .started: events.append("started")
+            case .stage(let index, let response):
+                events.append("stage:\(index)"); stages.append(response)
+            case .completed(let response):
+                events.append("completed"); completed = response
+            case .discarded: events.append("discarded")
+            }
+        }
+        #expect(events == ["started", "stage:0", "stage:1", "completed"])
+        #expect(stages.count == 2)
+        #expect(completed?.coordinates == observed.coordinates)
+        #expect(observed.coordinates == original.coordinates)
+        #expect(observed.distanceMeters == original.distanceMeters)
+        #expect(observed.arrivalEdgeId == original.arrivalEdgeId)
+        #expect(stages.first?.coordinates.last == stages.last?.coordinates.first)
+        print("CANDIDATE ordered-app-bridge events=\(events.joined(separator: ",")) meters=\(observed.distanceMeters ?? 0)")
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_DOWNLOADS"] == "1"),
           .timeLimit(.minutes(5)))
     func publishedCandidateInstallsVerifiesAndRoutesThroughTheApp() async throws {

@@ -2,11 +2,21 @@ import CoreLocation
 import Foundation
 import DirtRoutingEngine
 
+/// A regional stage is provisional until completed; discarded removes every
+/// preview belonging to the current chain. It never authorizes a partial ride.
+enum RouteBuildProgress: Sendable {
+    case started(regions: [String])
+    case stage(index: Int, response: RouteResponse)
+    case completed(response: RouteResponse)
+    case discarded
+}
+
 @MainActor
 protocol RoutingSource: AnyObject {
     var name: String { get }
     var supportsCombinedFuelPlanning: Bool { get }
     func route(_ req: RouteRequest) async throws -> RouteResponse
+    func route(_ req: RouteRequest, onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop?
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop
@@ -36,6 +46,13 @@ struct PlannedLoop: Sendable {
 }
 
 extension RoutingSource {
+    func route(_ req: RouteRequest,
+               onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
+        let response = try await route(req)
+        try Task.checkCancellation()
+        onProgress(.completed(response: response))
+        return response
+    }
     var supportsCombinedFuelPlanning: Bool { false }
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
         throw RoutingFailure.unsupported("Loop requires on-device packs.")
@@ -190,6 +207,42 @@ final class PackRoutingSource: RoutingSource {
             return NativeRoutingAdapter.response(result,style: request.profile.style,prior: Set(req.options?.priorEdgeIds ?? []))
         } catch let failure as RoutingFailure { throw RoutingError.server(NativeRoutingAdapter.message(failure)) }
     }
+    func route(_ req: RouteRequest,
+               onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
+        do {
+            let request = try NativeRoutingAdapter.request(req)
+            let directories = try packs.routingDirectories(for: req.locations.map {
+                CLLocationCoordinate2D(latitude: $0.latitude,longitude: $0.longitude)
+            })
+            let prior = Set(req.options?.priorEdgeIds ?? [])
+            let (events, continuation) = AsyncStream<StagedRouter.Progress>.makeStream()
+            // Structured child cancellation follows the parent build. The actor
+            // finishes the stream on success or failure; drain it in order before
+            // returning the authoritative final result.
+            var completedResponse: RouteResponse?
+            async let calculation = session.route(request, directories: directories, progress: continuation)
+            for await event in events {
+                try Task.checkCancellation()
+                switch event {
+                case .started(let regions): onProgress(.started(regions: regions))
+                case .stage(let index, let route):
+                    onProgress(.stage(index: index, response: NativeRoutingAdapter.response(
+                        route, style: request.profile.style, prior: prior)))
+                case .completed(let route):
+                    let response = NativeRoutingAdapter.response(route, style: request.profile.style, prior: prior)
+                    completedResponse = response
+                    onProgress(.completed(response: response))
+                case .discarded: onProgress(.discarded)
+                }
+            }
+            let result = try await calculation
+            try Task.checkCancellation()
+            return completedResponse ?? NativeRoutingAdapter.response(result, style: request.profile.style, prior: prior)
+        } catch let failure as RoutingFailure {
+            throw RoutingError.server(NativeRoutingAdapter.message(failure))
+        }
+    }
+
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
         var engine = LoopRequest(
             start: .init(longitude: request.start.longitude, latitude: request.start.latitude),

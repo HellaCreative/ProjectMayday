@@ -158,7 +158,11 @@ actor NativeRoutingSession {
             " footprintMB=\(memory.current) peakFootprintMB=\(memory.peak) \(outcome)"
         Task { @MainActor in RoutingDebugLog.shared.event(line) }
     }
-    func route(_ request: DirtRoutingEngine.RoutingRequest,directories: [String:URL]) throws -> ComputedRoute {
+    func route(_ request: DirtRoutingEngine.RoutingRequest, directories: [String:URL],
+               progress: AsyncStream<StagedRouter.Progress>.Continuation? = nil) throws -> ComputedRoute {
+        // Exactly one worker owns production and termination of this stream.
+        // No detached UI tasks may reorder stage/reset/completion notifications.
+        defer { progress?.finish() }
         let started = ContinuousClock.now
         let budget = ComputationBudget(seconds: 60)
         let counter = SearchCounter()
@@ -178,7 +182,10 @@ actor NativeRoutingSession {
                 result = try StagedRouter.route(request, repository: repository,
                                                 regions: Array(directories.keys), budget: budget,
                                                 prepared: preparedGraphs, compassStore: compassStore,
-                                                renewAfterCommittedStage: true)
+                                                renewAfterCommittedStage: true,
+                                                onProgress: progress.map { continuation in
+                                                    { event in _ = continuation.yield(event) }
+                                                })
             } else {
                 let preparation = try prepare(directories,budget: budget)
                 prepared = elapsedMs(from: started); prepareDetail = preparation.detail
@@ -186,7 +193,16 @@ actor NativeRoutingSession {
                 // Loop uses its own planner; staged country windows keep their
                 // independently qualified route selection.
                 request.options.composeDirtRide = true
-                result = try RoutingEngine(pack: preparation.graph, compassStore: compassStore).route(request,budget: budget)
+                progress?.yield(.started(chain: directories.keys.sorted()))
+                do {
+                    result = try RoutingEngine(pack: preparation.graph, compassStore: compassStore)
+                        .route(request,budget: budget)
+                    if result.limit == nil { progress?.yield(.completed(route: result)) }
+                    else { progress?.yield(.discarded) }
+                } catch {
+                    progress?.yield(.discarded)
+                    throw error
+                }
             }
             log("pack route",started: started,prepared: prepared,prepareDetail: prepareDetail,counter: counter,
                 outcome: "selectedPops=\(result.poppedLabels) meters=\(Int(result.distanceMeters.rounded())) " +

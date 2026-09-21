@@ -5,6 +5,34 @@ import Foundation
 /// road proven by both neighboring packs. This keeps preparation and search
 /// bounded by one region instead of repeatedly joining overlapping pairs.
 public enum StagedRouter {
+    /// Observation only: stages belong to a provisional chain until completed.
+    /// Consumers must discard their preview on discarded or a new started event.
+    /// Callbacks run synchronously on the routing worker; use an ordered channel
+    /// to transfer events to the UI without blocking the route calculation.
+    public enum Progress: Sendable {
+        case started(chain: [String])
+        case stage(index: Int, route: ComputedRoute)
+        case completed(route: ComputedRoute)
+        case discarded
+    }
+
+    static func observedAttempt(
+        chain: [String], onProgress: ((Progress) -> Void)?,
+        build: () throws -> ComputedRoute
+    ) throws -> ComputedRoute {
+        onProgress?(.started(chain: chain))
+        var completed = false
+        defer { if !completed { onProgress?(.discarded) } }
+        let route = try build()
+        // Observation cannot turn a partial/limited result into a complete one,
+        // nor change the caller's existing handling of that result.
+        if route.limit == nil {
+            completed = true
+            onProgress?(.completed(route: route))
+        }
+        return route
+    }
+
     public static let longGeodesicMeters = 400_000.0
     /// Two-pack corridors (subregion halves) stage earlier than multi-province.
     public static let twoPackGeodesicMeters = 100_000.0
@@ -80,7 +108,8 @@ public enum StagedRouter {
                              regions: [String], budget: ComputationBudget,
                              prepared: PreparedGraphStore = PreparedGraphStore(),
                              compassStore: RoadCompassStore? = nil,
-                             renewAfterCommittedStage: Bool = false) throws -> ComputedRoute {
+                             renewAfterCommittedStage: Bool = false,
+                             onProgress: ((Progress) -> Void)? = nil) throws -> ComputedRoute {
         let connectionsStarted = ContinuousClock.now
         let unique = Array(Set(regions)).sorted()
         let startRegion = try containingRegion(request.start, regions: unique, repository: repository,
@@ -98,12 +127,18 @@ public enum StagedRouter {
         let chains = try RegionConnectivity(neighbors: neighbors).chains(from: startRegion, to: endRegion,
                                                                           roadNeighbors: roads, avoidFerries: request.access.avoidFerries)
         if chains.count == 1 {
-            return try routeChain(request, chain: chains[0], repository: repository, budget: budget,
-                prepared: prepared, compassStore: compassStore, renewAfterCommittedStage: renewAfterCommittedStage)
+            return try observedAttempt(chain: chains[0], onProgress: onProgress) {
+                try routeChain(request, chain: chains[0], repository: repository, budget: budget,
+                    prepared: prepared, compassStore: compassStore,
+                    renewAfterCommittedStage: renewAfterCommittedStage, onProgress: onProgress)
+            }
         }
         return try firstCompletedConnection(chains, budget: budget) { chain, attemptBudget in
-            let candidate = try routeChain(request, chain: chain, repository: repository, budget: attemptBudget,
-                prepared: prepared, compassStore: compassStore, renewAfterCommittedStage: false)
+            let candidate = try observedAttempt(chain: chain, onProgress: onProgress) {
+                try routeChain(request, chain: chain, repository: repository, budget: attemptBudget,
+                    prepared: prepared, compassStore: compassStore,
+                    renewAfterCommittedStage: false, onProgress: onProgress)
+            }
             request.options.counter?.recordStage("connectionReady:\(chain.joined(separator: "+"))", since: connectionsStarted)
             return candidate
         }
@@ -142,7 +177,8 @@ public enum StagedRouter {
 
     private static func routeChain(_ request: RoutingRequest, chain: [String], repository: PackRepository,
                                    budget: ComputationBudget, prepared: PreparedGraphStore,
-                                   compassStore: RoadCompassStore?, renewAfterCommittedStage: Bool) throws -> ComputedRoute {
+                                   compassStore: RoadCompassStore?, renewAfterCommittedStage: Bool,
+                                   onProgress: ((Progress) -> Void)?) throws -> ComputedRoute {
         let windows = overlappingWindows(chain)
         guard windows.count >= 2 else {
             return try routeWindow(windows.first ?? chain, request: request, repository: repository,
@@ -250,7 +286,12 @@ public enum StagedRouter {
                     let part1 = try routeAvoidingEarlierRoads(hop1, graph: secondGraph,
                         compassStore: compassStore, budget: attemptBudget)
                     hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
-                    return try stitch([part0, part1], windows: windows)
+                    let combined = try stitch([part0, part1], windows: windows)
+                    // Both halves must succeed before exposing either: a failed
+                    // second half may cause a different handover to be selected.
+                    onProgress?(.stage(index: 0, route: part0))
+                    onProgress?(.stage(index: 1, route: part1))
+                    return combined
                 } catch RoutingFailure.ferriesAvoided {
                     // This handover may be on a ferry-dependent overlap stub;
                     // another legal land handover can still complete the journey.
@@ -456,6 +497,9 @@ public enum StagedRouter {
                     })
                     hop.options.counter?.recordStage("carryHistory:\(index)", since: historyStarted)
                     parts.append(part)
+                    // Handover clipping and onward direction proof are complete.
+                    // A later chain failure still invalidates this preview.
+                    onProgress?(.stage(index: index, route: part))
                     cursor = part.end.coordinate
                     advanced = true
                     break
@@ -710,21 +754,27 @@ public enum StagedRouter {
         // window can legally continue. Regional stages now end at the real
         // seam, so scanning from the origin repeats thousands of irrelevant
         // spatial lookups and throws away useful completed riding.
-        let cuts = (1..<route.segments.count).reversed()
+        // Replay in travel order once. Searching candidate cuts from the end
+        // must not replay restrictions backwards: a multi-edge via sequence
+        // starts at its first turn, before the latest candidate cut.
         var active = request.options.arrival?.restrictions ?? request.options.arrivalRestrictions
-        for cut in cuts {
+        var unrestrictedCuts: [Int] = []
+        for cut in 1..<route.segments.count {
             try budget.check()
-            let last = route.segments[cut - 1]
-            // Replay each transition once. Never erase an active via-way
-            // sequence when crossing into another graph's local numbering.
             if cut > 1 {
                 let prior = route.segments[cut - 2]
+                let last = route.segments[cut - 1]
                 guard let advanced = graph.restrictionIndex.advance(active,
                     from: graph.restrictionEdge(prior.edge), to: graph.restrictionEdge(last.edge),
                     at: graph.endpoint(last.edge, from: last.forward)) else { return route }
                 active = advanced
             }
-            guard active.isEmpty, last.access == 0, let point = last.geometry.last,
+            if active.isEmpty { unrestrictedCuts.append(cut) }
+        }
+        for cut in unrestrictedCuts.reversed() {
+            try budget.check()
+            let last = route.segments[cut - 1]
+            guard last.access == 0, let point = last.geometry.last,
                   point.distance(to: route.start.coordinate) > 1 else { continue }
             let identity: Set<String> = [graph.identity(of: last.edge)]
             guard nextGraph.candidates(near: point, radius: 1).contains(where: {
@@ -750,7 +800,7 @@ public enum StagedRouter {
                 alongMeters: last.forward ? length : 0, geometryMeters: length, forward: last.forward)
             var result = ComputedRoute(start: route.start, end: end, segments: prefix,
                 distanceMeters: prefix.reduce(0) { $0+$1.meters }, searchCost: route.searchCost,
-                poppedLabels: route.poppedLabels, arrivalRestrictions: active)
+                poppedLabels: route.poppedLabels, arrivalRestrictions: [])
             result.startRoadIdentity = route.startRoadIdentity
             result.endRoadIdentity = graph.identity(of: last.edge)
             result.searchSummary = "handover-before-final-road[\(route.searchSummary ?? "-")]"
