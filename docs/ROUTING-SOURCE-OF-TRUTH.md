@@ -3394,3 +3394,10 @@ Final complete host/app/catalog/download gates and immutable DEV publication
 remain pending. Published-download verification applies only after the actual
 complete candidate is uploaded; no partial catalog has been activated. The
 seven-pack rollback and all original continental datasets remain intact.
+
+Independent qualification milestone: all **68 unaffected regional artifact
+audits passed**, with zero failures (`unaffected-regions/artifacts.json`). The
+existing 70-region release and registry roster agree exactly; no data was
+rebuilt. The serial app supervisor has advanced to `app-build`, followed by the
+selected integration checks above. This milestone verifies stored artifacts,
+not app completion or published downloads. Inspect its live state before work.
