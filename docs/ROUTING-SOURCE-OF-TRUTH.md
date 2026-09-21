@@ -2959,6 +2959,23 @@ is not claimed. Requests and segment receipts are retained alongside
 
 The focused phone checkout is `ea4e5b8` (on the previously delivered `5f9ff7e`),
 containing these eight app/engine/test-file changes without unrelated continental
-memory changes. Its device build and installation succeeded; launch receipt and
-physical acceptance status are recorded in the same evidence directory. The
-seven-pack catalog is unchanged. Physical acceptance remains pending.
+memory changes. Its device build and installation succeeded. Automatic launch
+was denied because White is locked; no unlock was attempted. The owner can open
+the installed app after unlocking. Receipt: `white-build-receipt.json` in the
+same evidence directory. The seven-pack catalog is unchanged; physical acceptance
+remains pending.
+
+Continental continuation after phone repair: `remaining-runtime-profile` under
+`.build/continental-qualification-20260920` samples the remaining California
+north→south Balanced case using the current `14bf9c1` engine. This is diagnostic
+only: VM snapshots can affect wall time, and the unchanged release gate still
+applies. The 38-second snapshot shows about 493 MiB mapped-file residency and
+510 MiB dirty memory. This run spends 42.5 seconds joining and 6.5 seconds
+indexing before its 60-second timeout. Inspect the source/pack identities,
+request, VM snapshots and route receipt there; this does not invalidate or
+replace the earlier completed 30-case results. One concrete next investigation
+is the duplicate-road geometry proof at RegionalGraph's join: it reads both
+mapped polylines for each shared edge. Any bounded streaming comparison must
+preserve exact decoded-coordinate equality, directions, and legal seam proof;
+do not simply skip verification or loosen the RSS/time thresholds. The
+pipeline state records the live diagnostic supervisor and next resume step.
