@@ -3040,3 +3040,40 @@ California south→Arizona Dirt evidence also shows substantial compass/riding-a
 work with only 1,006 search pops; Michigan/Ontario and Texas/Oklahoma failures
 instead reach millions of search labels. Treat those as separate runtime causes.
 Broader final host/app qualification and DEV publication checks remain required.
+
+
+City-exclusion connectivity proof (September 21 continuation): the borrowed
+arc-distance replay completed with 5 newly passing cases and 14 failures.
+The new passes are Arizona→California south Dirt, Florida→Georgia Balanced,
+and Georgia→Florida Dirt/Balanced/Clean. Runtime gates, rather than pack factory
+integrity, remain the blockers. Candidate bytes/catalogs are unchanged.
+
+Two experiments were rejected and restored: 4 KiB geometry read windows had
+order-sensitive results with no new passing case; a tighter distance-only road
+bound left all four Michigan/Ontario and Texas/Oklahoma cases incomplete.
+Patches, tests and measurements remain in `geometry-read-window` and
+`distance-road-bound` under `.build/continental-qualification-20260920`.
+
+The accepted engine change proves optimistic connectivity with city roads
+excluded before running the expensive turn-aware city-excluded search. Only
+proven disconnection invokes the existing necessary-city fallback; a positive
+result still requires normal routing. Endpoint roads remain optimistic, legal
+access and turn restrictions stay binding in the actual search, and city cost,
+styles, Wander and all rider pins are unchanged. The proof is reused within the
+same matched request. All 175 engine tests pass, including an available bypass
+that must retain city avoidance and the required-city/access cases.
+
+Evidence is `city-connectivity-proof/`: Michigan→Ontario Clean now completes in
+39.3 seconds at 875.0 MB RSS, with 1,997,438 pops. The other three targeted cases
+remain incomplete; this does not establish continental readiness. Paired short
+NS Dirt/Balanced/Clean controls all pass with identical road digests/distances
+and search pops. Warm Balanced/Clean controls remain about 0.15 seconds; the
+first Dirt control includes cold preparation and is not a latency comparison.
+
+`city-connectivity-proof/remaining-failures` retains the 14-case plan, imports the
+four already measured final-source receipts after exact request/probe checks,
+and runs only its other ten cases. Import origins and copied receipt hashes are
+recorded. Inspect its live state before starting another heavy job. Next work
+must address the remaining label/time floods and resident memory, then complete
+final integrated host/app and download/catalog qualification. No phone install
+or DEV publication has occurred; the seven-pack release remains intact.

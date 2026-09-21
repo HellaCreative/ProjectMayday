@@ -179,10 +179,33 @@ public struct RoutingEngine: Sendable {
         catch is CancellationError { throw CancellationError() }
         catch { compass = nil }
         request.options.counter?.recordStage("compass", since: compassStarted)
+        // Prove a city-excluded connection is even topologically possible
+        // before spending millions of turn-aware labels on a disconnected wall.
+        // The optimistic check retains endpoint roads and ignores legal/turn
+        // constraints: only a negative result can skip the doomed search.
+        var cityConnectionPossible: Bool?
+        let blockingCores = UrbanCores.boxes(in: pack).filter {
+            !$0.contains(start.coordinate) && !$0.contains(end.coordinate)
+        }
         func run(_ options: SearchOptions, policy: ProfilePolicy? = nil) throws -> ComputedRoute {
             var options = options
             options.roadRemaining = compass?.remaining
             do {
+                if options.cityWall && options.additionalEnds.isEmpty && !blockingCores.isEmpty {
+                    if cityConnectionPossible == nil {
+                        let began = ContinuousClock.now
+                        defer { options.counter?.recordStage("cityConnectivity", since: began) }
+                        let graph = pack
+                        let checker = try EndpointReachability(graph: graph, budget: budget) { edge in
+                            if edge == start.edge || edge == end.edge { return true }
+                            let a = graph.coordinate(node: graph.endpoint(edge, from: true))
+                            let b = graph.coordinate(node: graph.endpoint(edge, from: false))
+                            return !blockingCores.contains { $0.intersects(a, b) }
+                        }
+                        cityConnectionPossible = try checker.mayConnect(start: start, end: end, budget: budget)
+                    }
+                    if cityConnectionPossible == false { throw RoutingFailure.noPath }
+                }
                 return try search.search(start: start,end: end,policy: policy ?? request.profile,access: request.access,options: options,budget: budget)
             } catch RoutingFailure.noPath where options.cityWall {
                 // Avoid cities is a preference, not a legal closure. If exclusion

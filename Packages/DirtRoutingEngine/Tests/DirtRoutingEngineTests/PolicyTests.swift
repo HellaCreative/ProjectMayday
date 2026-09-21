@@ -36,6 +36,25 @@ struct PolicyTests {
         func polyline(_ edge: Int) -> [Coordinate] { [nodes[edges[edge].0],nodes[edges[edge].1]] }
     }
 
+    @Test func cityConnectivityProofKeepsAnAvailableRideAroundTheCity() throws {
+        let nodes: [Coordinate] = [
+            .init(longitude: 0, latitude: 0), .init(longitude: 0.01, latitude: 0),
+            .init(longitude: 0.04, latitude: 0), .init(longitude: 0.025, latitude: 0.03),
+            .init(longitude: 0.05, latitude: 0)
+        ]
+        let graph = try IndexedGraph(Line(nodes: nodes, edges: [(0,1),(1,2),(1,3),(3,2),(2,4)],
+            surfaces: Array(repeating: "asphalt", count: 5), roads: Array(repeating: "tertiary", count: 5),
+            urbanCores: [.init(minLat: -0.005, maxLat: 0.005, minLon: 0.015, maxLon: 0.035, name: "city")]))
+        var request = RoutingRequest(start: nodes[0], end: nodes[4], style: .cleanest)
+        request.options.counter = SearchCounter()
+        let route = try RoutingEngine(pack: graph).route(request)
+        #expect(route.segments.contains { $0.edge == 2 })
+        #expect(route.segments.contains { $0.edge == 3 })
+        #expect(!route.segments.contains { $0.edge == 1 })
+        #expect(request.options.counter!.stageSummary.contains("cityConnectivity"))
+        #expect(!request.options.counter!.stageSummary.contains("necessaryCityConnection"))
+    }
+
     @Test func necessaryCityConnectionPreservesStyleAndAccess() throws {
         let nodes = (0...3).map { Coordinate(longitude: Double($0) * 0.02, latitude: 0) }
         let city = GeographicBox(minLat: -0.005, maxLat: 0.005,
@@ -50,6 +69,7 @@ struct PolicyTests {
             #expect(route.end.coordinate.distance(to: nodes[3]) < 1)
             #expect(Set(route.segments.map(\.edge)) == Set([0,1,2]))
             #expect(request.options.counter!.stageSummary.contains("necessaryCityConnection"))
+            #expect(request.options.counter!.stageSummary.contains("cityConnectivity"))
         }
         graph.access = 2
         #expect(throws: RoutingFailure.noMatch) {
