@@ -1080,7 +1080,7 @@ struct RootView: View {
     }
 
     private var islandTickerHasContent: Bool {
-        app.planner.activeRouteProgressMessage != nil
+        app.planner.installingPacks != nil || app.planner.activeRouteProgressMessage != nil
             || (BuildChannel.debugRoutingGraphOverlay && app.mapState.showRoutingGraphDebug)
     }
 
@@ -1091,7 +1091,10 @@ struct RootView: View {
                 graphBrandButton()
             }
 
-            if let progress = app.planner.activeRouteProgressMessage {
+            if let packs = app.planner.installingPacks {
+                ToastView(text: "Downloading \(PackAcquisitionEvaluator.joinedTitles(packs.regionTitles))",
+                          downloadProgress: app.planner.packInstallProgress)
+            } else if let progress = app.planner.activeRouteProgressMessage {
                 ToastView(text: progress, isBuildingRoute: true)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -1114,7 +1117,10 @@ struct RootView: View {
     @ViewBuilder
     private var landscapeMapStatusStack: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let progress = app.planner.activeRouteProgressMessage {
+            if let packs = app.planner.installingPacks {
+                ToastView(text: "Downloading \(PackAcquisitionEvaluator.joinedTitles(packs.regionTitles))",
+                          downloadProgress: app.planner.packInstallProgress)
+            } else if let progress = app.planner.activeRouteProgressMessage {
                 ToastView(text: progress, isBuildingRoute: true)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -1815,6 +1821,7 @@ private struct KeepAwakeLifecycle: ViewModifier {
 struct ToastView: View {
     let text: String
     var isBuildingRoute = false
+    var downloadProgress: Double? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hypeLineIndex = 0
@@ -1831,6 +1838,9 @@ struct ToastView: View {
     }
 
     private var progress: RoutePlannerModel.ProgressToastContent? {
+        if downloadProgress != nil {
+            return .init(title: text, detail: "Routing begins after all required packs are installed and verified.")
+        }
         if rotatesHype {
             let lines = RoutePlannerModel.routeBuildHypeLines
             guard !lines.isEmpty else { return nil }
@@ -1857,8 +1867,14 @@ struct ToastView: View {
                         .foregroundStyle(.white.opacity(0.78))
                         .fixedSize(horizontal: false, vertical: true)
                         .contentTransition(.opacity)
-                    RouteBuildPistonIndicator()
-                        .accessibilityHidden(true)
+                    if let downloadProgress {
+                        ProgressView(value: downloadProgress)
+                            .tint(DirtTheme.orange)
+                            .accessibilityLabel("Routing pack installation")
+                    } else {
+                        RouteBuildPistonIndicator()
+                            .accessibilityHidden(true)
+                    }
                     if let longBuildNotice {
                         Text(longBuildNotice)
                             .font(DirtType.helper)

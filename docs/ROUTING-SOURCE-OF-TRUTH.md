@@ -959,16 +959,18 @@ the app must not hang, exhaust memory, silently change the trip, or claim a
 destination was reached when it was not.
 
 A From Here ride whose proven road distance is at least 1,000 km becomes a Plan
-with real, editable rider waypoints spaced at roughly 800 km along a legal guide
-route. For an obviously continental request, obtain that guide before starting
-the final Dirt searches; it may use neutral Balanced guidance with zero Wander
-and without city/highway avoidance solely to find legal waypoint positions.
-Preserve the rider's Avoid Ferries choice. The guide does not become the ride and
-does not weaken the selected style, Wander, access, city, highway, or other
-settings on the final legs. Each final leg is calculated normally, and moving a
-generated waypoint rebuilds its neighbouring legs through the ordinary Plan
-flow. If guidance fails, keep the original pins and settings. This is the shared
-iOS requirement and future Android contract.
+with real, editable rider waypoints spaced at roughly 800 km. Richard clarified
+that these sections must improve efficiency and seam reliability, not merely
+provide editing controls. Calculate final legal sections incrementally and retain
+completed work; a full-country guide followed by recalculation of every section
+is not an accepted efficient implementation. Preserve style, Wander, access,
+city/highway avoidance and the rider's Avoid Ferries choice. Fit each completed
+leg and show progress for the next, then fit the entire route before celebration.
+Moving a generated waypoint rebuilds its neighbouring legs through ordinary Plan
+flow. Preserve original pins/settings on failure. Compare total latency using the
+same endpoints, seed, preferences, production catalog selection and independent
+sessions; completion alone is not performance acceptance. This is the shared iOS
+requirement and future Android contract.
 
 ### Riding styles and preferences
 
@@ -3490,3 +3492,96 @@ No California experiment blocks this queue. After publication and downloaded-byt
 verification, activate the matching DEV catalog, run the published app download /
 registry test, and install the verified development build on Richard’s existing
 physical test device. Do not claim publication or installation before receipts exist.
+
+
+Delivery continuation is prepared in `scoped-dev-68/activate-and-deliver.py`
+(state: `activation-state.json`). It waits for the existing publication supervisor
+to finish successfully; it performs no competing heavy work. It rechecks published
+discovery bytes and the qualified runtime, then activates only the DEV catalog,
+builds/runs the published-download test with an exact 68-region registry assertion,
+builds the development phone bundle, and installs it on the existing owner test
+iPhone. Each step fails closed and retains its own logs/receipts. Inspect BOTH
+supervisor states and live children before resuming; do not duplicate activation.
+The scope assertion in `NativeCandidateQualificationTests.swift` is prepared and
+awaits that post-publication app run. The accepted planner/runtime source is
+committed and pushed at `b872045`. No new simulator or clone was created.
+
+
+September 21 owner correction: the 291.18 s ten-leg run proves functional
+completion, not the promised efficiency. Receipts attribute 99.16 s to whole-trip
+guidance and 190.19 s to ten final route calls, plus approximately 1.84 s overhead.
+The test injected all eight regional directories into every request instead of
+production per-leg catalog selection. Its seed/adapter configuration also differed
+from the earlier 89/88 s direct test, so that comparison is not controlled. The
+harness now uses the exact published catalog and the same GraphPackStore corridor
+selector as production, with an optional identical-seed/settings direct comparison
+on a separate session. It awaits the serial post-publication app slot.
+
+Pack qualification/publication continues unchanged. The delivery tail queues that
+controlled comparison with the published app check, then records
+`published-app-verified-planner-efficiency-review-required` before phone installation.
+Do not interpret functional test success as efficiency approval. Repair duplicated
+long-trip work, verify measured performance and per-leg editing/progress, and update
+`planner-efficiency-review.json` only with actual accepted evidence. If a runtime
+repair changes the qualified engine, revise the app qualification/identity checks
+honestly; never alter the historical pack qualification receipts. This app repair
+must not block already-qualified scoped pack publication.
+
+September 21 14:00 UTC scoped-matrix checkpoint: the first 610/1,126 cases
+include two resident-memory failures, `crossing-fl-ga-dirt` and
+`crossing-ga-fl-dirt`. Both completed routes and passed their other checks; RSS
+was 1,107,558,400 and 1,079,033,856 bytes against the unchanged 1,073,741,824-byte
+ceiling. Original receipts are `qualification/0502` and `0505` under
+`scoped-dev-68`. The matrix continues to collect all remaining evidence; its
+fail-closed gate must stop publication if these failures remain. This is a newly
+discovered non-California blocker, not grounds for rebuilding all pack data.
+
+Code inspection found a test/app mismatch: both RoutingProbe routing paths use
+RoadCompassStore's default capacity four, whereas NativeRoutingSession uses two.
+Extra retained node-distance tables may explain the small RSS excess, but this is
+an unproven hypothesis until replayed. A frozen private package copy changes only
+those two probe constructors to capacity two. Evidence and a serial waiting
+supervisor are in `scoped-dev-68/probe-app-cache-parity/`; initial supervisor PID
+38839. It waits for the original matrix to finish and for the heavy slot to clear,
+then builds one private probe and replays all matrix failures plus both FL/GA
+directions in all three styles. It preserves old receipts and records memory,
+time, road identity and unchanged audit results. Its subset coverage failure is
+intentional: these experimental receipts cannot qualify or publish the release.
+Inspect its state/process before any new heavy job. Main engine/probe sources and
+the running matrix's identity are unchanged. After results, review actual cause
+and required qualification/provenance; never merge changed-probe receipts into
+the old matrix or describe this hypothesis as a verified repair.
+
+September 21 16:10 UTC: the original matrix completed 1,126 cases: 1,124 passed,
+only the two FL/GA Dirt RSS failures remained. The isolated app-capacity-two
+probe passed all six FL/GA direction/style replays with identical road hashes.
+Dirt RSS fell to 1,001,668,608 bytes forward and 874,299,392 reverse, below the
+unchanged 1 GiB ceiling. Timing was 47.01/25.66 s. This repairs test/app cache
+configuration parity; pack bytes and app engine behavior are unchanged. Probe
+constructors now explicitly use capacity two. The new accepted identity is
+`probe-app-cache-parity/accepted-identity.json`; old receipts remain unchanged.
+
+Because eviction can change runtime across the suite, `deliver-app-parity.py`
+owns a fresh serial resource matrix in `qualification-app-cache-2`, then the
+same gated immutable publication/download verification. Reuse the accepted
+engine tests, pack seals, source/feature audits and app functional results; no
+datasets are rebuilt. `activate-and-deliver-app-parity.py` follows publication
+using the new identity and evidence directory; older supervisors are superseded.
+Inspect states/live PIDs before heavy work. Planner efficiency review still
+blocks physical delivery, not independently qualified pack publication.
+
+Owner diagnostic `dirt-app-debug-2026-09-21T155914Z.txt` identifies phone catalog
+`fabric-v4-20260919-01`, with Ontario absent. Both Ontario requests stopped at
+acquisition with an empty resolved catalog; neither downloaded nor searched.
+Quebec South consent was accepted 15:58:34, installation finished 15:58:50,
+then routing began. The 15:58:56 destination replacement cancelled that search.
+This is not evidence of old-pack format incompatibility. The misleading progress
+notice was real: early acquisition returns retained `fuelPlanningStatus`, which
+also hid the actual coverage error. Those returns now clear it; inactive routing
+cannot retain the notice. Pack installation has an observable prompt and a
+top-left installation progress bar using pack-file installation states, with
+fixed explanatory text rather than route-building hype. Routing still waits for
+verified installation. The bar is installation progress, not byte-transfer speed.
+37 focused acquisition/progress tests pass on the existing single simulator
+(`acquisition-progress-fix.xcresult`). These app fixes are not installed on the
+phone yet; full long-route/device acceptance remains outstanding.

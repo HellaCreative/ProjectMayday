@@ -207,6 +207,7 @@ enum PackAcquisitionEvaluator {
 @MainActor
 final class PackAcquisitionCoordinator {
     private(set) var consent: PackConsentPrompt?
+    private(set) var installing: PackConsentPrompt?
     private(set) var warnings: [PackRoutingWarning] = []
     private(set) var declinedDownloads: Set<String> = []
     private(set) var declinedUpdates: Set<String> = []
@@ -258,6 +259,8 @@ final class PackAcquisitionCoordinator {
     func acceptConsent() async throws {
         guard let prompt = consent else { return }
         consent = nil
+        installing = prompt
+        defer { installing = nil }
         RoutingDebugLog.shared.event(
             "pack install accepted regions=\(prompt.regionIDs.joined(separator: ",")) " +
                 "kind=\(prompt.kind == .update ? "update" : "download")"

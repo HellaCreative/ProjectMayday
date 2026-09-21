@@ -969,6 +969,19 @@ final class RoutePlannerModel {
     }
 
     var packConsent: PackConsentPrompt? { packAcquisition.consent }
+    var installingPacks: PackConsentPrompt? { packAcquisition.installing }
+    var packInstallProgress: Double {
+        guard let prompt = installingPacks, !prompt.regionIDs.isEmpty else { return 0 }
+        let sum = prompt.regionIDs.reduce(0.0) { total, id in
+            guard let region = graphPacks.regions.first(where: { $0.id == id }) else { return total }
+            switch region.install {
+            case .downloading(let fraction): return total + min(1, max(0, fraction))
+            case .installed: return total + (region.revisionState == .current ? 1 : 0)
+            default: return total
+            }
+        }
+        return sum / Double(prompt.regionIDs.count)
+    }
     var packRoutingWarnings: [PackRoutingWarning] { packAcquisition.warnings }
 
     func acceptPackConsent() async {
@@ -979,6 +992,7 @@ final class RoutePlannerModel {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             isRouting = false
             isAssemblingRoute = false
+            fuelPlanningStatus = nil
             if toast == Self.calculatingRouteToast { toast = nil }
         }
     }
@@ -1050,6 +1064,7 @@ final class RoutePlannerModel {
                 )
                 self.pendingPackBuild = (from: legIndex,through: throughLegIndex,reuse: reuse,replanFromStationID: replanFromStationID)
                 self.isRouting = false; self.isAssemblingRoute = false; self.toast = nil
+                self.fuelPlanningStatus = nil
                 return
             case .unavailable(let warning):
                 RoutingDebugLog.shared.event(
@@ -1058,6 +1073,10 @@ final class RoutePlannerModel {
                 )
                 self.isRouting = false; self.isAssemblingRoute = false
                 self.errorMessage = warning.message; self.toast = nil
+                self.fuelPlanningStatus = nil
+                self.cameraBuildGeneration = nil
+                self.cameraBuildLegKeys = []
+                self.mapState.cancelRouteBuildCamera()
                 return
             case .useInstalledPacks:
                 RoutingDebugLog.shared.event(
@@ -1682,8 +1701,8 @@ final class RoutePlannerModel {
         isRouting: Bool,
         toast: String?
     ) -> String? {
-        if let fuelPlanningStatus { return fuelPlanningStatus }
         guard isRouting else { return nil }
+        if let fuelPlanningStatus { return fuelPlanningStatus }
         if let toast, isPersistentProgressToast(toast) { return toast }
         return calculatingRouteToast
     }

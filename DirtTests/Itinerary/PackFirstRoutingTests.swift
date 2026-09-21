@@ -337,6 +337,8 @@ struct PackFirstRoutingTests {
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.packConsent?.regionIDs == ["ns"])
+        #expect(model.activeRouteProgressMessage == nil)
+        #expect(model.fuelPlanningStatus == nil)
         #expect(model.itinerary.waypoints.count == 2)
         #expect(live.routeRequests.isEmpty)
         #expect(pack.routeRequests.isEmpty)
@@ -425,6 +427,9 @@ struct PackFirstRoutingTests {
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.packConsent == nil)
+        #expect(model.activeRouteProgressMessage == nil)
+        #expect(model.fuelPlanningStatus == nil)
+        #expect(model.errorMessage?.contains("not available") == true)
         #expect(live.routeRequests.isEmpty)
         #expect(pack.routeRequests.isEmpty)
         #expect(coverage.installCalls.isEmpty)
