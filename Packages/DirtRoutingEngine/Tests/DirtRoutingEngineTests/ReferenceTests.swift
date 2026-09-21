@@ -49,6 +49,16 @@ struct ReferenceTests {
             }
         }
     }
+    @Test(arguments: cases) func bidirectionalProofNeverRejectsAnOraclePath(_ name: String) throws {
+        let oracle = try JSONDecoder().decode(Oracle.self, from: Data(contentsOf: fixture(name + ".json")))
+        let pack = try GraphPack(graphURL: fixture(name + ".graph.v4.bin"),
+                                geometryURL: fixture(name + ".geometry.v1.bin"))
+        let checker = try EndpointReachability(graph: pack, budget: .init())
+        for expected in oracle.routes where expected.distance != nil {
+            #expect(try checker.mayConnectBidirectionally(start: expected.start.native,
+                end: expected.end.native, budget: .init()))
+        }
+    }
     static let cases = ["legal-topology-canary", "legal-topology-forecourt", "legal-topology-forecourt-blocked", "legal-topology-restrictions"]
     func fixture(_ name: String) -> URL { Bundle.module.url(forResource: name, withExtension: nil, subdirectory: "Fixtures")! }
     @Test(arguments: cases) func decodeAndTransitionsMatchExecutedJavaScript(_ name: String) throws {

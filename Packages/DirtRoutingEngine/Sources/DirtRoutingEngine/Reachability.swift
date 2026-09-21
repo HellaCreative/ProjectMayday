@@ -198,6 +198,62 @@ final class EndpointReachability {
         }
     }
 
+    /// A negative result proves disconnection; a positive result still needs
+    /// the legal turn-aware search. Expand the smaller frontier so a nearby
+    /// destination or a small cut-off component does not flood an entire region.
+    /// Ignoring arrival restrictions and U-turns makes this deliberately optimistic.
+    func mayConnectBidirectionally(start: RoadMatch, end: RoadMatch,
+                                   budget: ComputationBudget) throws -> Bool {
+        if start.edge == end.edge { return true }
+        var marks = [UInt8](repeating: 0, count: graph.nodeCount)
+        var permission = [UInt8](repeating: 0, count: graph.edgeCount)
+        var forward: [Int32] = [], reverse: [Int32] = []
+        func seed(_ node: Int, side: UInt8, into frontier: inout [Int32]) -> Bool {
+            guard node >= 0 && node < marks.count else { return false }
+            if marks[node] & (3 ^ side) != 0 { return true }
+            if marks[node] & side == 0 { marks[node] |= side; frontier.append(Int32(node)) }
+            return false
+        }
+        if start.forward != true {
+            _ = seed(graph.endpoint(start.edge, from: true), side: 1, into: &forward)
+        }
+        if start.forward != false {
+            _ = seed(graph.endpoint(start.edge, from: false), side: 1, into: &forward)
+        }
+        if seed(graph.endpoint(end.edge, from: true), side: 2, into: &reverse)
+            || seed(graph.endpoint(end.edge, from: false), side: 2, into: &reverse) { return true }
+        func permits(_ edge: Int) -> Bool {
+            if permission[edge] == 0 { permission[edge] = permitsThrough(edge) ? 2 : 1 }
+            return permission[edge] == 2
+        }
+        var steps = 0
+        while !forward.isEmpty && !reverse.isEmpty {
+            try budget.check()
+            let advancing = forward.count <= reverse.count
+            let side: UInt8 = advancing ? 1 : 2
+            let frontier = advancing ? forward : reverse
+            var next: [Int32] = []
+            for value in frontier {
+                let node = Int(value)
+                let range = advancing
+                    ? Int(arcs.outStart[node])..<Int(arcs.outStart[node + 1])
+                    : Int(arcs.inStart[node])..<Int(arcs.inStart[node + 1])
+                for slot in range {
+                    steps += 1
+                    if steps & 4095 == 0 { try budget.check() }
+                    let arc = advancing ? slot : Int(arcs.inArcs[slot])
+                    let target = advancing ? Int(arcs.targets[arc]) : arcs.source(arc)
+                    if permits(Int(arcs.outEdge[arc])), seed(target, side: side, into: &next) { return true }
+                }
+                for sibling in graph.coincidentSiblings(node) {
+                    if seed(sibling, side: side, into: &next) { return true }
+                }
+            }
+            if advancing { forward = next } else { reverse = next }
+        }
+        return false
+    }
+
     func mayConnect(start: RoadMatch, end: RoadMatch, budget: ComputationBudget) throws -> Bool {
         if start.edge == end.edge {
             // PathSearch adds a direct arc between two positions on one road.

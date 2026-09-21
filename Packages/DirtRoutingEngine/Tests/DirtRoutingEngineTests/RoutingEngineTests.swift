@@ -165,6 +165,9 @@ struct RoutingEngineTests {
                 let pairwise = try checker.mayConnect(start: start, end: end, budget: .init())
                 let fixed = try checker.mayConnectAny(starts: [start], ends: [end], budget: .init())
                 #expect(fixed == pairwise)
+                if pairwise {
+                    #expect(try checker.mayConnectBidirectionally(start: start, end: end, budget: .init()))
+                }
             }
         }
         let starts = Array(matches.prefix(4)), ends = Array(matches.suffix(4))
@@ -283,11 +286,34 @@ struct RoutingEngineTests {
         #expect(try reachable.mayConnect(start: start, end: end, budget: .init()))
         let disconnected = try EndpointReachability(graph: graph, budget: .init()) { $0 == 1 }
         #expect(try !disconnected.mayConnect(start: start, end: end, budget: .init()))
+        #expect(try !disconnected.mayConnectBidirectionally(start: start, end: end, budget: .init()))
+        #expect(try reachable.mayConnectBidirectionally(start: start, end: end, budget: .init()))
         var request = RoutingRequest(start: start.coordinate, end: end.coordinate, style: .cleanest)
         request.options.counter = SearchCounter()
         let route = try RoutingEngine(pack: graph).route(request, start: start, end: end, budget: .init())
         #expect(route.segments.map(\.edge) == [0,1,2,3])
         #expect(route.searchSummary?.contains("paved/") == true)
+    }
+
+    @Test func bidirectionalProofStopsBeforeScanningAnIrrelevantBranch() throws {
+        let count = 2_000
+        let line = PolicyTests.Line(
+            nodes: (0...count).map { .init(longitude: Double($0) * 0.001, latitude: 0) },
+            edges: (0..<count).map { ($0, $0 + 1) },
+            surfaces: Array(repeating: "asphalt", count: count),
+            roads: Array(repeating: "tertiary", count: count))
+        let graph = try IndexedGraph(line)
+        let start = RoadMatch(edge: 0, coordinate: line.nodes[0], distanceMeters: 0,
+            alongMeters: 0, geometryMeters: line.distance(0), forward: true)
+        let end = RoadMatch(edge: 3, coordinate: line.nodes[4], distanceMeters: 0,
+            alongMeters: line.distance(3), geometryMeters: line.distance(3), forward: true)
+        var examined = Set<Int>()
+        let checker = try EndpointReachability(graph: graph, budget: .init()) {
+            examined.insert($0)
+            return true
+        }
+        #expect(try checker.mayConnectBidirectionally(start: start, end: end, budget: .init()))
+        #expect(examined.count < 10)
     }
 
     @Test func cleanestUsesAHighwayOnlyWhenNoBackRoadConnects() throws {

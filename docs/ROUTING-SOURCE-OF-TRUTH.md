@@ -3077,3 +3077,32 @@ recorded. Inspect its live state before starting another heavy job. Next work
 must address the remaining label/time floods and resident memory, then complete
 final integrated host/app and download/catalog qualification. No phone install
 or DEV publication has occurred; the seven-pack release remains intact.
+
+
+Bidirectional city-proof repair (September 21, 03:51 UTC heartbeat): the 14-case
+city-proof replay finished 1 pass / 13 failures. Its full reverse connectivity
+field caused new time failures in previously completed California/Florida cases:
+city screening alone consumed up to 36 seconds. This is a runtime regression,
+not evidence that the sealed pack factory output needs rebuilding.
+
+City screening now expands the smaller of directed forward/reverse node
+frontiers and caches each examined edge's city permission. It remains an
+optimistic negative proof; positive results still require legal turn-aware
+routing. All 177 engine tests pass, including oracle paths through directed and
+restricted fixtures, excluded interior gaps, available city bypasses, and an
+early-exit fixture with a large irrelevant branch.
+
+Evidence: `bidirectional-city-proof/` under the continental qualification folder.
+California north→south Balanced city screening fell from 22,284 ms to 623 ms,
+but the run still timed out after 50.86 seconds preparation and 1,304 MB RSS.
+California south→Arizona Balanced screening fell from 32,398 ms to 135 ms and
+completed in 39.25 seconds; roads, distance and 28,148 pops match the pre-proof
+baseline exactly. Its 1,095 MB RSS still fails the unchanged 1 GiB ceiling.
+Michigan→Ontario Clean remains passing at 53.09 seconds / 905.7 MB with identical
+roads and 1,997,438 pops. Preparation varies substantially between runs; these
+measurements establish reduced screening work, not general route speed claims.
+
+No candidate bytes, scoring, access rules, runtime gates or installed app catalog
+changed. Continental publication remains blocked pending remaining runtime
+repairs and final host/app/download qualification. See pipeline-state.json for
+the current serial experiment and resumption instructions before heavy work.

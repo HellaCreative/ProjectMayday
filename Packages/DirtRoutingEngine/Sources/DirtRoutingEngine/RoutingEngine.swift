@@ -202,7 +202,7 @@ public struct RoutingEngine: Sendable {
                             let b = graph.coordinate(node: graph.endpoint(edge, from: false))
                             return !blockingCores.contains { $0.intersects(a, b) }
                         }
-                        cityConnectionPossible = try checker.mayConnect(start: start, end: end, budget: budget)
+                        cityConnectionPossible = try checker.mayConnectBidirectionally(start: start, end: end, budget: budget)
                     }
                     if cityConnectionPossible == false { throw RoutingFailure.noPath }
                 }
