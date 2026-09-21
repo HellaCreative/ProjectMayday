@@ -3606,8 +3606,12 @@ provisional progress, discards failed/cancelled chain previews, and holds the
 true two-pack result until both halves succeed. Only Swift syntax parsing has
 passed; typechecking, tests and performance measurement have not run. Main
 engine/app sources are unchanged. This is preparation for removing duplicate
-planner guidance, not a completed performance repair. After the queued published
-app comparison, test the isolated prototype, then implement the ordered adapter
-bridge, exact metadata-preserving leg splits and planner consumption. The
-existing phone efficiency gate remains unapproved. Exact process ownership and
-resumption evidence are in `scoped-dev-68/check-in-20260921T2017.json`.
+planner guidance, not a completed performance repair. The 21:18 UTC resumption
+also prepares private NativeRoutingSession/RoutingSource overlays that carry
+these events through one ordered AsyncStream with structured cancellation and
+final-event draining. Their syntax parses; they have not been typechecked or
+executed. After the queued published app comparison, test the isolated engine
+observer and app bridge, then implement legal cut metadata, exact segment splits,
+buffered final tails and planner consumption. The existing phone efficiency gate
+remains unapproved. Exact process ownership and resumption evidence are in
+`scoped-dev-68/check-in-20260921T2118.json`.
