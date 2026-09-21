@@ -3336,8 +3336,8 @@ factory provenance was relabeled, and no unnecessary neighbor rebuild runs.
 
 After the 60 checks, inspect `neighbors/routes/qualification.json` and remaining
 resource failures. The borderline California Dirt cases need more memory
-headroom; do not rerun until passing or restart the rejected borrowing/cache
-experiments. Before promoting trial bytes, also compare affected owned-road
+headroom. Do not repeatedly rerun unchanged requests to obtain a passing sample,
+or restart the rejected borrowing/cache experiments. Before promoting trial bytes, also compare affected owned-road
 coverage and legal/feature facts across the old and new California union.
 Preserve all failed receipts and old datasets. Keep the 60-second/1-GiB gates
 unchanged. Continental publication and final integrated host/app/download/
