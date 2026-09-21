@@ -15,9 +15,20 @@ struct RoutePlannerModelItineraryTests {
         defer { prefs.restore() }
         FuelRangePrefs.notificationsEnabled = false
         let root = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["DIRT_QUALIFY_PACK_ROOT"]))
-        let regions = ["ns", "nb", "qc-s", "on-n", "mb", "sk", "ab", "bc"]
-        let directories = Dictionary(uniqueKeysWithValues: regions.map { ($0, root.appendingPathComponent($0)) })
-        let session = NativeRoutingSession()
+        let catalogData = try Data(contentsOf: root.deletingLastPathComponent().appendingPathComponent("manifest.json"))
+        let catalog = try #require(JSONSerialization.jsonObject(with: catalogData) as? [String: Any])
+        let catalogRows = try #require(catalog["regions"] as? [[String: Any]])
+        let published = Set(catalogRows.compactMap { $0["id"] as? String })
+        let roadNeighbors = try #require(catalog["roadNeighbors"] as? [String: [String]])
+            .mapValues { Set($0) }
+        func directories(for request: RouteRequest) throws -> [String: URL] {
+            let ids = GraphPackStore.requiredCatalogRoutingRegions(
+                for: request.locations.map { .init(latitude: $0.latitude, longitude: $0.longitude) },
+                published: published, roadNeighbors: roadNeighbors)
+            try #require(!ids.isEmpty)
+            return Dictionary(uniqueKeysWithValues: ids.map { ($0, root.appendingPathComponent($0)) })
+        }
+        var session: NativeRoutingSession? = NativeRoutingSession()
         let source = PlannerFakeRoutingSource(name: "pack")
         defer { source.routeHandler = nil }
         let map = MapState()
@@ -46,12 +57,14 @@ struct RoutePlannerModelItineraryTests {
                 #expect(model.routeCompletionID == initialCelebration)
             }
             let legStarted = ContinuousClock.now
-            let route = try await session.route(native, directories: directories)
+            let selectedDirectories = try directories(for: request)
+            let routingSession = try #require(session)
+            let route = try await routingSession.route(native, directories: selectedDirectories)
             #expect(route.limit == nil)
             #expect(route.end.coordinate.distance(to: native.end) <= 250)
             #expect(route.segments.allSatisfy { ![2, 5].contains($0.access) && $0.structure != "ferry" })
             #expect(ProcessMemory.megabytes().peak < 1_300)
-            print("CANDIDATE planner-800km request=\(requests) style=\(native.profile.style) seed=\(request.options?.sessionSeed ?? 0) meters=\(route.distanceMeters) elapsed=\(legStarted.duration(to: .now)) progress=\(model.activeRouteProgressMessage ?? "guide")")
+            print("CANDIDATE planner-800km request=\(requests) regions=\(selectedDirectories.keys.sorted().joined(separator: ",")) style=\(native.profile.style) seed=\(request.options?.sessionSeed ?? 0) meters=\(route.distanceMeters) elapsed=\(legStarted.duration(to: .now)) progress=\(model.activeRouteProgressMessage ?? "guide")")
             let response = NativeRoutingAdapter.response(route, style: native.profile.style)
             if let receiptRoot {
                 try JSONEncoder().encode(response).write(to: receiptRoot.appendingPathComponent("response-\(requests).json"), options: .atomic)
@@ -76,7 +89,31 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.activeRouteProgressMessage == nil)
         let last = try #require(model.activeResponses.last?.coordinates.last)
         #expect(GeoMath.meters(last, end) <= 250)
-        print("CANDIDATE planner-800km-complete legs=\(model.itinerary.legs.count) elapsed=\(started.duration(to: .now))")
+        let plannerDuration = started.duration(to: .now)
+        print("CANDIDATE planner-800km-complete legs=\(model.itinerary.legs.count) elapsed=\(plannerDuration)")
+        if ProcessInfo.processInfo.environment["DIRT_QUALIFY_COMPARE_LONG_PLANNER"] == "1" {
+            // Compare identical pins, seed, preferences, catalog and adapter.
+            // A fresh session prevents the direct baseline borrowing prepared
+            // graphs from the planner. Both runs use already-installed packs.
+            source.routeHandler = nil
+            session = nil
+            let directRequest = RidePreferenceContext.$current.withValue(
+                RidePreferences(wander: 1, avoidCities: true, avoidHighways: true, avoidFerries: true)) {
+                RouteRequest(profile: .dirt, locations: [
+                    .init(latitude: start.latitude, longitude: start.longitude, label: "Halifax"),
+                    .init(latitude: end.latitude, longitude: end.longitude, label: "Squamish")
+                ], allowUnknown: false, sessionSeed: model.planningSessionSeed,
+                    avoidMotorways: true, preferBackRoads: true, mapZoom: 3.5)
+            }
+            let directNative = try NativeRoutingAdapter.request(directRequest)
+            let directStarted = ContinuousClock.now
+            let direct = try await NativeRoutingSession().route(directNative, directories: directories(for: directRequest))
+            let directDuration = directStarted.duration(to: .now)
+            #expect(direct.limit == nil)
+            #expect(direct.end.coordinate.distance(to: directNative.end) <= 250)
+            #expect(direct.segments.allSatisfy { ![2, 5].contains($0.access) && $0.structure != "ferry" })
+            print("CANDIDATE planner-efficiency-comparison seed=\(model.planningSessionSeed) planner=\(plannerDuration) direct=\(directDuration) plannerMeters=\(model.activeResponses.reduce(0) { $0 + ($1.distanceMeters ?? 0) }) directMeters=\(direct.distanceMeters)")
+        }
     }
 
     @Test func everyLoopWaypointCanBeMovedWithoutRegeneratingLoop() async throws {
@@ -477,6 +514,11 @@ struct RoutePlannerModelItineraryTests {
     }
 
     @Test func activeRouteProgressSurvivesUnrelatedTapFeedback() {
+        #expect(RoutePlannerModel.activeRouteProgressMessage(
+            fuelPlanningStatus: RoutePlannerModel.craftingRouteToast,
+            isRouting: false,
+            toast: nil
+        ) == nil)
         #expect(RoutePlannerModel.activeRouteProgressMessage(
             fuelPlanningStatus: "Creating fuel stop 4",
             isRouting: true,

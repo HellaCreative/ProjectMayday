@@ -3657,3 +3657,43 @@ The private regression supervisor resumed as PID28864 after the upstream error;
 it waits for the app baseline, preserves the pre-existing Xcode indexer, and
 starts no competing heavy job. Planner efficiency remains unapproved. Resumption
 state: `scoped-dev-68/check-in-20260921T2321.json`.
+
+September 21 23:39 UTC: the published app checks passed on the existing single
+simulator. DEV source now uses fabric-v4-20260921-01. All 68 catalog/registry IDs
+and exclusions match, and representative NB/PE app download, verification, reuse
+and bridge routing passed. All 481 objects were separately downloaded and
+verified by the publisher. Evidence: published-app-identified-tests.xcresult,
+published-app-passed.json and published-app-build-reused-identified.json.
+
+Activation orchestration recovered from two additional tool-format mismatches:
+Xcode emitted the legacy top-level xctestrun target layout, and Swift Testing
+method filters require trailing parentheses. The zero-test attempt was rejected
+by required receipt markers; no app pass was claimed for it. The successful
+build was reused without recompilation. Current tail is
+continue-published-app-identified.py (PID31566), parked at
+published-app-verified-planner-efficiency-review-required. Do not restart older
+activation scripts.
+
+Controlled same-seed/settings, production catalog-selected Halifax–Squamish
+comparison: ten editable legs completed in 230.704 seconds versus 93.616 seconds
+for the direct route. The guide alone took 75.679 seconds; the planner still
+performs duplicate routing. Distances differ (11,790,274 versus 11,044,902 m),
+so this is a workflow comparison, not identical geometry. Three actual app tests
+passed, including incremental full-leg camera events and final-only celebration;
+performance remains unacceptable and phone delivery remains unapproved.
+Per-request receipts: controlled-planner-receipts/.
+
+September 21 23:42 UTC: private full-router regression reproduced the handover
+restriction fallback defect (incorrect 300 m cut inside an active via sequence).
+Forward-prefix repair retains the legal 400 m route. The repair and observer
+combined pass all 195 engine tests in planner-streaming-prototype/package.
+The first supervisor rejected a successful test because its summary matcher
+expected a different Swift Testing string; the original passing log was reused
+and continuation PID35111 completed the full suite. Evidence:
+baseline-handover-regression.log, repaired-handover-regression.log,
+private-engine-suite.log and qualification-state.json. Main runtime is unchanged.
+Next: typecheck/test the ordered app bridge, implement legal incremental editable
+leg assembly without duplicate guide routing, then measure the actual planner.
+A changed runtime requires a new identity and affected app/runtime evidence;
+never overwrite the passed pack qualification. California and physical riding
+acceptance remain outstanding.

@@ -27,6 +27,29 @@ struct NativeCandidateQualificationTests {
         let store = GraphPackStore()
         await store.refreshCatalog()
         #expect(store.lastManifestVersion == expected)
+        if let scopedIDs = ProcessInfo.processInfo.environment["DIRT_QUALIFY_EXPECTED_REGIONS"] {
+            let expectedIDs = Set(scopedIDs.split(separator: ",").map(String.init))
+            let (data, response) = try await URLSession.shared.data(from: AppConfig.packManifestURL)
+            #expect((response as? HTTPURLResponse)?.statusCode == 200)
+            let catalog = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(catalog["version"] as? String == expected)
+            let rows = try #require(catalog["regions"] as? [[String: Any]])
+            let publishedIDs = rows.compactMap { $0["id"] as? String }
+            #expect(Set(publishedIDs) == expectedIDs)
+            #expect(publishedIDs.count == expectedIDs.count)
+            #expect(Set(store.regions.filter { store.isRoutingPackPublished($0.id) }.map(\.id)) == expectedIDs)
+            let neighbors = try #require(catalog["roadNeighbors"] as? [String: [String]])
+            #expect(Set(neighbors.keys) == expectedIDs)
+            #expect(neighbors.values.allSatisfy { Set($0).isSubset(of: expectedIDs) })
+            for id in expectedIDs {
+                #expect(store.resolveCatalogRegionId(id) == id)
+            }
+            for excluded in ["ca-n", "ca-s"] where !expectedIDs.contains(excluded) {
+                #expect(!store.isRoutingPackPublished(excluded))
+                #expect(store.resolveCatalogRegionId(excluded) == nil)
+            }
+            print("CANDIDATE published-catalog-registry regions=\(expectedIDs.count) release=\(expected)")
+        }
         let islandTrip = [CLLocationCoordinate2D(latitude: 44.696743, longitude: -63.485973),
                           CLLocationCoordinate2D(latitude: 46.2382, longitude: -63.1316)]
         #expect(Set(store.requiredCatalogRoutingRegions(for: islandTrip)) == ["ns", "nb", "pe"])
