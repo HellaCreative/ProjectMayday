@@ -3596,3 +3596,18 @@ the publisher revalidates local evidence before immutable upload and downloaded
 hash verification. Publication completion, app catalog activation, published app
 checks and phone installation are not yet established. The existing activation
 tail remains queued; do not restart qualification or create competing jobs.
+
+The September 21 20:17 UTC resumption confirms the same publication/activation
+owners are live. Upload/download verification continues; its completion is not
+yet established. A private observer prototype is prepared in
+`scoped-dev-68/planner-streaming-prototype/`, including a source-bound patch and
+four lifecycle regressions. It exposes legally validated regional stages as
+provisional progress, discards failed/cancelled chain previews, and holds the
+true two-pack result until both halves succeed. Only Swift syntax parsing has
+passed; typechecking, tests and performance measurement have not run. Main
+engine/app sources are unchanged. This is preparation for removing duplicate
+planner guidance, not a completed performance repair. After the queued published
+app comparison, test the isolated prototype, then implement the ordered adapter
+bridge, exact metadata-preserving leg splits and planner consumption. The
+existing phone efficiency gate remains unapproved. Exact process ownership and
+resumption evidence are in `scoped-dev-68/check-in-20260921T2017.json`.
