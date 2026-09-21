@@ -3193,3 +3193,41 @@ before starting heavy work. Remaining California RSS/preparation and Ontario
 reverse search need attention, then final integrated host/app/download/catalog
 qualification. The complete 70-region candidate remains unpublished; no app
 catalog, installed phone build, pack bytes or rollback release changed.
+
+
+Directed endpoint distance guidance (September 21, 06:54 UTC heartbeat): the
+previous affected replay finished 5 passes / 5 failures. California south→Arizona
+Balanced/Clean passed on that run; four California split-crossing cases exceeded
+RSS and Ontario→Michigan Balanced timed out. The three previously failing
+California Dirt cases remain open outside that Balanced/Clean subset.
+
+The city-cost lower bound now respects which end of a one-way destination road
+can legally reach the pin and which departure side the matched start permits.
+It keeps destination partial-road costs relaxed, while real-node traversal of
+the start road pays its existing full cost. The virtual start remains unbounded.
+The bound also excludes through-traversal of destination/customer-only roads
+outside the exact search's endpoint approach sets and, with Unknown off, full
+unknown roads longer than the existing 100 m connector cap. Short unknown chains,
+turn restrictions and endpoint partial distances remain optimistic; actual search
+still applies every legal rule. No style score, route limit or pin changed.
+
+All 185 engine tests pass, including directional endpoint seeding and preservation
+of customer/destination/Unknown opt-in exceptions. Final measurements are in
+`city-bound-endpoint-directed/`; the preceding through-access-only experiment is
+separate in `city-bound-endpoint-access/`. Ontario→Michigan Balanced now passes
+in 46.62 seconds / 760.1 MB RSS / 385,367 pops (previously 60 seconds and
+2,796,032 pops without completion). Michigan→Ontario Balanced passes in 30.13 s /
+747.4 MB / 576,722 pops; Texas northeast→Oklahoma Balanced passes in 16.99 s /
+507.0 MB / 40,742 pops. Preparation is variable, so these are named workload
+measurements, not general speed claims. Michigan's equal-cost selected road
+sequence changed; its distance stayed 369,110.034 m and the legal/shape audit
+passes. The unchanged NS short Dirt/Balanced/Clean controls retain their road
+digests, distances and pops. The stronger bound guides legal search; it does not
+promise a particular route geometry across equal-cost alternatives.
+
+Replay the affected Balanced/Clean subset on this final probe, reusing the three
+identical request/probe measurements above. California split memory/preparation
+remains the next repair area. Final integrated host/app/download/catalog gates
+remain outstanding; all 70 packs and 155 seams are sealed but unpublished. The
+seven-pack device catalog and rollback are untouched; no Xcode/device build on
+this heartbeat. Pipeline-state.json records the live serial job and next steps.

@@ -439,7 +439,9 @@ public struct PathSearch: Sendable {
             let began = ContinuousClock.now
             cityBound = try RoadCompass.cityDistanceLowerBound(start: start, end: end, pack: pack,
                 cores: blockingCores, multiplier: policy.style == .cleanest ? (policy.avoidMajorHighways ? 10 : 2) : 120,
-                avoidFerries: access.avoidFerries, budget: budget)
+                avoidFerries: access.avoidFerries, access: access,
+                allowsUnknownConnectors: policy.style != .cleanest,
+                customerStart: customerStart, customerEnd: customerEnd, budget: budget)
             options.counter?.recordStage("cityDistanceBound", since: began)
         }
         func heapCost(_ pathCost: Double, _ node: Int) -> Double {

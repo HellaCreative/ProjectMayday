@@ -10,6 +10,7 @@ struct PolicyTests {
         var roads: [String]
         var access: UInt8 = 0
         var edgeAccess: [UInt8]? = nil
+        var reverseAccess: [UInt8]? = nil
         var nodeCount: Int { nodes.count }
         var edgeCount: Int { edges.count }
         var urbanCores: [GeographicBox] = []
@@ -28,7 +29,7 @@ struct PolicyTests {
         func distance(_ edge: Int) -> Double { nodes[edges[edge].0].distance(to: nodes[edges[edge].1]) }
         func attributes(_ edge: Int) -> UInt16 { 0 }
         func crossingTime(_ edge: Int) -> Double { 0 }
-        func accessCode(_ edge: Int,forward: Bool) -> UInt8 { edgeAccess?[edge] ?? access }
+        func accessCode(_ edge: Int,forward: Bool) -> UInt8 { (!forward ? reverseAccess?[edge] : nil) ?? edgeAccess?[edge] ?? access }
         func surfaceLeaf(_ edge: Int) -> String { surfaces[edge] }
         func roadClass(_ edge: Int) -> String { roads[edge] }
         var structures: [String]? = nil

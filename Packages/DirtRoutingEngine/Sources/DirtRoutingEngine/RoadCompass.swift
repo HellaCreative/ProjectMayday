@@ -79,11 +79,13 @@ public struct RoadCompass: Sendable {
     /// Optimistic cost-to-go for the distance objective after a necessary-city
     /// crossing. Keep the existing city tax, while relaxing endpoint/unknown
     /// access and turn state. Hard directional closures and ferry avoidance stay.
-    /// Endpoint roads cost zero here: their virtual arcs use partial decoded
-    /// geometry, so a full-road cost cannot safely bound them.
+    /// Destination roads cost zero here: their virtual arrival arcs use partial
+    /// geometry. The virtual start has no bound; real nodes pay full road cost.
     static func cityDistanceLowerBound(start: RoadMatch, end: RoadMatch,
                                       pack: any RoadGraph, cores: [GeographicBox],
                                       multiplier: Double, avoidFerries: Bool = false,
+                                      access: AccessPolicy? = nil, allowsUnknownConnectors: Bool = true,
+                                      customerStart: Set<Int> = [], customerEnd: Set<Int> = [],
                                       budget: ComputationBudget) throws -> [Double] {
         let arcs: ArcIndex
         if let indexed = pack as? IndexedGraph { arcs = try indexed.arcIndex(budget: budget) }
@@ -95,10 +97,20 @@ public struct RoadCompass: Sendable {
         var remaining = [Double](repeating: .infinity, count: pack.nodeCount)
         var urban = [UInt8](repeating: 0, count: pack.edgeCount)
         var heap = CompassHeap()
-        for node in [pack.endpoint(end.edge, from: true), pack.endpoint(end.edge, from: false)] {
+        func possibleEndpoint(_ edge: Int, forward: Bool, isStart: Bool) -> Bool {
+            let code = pack.accessCode(edge, forward: forward)
+            guard code == 0 || code == 1 || code == 3 || code == 4 else { return false }
+            guard let access else { return true }
+            if code == 1 && !access.allowUnknown { return allowsUnknownConnectors }
+            return access.permits(code, isStart: isStart, isEnd: !isStart)
+        }
+        for forward in [true, false] where possibleEndpoint(end.edge, forward: forward, isStart: false) {
+            let node = pack.endpoint(end.edge, from: forward)
             if remaining[node] != 0 { remaining[node] = 0; heap.push(node: node, meters: 0) }
         }
-        let startNodes = [pack.endpoint(start.edge, from: true), pack.endpoint(start.edge, from: false)]
+        let startNodes = [true, false].filter {
+            (start.forward == nil || start.forward == $0) && possibleEndpoint(start.edge, forward: $0, isStart: true)
+        }.map { pack.endpoint(start.edge, from: !$0) }
         var ceiling = Double.infinity
         var pops = 0
         while let current = heap.pop() {
@@ -120,8 +132,19 @@ public struct RoadCompass: Sendable {
                 let code = pack.accessCode(edge, forward: arcs.forward(arc))
                 guard code == 0 || code == 1 || code == 3 || code == 4 else { continue }
                 if avoidFerries && pack.structure(edge) == "ferry" { continue }
+                if let access {
+                    if code == 1 && !access.allowUnknown {
+                        // A full unknown road longer than the connector cap cannot
+                        // occur in any legal path. Keep endpoint roads relaxed:
+                        // their virtual pieces can be shorter than the full road.
+                        guard allowsUnknownConnectors else { continue }
+                        if edge != start.edge && edge != end.edge && arcs.distance(arc) > 100 { continue }
+                    } else if !access.permits(code,
+                        isStart: edge == start.edge || customerStart.contains(edge),
+                        isEnd: edge == end.edge || customerEnd.contains(edge)) { continue }
+                }
                 var cost = arcs.distance(arc)
-                if edge == start.edge || edge == end.edge { cost = 0 }
+                if edge == end.edge { cost = 0 }
                 else {
                     if urban[edge] == 0 {
                         let a = pack.coordinate(node: pack.endpoint(edge, from: true))
