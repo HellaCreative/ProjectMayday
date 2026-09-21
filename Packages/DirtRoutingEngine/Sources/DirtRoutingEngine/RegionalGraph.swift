@@ -382,13 +382,14 @@ public final class RegionalGraph: RoadGraph {
             return lo
         }
         var identities: [SeamDocument.EdgeProof:Int] = [:], edgeMap: [Int:Int] = [:]
+        let geometryReaders = graphs.map(GraphPack.GeometryReader.init)
         for global in borderEdges.sorted() {
             try budget.check()
             let p = owner(global,eb), local = global-eb[p], key = proof(p,local)
             if let first = identities[key] {
                 let q = owner(first,eb), original = first-eb[q]
                 guard graphs[q].distance(original) == graphs[p].distance(local),
-                      graphs[q].polyline(original) == graphs[p].polyline(local) else {
+                      try geometryReaders[q].matches(original, other: geometryReaders[p], edge: local, budget: budget) else {
                     throw RoutingFailure.invalidPack(
                         "shared road geometry differs regions=\(documents[q].regionId),\(documents[p].regionId) " +
                         "way=\(key.osmWayId) from=\(key.fromOsmNodeId) to=\(key.toOsmNodeId) " +

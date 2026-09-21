@@ -2979,3 +2979,28 @@ mapped polylines for each shared edge. Any bounded streaming comparison must
 preserve exact decoded-coordinate equality, directions, and legal seam proof;
 do not simply skip verification or loosen the RSS/time thresholds. The
 pipeline state records the live diagnostic supervisor and next resume step.
+
+Bounded shared-road geometry proof (September 21 heartbeat): accepted as a
+residency improvement only. Regional joins now compare the exact decoded
+Float/Double coordinate values through one 64 KiB buffered descriptor reader
+per pack, rather than materializing every overlapping polyline and faulting all
+its mapped shape pages into the process. Distance, source identity, reciprocal
+seam, direction, access and turn checks remain binding. Readers retain the same
+verified descriptor across pathname replacement; no file/pack bytes change.
+All 174 engine tests pass, including bounds/block crossings, descriptor identity,
+mixed geometry formats, signed zero/NaN semantics, cancellation and rejecting
+shared-road shape conflicts even when distances match.
+
+Evidence: `.build/continental-qualification-20260920/streamed-geometry-proof/`
+and its `recheck` subdirectory. California north→south Balanced peak RSS is
+1,379.9 / 1,395.7 MB streamed versus 1,594.3 / 1,525.4 MB before (130–214 MB
+less). The completed comparisons retain the same road digest, 154,377 m and
+312,874 search pops. Florida→Georgia retains its digest, distance and 5,544
+pops; its memory varies across runs without a demonstrated reduction. Physical
+footprint does not show a consistent improvement. Timings depend strongly on
+run order: one streamed California recheck reaches its 60-second limit, so no
+latency improvement or gate pass is claimed. `accepted-review.json` preserves
+all eight measurements and this limitation. The next serial replay covers only
+the 20 previously failed cases; broader final host/app qualification remains
+required. The 70-region candidate is still unpublished, the seven-pack release
+is retained, and this heartbeat does not install anything on White.

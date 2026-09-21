@@ -83,6 +83,33 @@ extension Int64: PackedInteger {
         source = handle
     }
     init(data: Data) { self.data = data; source = nil; mappedBaseAddress = nil; mapping = nil }
+    /// Serial, bounded reads for exhaustive validation. Unlike mapped column
+    /// reads, these do not make every visited geometry page process-resident.
+    /// Keep one reader per file for the duration of a join, never a global cache.
+    final class BufferedReader {
+        private let file: BinaryFile
+        private let blockSize: Int
+        private var start = -1
+        private var bytes = Data()
+        var bufferedByteCount: Int { bytes.count }
+
+        init(_ file: BinaryFile, blockSize: Int = 65_536) {
+            precondition(blockSize >= 8)
+            self.file = file; self.blockSize = blockSize
+        }
+
+        func read<T: PackedInteger>(_ offset: Int, as: T.Type) throws -> T {
+            let width = MemoryLayout<T>.size
+            try file.range(offset, width)
+            if start < 0 || offset < start || offset - start > bytes.count - width {
+                let nextStart = (offset / blockSize) * blockSize
+                // An unaligned scalar may straddle the nominal block boundary.
+                bytes = try file.copiedBytes(at: nextStart, count: min(blockSize + 7, file.data.count - nextStart))
+                start = nextStart
+            }
+            return bytes.withUnsafeBytes { T.loadLittleEndian($0.baseAddress!.advanced(by: offset - start)) }
+        }
+    }
     /// Read a bounded slice from the descriptor that was verified, without
     /// faulting the whole mapped JSON artifact into resident memory.
     func copiedBytes(at offset: Int, count: Int) throws -> Data {

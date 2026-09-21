@@ -4,6 +4,61 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct PreparationMemoryTests {
+    @Test func bufferedFileReadsStayBoundedAndRetainVerifiedDescriptor() throws {
+        let original = Data((0..<150_013).map { UInt8($0 % 251) })
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try original.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let file = try BinaryFile(url: url), reader = BinaryFile.BufferedReader(file, blockSize: 64)
+        // Replacing the pathname must not redirect reads away from verified bytes.
+        try Data(repeating: 0, count: original.count).write(to: url, options: .atomic)
+        for offset in [0, 61, 62, 63, 64, 120, 90_003, original.count - 8, 11] {
+            let expected = original.withUnsafeBytes { UInt64.loadLittleEndian($0.baseAddress!.advanced(by: offset)) }
+            #expect(try reader.read(offset, as: UInt64.self) == expected)
+            #expect(reader.bufferedByteCount <= 71)
+        }
+        #expect(throws: RoutingFailure.self) { try reader.read(original.count - 7, as: UInt64.self) }
+        #expect(throws: RoutingFailure.self) { try reader.read(-1, as: UInt32.self) }
+        #expect(try reader.read(11, as: UInt64.self) == file.read(11, as: UInt64.self))
+    }
+
+    @Test func streamedGeometryEqualityMatchesDecodedCoordinatesAcrossFormats() throws {
+        let fixtures = ReferenceTests(), raw = try RegionalGraphTests().graph()
+        let graphFile = try BinaryFile(url: fixtures.fixture("legal-topology-restrictions.graph.v4.bin"))
+        let original = try Data(contentsOf: fixtures.fixture("legal-topology-restrictions.geometry.v1.bin"))
+        func open(double: Bool, first: Double? = nil) throws -> GraphPack {
+            var geometry = Data(original.prefix(16 + (raw.edgeCount + 1) * 4))
+            geometry[6] = double ? 1 : 0; geometry[7] = 0
+            let width = double ? 8 : 4
+            while geometry.count % width != 0 { geometry.append(0) }
+            var scalars = (0..<raw.edgeCount).flatMap { raw.polyline($0).flatMap { [$0.longitude, $0.latitude] } }
+            if let first { scalars[0] = first }
+            for value in scalars {
+                if double {
+                    var bits = value.bitPattern.littleEndian
+                    withUnsafeBytes(of: &bits) { geometry.append(contentsOf: $0) }
+                } else {
+                    var bits = Float(value).bitPattern.littleEndian
+                    withUnsafeBytes(of: &bits) { geometry.append(contentsOf: $0) }
+                }
+            }
+            var graph = graphFile.data
+            let hashAt = Int(try graphFile.read(136, as: UInt32.self))
+            graph.replaceSubrange(hashAt..<(hashAt + 32), with: Data(SHA256.hash(data: geometry)))
+            return try GraphPack(graph: BinaryFile(data: graph), geometry: BinaryFile(data: geometry), budget: .init())
+        }
+        let packs = try [open(double: false), open(double: true), open(double: true, first: -0.0),
+                         open(double: false, first: 0), open(double: true, first: .nan)]
+        for left in packs { for right in packs {
+            let a = GraphPack.GeometryReader(left), b = GraphPack.GeometryReader(right)
+            for edge in 0..<left.edgeCount {
+                #expect(try a.matches(edge, other: b, edge: edge, budget: .init()) == (left.polyline(edge) == right.polyline(edge)))
+            }
+        } }
+        let a = GraphPack.GeometryReader(raw)
+        #expect(throws: RoutingFailure.self) { try a.matches(0, other: a, edge: 0, budget: .init(seconds: 0)) }
+    }
+
     @Test func chunkedSearchHistoryKeepsIndicesAndIndependentCopies() {
         var history = ChunkedArray<Int>()
         #expect(history.count == 0)

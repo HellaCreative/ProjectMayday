@@ -1,8 +1,35 @@
 import Foundation
+import CryptoKit
 import Testing
 @testable import DirtRoutingEngine
 
 struct RegionalGraphTests {
+    @Test func sharedRoadGeometryConflictCannotJoinEvenWithMatchingDistance() throws {
+        let original = try graph(), fixtures = ReferenceTests()
+        let graphFile = try BinaryFile(url: fixtures.fixture("legal-topology-restrictions.graph.v4.bin"))
+        var geometry = try Data(contentsOf: fixtures.fixture("legal-topology-restrictions.geometry.v1.bin"))
+        let edge = try #require(original.outgoing(0).first).edge
+        let offset = original.geometryCoordinatesOffset + Int(original.geometryOffsets[edge]) * (original.geometryIsDouble ? 8 : 4)
+        if original.geometryIsDouble {
+            var changed = (original.polyline(edge)[0].longitude + 0.001).bitPattern.littleEndian
+            withUnsafeBytes(of: &changed) { geometry.replaceSubrange(offset..<(offset + 8), with: $0) }
+        } else {
+            var changed = Float(original.polyline(edge)[0].longitude + 0.001).bitPattern.littleEndian
+            withUnsafeBytes(of: &changed) { geometry.replaceSubrange(offset..<(offset + 4), with: $0) }
+        }
+        var graphBytes = graphFile.data
+        let hashAt = Int(try graphFile.read(136, as: UInt32.self))
+        graphBytes.replaceSubrange(hashAt..<(hashAt + 32), with: Data(SHA256.hash(data: geometry)))
+        let different = try GraphPack(graph: BinaryFile(data: graphBytes), geometry: BinaryFile(data: geometry), budget: .init())
+        #expect(original.distance(edge) == different.distance(edge))
+        do {
+            _ = try RegionalGraph(graphs: [original, different], documents: documents(original), budget: .init())
+            Issue.record("Shared road shape conflicts must remain fatal")
+        } catch RoutingFailure.invalidPack(let detail) {
+            #expect(detail.contains("shared road geometry differs"))
+        }
+    }
+
     func graph() throws -> GraphPack {
         let fixtures = ReferenceTests()
         return try GraphPack(graphURL: fixtures.fixture("legal-topology-restrictions.graph.v4.bin"),

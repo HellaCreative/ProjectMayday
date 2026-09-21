@@ -300,6 +300,34 @@ public final class GraphPack: Sendable {
               x0 <= x1, y0 <= y1 else { throw RoutingFailure.invalidPack("geometry grid bounds") }
         return MatchingGridBounds(x0: x0, x1: x1, y0: y0, y1: y1)
     }
+    /// A join validates many shared roads but does not need their decoded shapes
+    /// retained or their mapped pages resident. Compare the same decoded scalar
+    /// values as polyline equality, including Float/Double packs and signed zero.
+    final class GeometryReader {
+        private let pack: GraphPack
+        private let reader: BinaryFile.BufferedReader
+        init(_ pack: GraphPack) { self.pack = pack; reader = .init(pack.geometry) }
+
+        func matches(_ edge: Int, other: GeometryReader, edge otherEdge: Int,
+                     budget: ComputationBudget) throws -> Bool {
+            let start = Int(pack.geometryOffsets[edge]), end = Int(pack.geometryOffsets[edge + 1])
+            let otherStart = Int(other.pack.geometryOffsets[otherEdge])
+            guard end - start == Int(other.pack.geometryOffsets[otherEdge + 1]) - otherStart else { return false }
+            for i in 0..<(end - start) {
+                if i & 1023 == 0 { try budget.check() }
+                guard try value(start + i) == other.value(otherStart + i) else { return false }
+            }
+            return true
+        }
+
+        private func value(_ index: Int) throws -> Double {
+            if pack.geometryIsDouble {
+                return Double(bitPattern: try reader.read(pack.geometryCoordinatesOffset + index * 8, as: UInt64.self))
+            }
+            return Double(Float(bitPattern: try reader.read(pack.geometryCoordinatesOffset + index * 4, as: UInt32.self)))
+        }
+    }
+
     public func polyline(_ edge: Int) -> [Coordinate] {
         let start = Int(geometryOffsets[edge]), end = Int(geometryOffsets[edge+1])
         return stride(from: start,to: end,by: 2).map { i in
