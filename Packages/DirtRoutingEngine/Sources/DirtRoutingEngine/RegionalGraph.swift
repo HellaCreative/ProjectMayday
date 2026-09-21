@@ -121,6 +121,48 @@ struct SeamDocument: Decodable, Sendable {
         func index(before index: Int) -> Int { index - 1 }
         mutating func append(_ anchor: Anchor) { storage.append(anchor) }
     }
+    /// Retain only a hash and row number for reciprocal lookup, rather than
+    /// copying every wide proof into a Set. Hashes narrow the lookup; the original
+    /// node, edge and proof string are always compared, including collisions.
+    struct ReciprocalIndex {
+        private struct Entry { let hash: Int; let row: Int }
+        private let anchors: Anchors
+        private let entries: [Entry]
+        private let hash: (Anchor) -> Int
+        static func key(_ anchor: Anchor) -> Int {
+            var h = Hasher()
+            h.combine(anchor.osmNodeId); h.combine(anchor.edge); h.combine(anchor.proof)
+            return h.finalize()
+        }
+        init(_ anchors: Anchors, budget: ComputationBudget,
+             hash: @escaping (Anchor) -> Int = Self.key) throws {
+            self.anchors = anchors; self.hash = hash
+            var entries: [Entry] = []
+            entries.reserveCapacity(anchors.count)
+            for (row, anchor) in anchors.enumerated() {
+                if row & 1023 == 0 { try budget.check() }
+                entries.append(.init(hash: hash(anchor), row: row))
+            }
+            entries.sort { $0.hash == $1.hash ? $0.row < $1.row : $0.hash < $1.hash }
+            try budget.check()
+            self.entries = entries
+        }
+        func contains(_ anchor: Anchor) -> Bool {
+            let key = hash(anchor)
+            var lo = 0, hi = entries.count
+            while lo < hi {
+                let mid = lo + (hi - lo) / 2
+                if entries[mid].hash < key { lo = mid + 1 } else { hi = mid }
+            }
+            while lo < entries.count && entries[lo].hash == key {
+                let candidate = anchors[entries[lo].row]
+                if candidate.osmNodeId == anchor.osmNodeId && candidate.edge == anchor.edge
+                    && candidate.proof == anchor.proof { return true }
+                lo += 1
+            }
+            return false
+        }
+    }
     let schemaVersion: String
     let fabricReleaseId: String
     let sourceEpoch: String
@@ -274,24 +316,14 @@ public final class RegionalGraph: RoadGraph {
                                  only: r.only, mask: r.vehicleMask)
             })
         }
-        struct ReciprocalProof: Hashable {
-            let node: String
-            let edge: SeamDocument.EdgeProof
-            let proof: String
-        }
-        var reciprocal = [[String: Set<ReciprocalProof>]]()
+        var reciprocal = [[String: SeamDocument.ReciprocalIndex]]()
         for (index, document) in documents.enumerated() {
-            var neighbors: [String: Set<ReciprocalProof>] = [:]
+            var neighbors: [String: SeamDocument.ReciprocalIndex] = [:]
             for (neighbor, anchors) in document.neighbors {
                 // Each pair is validated once, left < right, against the right
-                // member's reciprocal set. The other set is never consulted.
+                // member's reciprocal index. The other index is never consulted.
                 guard let other = regionIndices[neighbor], other < index else { continue }
-                var rows = Set<ReciprocalProof>()
-                for (index, anchor) in anchors.enumerated() {
-                    if index & 1023 == 0 { try budget.check() }
-                    rows.insert(.init(node: anchor.osmNodeId, edge: anchor.edge, proof: anchor.proof))
-                }
-                neighbors[neighbor] = rows
+                neighbors[neighbor] = try .init(anchors, budget: budget)
             }
             reciprocal.append(neighbors)
         }
@@ -308,8 +340,7 @@ public final class RegionalGraph: RoadGraph {
                           anchor.gapMeters.isFinite, anchor.gapMeters >= 0, anchor.gapMeters <= 2,
                           anchor.coordinate.count == 2,
                           let ln = located[left][anchor.osmNodeId], let rn = located[right][anchor.osmNodeId],
-                          reciprocal[right][document.regionId]?.contains(.init(
-                              node: anchor.osmNodeId, edge: anchor.edge, proof: anchor.proof)) == true else { throw RoutingFailure.invalidPack("unreciprocated seam proof") }
+                          reciprocal[right][document.regionId]?.contains(anchor) == true else { throw RoutingFailure.invalidPack("unreciprocated seam proof") }
                     let lg = graphs[left], rg = graphs[right]
                     let stated = Coordinate(longitude: anchor.coordinate[0],latitude: anchor.coordinate[1])
                     let leftPoint = lg.coordinate(node: ln), rightPoint = rg.coordinate(node: rn)

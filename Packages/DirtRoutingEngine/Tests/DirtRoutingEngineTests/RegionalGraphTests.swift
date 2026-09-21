@@ -4,6 +4,40 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct RegionalGraphTests {
+    @Test func compactReciprocalIndexAlwaysChecksFullProofEvenOnHashCollision() throws {
+        let graph = try graph()
+        let anchors = try #require(documents(graph).first?.neighbors.values.first)
+        let copies = SeamDocument.Anchors(Array(anchors) + Array(anchors))
+        let indexes = [try SeamDocument.ReciprocalIndex(copies, budget: .init()),
+                       try SeamDocument.ReciprocalIndex(copies, budget: .init(), hash: { _ in 0 })]
+        for anchor in anchors {
+            let changedNode = SeamDocument.Anchor(coordinate: [anchor.coordinate[0], anchor.coordinate[1]],
+                gapMeters: anchor.gapMeters, osmNodeId: "wrong-node", osmWayId: anchor.osmWayId,
+                proof: anchor.proof, edge: anchor.edge, barrierDecision: anchor.barrierDecision)
+            let changedProof = SeamDocument.Anchor(coordinate: [anchor.coordinate[0], anchor.coordinate[1]],
+                gapMeters: anchor.gapMeters, osmNodeId: anchor.osmNodeId, osmWayId: anchor.osmWayId,
+                proof: "unverified", edge: anchor.edge, barrierDecision: anchor.barrierDecision)
+            let edge = SeamDocument.EdgeProof(osmWayId: anchor.edge.osmWayId,
+                fromOsmNodeId: anchor.edge.fromOsmNodeId, toOsmNodeId: anchor.edge.toOsmNodeId,
+                accessForward: 255, accessReverse: anchor.edge.accessReverse,
+                layer: anchor.edge.layer, structureLeaf: anchor.edge.structureLeaf)
+            let changedAccess = SeamDocument.Anchor(coordinate: [anchor.coordinate[0], anchor.coordinate[1]],
+                gapMeters: anchor.gapMeters, osmNodeId: anchor.osmNodeId, osmWayId: anchor.osmWayId,
+                proof: anchor.proof, edge: edge, barrierDecision: anchor.barrierDecision)
+            for index in indexes {
+                #expect(index.contains(anchor))
+                #expect(!index.contains(changedNode))
+                #expect(!index.contains(changedProof))
+                #expect(!index.contains(changedAccess))
+            }
+        }
+        let empty = try SeamDocument.ReciprocalIndex(.init(), budget: .init())
+        #expect(!empty.contains(try #require(anchors.first)))
+        #expect(throws: RoutingFailure.self) {
+            try SeamDocument.ReciprocalIndex(copies, budget: .init(seconds: 0))
+        }
+    }
+
     @Test func sharedRoadGeometryConflictCannotJoinEvenWithMatchingDistance() throws {
         let original = try graph(), fixtures = ReferenceTests()
         let graphFile = try BinaryFile(url: fixtures.fixture("legal-topology-restrictions.graph.v4.bin"))

@@ -3231,3 +3231,38 @@ remains the next repair area. Final integrated host/app/download/catalog gates
 remain outstanding; all 70 packs and 155 seams are sealed but unpublished. The
 seven-pack device catalog and rollback are untouched; no Xcode/device build on
 this heartbeat. Pipeline-state.json records the live serial job and next steps.
+
+
+Compact reciprocal proof lookup (same heartbeat continuation): the directed
+endpoint replay finished 4 passes / 6 failures. All three Balanced border search
+failures now pass; California south→Arizona and both California split directions
+still exceed RSS in that replay. Together with the three California Dirt cases,
+nine California requests remain the focused runtime workload.
+
+Regional joining now indexes reciprocal proofs with sorted hash/row pairs and
+retains the original chunked anchors, instead of copying wide proof values into
+a hash set. Every possible match still compares the complete original node,
+edge and proof string; a hash collision cannot establish reciprocity. All 186
+engine tests pass, including deliberately colliding hashes, duplicates, altered
+access/proof/node rejection, empty indexes, cancellation and existing seam
+geometry/restriction tests.
+
+`compact-reciprocal-index/` and `recheck/` contain exact source/probe identities
+and measurements. The paired California north→south Balanced comparison retains
+154,377 m, 312,874 pops and its directed-road digest. Peak physical footprint is
+659.6→585.4 MB; RSS is 1,226.9→1,251.0 MB, so this is a retained-storage saving,
+**not an RSS-gate fix**. Wall time is 56.29→42.65 s, but preparation is variable:
+the earlier new-probe attempt timed out after 50.96 s preparation. That failed
+receipt remains in the affected replay; do not substitute the warmer repeat to
+claim acceptance. California south→Arizona Balanced passes at 42.64 s / 937.4 MB;
+California south→north Clean completes at 50.29 s / 1,219.3 MB and fails RSS.
+Both completed cases retain their prior road digests, distances and pop counts.
+
+Continue the nine-case California replay using the three original exact-probe
+receipts, including the timeout, then inspect preparation and joined adjacency
+storage. Joined forward source/edge/target/direction columns still duplicate
+facts available in the mapped regional packs; any borrowing experiment must
+retain every alias row, directed arc and reverse lookup exactly and measure its
+CPU cost. This is the next investigation, not an implemented repair. Keep the
+60-second/1-GiB gates unchanged. Continental publication and integrated app/
+download/catalog qualification remain pending. No device build or installation.
