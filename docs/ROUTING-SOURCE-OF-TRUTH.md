@@ -1,6 +1,6 @@
 # DIRT routing — source of truth
 
-Updated: 2026-09-20. Owner: Richard Smith.
+Updated: 2026-09-21. Owner: Richard Smith.
 
 ## 1. Authority and purpose
 
@@ -3258,11 +3258,40 @@ claim acceptance. California south→Arizona Balanced passes at 42.64 s / 937.4 
 California south→north Clean completes at 50.29 s / 1,219.3 MB and fails RSS.
 Both completed cases retain their prior road digests, distances and pop counts.
 
-Continue the nine-case California replay using the three original exact-probe
-receipts, including the timeout, then inspect preparation and joined adjacency
-storage. Joined forward source/edge/target/direction columns still duplicate
-facts available in the mapped regional packs; any borrowing experiment must
-retain every alias row, directed arc and reverse lookup exactly and measure its
-CPU cost. This is the next investigation, not an implemented repair. Keep the
-60-second/1-GiB gates unchanged. Continental publication and integrated app/
-download/catalog qualification remain pending. No device build or installation.
+September 21, 07:54 UTC heartbeat continuation: the nine-case California replay
+finished **1 pass / 8 failures**. California south→Arizona Balanced passed its
+original receipt; the other requests still exceed RSS or time. Later diagnostic
+measurements vary, so the isolated pass is not a complete release acceptance.
+The final accepted engine remains `e59d63d`, with all 186 engine tests passing.
+
+Two additional experiments were measured and **not retained**. Borrowing joined
+forward arc facts preserved every directed arc/source/alias on four fixtures,
+but introduced a California south→Arizona Balanced timeout (60.02 s versus the
+prior final-probe 42.64 s). South→north Clean still exceeded RSS at 1,161,904,128
+bytes. Evidence, exact source/probe identities and the rejected patch are in
+`borrowed-regional-arcs/`. A bounded current-node seam-fact cache passed 187 tests,
+including changed road/barrier/coordinate rejection after a valid same-node
+anchor. Its apparent preparation improvement reversed with run order: north→south
+Balanced was 36.38 s after a timed-out baseline, then 48.97 s before a 42.61 s
+baseline. All completed road digests agree; no repeatable speed or RSS acceptance
+improvement was established. Evidence is in `seam-node-facts/` and `reverse-order/`.
+Both experiments were removed from main; do not restart them or mistake their
+private probes for the accepted runtime.
+
+The next isolated factory trial is `california-narrow-trial/`. California's
+current outlines add 0.25 degrees on each side of the latitude-37 ownership cut,
+in addition to the qualified 2 km extraction halo. The trial removes only that
+extra polygon overlap, using private polygon files and the same dated parent
+PBF with full checksum verification. Ownership, the parent outline, extraction
+halo, source epoch and legal recipe are preserved. This is a sizing experiment,
+not an accepted pack repair. The existing 70-region/155-pair candidate, active
+polygon registry, app catalog and seven-pack rollback remain untouched.
+
+`pipeline-state.json` identifies the one serial source-extraction supervisor.
+After it finishes, inspect the private source lock and polygon-recipe receipts;
+build the two trial packs using those exact private polygons, then compare
+coverage, directions, source/feature proofs, both seam directions and the actual
+California routes before considering replacement of any candidate bytes. Retain
+all existing datasets. Keep the 60-second/1-GiB gates unchanged. Continental
+publication and final integrated host/app/download/catalog qualification remain
+pending. No device build or installation occurred on this heartbeat.
