@@ -3636,3 +3636,24 @@ phone gate. Inspect it before starting heavy work. Subsequent app bridge and
 actual planner timing remain required, with a new runtime identity for any
 accepted code repair; preserve historical qualification receipts. Richard has
 been notified. Resumption: `scoped-dev-68/check-in-20260921T2220.json`.
+
+September 21 23:27:11 UTC: **fabric-v4-20260921-01 is published**. All 481
+objects were uploaded, downloaded and hash/size verified; the final public
+catalogs were published last. Scope remains 68 regions / 150 neighboring pairs,
+excluding both California regions. Exact evidence: `scoped-dev-publication.log`
+and `published-release-receipt.json` under `scoped-dev-68`. Do not repeat the
+passed 1,126-case matrix or publication.
+
+The activation recheck initially received Cloudflare 1010/HTTP403 for Python's
+default client identifier. An explicit `DIRT-Qualification/1.0` identifier returns
+HTTP200 and all three public discovery hashes match; checks are unchanged.
+`public-discovery-client-fix.json` records that result, and failed receipts are
+preserved. Superseding activation owner `activate-and-deliver-public-discovery.py`
+(initial PID28592) now points DEV source at the published release and runs the
+app build/checks. The exact68 catalog/registry check includes representative
+NB/PE app installation/reuse/bridge routing; the publisher separately verified
+every object's downloaded bytes. App checks and phone installation are pending.
+The private regression supervisor resumed as PID28864 after the upstream error;
+it waits for the app baseline, preserves the pre-existing Xcode indexer, and
+starts no competing heavy job. Planner efficiency remains unapproved. Resumption
+state: `scoped-dev-68/check-in-20260921T2321.json`.
