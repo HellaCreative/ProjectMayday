@@ -3287,11 +3287,29 @@ halo, source epoch and legal recipe are preserved. This is a sizing experiment,
 not an accepted pack repair. The existing 70-region/155-pair candidate, active
 polygon registry, app catalog and seven-pack rollback remain untouched.
 
-`pipeline-state.json` identifies the one serial source-extraction supervisor.
-After it finishes, inspect the private source lock and polygon-recipe receipts;
-build the two trial packs using those exact private polygons, then compare
-coverage, directions, source/feature proofs, both seam directions and the actual
-California routes before considering replacement of any candidate bytes. Retain
-all existing datasets. Keep the 60-second/1-GiB gates unchanged. Continental
-publication and final integrated host/app/download/catalog qualification remain
-pending. No device build or installation occurred on this heartbeat.
+September 21, 08:55 UTC continuation: private source extraction completed. Both
+California inputs match the original parent SHA256, timestamp and epoch. The
+narrow source sizes are 557,849,179 bytes north and 777,908,776 bytes south.
+`coverage-union.json` proves the two valid private polygons reconstruct the full
+parent outline within floating-point precision (symmetric difference
+2.19e-15 square degrees); the latitude-37 ownership cut is unchanged. This is
+polygon coverage evidence, not yet proof of routed-road coverage or performance.
+
+`pipeline-state.json` now identifies the one serial `build-and-qualify.py`
+supervisor in `california-narrow-trial/`. It builds both private packs with the
+exact recorded polygons, retains work/source data, builds reciprocal seams, then
+runs 15 unchanged California internal, split-crossing and Golden Gate requests
+using the accepted `e59d63d` probe. A private Node preload selects the trial
+polygon files for this process and its children; checksum checks, manifests,
+factory recipes and source proofs remain enforced. Its hash and the probe/source
+identities are recorded in `build-identity.json`. The existing candidate and
+registry files are not overwritten; the trial release is marked partial and
+must never be published.
+
+Inspect `candidate/progress.json`, `build.log`, `routes/qualification.json` and
+the live process before resuming. If the trial helps, compare all affected road
+coverage/features and prove neighboring Arizona/Nevada/Oregon seams in both
+directions before considering candidate replacement. Preserve every failed
+receipt and all old datasets. Keep the 60-second/1-GiB gates unchanged.
+Continental publication and final integrated host/app/download/catalog
+qualification remain pending. No device build or installation occurred.
