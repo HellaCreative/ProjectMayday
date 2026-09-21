@@ -3615,3 +3615,24 @@ observer and app bridge, then implement legal cut metadata, exact segment splits
 buffered final tails and planner consumption. The existing phone efficiency gate
 remains unapproved. Exact process ownership and resumption evidence are in
 `scoped-dev-68/check-in-20260921T2118.json`.
+
+September 21 22:20 UTC legal replay finding: the fallback in
+`handoverBeforeFinalRoad` examines cuts in reverse order but also advances its
+restriction state in that order. A standalone executable using the actual
+RestrictionIndex reproduces lost active state for a two-edge via-way sequence:
+replaying only its last transition reports no active sequence; the forward
+prefix correctly retains progress two. This is a confirmed transition replay
+error, not yet a completed full-router regression. The normal direct handover
+fast path is separate. Qualified pack publication continues unchanged; pack
+bytes do not need rebuilding. Main runtime has not been modified.
+
+The private forward-prefix repair and a full handover fixture are retained in
+`scoped-dev-68/planner-streaming-prototype/restriction-order/`. The private serial
+supervisor `planner-streaming-prototype/run-after-app-baseline.py` (initial PID
+19737, state `qualification-state.json`) waits for the published app baseline
+and an empty heavy slot, then runs the original regression, repaired regression,
+and combined observer engine suite. It does not activate source or approve the
+phone gate. Inspect it before starting heavy work. Subsequent app bridge and
+actual planner timing remain required, with a new runtime identity for any
+accepted code repair; preserve historical qualification receipts. Richard has
+been notified. Resumption: `scoped-dev-68/check-in-20260921T2220.json`.
