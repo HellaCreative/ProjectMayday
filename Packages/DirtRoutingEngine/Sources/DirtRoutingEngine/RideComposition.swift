@@ -74,6 +74,8 @@ extension RoutingEngine {
                     searchCost: first.searchCost + second.searchCost,
                     poppedLabels: first.poppedLabels + second.poppedLabels,
                     arrivalRestrictions: second.arrivalRestrictions)
+                result.startRoadIdentity = first.startRoadIdentity
+                result.endRoadIdentity = second.endRoadIdentity
                 let quality = RouteQuality(route: result, urbanBoxes: UrbanCores.boxes(in: pack))
                 request.options.counter?.recordStage("rideQuality:dirt=\(quality.knownDirtPercent),repeat=\(Int(quality.reriddenMeters)),return=\(Int(quality.returnMeters)),scrap=\(Int(quality.shortDirtScrapMeters))", since: .now)
                 let closedCircuit = RouteQuality.hasClosedRoadCircuit(result.segments, in: pack)

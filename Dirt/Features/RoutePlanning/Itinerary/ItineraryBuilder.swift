@@ -218,6 +218,7 @@ final class ItineraryBuilder {
         var baselineProfiles: [Int: RouteProfile] = [:]
         var baselineHistory: [Int: EdgeHistory] = [:]
         var discoveryHistory = EdgeHistory()
+        var progressiveFuelUsed = carriedFuel(from: kept)
         var baselineFailure: (index: Int, message: String)?
         for index in 0..<requestedEndIndex {
             do {
@@ -279,7 +280,39 @@ final class ItineraryBuilder {
                         "sections=clean reason=\(crossProvince ? "cross_region" : "over_1000km")"
                     )
                 }
-                discoveryHistory.append(response)
+                if !fuelReplan, index >= startIndex {
+                    // A road-only leg is final as soon as its route returns.
+                    // Commit it before requesting the next leg instead of
+                    // hiding the entire ride behind the old discovery pass.
+                    let legs = try await buildRiderLeg(
+                        itinerary: itinerary, index: index, baseline: response,
+                        baselineHistory: discoveryHistory, allBaseline: baseline,
+                        fuelUsedAtStart: progressiveFuelUsed, fuel: .routeOnly,
+                        source: selectedSource, history: discoveryHistory,
+                        destinationFuelUsedLimitMeters: nil, waypointFuelReset: nil,
+                        forceFuelStop: false, minimumFuelStopsOverride: nil,
+                        excludedStationIDs: [], resumeAfterStation: nil,
+                        fuelDeadline: .distantFuture, defaultProfile: discoveryProfile,
+                        onHop: { _ in }
+                    )
+                    guard active(itinerary) else { return dropped(itinerary, committed: committed) }
+                    var routes = committed.riderRoutes
+                    routes[riderLeg.id] = legs.first?.response ?? response
+                    committed = BuiltItinerary(generation: committed.generation,
+                        legs: committed.legs, riderLegStatus: committed.riderLegStatus,
+                        riderRoutes: routes, waypointFuelStops: committed.waypointFuelStops)
+                    committed = replacing(riderLegID: riderLeg.id, with: legs,
+                        in: committed, status: .built)
+                    progressiveFuelUsed = legs.last?.fuelUsedOnArrivalMeters ?? progressiveFuelUsed
+                    for leg in legs { discoveryHistory.append(leg.response) }
+                    RoutingDebugLog.shared.event(
+                        "build leg riderLeg=\(riderLeg.id) number=\(index + 1) "
+                            + "of=\(itinerary.legs.count) meters=\(Int(legs.reduce(0) { $0 + ($1.response.distanceMeters ?? 0) }))"
+                    )
+                    onProgress(committed)
+                } else {
+                    discoveryHistory.append(response)
+                }
             } catch is CancellationError {
                 return dropped(itinerary, committed: committed, cancelled: true)
             } catch {
@@ -289,6 +322,17 @@ final class ItineraryBuilder {
                 baselineFailure = (index, error.localizedDescription)
                 break
             }
+        }
+
+        if !fuelReplan {
+            if let failure = baselineFailure {
+                committed = markingFailed(itinerary.legs[failure.index].id,
+                    message: failure.message, in: committed)
+                onProgress(committed)
+            }
+            RoutingDebugLog.shared.event("build committed gen=\(itinerary.generation) legs=\(committed.legs.count)")
+            return appendingPreservedSuffix(preservedSuffix, statuses: statuses,
+                routes: reusableRoutes, to: committed)
         }
 
         var routedResponses = reusableRoutes

@@ -401,6 +401,7 @@ final class RoutePlannerModel {
     /// newly committed fuel leg. Routine option reroutes do not replay it.
     private var cameraBuildGeneration: Int?
     private var cameraBuildLegKeys: Set<String> = []
+    private var longRideBuildGeneration: Int?
 
     // From here
     private(set) var destination: RouteCoordinate?
@@ -862,6 +863,7 @@ final class RoutePlannerModel {
         let before = itinerary
         let change = reduce(before, action)
         guard change.itinerary != before else { return }
+        longRideBuildGeneration = nil
         switch action {
         case .replaceAll, .clear:
             routingSessionSeed = UInt64.random(in: 1...9_007_199_254_740_991)
@@ -1221,26 +1223,28 @@ final class RoutePlannerModel {
         ))
         guard directMeters >= 800_000 else { return nil }
 
-        let guideRequest = RouteRequest(
-            profile: .balanced,
-            locations: [
-                RouteLocation(
-                    latitude: endpoints[0].latitude,
-                    longitude: endpoints[0].longitude,
-                    label: "Point 1"
-                ),
-                RouteLocation(
-                    latitude: endpoints[1].latitude,
-                    longitude: endpoints[1].longitude,
-                    label: "Point 2"
-                )
-            ],
-            allowUnknown: false,
-            sessionSeed: routingSessionSeed,
-            avoidMotorways: false,
-            preferBackRoads: false,
-            mapZoom: mapState.mapZoom
-        )
+        func makeGuideRequest() -> RouteRequest {
+            RouteRequest(
+                profile: .balanced,
+                locations: [
+                    RouteLocation(
+                        latitude: endpoints[0].latitude,
+                        longitude: endpoints[0].longitude,
+                        label: "Point 1"
+                    ),
+                    RouteLocation(
+                        latitude: endpoints[1].latitude,
+                        longitude: endpoints[1].longitude,
+                        label: "Point 2"
+                    )
+                ],
+                allowUnknown: false,
+                sessionSeed: routingSessionSeed,
+                avoidMotorways: false,
+                preferBackRoads: false,
+                mapZoom: mapState.mapZoom
+            )
+        }
 
         do {
             var guidePreferences = RidePreferenceContext.current ?? RidePreferences()
@@ -1251,7 +1255,8 @@ final class RoutePlannerModel {
             // preserves it. Wander/city/highway preferences belong to the final
             // Dirt legs and would only make this scaffold needlessly expensive.
             let guide = try await RidePreferenceContext.$current.withValue(guidePreferences) {
-                try await routingSourcePolicy.select(for: guideRequest).route(guideRequest)
+                let guideRequest = makeGuideRequest()
+                return try await routingSourcePolicy.select(for: guideRequest).route(guideRequest)
             }
             guard !Task.isCancelled,
                   itinerary.generation == requested.generation,
@@ -1271,6 +1276,13 @@ final class RoutePlannerModel {
             ).itinerary
             replacement.setRidePreferencesForAllLegs(riderLeg.ridePreferences)
             itinerary = replacement
+            // The scaffold is a new itinerary generation. Keep progress and
+            // the existing per-leg camera sequence attached to that build.
+            longRideBuildGeneration = replacement.generation
+            if cameraBuildGeneration == requested.generation {
+                cameraBuildGeneration = replacement.generation
+                cameraBuildLegKeys = []
+            }
             built = nil
             destination = nil
             destinationName = nil
@@ -1640,6 +1652,12 @@ final class RoutePlannerModel {
             // Fuel-chain internals may still emit these; rider toast stays on craft hype.
             return routeBuildHypeLines[0]
         default:
+            if message.hasPrefix("Building leg ") {
+                return ProgressToastContent(
+                    title: message,
+                    detail: "Planning the next section · about 800 km between waypoints"
+                )
+            }
             if message.hasPrefix("Finding loop") {
                 return ProgressToastContent(
                     title: message,
@@ -1673,7 +1691,12 @@ final class RoutePlannerModel {
     /// Route-build progress is independent from transient tap feedback. A map
     /// interaction may replace `toast`, but it must never hide the active job.
     var activeRouteProgressMessage: String? {
-        Self.activeRouteProgressMessage(
+        if isRouting, longRideBuildGeneration == itinerary.generation,
+           !itinerary.legs.isEmpty {
+            let completed = Set((built?.legs ?? []).map(\.riderLegID)).count
+            return "Building leg \(min(completed + 1, itinerary.legs.count)) of \(itinerary.legs.count)"
+        }
+        return Self.activeRouteProgressMessage(
             fuelPlanningStatus: fuelPlanningStatus,
             isRouting: isRouting,
             toast: toast
@@ -2333,6 +2356,7 @@ final class RoutePlannerModel {
     /// Invalidate every in-flight planner route (clear / mode convert / wipe).
     private func invalidateInFlightRoutes(cancelPlanRebuildTask: Bool = true) {
         routeCompletionID = nil
+        longRideBuildGeneration = nil
         mapState.cancelRouteBuildCamera()
         waypointPlacement = nil
         waypointMove = nil

@@ -44,7 +44,8 @@ excluded regions and connections must be absent from the scoped catalog; never
 claim this is the complete 70-region release. Keep all qualification gates and
 the existing candidate for rollback. Deliver the full continental release after
 California qualifies. Physical-device acceptance is separate from authorized
-installation. Production and White remain unchanged. Notify Richard promptly
+installation. Only the DIRT Dev bundle may be installed on Richard’s existing
+physical test device; production remains unchanged. Notify Richard promptly
 when qualification, publication/download verification, and installation finish,
 and whenever a blocker or meaningful California discovery occurs.
 Overnight follow-ups are resumption checks, not an eight-hour estimate for the
@@ -3448,3 +3449,44 @@ collecting every baseline before publishing any leg. It now commits each final
 leg before requesting the next, retaining road history and cached responses.
 Regression and actual app qualification are required before device delivery. No unrelated interface refinement is in
 scope until delivery completes.
+
+Scoped delivery qualification found a separate app-continuation defect. The first
+actual Halifax→Squamish planner run built/framed eight of eleven generated legs,
+then failed matching leg nine at the AB/BC handoff. Its incoming compact road ID
+was local to the previous graph. All other 96 tests passed; the full 97-test run
+is failed, not qualified (`scoped-dev-68/planner-app-tests.xcresult`). It did not
+celebrate the partial ride. This is a runtime handoff issue, not damaged pack data.
+
+The repair carries stable OSM way/node identities for the first and last actually
+traversed roads through path results, composition, staged joins, truncation and
+reversal. The app uses that stable incoming road for the next planner leg; raw
+segment/display IDs, route geometry, source data and legal restrictions remain
+unchanged. All 190 engine tests pass, including different local numbering of the
+same road in the next graph and the junction case where the final matching edge
+is not the actual last traversed road. The legal guide request is now constructed
+inside its intended no-Wander preference context; final riding legs retain rider
+settings. A fresh probe and repaired app run are queued serially before the
+1,126-case scoped matrix and publication. The original failed app evidence is
+retained. Inspect `scoped-dev-68/continuation-repair/` and `deliver-repaired.py`;
+the original `deliver.py` is superseded. Publication and physical installation
+are still pending; do not infer success from completed preparation.
+
+
+The repaired actual Halifax→Squamish app planner qualification passed: **60 tests
+in two suites**, including ten generated rider legs, numbered next-leg progress,
+full completed-leg camera geometry and final-only celebration. The real workflow
+took **291.18 s** on the existing simulator, including a 99.16 s legal guide;
+this is not the earlier 89/88 s two-endpoint benchmark. Waypoints are approximately
+800 km apart on the guide; styled Dirt legs can be longer. The guide and every
+leg request/response are retained in `continuation-repair/planner-receipts/`.
+The former cross-window incoming-road mismatch is repaired with stable OSM
+identity; all 190 engine tests pass. The tested probe SHA256 is
+`eb70e52586687ded23baaf44e627fc22abe00fc71c68cc96ee848916d59ff27b`.
+
+The scoped release `fabric-v4-20260921-01` is sealed with 68 regions and 150
+neighboring pairs. Its final 1,126-case serial native matrix is running under
+`scoped-dev-68/deliver-repaired.py`; publication is queued behind a passing gate.
+No California experiment blocks this queue. After publication and downloaded-byte
+verification, activate the matching DEV catalog, run the published app download /
+registry test, and install the verified development build on Richard’s existing
+physical test device. Do not claim publication or installation before receipts exist.

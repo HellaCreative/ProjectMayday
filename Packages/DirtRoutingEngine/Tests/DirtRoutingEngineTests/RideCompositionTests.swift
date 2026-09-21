@@ -14,6 +14,7 @@ struct RideCompositionTests {
         let route = try PathSearch(pack: graph).search(start: start, end: end, policy: .init(style: .dirt), access: .init(), options: options)
         #expect(route.segments.last?.edge == 0)
         #expect(route.end.edge == 1)
+        #expect(route.endRoadIdentity == graph.identity(of: 0))
         let incoming = try RoutingEngine(pack: graph).exactContinuation(route)
         #expect(incoming.edge == 0)
         #expect(incoming.coordinate == route.end.coordinate)

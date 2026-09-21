@@ -31,11 +31,14 @@ public struct LoopPlanResult: Sendable {
     public var reriddenMeters: Double { RouteQuality(route: combined).reriddenMeters }
     public var returnMeters: Double { RouteQuality(route: combined).returnMeters }
     public var combined: ComputedRoute {
-        ComputedRoute(start: outbound.start, end: inbound.end, segments: segments,
+        var route = ComputedRoute(start: outbound.start, end: inbound.end, segments: segments,
                       distanceMeters: distanceMeters,
                       searchCost: outbound.searchCost + inbound.searchCost,
                       poppedLabels: outbound.poppedLabels + inbound.poppedLabels,
                       arrivalRestrictions: inbound.arrivalRestrictions)
+        route.startRoadIdentity = outbound.startRoadIdentity
+        route.endRoadIdentity = inbound.endRoadIdentity
+        return route
     }
 }
 

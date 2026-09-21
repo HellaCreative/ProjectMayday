@@ -3,6 +3,30 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct RoutingEngineTests {
+    @Test func consecutiveLegRetainsRoadIdentityAcrossPackLocalRenumbering() throws {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0),
+            .init(longitude: 0.01, latitude: 0), .init(longitude: 0.02, latitude: 0)]
+        let first = PolicyTests.Line(nodes: nodes, edges: [(0,1),(1,2)],
+            surfaces: ["asphalt","asphalt"], roads: ["tertiary","tertiary"],
+            sourceWays: [301,302], sourceNodes: [101,102,103])
+        let next = PolicyTests.Line(nodes: [.init(longitude: -0.1, latitude: 0)] + nodes,
+            edges: [(0,1),(1,2),(2,3)], surfaces: Array(repeating: "asphalt", count: 3),
+            roads: Array(repeating: "tertiary", count: 3),
+            sourceWays: [399,301,302], sourceNodes: [99,101,102,103])
+        let pin = Coordinate(longitude: 0.005, latitude: 0)
+        let leg = try RoutingEngine(pack: first).route(.init(start: nodes[0], end: pin, style: .cleanest))
+        #expect(leg.endRoadIdentity == "301:101:102")
+        var request = RoutingRequest(start: pin, end: nodes[2], style: .cleanest)
+        request.options.arrivalEdgeID = leg.segments.last?.edgeID
+        #expect(throws: RoutingFailure.noMatch) { try RoutingEngine(pack: next).route(request) }
+        request.options.arrivalEdgeID = leg.endRoadIdentity
+        let continued = try RoutingEngine(pack: next).route(request)
+        #expect(continued.start.coordinate.distance(to: pin) < 1)
+        #expect(continued.segments.first?.edge == 1)
+        #expect(continued.endRoadIdentity == "302:102:103")
+        #expect(continued.reversed().endRoadIdentity == continued.startRoadIdentity)
+    }
+
     @Test func waypointContinuationRanksBothLegalDirectionsTowardNextPin() throws {
         let graph = try IndexedGraph(PolicyTests.Line(nodes: [
             .init(longitude: -0.01, latitude: 0), .init(longitude: 0.02, latitude: 0),

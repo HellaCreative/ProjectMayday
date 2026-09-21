@@ -751,6 +751,8 @@ public enum StagedRouter {
             var result = ComputedRoute(start: route.start, end: end, segments: prefix,
                 distanceMeters: prefix.reduce(0) { $0+$1.meters }, searchCost: route.searchCost,
                 poppedLabels: route.poppedLabels, arrivalRestrictions: active)
+            result.startRoadIdentity = route.startRoadIdentity
+            result.endRoadIdentity = graph.identity(of: last.edge)
             result.searchSummary = "handover-before-final-road[\(route.searchSummary ?? "-")]"
             result.qualityUrbanBoxes = route.qualityUrbanBoxes
             result.maneuvers = NavigationCues.make(route: result, graph: graph, access: request.access,
@@ -1235,6 +1237,8 @@ public enum StagedRouter {
                                      searchCost: parts.reduce(0) { $0 + $1.searchCost },
                                      poppedLabels: parts.reduce(0) { $0 + $1.poppedLabels },
                                      arrivalRestrictions: last.arrivalRestrictions)
+        combined.startRoadIdentity = first.startRoadIdentity
+        combined.endRoadIdentity = last.endRoadIdentity
         let labels = zip(windows, parts).map { window, part in
             "stage:\(window.joined(separator: "+"))[\(part.searchSummary ?? "-")]"
         }

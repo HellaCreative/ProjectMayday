@@ -137,6 +137,9 @@ public struct RouteSegment: Sendable {
 
 public struct ComputedRoute: Sendable {
     public var maneuvers: [NavigationCue] = []
+    /// Source identities remain valid when the next leg opens a different pack.
+    public var startRoadIdentity: String?
+    public var endRoadIdentity: String?
     // Small scoring metadata survives release of the detailed stage graph.
     var qualityUrbanBoxes: [GeographicBox] = []
     public let start: RoadMatch
@@ -169,9 +172,12 @@ public struct ComputedRoute: Sendable {
                          roadClass: segment.roadClass, structure: segment.structure, access: segment.access,
                          geometry: segment.geometry.reversed())
         }
-        return ComputedRoute(start: end, end: start, segments: Array(flipped),
+        var reversed = ComputedRoute(start: end, end: start, segments: Array(flipped),
                              distanceMeters: distanceMeters, searchCost: searchCost,
                              poppedLabels: poppedLabels, arrivalRestrictions: [])
+        reversed.startRoadIdentity = endRoadIdentity
+        reversed.endRoadIdentity = startRoadIdentity
+        return reversed
     }
 }
 
@@ -890,6 +896,8 @@ public struct PathSearch: Sendable {
             var result = ComputedRoute(start: start,end: arrived,segments: segments,distanceMeters: labels[chosen].meters,
                                  searchCost: labels[chosen].cost,poppedLabels: pops,limit: limit,
                                  arrivalRestrictions: restrictionSets[labels[chosen].state.restrictionID])
+            result.startRoadIdentity = segments.first.map { pack.identity(of: $0.edge) }
+            result.endRoadIdentity = segments.last.map { pack.identity(of: $0.edge) }
             result.maneuvers = NavigationCues.make(route: result,graph: pack,access: access,arrival: options.arrival)
             return result
         }

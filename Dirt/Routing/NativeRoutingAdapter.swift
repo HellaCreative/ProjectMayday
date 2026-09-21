@@ -103,7 +103,7 @@ nonisolated enum NativeRoutingAdapter {
             dirtPercentValue: nil,pavedPercentValue: nil,backtrackMeters: repeated,
             backtrackPct: route.distanceMeters > 0 ? repeated/route.distanceMeters*100 : 0,
             backtrackReason: repeated > 0 ? "shared_road" : nil,restrictedMeters: 0,restrictedReason: nil,
-            arrivalEdgeId: route.segments.last?.edgeID,
+            arrivalEdgeId: route.endRoadIdentity ?? route.segments.last?.edgeID,
             arrivalRestrictions: route.arrivalRestrictions.map { .init(pattern: $0.pattern, progress: $0.progress) })
     }
 }

@@ -33,6 +33,10 @@ struct PolicyTests {
         func surfaceLeaf(_ edge: Int) -> String { surfaces[edge] }
         func roadClass(_ edge: Int) -> String { roads[edge] }
         var structures: [String]? = nil
+        var sourceWays: [Int64]? = nil
+        var sourceNodes: [Int64]? = nil
+        func osmWayID(_ edge: Int) -> Int64 { sourceWays?[edge] ?? Int64(edge) }
+        func osmNodeID(_ node: Int) -> Int64 { sourceNodes?[node] ?? Int64(node) }
         func structure(_ edge: Int) -> String { structures?[edge] ?? "" }
         func polyline(_ edge: Int) -> [Coordinate] { [nodes[edges[edge].0],nodes[edges[edge].1]] }
     }
