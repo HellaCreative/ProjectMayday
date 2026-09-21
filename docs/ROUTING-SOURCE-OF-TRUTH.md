@@ -36,9 +36,17 @@ valid evidence instead of restarting all seven-pack tests. Separate runtime
 route-quality defects from pack defects so a code-only repair does not trigger
 another blanket rebuild. Expand in measured batches and require automated
 source, feature, seam, route and resource checks before qualified DEV publication.
-Retain the existing candidate for rollback and never activate an incomplete
-catalog. Physical-device acceptance remains outstanding but does not block this
-authorized build/test/DEV-publication work. Production remains unchanged.
+Richard superseded the complete-continent-only release restriction on September
+21: first qualify and publish an explicitly scoped immutable DEV release of the
+**68 non-California regions**, then install the matching DEV build on his device.
+California is two packs (`ca-n`, `ca-s`) and must not delay that delivery. Its
+excluded regions and connections must be absent from the scoped catalog; never
+claim this is the complete 70-region release. Keep all qualification gates and
+the existing candidate for rollback. Deliver the full continental release after
+California qualifies. Physical-device acceptance is separate from authorized
+installation. Production and White remain unchanged. Notify Richard promptly
+when qualification, publication/download verification, and installation finish,
+and whenever a blocker or meaningful California discovery occurs.
 Overnight follow-ups are resumption checks, not an eight-hour estimate for the
 seven packs or a guarantee of continental completion by morning.
 
@@ -3401,3 +3409,42 @@ existing 70-region release and registry roster agree exactly; no data was
 rebuilt. The serial app supervisor has advanced to `app-build`, followed by the
 selected integration checks above. This milestone verifies stored artifacts,
 not app completion or published downloads. Inspect its live state before work.
+
+
+Independent app qualification completed on the compact-column runtime:
+**41 tests in two suites passed** (`unaffected-regions/app-tests.xcresult`).
+Actual execution markers cover Quebec cold/warm, Confederation Bridge in both
+directions/all styles, three Ontario seeds plus exact seeded replay and frozen
+response round-trip, cross-Canada cold/warm, and pack-acquisition behavior.
+Halifax→Squamish completed in 89.42 / 87.55 s with identical directed-road
+hashes and destination retained; this is a named simulator test, not a phone
+latency promise. No California request was substituted into this unaffected
+subset, and it does not claim every region was tested through the app.
+
+The bounded local-snap-connectivity experiment is rejected: the exact California
+south→Arizona Dirt request still timed out at 60.03 s. Its source was removed;
+`local-snap-connectivity/review.json` retains the result and patch. Runtime
+95a62a6 (compact columns, 189 engine tests and the 41 app tests above) remains
+accepted. No known data rewrite of the 68 other packs is required.
+
+Current delivery: `scope-v4-candidate.js` prepares `fabric-v4-20260921-01` from
+verified non-California bytes of the original 70-pack candidate. Immutable road,
+geometry, fuel, legal and service bytes are reused; source dates and factory
+provenance remain unchanged. Release metadata and seam neighbor scope receive
+new files, and no qualification receipt is copied. The final serial scoped route
+matrix must pass before the existing fail-closed publisher runs. Evidence and
+resumption state: `.build/continental-qualification-20260920/scoped-dev-68/`.
+
+The 89.42/87.55 s Halifax→Squamish runs exercised a direct two-endpoint native
+request, **not the actual approximately-800 km app waypoint workflow**. Richard
+requires visible incremental planner legs: fit each completed leg's full
+geometry, show persistent top-left progress for the next leg, and fit the whole
+route before final celebration. The existing legal guide creates editable pins
+at approximately 800 km of guide-road distance; final styled route distances can
+differ. Investigation found its replacement itinerary generation disconnected
+the per-leg camera. The fix binds the camera to the replacement generation and
+adds persistent numbered leg progress. A second cause was the road-only builder
+collecting every baseline before publishing any leg. It now commits each final
+leg before requesting the next, retaining road history and cached responses.
+Regression and actual app qualification are required before device delivery. No unrelated interface refinement is in
+scope until delivery completes.
