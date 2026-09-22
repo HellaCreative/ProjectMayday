@@ -3763,3 +3763,56 @@ remains pending. No old waiter should be restarted. Next: California south to
 Arizona Dirt preparation timeout and narrow-overlap owned-road/legal-feature
 coverage proof, followed by honest full-70 qualification/publication. The scoped
 release and its immutable receipts remain complete.
+
+September 22 California follow-up after scoped phone delivery: a sampled replay
+of the preserved failing probe confirms substantial reference-count overhead in
+RegionalGraph road metadata reads. Two private exact-read trials (index tuple,
+then inlined pack reads) each pass 203 engine tests but still time out on
+ca-s→Arizona Dirt. The index-tuple trial retains identical selected roads and
+distances on its three passing comparison cases. Neither trial is adopted.
+Evidence: california-preparation-profile-20260922/{sample.txt,routes,inline}.
+Do not repeat these failed trials unchanged.
+
+The private narrower California union now has an explicit coverage receipt:
+california-owned-coverage-20260922/owned-union-coverage-receipt.json. Original
+ca-n roads whose shape reaches latitude37 or north, and ca-s roads reaching37
+or south, are all present unchanged in the trial union. Stable OSM road keys,
+exact geometry fingerprints, directional adjacency/access, surface/grade/layer/
+structure/ferry metadata and distance are compared; associated restrictions and
+owned barriers are also preserved. The latitude filter includes the external
+halo and therefore is stronger than parent-only coverage. Zero missing records.
+Independent exact-row comparisons also preserve all 12,318 owned fuel stations
+and 14,885 optional Rider Services entries. Sources retain their true common
+epoch and per-extract hashes. This resolves union feature coverage, not routing
+qualification, split-recipe adoption or complete-70 release acceptance.
+
+A separate composition regression reproduces duplicate failed ordinary searches
+(4 versus2). The private no-repeat repair retains the exhausted no-path outcome
+after optional composition instead of launching the identical fallback again.
+204 engine tests pass; the exact California replay is pending in
+california-preparation-profile-20260922/no-repeat. Supervisor
+run-no-repeat-trial.py PID68899 owns that single heavy job. Main/runtime and the
+installed phone build remain f34e3db behavior; no private trial has been promoted.
+
+The no-repeat composition trial still times out at60.02s, despite its passing
+204-test regression suite. Preserve it privately; it is not the California fix.
+A distinct bounded legal probe now completes the exact formerly failing
+ca-s→Arizona Dirt request in45.482s at983,662,592 bytes RSS, with the exact
+requested pins,34,853.795m of connected road, zero repeated meters, no unknown
+connector and no ferry. It uses ordinary PathSearch access/turn handling with
+scenic bounds relaxed and a tiny shared-deadline work cap. Only exhausted
+no-path rejects a snap pair; hitting the probe's work/time limit means unknown
+and leaves normal routing in charge. This differs from the rejected earlier
+physical-only local-snap experiment, which ignored access eligibility.
+
+The private legal-probe package passes204 engine tests. Probe SHA256:
+c01a54bad4c070eceff93ac18ce6a39b640edd4ae8e2aee8516a5ef579060b68.
+Identity and focused route receipt are in
+california-preparation-profile-20260922/legal-probe/. No main source promotion.
+run-legal-probe-matrix.py PID73983, child74574, now owns the serial unchanged
+60-case California/neighbor matrix in legal-probe-matrix/. It starts only after
+the focused case and owned-union coverage pass, never publishes or promotes
+source, and stops for review. Do not duplicate this heavy job. On completion
+review all route/resource receipts and add focused legal-probe edge-case proof;
+then qualify the actual app/runtime before accepting source and assembling the
+truthful full70-region release. The existing68-region delivery is complete.
