@@ -4190,3 +4190,20 @@ TestFlight therefore also requires coherent verified pack promotion/selection,
 configuration and signing checks after acceptance; Richard may handle upload.
 No immediate production promotion or archive is requested. Detailed resumption
 scope is complete-dev-70-20260922/owner-release-dev-target.json.
+
+### September 22 10:25 UTC — optimized Release DEV tail replaces Debug delivery
+
+Publication47922/68056 continues unchanged. The idle activation waiter47923
+was verified childless, recorded in debug-device-tail-superseded.json, then
+stopped. Its successor activate-release-dev.py76532 preserves the ORIGINAL
+city-clipping-activation-prepared-source.json identity and all published
+discovery/exact70 app gates; it does not take a fresh baseline to mask changes.
+It retains the three planned DEV activation edits and existing Debug simulator
+published-app tests. Only the device build becomes Release with explicit
+DIRT_DEVELOPMENT (no DEBUG), com.mayday.dirt.dev, DIRT Dev display name and
+Swift -O optimization. It verifies build settings, DEV backend/catalog bytes,
+absence of production service hosts and strict code signature before install.
+Receipt labels distinguish simulator functional checks from optimized-device
+identity/signature checks; physical runtime/riding acceptance remains pending.
+No App Store archive or production promotion. Read activation-state.json and
+release-dev-activation-supervisor.log; do not restart the old waiter.
