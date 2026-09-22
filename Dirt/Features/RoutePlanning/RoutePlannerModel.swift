@@ -185,6 +185,7 @@ final class RoutePlannerModel {
         invalidateInFlightRoutes()
         let runID = UUID()
         loopRunID = runID
+        routeCompletionID = nil
         isRouting = true
         isAssemblingRoute = true
         errorMessage = nil
@@ -201,27 +202,56 @@ final class RoutePlannerModel {
             allowUnknown: selectedAllow)
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            var loopCommitted = false
             defer {
                 if self.loopRunID == runID {
+                    self.streamedLegGeneration = nil
+                    self.streamedLegResponses = []
                     self.isRouting = false
                     self.isAssemblingRoute = false
                     self.fuelPlanningStatus = nil
+                    if !loopCommitted {
+                        self.built = .empty(for: self.itinerary)
+                        self.mapState.cancelRouteBuildCamera()
+                        self.refreshMap()
+                    }
                 }
             }
             do {
                 let source = policy.select(for: dummy)
+                var loopIntent = reduce(RiderItinerary(), .replaceAll(
+                    waypoints: [start, far, start], profile: selectedProfile, allowUnknown: selectedAllow,
+                    avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
+                loopIntent.setRidePreferencesForAllLegs(preferences)
+                self.itinerary = loopIntent
+                self.built = .empty(for: loopIntent)
+                self.streamedLegGeneration = loopIntent.generation
+                self.streamedRiderLegID = nil; self.streamedLegResponses = []
+                self.streamedRoutesByLeg = [:]; self.streamedPrefixResponses = []
+                self.streamedCameraLegIDs = []
+                self.cameraBuildGeneration = loopIntent.generation
+                self.mapState.beginRouteBuildCamera(at: start)
                 let result = try await source.planLoop(PlannedLoopRequest(
                     start: start, far: far, targetMeters: target,
                     profile: selectedProfile, allowUnknown: selectedAllow,
                     wander: preferences.normalized.wander, avoidCities: preferences.avoidCities,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads,
-                    seed: UInt64.random(in: 1...9_007_199_254_740_991), avoidFerries: preferences.avoidFerries))
+                    seed: UInt64.random(in: 1...9_007_199_254_740_991), avoidFerries: preferences.avoidFerries)) { index, event in
+                    guard self.loopRunID == runID, !Task.isCancelled, loopIntent.legs.indices.contains(index) else { return }
+                    self.consumeLongRouteProgress(event, riderLegID: loopIntent.legs[index].id, generation: loopIntent.generation)
+                    if case .completed(let response) = event,
+                       let from = response.coordinates.first, let to = response.coordinates.last {
+                        let leg = loopIntent.legs[index]
+                        let previous = self.built?.legs ?? []
+                        let completed = BuiltLeg(riderLegID: leg.id, fromCoordinate: from,
+                            toCoordinate: to, endsAtFuelStop: nil, response: response,
+                            fuelUsedOnArrivalMeters: 0, routeProfile: selectedProfile)
+                        self.built = BuiltItinerary(generation: loopIntent.generation, legs: previous + [completed],
+                            riderLegStatus: [:])
+                    }
+                }
                 guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
-                var itinerary = reduce(RiderItinerary(), .replaceAll(
-                    waypoints: [start, far, start],
-                    profile: selectedProfile, allowUnknown: selectedAllow,
-                    avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
-                itinerary.setRidePreferencesForAllLegs(preferences)
+                let itinerary = loopIntent
                 guard itinerary.legs.count == 2, itinerary.legs.allSatisfy({ $0.profile == selectedProfile }),
                       itinerary.legs.allSatisfy({ $0.allowUnknown == selectedAllow }) else {
                     self.errorMessage = "Loop legs must keep the selected riding style."
@@ -249,6 +279,9 @@ final class RoutePlannerModel {
                 self.loopFar = far
                 self.loopFarWaypointID = itinerary.waypoints[1].id
                 self.built = built
+                _ = self.promoteLongRideIfNeeded(built)
+                loopCommitted = true
+                self.streamedLegGeneration = nil; self.streamedLegResponses = []
                 self.destination = start
                 self.routeIdentity = "loop:\(runID.uuidString)"
                 self.isRouting = false
@@ -404,6 +437,11 @@ final class RoutePlannerModel {
     private var longRideBuildGeneration: Int?
     private var streamedLegGeneration: Int?
     private var streamedLegResponses: [RouteResponse] = []
+    private var streamedRiderLegID: UUID?
+    private var streamedRoutesByLeg: [UUID: [RouteResponse]] = [:]
+    private var streamedPrefixResponses: [RouteResponse] = []
+    private var streamedCameraLegIDs: Set<UUID> = []
+    private var builtBeforeCurrentSolve: [UUID: [BuiltLeg]] = [:]
 
     // From here
     private(set) var destination: RouteCoordinate?
@@ -652,8 +690,8 @@ final class RoutePlannerModel {
     // MARK: - Aggregate stats
 
     var activeResponses: [RouteResponse] {
-        if isRouting, streamedLegGeneration == itinerary.generation, !streamedLegResponses.isEmpty {
-            return streamedLegResponses
+        if isRouting, streamedLegGeneration == itinerary.generation, streamedRiderLegID != nil {
+            return streamedPrefixResponses + streamedLegResponses
         }
         switch mode {
         case .fromHere, .plan:
@@ -1029,13 +1067,17 @@ final class RoutePlannerModel {
         replanFromStationID: String? = nil
     ) {
         let requested = itinerary
+        routeCompletionID = nil
+        builtBeforeCurrentSolve = Dictionary(grouping: reuse?.legs ?? [], by: \.riderLegID)
         let preferences = ridePreferences
         let fuel = FuelRangePrefs.snapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)
         streamedLegResponses = []
-        streamedLegGeneration = (mode == .fromHere || mode == .plan)
-            && requested.waypoints.count == 2 && requested.legs.count == 1
-            ? requested.generation : nil
+        streamedLegGeneration = requested.generation
+        streamedRiderLegID = nil
+        streamedRoutesByLeg = [:]
+        streamedCameraLegIDs = []
+        streamedPrefixResponses = []
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
         isRouting = true
@@ -1095,14 +1137,6 @@ final class RoutePlannerModel {
 
             self.itineraryBuilder.mapZoom = self.mapState.mapZoom
             let buildRequest = requested
-            let routeProgressHandler: (@MainActor (RouteBuildProgress) -> Void)?
-            if self.streamedLegGeneration == buildRequest.generation {
-                routeProgressHandler = { [weak self] progress in
-                    self?.consumeLongRouteProgress(progress, generation: buildRequest.generation)
-                }
-            } else {
-                routeProgressHandler = nil
-            }
             let result = await RidePreferenceContext.$current.withValue(preferences) {
                 return await RoutingSessionContext.$seed.withValue(self.routingSessionSeed) {
                     await self.itineraryBuilder.build(
@@ -1119,7 +1153,9 @@ final class RoutePlannerModel {
                             self.fuelPlanningStatus = Self.craftingRouteToast
                             self.toast = Self.craftingRouteToast
                         },
-                        onRouteProgress: routeProgressHandler,
+                        onScopedRouteProgress: { [weak self] id, event in
+                            self?.consumeLongRouteProgress(event, riderLegID: id, generation: buildRequest.generation)
+                        },
                         onProgress: { [weak self] progress in
                             guard let self, self.itinerary.generation == progress.generation else { return }
                             self.built = progress
@@ -1226,21 +1262,34 @@ final class RoutePlannerModel {
         }
     }
 
-    private func consumeLongRouteProgress(_ progress: RouteBuildProgress, generation: Int) {
+    private func consumeLongRouteProgress(_ progress: RouteBuildProgress, riderLegID: UUID, generation: Int) {
         guard !Task.isCancelled, itinerary.generation == generation,
               streamedLegGeneration == generation else { return }
+        if streamedRiderLegID != riderLegID {
+            streamedRiderLegID = riderLegID
+            streamedLegResponses = []
+            let priorIDs = Set(itinerary.legs.prefix { $0.id != riderLegID }.map(\.id))
+            streamedPrefixResponses = itinerary.legs.prefix { $0.id != riderLegID }.flatMap { leg in
+                streamedRoutesByLeg[leg.id] ?? built?.legs.filter { $0.riderLegID == leg.id }.map(\.response) ?? []
+            }
+            streamedCameraLegIDs.formUnion(priorIDs)
+        }
         switch progress {
         case .started, .discarded:
             let hadPreview = !streamedLegResponses.isEmpty
             streamedLegResponses = []
-            built = nil
+            streamedRoutesByLeg[riderLegID] = nil
+            streamedCameraLegIDs.remove(riderLegID)
             if hadPreview, cameraBuildGeneration == generation, let first = itinerary.waypoints.first {
                 cameraBuildLegKeys = []
                 mapState.beginRouteBuildCamera(at: first.coordinate)
+                for response in streamedPrefixResponses { mapState.appendCompletedRouteBuildLeg(response.coordinates) }
             }
         case .leg(let index, let response):
             guard index == streamedLegResponses.count else { return }
             streamedLegResponses.append(response)
+            streamedRoutesByLeg[riderLegID] = streamedLegResponses
+            streamedCameraLegIDs.insert(riderLegID)
             if cameraBuildGeneration == generation {
                 mapState.appendCompletedRouteBuildLeg(response.coordinates)
             }
@@ -1303,7 +1352,7 @@ final class RoutePlannerModel {
         )
     }
 
-    /// A continental two-pin result becomes a real Plan itinerary. The
+    /// Each newly solved long rider leg becomes editable sections. The
     /// intermediate pins are taken from the legal route that just completed,
     /// so none can land in water, wilderness, or on an unrelated road. The
     /// accepted geometry is split and reused; conversion performs no second
@@ -1311,43 +1360,65 @@ final class RoutePlannerModel {
     /// rider legs through the ordinary itinerary reducer.
     @discardableResult
     private func promoteLongRideIfNeeded(_ result: BuiltItinerary) -> Bool {
-        guard mode == .fromHere || mode == .plan,
-              itinerary.waypoints.count == 2,
-              itinerary.legs.count == 1,
-              let riderLeg = itinerary.legs.first,
-              let response = result.riderRoutes[riderLeg.id] ?? result.legs.first?.response,
-              let split = streamedLegResponses.count > 1
-                ? LongRouteSplitPlan(
-                    waypoints: [streamedLegResponses[0].coordinates[0]]
-                        + streamedLegResponses.compactMap { $0.coordinates.last },
-                    responses: streamedLegResponses,
-                    totalMeters: streamedLegResponses.reduce(0) { $0 + ($1.distanceMeters ?? 0) })
-                : Self.longRouteSplitPlan(response: response)
-        else { return false }
-
-        let source = mode == .fromHere ? "fromHere" : "plan"
-        if mode == .fromHere {
-            destination = nil
-            destinationName = nil
-            fromHereResponse = nil
-            fromHereNeedsStartPin = false
-            fromHereStartOverride = nil
+        var points: [RiderWaypoint] = []
+        var riderLegs: [RiderLeg] = []
+        var builtLegs: [BuiltLeg] = []
+        var routes: [UUID: RouteResponse] = [:]
+        var statuses: [UUID: LegStatus] = [:]
+        var changed = false
+        for (index, original) in itinerary.legs.enumerated() {
+            if points.isEmpty { points.append(itinerary.waypoints[index]) }
+            let originalBuilt = result.legs.filter { $0.riderLegID == original.id }
+            let stream = streamedRoutesByLeg[original.id] ?? []
+            // A native single leg explicitly means there was no safe internal
+            // boundary. Do not override its legal proof with geometric cuts.
+            let parts: [RouteResponse]?
+            if stream.count > 1 { parts = stream }
+            else if stream.count == 1 { parts = nil }
+            else if showingLoop || originalBuilt != builtBeforeCurrentSolve[original.id] {
+                parts = result.riderRoutes[original.id].flatMap { Self.longRouteSplitPlan(response: $0)?.responses }
+            } else { parts = nil }
+            guard let parts, parts.count > 1, parts.allSatisfy({ $0.coordinates.count >= 2 }), originalBuilt.count == 1,
+                  originalBuilt[0].endsAtFuelStop == nil else {
+                points.append(itinerary.waypoints[index + 1])
+                riderLegs.append(original)
+                builtLegs += originalBuilt
+                routes[original.id] = result.riderRoutes[original.id]
+                statuses[original.id] = result.riderLegStatus[original.id]
+                continue
+            }
+            changed = true
+            var fuelUsed = max(0, originalBuilt[0].fuelUsedOnArrivalMeters - (originalBuilt[0].response.distanceMeters ?? 0))
+            for (partIndex, response) in parts.enumerated() {
+                let endpoint = partIndex == parts.count - 1 ? itinerary.waypoints[index + 1]
+                    : RiderWaypoint(coordinate: response.coordinates.last!)
+                let leg = RiderLeg(from: points.last!.id, to: endpoint.id,
+                    profile: original.profile, allowUnknown: original.allowUnknown,
+                    ridePreferences: original.ridePreferences, avoidMotorways: original.avoidMotorways,
+                    preferBackRoads: original.preferBackRoads, hopOverrides: original.hopOverrides,
+                    hopAvoidMotorways: original.hopAvoidMotorways, hopAllowUnknown: original.hopAllowUnknown,
+                    fuelStopOverrides: original.fuelStopOverrides)
+                fuelUsed += response.distanceMeters ?? 0
+                points.append(endpoint); riderLegs.append(leg)
+                builtLegs.append(BuiltLeg(riderLegID: leg.id,
+                    fromCoordinate: response.coordinates.first!, toCoordinate: response.coordinates.last!,
+                    endsAtFuelStop: nil, response: response, fuelUsedOnArrivalMeters: fuelUsed,
+                    routeProfile: originalBuilt[0].routeProfile))
+                routes[leg.id] = response; statuses[leg.id] = result.riderLegStatus[original.id] ?? .built
+            }
         }
-        mode = .plan
-        mapState.selectPlannerPin(nil)
-        seedCanonicalBuild(
-            coordinates: split.waypoints,
-            profile: riderLeg.profile,
-            allowUnknown: riderLeg.allowUnknown,
-            responses: split.responses
-        )
-        routeIdentity = "plan:" + split.waypoints.dropFirst().map {
-            "\($0.latitude),\($0.longitude)"
-        }.joined(separator: ";")
-        RoutingDebugLog.shared.event(
-            "long ride promoted source=\(source) meters=\(Int(split.totalMeters.rounded())) "
-                + "legs=\(split.responses.count) targetLegMeters=800000"
-        )
+        guard changed else { return false }
+        let source = showingLoop ? "loop" : (mode == .fromHere ? "fromHere" : "plan")
+        if mode == .fromHere && !showingLoop {
+            destination = nil; destinationName = nil; fromHereResponse = nil
+            fromHereNeedsStartPin = false; fromHereStartOverride = nil
+            mode = .plan
+        }
+        itinerary = RiderItinerary(waypoints: points, legs: riderLegs,
+            generation: itinerary.generation + 1, impassableEdgeIDs: itinerary.impassableEdgeIDs)
+        built = BuiltItinerary(generation: itinerary.generation, legs: builtLegs,
+            riderLegStatus: statuses, riderRoutes: routes, waypointFuelStops: result.waypointFuelStops)
+        RoutingDebugLog.shared.event("long ride promoted source=\(source) legs=\(riderLegs.count) targetLegMeters=800000")
         return true
     }
 
@@ -1640,7 +1711,7 @@ final class RoutePlannerModel {
     /// interaction may replace `toast`, but it must never hide the active job.
     var activeRouteProgressMessage: String? {
         if isRouting, streamedLegGeneration == itinerary.generation, !streamedLegResponses.isEmpty {
-            return "Building leg \(streamedLegResponses.count + 1)"
+            return "Building leg \(streamedPrefixResponses.count + streamedLegResponses.count + 1)"
         }
         if isRouting, longRideBuildGeneration == itinerary.generation,
            !itinerary.legs.isEmpty {
@@ -1877,6 +1948,7 @@ final class RoutePlannerModel {
     private func advanceRouteBuildCamera(with progress: BuiltItinerary) {
         guard cameraBuildGeneration == progress.generation else { return }
         for leg in progress.legs {
+            guard !streamedCameraLegIDs.contains(leg.riderLegID) else { continue }
             let key = routeBuildCameraKey(for: leg)
             let coordinates = leg.response.coordinates
             guard coordinates.count >= 2 else { continue }
@@ -3226,7 +3298,7 @@ final class RoutePlannerModel {
             for (index, response) in streamedLegResponses.enumerated() {
                 if let point = response.coordinates.last {
                     markers.append(MapState.Marker(id: "streamed-leg-\(index)",
-                        latitude: point.latitude, longitude: point.longitude, label: "\(index + 2)",
+                        latitude: point.latitude, longitude: point.longitude, label: "\(streamedPrefixResponses.count + index + 2)",
                         kind: .stage, isLocked: true))
                 }
             }

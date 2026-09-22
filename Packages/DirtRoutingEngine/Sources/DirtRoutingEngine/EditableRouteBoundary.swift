@@ -9,6 +9,15 @@ public struct EditableRouteBoundary: Sendable {
     public let match: RoadMatch
     public let incomingRoadIdentity: String
 
+    /// Validate completed geometry using the same bounded post-search allowance
+    /// as seam validation. This does not renew or fund a path search.
+    public static func afterCompletedSearch(in route: ComputedRoute, graph: any RoadGraph,
+                              initialRestrictions: [RestrictionProgress] = [],
+                              budget: ComputationBudget) throws -> [Self]? {
+        try proven(in: route, graph: graph, initialRestrictions: initialRestrictions,
+                   budget: budget.afterCompletedSearchForValidation())
+    }
+
     /// Nil means proof failed, not that arbitrary points may be used instead.
     /// Generated points require through-permitted access and no active via-way
     /// sequence. The final rider endpoint is preserved independently by callers.

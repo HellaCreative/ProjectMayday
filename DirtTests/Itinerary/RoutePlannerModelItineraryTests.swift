@@ -306,12 +306,12 @@ struct RoutePlannerModelItineraryTests {
         model.generateLoop(start: start, far: far)
         await model.waitForCanonicalBuildForTesting()
         let originalFarID = model.itinerary.waypoints[1].id
-        let completion = model.routeCompletionID
+        #expect(model.routeCompletionID != nil)
         source.routeError = RoutingError.server("Cannot reach requested pin")
         model.apply(.insert(afterLegID: model.itinerary.legs[0].id, coordinate: added), source: "test")
         await model.waitForCanonicalBuildForTesting()
         #expect(model.itinerary.waypoints.map(\.coordinate) == [start, added, far, start])
-        #expect(model.routeCompletionID == completion)
+        #expect(model.routeCompletionID == nil)
         #expect(model.errorMessage != nil)
         #expect(map.plannerMarkers.count == 4)
         source.routeError = nil
@@ -756,7 +756,8 @@ struct RoutePlannerModelItineraryTests {
         )
         source.progressRouteHandler = { _, progress in
             progress(.started(regions: []))
-            progress(.leg(index: 0, response: response))
+            let split = try #require(RoutePlannerModel.longRouteSplitPlan(response: response))
+            for (index, leg) in split.responses.enumerated() { progress(.leg(index: index, response: leg)) }
             progress(.completed(response: response))
             return response
         }
@@ -772,6 +773,121 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.itinerary.waypoints.count == 4)
         #expect(model.built?.legs.count == 3)
         #expect(source.routeRequests.count == 1)
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_APPEND"] == "1"), .timeLimit(.minutes(10)))
+    func actualMaineTennesseeAppendStreamsBeforeCompletion() async throws {
+        let root = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["DIRT_QUALIFY_PACK_ROOT"]))
+        let source = PlannerFakeRoutingSource(name: "pack")
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        let start = RouteCoordinate(longitude: -63.339801, latitude: 44.765471)
+        let maine = RouteCoordinate(longitude: -69.87048722902045, latitude: 44.50814567765103)
+        let end = RouteCoordinate(longitude: -85.20936944525984, latitude: 35.25982918763956)
+        model.selectMode(.plan)
+        model.setPlanningSessionSeedForTesting(234465671932795)
+        let session = NativeRoutingSession()
+        source.progressRouteHandler = { request, progress in
+            let directories = Dictionary(uniqueKeysWithValues: ["ns", "nb", "me"].map {
+                ($0, root.appendingPathComponent($0))
+            })
+            return try await NativeRouteProgressBridge.route(request, session: session, directories: directories, onProgress: progress)
+        }
+        model.apply(.replaceAll(waypoints: [start, maine], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: true), source: "plan")
+        model.setPlanningSessionSeedForTesting(234465671932795)
+        await model.waitForCanonicalBuildForTesting()
+        let prefix = try #require(model.built).legs
+        let pins = model.itinerary.waypoints
+        let began = ContinuousClock.now
+        var times: [Duration] = []
+        source.progressRouteHandler = { request, progress in
+            let directories = Dictionary(uniqueKeysWithValues: ["me", "qc-s", "ny", "pa", "md", "va", "tn"].map {
+                ($0, root.appendingPathComponent($0))
+            })
+            return try await NativeRouteProgressBridge.route(request, session: session, directories: directories) { event in
+                progress(event)
+                if case .leg(_, let response) = event {
+                    times.append(began.duration(to: .now))
+                    #expect(model.activeResponses.first?.coordinates == prefix[0].response.coordinates)
+                    #expect(model.activeResponses.last?.coordinates == response.coordinates)
+                    #expect(model.routeCompletionID == nil)
+                    print("APPEND leg meters=\(response.distanceMeters ?? 0) elapsed=\(times.last!)")
+                }
+            }
+        }
+        model.setPlanningSessionSeedForTesting(234465671932795)
+        model.apply(.append(coordinate: end), source: "longPress")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.errorMessage == nil)
+        #expect(model.built?.legs.first == prefix.first)
+        #expect(model.itinerary.waypoints.prefix(pins.count).map(\.id) == pins.map(\.id))
+        #expect(times.count >= 2)
+        #expect(try #require(times.first) < began.duration(to: .now) - .seconds(1))
+        #expect(model.itinerary.legs.count == times.count + prefix.count)
+        print("APPEND complete elapsed=\(began.duration(to: .now)) legs=\(model.itinerary.legs.count)")
+    }
+
+    @Test func appendedLongLegStreamsWhilePreservingExistingPinsAndRoads() async throws {
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.selectMode(.plan)
+        model.apply(.replaceAll(waypoints: [point(0), point(0.2)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: false), source: "plan")
+        await model.waitForCanonicalBuildForTesting()
+        let prior = try #require(model.built).legs
+        let pins = model.itinerary.waypoints
+        source.routeRequests = []
+        let first = plannerRoadResponse(from: point(0.2), to: point(0.6))
+        let last = plannerRoadResponse(from: point(0.6), to: point(1))
+        source.progressRouteHandler = { _, progress in
+            progress(.started(regions: ["me", "tn"]))
+            progress(.leg(index: 0, response: first))
+            #expect(model.activeResponses.first?.coordinates == prior[0].response.coordinates)
+            #expect(model.activeResponses.last?.coordinates == first.coordinates)
+            #expect(model.activeRouteProgressMessage == "Building leg 3")
+            #expect(model.routeCompletionID == nil)
+            progress(.discarded)
+            #expect(model.activeResponses.map(\.coordinates) == prior.map { $0.response.coordinates })
+            progress(.started(regions: ["me", "tn"]))
+            progress(.leg(index: 0, response: first))
+            progress(.leg(index: 1, response: last))
+            return plannerRoadResponse(from: point(0.2), to: point(1))
+        }
+        model.apply(.append(coordinate: point(1)), source: "longPress")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(source.routeRequests.count == 1)
+        #expect(model.itinerary.waypoints.prefix(pins.count).map(\.id) == pins.map(\.id))
+        #expect(model.built?.legs.first == prior.first)
+        #expect(model.itinerary.legs.count == 3)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [point(0), point(0.2), point(0.6), point(1)])
+        #expect(model.routeCompletionID != nil)
+    }
+
+    @Test func longLoopSplitsBothHalvesAndPreservesFarPinAndClosure() async throws {
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(point(0), point(1))] = 2_100_000
+        source.distanceOverrides[key(point(1), point(0))] = 2_100_000
+        let model = makeModel(source: source)
+        model.showingLoop = true
+        var observed: [Int] = []
+        source.loopProgressInspection = { half, _ in
+            observed.append(half)
+            #expect(model.routeCompletionID == nil)
+            #expect(!model.activeResponses.isEmpty)
+            if half == 0 { #expect(source.routeRequests.count == 1) }
+        }
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        #expect(observed == [0, 0, 0, 1, 1, 1])
+        #expect(source.loopRequestCount == 1)
+        #expect(model.itinerary.legs.count == 6)
+        #expect(model.itinerary.waypoints.first?.coordinate == point(0))
+        #expect(model.itinerary.waypoints.last?.coordinate == point(0))
+        #expect(model.itinerary.waypoints.contains { $0.coordinate == point(1) })
+        #expect(model.built?.legs.count == 6)
+        #expect(model.routeCompletionID != nil)
     }
 
     @Test func insertAndDeleteMutateOnlyCanonicalWaypoints() async throws {
@@ -1632,6 +1748,29 @@ private final class PlannerFakeRoutingSource: RoutingSource {
     }
 
     var loopRequestCount = 0
+    var loopProgressInspection: ((Int, RouteBuildProgress) -> Void)?
+    func planLoop(_ request: PlannedLoopRequest,
+                  onProgress: @escaping @MainActor (Int, RouteBuildProgress) -> Void) async throws -> PlannedLoop {
+        loopRequestCount += 1
+        var responses: [RouteResponse] = []
+        for (index, pair) in [(request.start, request.far), (request.far, request.start)].enumerated() {
+            let response = try await route(RouteRequest(profile: request.profile, locations: [
+                RouteLocation(latitude: pair.0.latitude, longitude: pair.0.longitude, label: "start"),
+                RouteLocation(latitude: pair.1.latitude, longitude: pair.1.longitude, label: "end")
+            ], allowUnknown: request.allowUnknown))
+            onProgress(index, .started(regions: []))
+            if let split = RoutePlannerModel.longRouteSplitPlan(response: response) {
+                for (partIndex, part) in split.responses.enumerated() {
+                    let event = RouteBuildProgress.leg(index: partIndex, response: part)
+                    onProgress(index, event)
+                    loopProgressInspection?(index, event)
+                }
+            }
+            onProgress(index, .completed(response: response))
+            responses.append(response)
+        }
+        return PlannedLoop(far: request.far, outbound: responses[0], inbound: responses[1], reriddenMeters: 0, returnMeters: 0)
+    }
 
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
         loopRequestCount += 1

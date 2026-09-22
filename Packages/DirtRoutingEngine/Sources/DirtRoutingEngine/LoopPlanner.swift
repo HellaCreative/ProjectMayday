@@ -59,7 +59,8 @@ public struct LoopPlanner: Sendable {
     let pack: any RoadGraph
     public init(pack: any RoadGraph) { self.pack = pack }
 
-    public func plan(_ request: LoopRequest, budget: ComputationBudget = .init(seconds: 60)) throws -> LoopPlanResult {
+    public func plan(_ request: LoopRequest, budget: ComputationBudget = .init(seconds: 60),
+                     onLeg: ((Int, ComputedRoute) throws -> Void)? = nil) throws -> LoopPlanResult {
         try budget.check()
         var request = request
         request.profile.wander = aimedWander(start: request.start, far: request.far, target: request.targetMeters)
@@ -93,6 +94,7 @@ public struct LoopPlanner: Sendable {
         } catch is RoutingFailure {
             throw LoopFailure.pinUnreachable
         }
+        try onLeg?(0, outbound)
         var inboundRequest = outboundRequest.with(start: request.far, end: request.start)
         inboundRequest.options.repeatEdges = Set(outbound.segments.map(\.edgeID).filter { !$0.isEmpty })
         inboundRequest.options.repeatFactor = 16
@@ -103,6 +105,7 @@ public struct LoopPlanner: Sendable {
         } catch {
             inbound = outbound.reversed()
         }
+        try onLeg?(1, inbound)
         return LoopPlanResult(outbound: outbound, inbound: inbound, far: request.far)
     }
 

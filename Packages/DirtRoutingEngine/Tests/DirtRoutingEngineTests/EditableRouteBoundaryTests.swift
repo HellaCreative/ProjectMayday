@@ -17,6 +17,20 @@ struct EditableRouteBoundaryTests {
             policy: ProfilePolicy(style: .dirt), access: AccessPolicy(), options: options)
     }
 
+    @Test func completedRouteCanBeValidatedAfterSearchAllowanceExpiresWithoutRenewingSearch() throws {
+        let graph = UnknownConnectorTests.Graph(lengths: [100,100], access: [0,0])
+        let completed = try route(graph)
+        let expired = ComputationBudget(seconds: 0, maximumLabels: 17)
+        #expect(throws: RoutingFailure.resourceLimit("time")) { try expired.check() }
+        #expect(throws: RoutingFailure.resourceLimit("time")) {
+            try EditableRouteBoundary.proven(in: completed, graph: graph, budget: expired)
+        }
+        let boundaries = try #require(try EditableRouteBoundary.afterCompletedSearch(
+            in: completed, graph: graph, budget: expired))
+        #expect(boundaries.map(\.meters) == [100,200])
+        #expect(throws: RoutingFailure.resourceLimit("time")) { try expired.check() }
+    }
+
     @Test func generatedPinCannotResetAnActiveViaWaySequence() throws {
         var graph = UnknownConnectorTests.Graph(lengths: [100,100,100,100], access: [0,0,0,0])
         graph.restrictions = [.init(relationID: 1, fromEdge: 0, toEdge: 3,

@@ -4269,3 +4269,57 @@ Release currently selects production services and the older
 selection must be promoted and independently verified only after DEV physical
 acceptance and a separate production authorization. No production pointer,
 archive, TestFlight upload, or App Store promotion was performed.
+
+### September 22 — every rider leg receives long-route progress and editable sections
+
+Richard's 17:30 UTC phone log proves the two-pin Plan fix was installed: both
+NS–NY and NS–Maine generated editable sections. Appending Maine–Tennessee still
+ran for 163.151 seconds and committed a single 2,878,312 m leg. That was an
+application scope defect, not an absent pack or a missing optimized build.
+The working spacing remains approximately **800 km** for a long rider leg over
+1,000 km; Richard's latest message said “800 m,” and clarification was requested
+while proceeding with the repeatedly established 800 km requirement.
+
+Progress is now scoped by rider-leg identity in the shared itinerary builder.
+From Here, Plan, appended destinations, edited legs and loop halves use the same
+promotion path. Existing rider waypoint IDs, prior built legs, preferences and
+geometry survive an append. New boundaries use the existing native whole-road
+legal/restriction proof, retain the original endpoint, and are committed together
+after success without a second routing pass. A native single-section result is
+not overridden with arbitrary geometric cuts. Retry/cancel clears only the new
+preview; completion signals are cleared at build start and emitted only after
+complete success. Loop outbound sections are available before the return solve
+finishes; its far pin, closure and repeated-road metadata remain intact.
+
+The first real app replay exposed an expired candidate-search allowance being
+reused for editable-boundary validation after a completed PA search. Failed
+validation could also overwrite the preceding stage's incoming identity before
+retry. Validation now uses the existing bounded post-search validation allowance;
+no path search receives that allowance. Incoming identity/history are committed
+only after the proof succeeds. Search/time/label limits, scoring and legal-access
+rules are unchanged. The old failure is preserved, not replaced by the pass.
+
+Evidence: `.build/all-leg-progress-20260922/validation-repair/` contains the final
+source hashes, app result bundle and delivery receipts. All **215 engine tests**
+and **64 planner/builder app tests** pass (one unrelated opt-in continental timing
+test skipped). The actual native NS–Maine route was built first, then Tennessee
+appended with seed 234465671932795 and the phone's route preferences. The two
+existing legs and pins remained; the extension produced 800,614.498 m,
+800,195.194 m, 800,071.994 m and 447,832.764 m sections, six legs total. App events
+arrived at 116.244, 232.091, 245.859 and 245.930 seconds; complete at 246.341 s.
+This is a Debug simulator functional/progress measurement, **not** a phone speed
+improvement or geometry-equivalent timing comparison with the 163-second phone
+run. The underlying long search remains expensive. Loop observer/road-equality
+and editable-boundary tests pass; physical loop acceptance remains pending.
+
+The fabric remains the already published immutable `fabric-v4-20260922-01`.
+No dataset rebuild or republication is needed. The new runtime evidence supplements
+rather than rewrites the earlier 1,165-case pack qualification. Diagnostic stamp:
+`continental-70-all-legs-20260922`. Optimized `ReleaseDev` was installed and launched successfully on White at
+18:10:36 UTC, retaining `com.mayday.dirt.dev`, DEV services, Swift `-O` and
+tester controls. Binary SHA256:
+`4b4e51e47eda3809e3221fe7377f0b0399fd88c8e592e0954ca63d73f823f255`.
+Separate build/install/launch receipts are in
+`validation-repair/device-receipt.json`, `install.json` and `launch.json`.
+Physical acceptance remains pending. Production is not changed by this routing
+repair. BC–Utah chain recovery remains a separate unresolved issue.

@@ -198,7 +198,7 @@ actor NativeRoutingSession {
                     result = try RoutingEngine(pack: preparation.graph, compassStore: compassStore)
                         .route(request,budget: budget)
                     if progress != nil, result.limit == nil {
-                        result.editableBoundaries = try EditableRouteBoundary.proven(in: result,
+                        result.editableBoundaries = try EditableRouteBoundary.afterCompletedSearch(in: result,
                             graph: preparation.graph, initialRestrictions: request.options.arrival?.restrictions
                                 ?? request.options.arrivalRestrictions, budget: budget)
                     }
@@ -219,7 +219,9 @@ actor NativeRoutingSession {
             throw error
         }
     }
-    func loop(_ request: LoopRequest, directories: [String:URL]) throws -> LoopPlanResult {
+    func loop(_ request: LoopRequest, directories: [String:URL],
+              progress: AsyncStream<LoopLegProgress>.Continuation? = nil) throws -> LoopPlanResult {
+        defer { progress?.finish() }
         let started = ContinuousClock.now
         let budget = ComputationBudget(seconds: 60)
         let counter = request.options.counter ?? SearchCounter()
@@ -229,7 +231,13 @@ actor NativeRoutingSession {
         do {
             let preparation = try prepare(directories, budget: budget)
             prepared = elapsedMs(from: started); prepareDetail = preparation.detail
-            let result = try LoopPlanner(pack: preparation.graph).plan(request, budget: budget)
+            let result = try LoopPlanner(pack: preparation.graph).plan(request, budget: budget) { index, route in
+                guard let progress else { return }
+                var proven = route
+                proven.editableBoundaries = try EditableRouteBoundary.afterCompletedSearch(in: route,
+                    graph: preparation.graph, budget: budget)
+                progress.yield(LoopLegProgress(index: index, route: proven))
+            }
             log("pack loop", started: started, prepared: prepared, prepareDetail: prepareDetail, counter: counter,
                 outcome: "outbound=\(Int(result.outbound.distanceMeters.rounded())) inbound=\(Int(result.inbound.distanceMeters.rounded())) far=\(String(format: "%.5f", result.far.longitude)),\(String(format: "%.5f", result.far.latitude)) reridden=\(Int(result.reriddenMeters.rounded())) return=\(Int(result.returnMeters.rounded()))")
             return result
@@ -250,4 +258,9 @@ extension GraphPack {
     nonisolated var regionId: String? { metadata.regionId }
     nonisolated var hasLeaves: Bool { true }
     nonisolated var version: Int { 4 }
+}
+
+struct LoopLegProgress: Sendable {
+    let index: Int
+    let route: ComputedRoute
 }

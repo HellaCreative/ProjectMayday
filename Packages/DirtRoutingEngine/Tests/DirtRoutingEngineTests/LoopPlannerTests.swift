@@ -19,6 +19,27 @@ struct LoopPlannerTests {
         return try IndexedGraph(PolicyTests.Line(nodes: nodes, edges: edges, surfaces: surfaces, roads: roads))
     }
 
+    @Test func observedLoopKeepsRoadsAndProvidesProvableLegsInOrder() throws {
+        let graph = try parallelRoads()
+        var request = LoopRequest(start: .init(longitude: 0.002, latitude: 0.002),
+            far: .init(longitude: 0.28, latitude: 0.002), targetMeters: 50_000, style: .dirt)
+        request.options.cityWall = false
+        let baseline = try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10))
+        var indexes: [Int] = []
+        let observed = try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10)) { index, route in
+            indexes.append(index)
+            var proven = route
+            proven.editableBoundaries = try EditableRouteBoundary.proven(in: route, graph: graph)
+            var assembler = EditableRouteLegAssembler(targetMeters: 8_000, thresholdMeters: 10_000)
+            let legs = try assembler.finish(proven)
+            #expect(legs.count > 1)
+            #expect(legs.flatMap(\.segments).map(\.edgeID) == route.segments.map(\.edgeID))
+        }
+        #expect(indexes == [0, 1])
+        #expect(observed.segments.map(\.edgeID) == baseline.segments.map(\.edgeID))
+        #expect(observed.distanceMeters == baseline.distanceMeters)
+    }
+
     @Test func aLoopToAFarPinReturnsStartFarStart() throws {
         let graph = try parallelRoads()
         let start = Coordinate(longitude: 0.002, latitude: 0.002)

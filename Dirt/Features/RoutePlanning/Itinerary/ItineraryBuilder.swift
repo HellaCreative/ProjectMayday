@@ -105,6 +105,7 @@ final class ItineraryBuilder {
         replanFromStationID: String? = nil,
         onFuelStatus: @MainActor (String) -> Void = { _ in },
         onRouteProgress: (@MainActor (RouteBuildProgress) -> Void)? = nil,
+        onScopedRouteProgress: (@MainActor (UUID, RouteBuildProgress) -> Void)? = nil,
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
@@ -250,7 +251,12 @@ final class ItineraryBuilder {
                     let request = routeRequest(
                         itinerary: itinerary, legIndex: index, maxPathMeters: nil,
                         history: discoveryHistory, profileOverride: discoveryProfile)
-                    if let onRouteProgress {
+                    if let onScopedRouteProgress {
+                        response = try await selectedSource.route(request) { event in
+                            onScopedRouteProgress(riderLeg.id, event)
+                            onRouteProgress?(event)
+                        }
+                    } else if let onRouteProgress {
                         response = try await selectedSource.route(request, onProgress: onRouteProgress)
                     } else {
                         response = try await selectedSource.route(request)

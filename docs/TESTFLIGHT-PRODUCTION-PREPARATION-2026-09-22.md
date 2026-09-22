@@ -8,13 +8,17 @@ its release qualification and is being accepted on a physical DEV build first.
 
 ## Verified DEV baseline
 
-- Git checkpoint: `869ff85` on `main`.
+- Initial delivered Git checkpoint: `869ff85` on `main`; use the later all-leg
+  routing follow-up and its device receipt for the next production candidate.
 - Immutable fabric: `fabric-v4-20260922-01`.
 - Scope: 70 regions and 155 neighbouring pairs, including `ca-n` and `ca-s`.
 - Qualification: 1,165 route/resource cases passed; 213 engine and 64 integrated
   app checks passed before the small Plan-mode follow-up.
-- Follow-up: Plan a Route now promotes a legal two-pin route over 1,000 km into
-  editable roughly 800 km legs. Its 45-test planner itinerary suite passes.
+- Latest follow-up: From Here, Plan, appended/edited legs and loop halves share
+  editable roughly 800 km sections for long legs. All 215 engine and 64 app
+  checks pass, including a real NS–Maine–Tennessee append. See the routing
+  authority for exact source/receipt attribution and the remaining search-time
+  and BC–Utah limitations. Physical acceptance of this follow-up is pending.
 - Device lane: optimized `ReleaseDev`, `com.mayday.dirt.dev`, DEV services only.
 
 ## Current production boundary

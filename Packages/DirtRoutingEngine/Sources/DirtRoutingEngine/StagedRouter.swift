@@ -288,12 +288,13 @@ public enum StagedRouter {
                         compassStore: compassStore, budget: attemptBudget)
                     hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
                     if onProgress != nil {
+                        let validationBudget = try budget.afterCompletedSearchForValidation()
                         part0.editableBoundaries = try EditableRouteBoundary.proven(in: part0,
                             graph: firstGraph, initialRestrictions: hop0.options.arrival?.restrictions
-                                ?? hop0.options.arrivalRestrictions, budget: attemptBudget)
+                                ?? hop0.options.arrivalRestrictions, budget: validationBudget)
                         part1.editableBoundaries = try EditableRouteBoundary.proven(in: part1,
                             graph: secondGraph, initialRestrictions: hop1.options.arrival?.restrictions
-                                ?? hop1.options.arrivalRestrictions, budget: attemptBudget)
+                                ?? hop1.options.arrivalRestrictions, budget: validationBudget)
                     }
                     let combined = try stitch([part0, part1], windows: windows)
                     // Both halves must succeed before exposing either: a failed
@@ -467,8 +468,8 @@ public enum StagedRouter {
                             "handoverSlice:\(attempt):\(Int(sliceSeconds.rounded()))s", since: started)
                     }
                     guard part.limit == nil else { throw RoutingFailure.resourceLimit(part.limit!) }
+                    let validationBudget = try budget.afterCompletedSearchForValidation()
                     if index + 1 < windows.count {
-                        let validationBudget = try budget.afterCompletedSearchForValidation()
                         let validationStarted = ContinuousClock.now
                         defer { hop.options.counter?.recordStage("handoverValidation:\(index)", since: validationStarted) }
                         guard let nextGraph = nextIndexed else { throw RoutingFailure.noPath }
@@ -493,6 +494,13 @@ public enum StagedRouter {
                             since: validationStarted)
                         guard !legal.isEmpty else { throw RoutingFailure.noMatch }
                     }
+                    // A failed validation must leave the previous stage's
+                    // incoming identity/history intact for another candidate.
+                    if onProgress != nil {
+                        part.editableBoundaries = try EditableRouteBoundary.proven(in: part,
+                            graph: indexed, initialRestrictions: hop.options.arrival?.restrictions
+                                ?? hop.options.arrivalRestrictions, budget: validationBudget)
+                    }
                     incomingIdentity = part.segments.last.map { indexed.identity(of: $0.edge) }
                     // Remember original road identities before evicting this window.
                     // The next window has different local indices but the same roads.
@@ -505,11 +513,6 @@ public enum StagedRouter {
                         indexed.identity(of: $0.edge)
                     })
                     hop.options.counter?.recordStage("carryHistory:\(index)", since: historyStarted)
-                    if onProgress != nil {
-                        part.editableBoundaries = try EditableRouteBoundary.proven(in: part,
-                            graph: indexed, initialRestrictions: hop.options.arrival?.restrictions
-                                ?? hop.options.arrivalRestrictions, budget: attemptBudget)
-                    }
                     parts.append(part)
                     // Handover clipping and onward direction proof are complete.
                     // A later chain failure still invalidates this preview.
@@ -1224,7 +1227,7 @@ public enum StagedRouter {
         let indexed = try openWindow(regions, repository: repository, budget: budget, prepared: prepared)
         var result = try RoutingEngine(pack: indexed, compassStore: compassStore).route(request, budget: budget)
         if proveEditableBoundaries {
-            result.editableBoundaries = try EditableRouteBoundary.proven(in: result, graph: indexed,
+            result.editableBoundaries = try EditableRouteBoundary.afterCompletedSearch(in: result, graph: indexed,
                 initialRestrictions: request.options.arrival?.restrictions ?? request.options.arrivalRestrictions,
                 budget: budget)
         }

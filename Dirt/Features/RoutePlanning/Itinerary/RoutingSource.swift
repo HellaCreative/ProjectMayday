@@ -21,6 +21,7 @@ protocol RoutingSource: AnyObject {
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop?
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop
+    func planLoop(_ request: PlannedLoopRequest, onProgress: @escaping @MainActor (Int, RouteBuildProgress) -> Void) async throws -> PlannedLoop
 }
 
 struct PlannedLoopRequest: Sendable {
@@ -53,6 +54,10 @@ extension RoutingSource {
         try Task.checkCancellation()
         onProgress(.completed(response: response))
         return response
+    }
+    func planLoop(_ request: PlannedLoopRequest,
+                  onProgress: @escaping @MainActor (Int, RouteBuildProgress) -> Void) async throws -> PlannedLoop {
+        try await planLoop(request)
     }
     var supportsCombinedFuelPlanning: Bool { false }
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
@@ -222,6 +227,11 @@ final class PackRoutingSource: RoutingSource {
     }
 
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
+        try await planLoop(request, onProgress: { _, _ in })
+    }
+
+    func planLoop(_ request: PlannedLoopRequest,
+                  onProgress: @escaping @MainActor (Int, RouteBuildProgress) -> Void) async throws -> PlannedLoop {
         var engine = LoopRequest(
             start: .init(longitude: request.start.longitude, latitude: request.start.latitude),
             far: .init(longitude: request.far.longitude, latitude: request.far.latitude),
@@ -237,7 +247,23 @@ final class PackRoutingSource: RoutingSource {
             request.start.locationCoordinate, request.far.locationCoordinate
         ])
         do {
-            let result = try await session.loop(engine, directories: directories)
+            let (events, continuation) = AsyncStream<LoopLegProgress>.makeStream()
+            let loopRequest = engine
+            async let calculation = session.loop(loopRequest, directories: directories, progress: continuation)
+            var observedOutbound: ComputedRoute?
+            for await event in events {
+                try Task.checkCancellation()
+                let priorIDs = Set(observedOutbound?.segments.map(\.edgeID) ?? [])
+                onProgress(event.index, .started(regions: directories.keys.sorted()))
+                var assembler = EditableRouteLegAssembler()
+                for (index, leg) in try assembler.finish(event.route).enumerated() {
+                    onProgress(event.index, .leg(index: index,
+                        response: NativeRoutingAdapter.response(leg, style: engine.profile.style, prior: priorIDs)))
+                }
+                onProgress(event.index, .completed(response: NativeRoutingAdapter.response(event.route, style: engine.profile.style, prior: priorIDs)))
+                if event.index == 0 { observedOutbound = event.route }
+            }
+            let result = try await calculation
             let style = engine.profile.style
             let outboundIDs = Set(result.outbound.segments.map(\.edgeID))
             let quality = RouteQuality(route: result.combined)
