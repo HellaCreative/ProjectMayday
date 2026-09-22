@@ -3839,3 +3839,44 @@ without proof. The Oregon attempt was cancelled by the rider after52.240s,
 not a demonstrated completed route failure. Preserve prior valid legs and
 cancellation behavior. California's existing serial private matrix keeps its
 heavy-job slot; this phone report does not authorize duplicating it.
+
+September 22 01:22 UTC follow-up: the private California/neighbor matrix is
+complete, all60 cases passing, zero route/resource/coverage failures. Evidence:
+california-preparation-profile-20260922/legal-probe-matrix/routes/qualification.json
+on probe c01a54bad4c070eceff93ac18ce6a39b640edd4ae8e2aee8516a5ef579060b68.
+The bounded legal probe is now integrated with exactly the tested engine source
+bytes. Five additional tests (including four independent oracle fixtures) cover
+turn/customer/one-way legality, explicit ferry permission, forbidden roads,
+necessary town connections despite scenic bounds and cancellation. All209
+integrated engine tests pass. The app California→Arizona Dirt request passes
+in46.934s through its actual adapter/session at525MB peak footprint. The
+controlled long planner retains14 editable legs and exact11,044,901.952m distance:
+95.429s planner versus95.372s direct. The integrated app suite passes63 tests, including real California routing,
+stream bridge, planner progress and adjacent-leg editing. Evidence:
+integrated-app-tests.xcresult and integrated-app-state.json.
+
+The factory's California clip polygons now adopt the proved latitude37 cut
+with zero extra polygon overlap and the existing2km extraction halo. Exact
+original/replacement hashes and unchanged source epoch are retained in
+scripts/pack-fabric/routing/data/california-split-recipe-20260922.json. This
+does not retroactively alter the source lock or recipe on historical artifacts.
+The complete-release assembler verifies each sealed source, requires unchanged
+neighbor graph/geometry/fuel/service bytes, replaces both directions of every
+seam touching California, and preserves all unrelated proofs. Six focused
+assembly/scoping tests pass. No road datasets need rebuilding.
+
+complete-dev-70-20260922/run.py PID85279 owns the next serial queue. It waits
+for integrated app supervisorPID83545 to pass, checks source/probe identities,
+then assembles fabric-v4-20260922-01 from the original70 seal plus the proved
+California replacement. The68 reused road/fuel/service identities must equal
+the delivered scoped release. It runs all1165 original requests under unchanged
+limits on the new runtime/new sealed candidate, then publishes and verifies
+immutable downloads only if all gates pass. Candidate scope70 regions/155pairs;
+plan restores39 California requests to the1126 scoped cases. New receipts stay
+separate from every historical qualification. Read complete-dev-70-20260922/
+state.json, execution-identity.json and live children before heavy work. On
+failure inspect the exact stage; do not restart unchanged. Following verified
+publication, DEV catalog activation, exact70 app download/registry verification
+and matching physical installation are still required. The delivered68-region
+phone build stays available for Richard's testing. The long-append subdivision
+and BC→Utah matching follow-ups from his log remain recorded above.

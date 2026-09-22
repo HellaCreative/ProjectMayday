@@ -3,6 +3,25 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct RideCompositionTests {
+    @Test func localLegalProbeRespectsUnknownAccessAndNeverRejectsOnItsWorkLimit() throws {
+        let nodes: [Coordinate] = [.init(longitude: 0, latitude: 0), .init(longitude: 0.01, latitude: 0),
+            .init(longitude: 0.02, latitude: 0), .init(longitude: 0.03, latitude: 0)]
+        let line = PolicyTests.Line(nodes: nodes, edges: [(0,1),(1,2),(2,3)],
+            surfaces: ["asphalt","asphalt","asphalt"], roads: ["tertiary","tertiary","tertiary"],
+            edgeAccess: [0,1,0])
+        let graph = try IndexedGraph(line), engine = RoutingEngine(pack: graph)
+        let start = RoadMatch(edge: 0, coordinate: nodes[0], distanceMeters: 0, alongMeters: 0, geometryMeters: line.distance(0))
+        let end = RoadMatch(edge: 2, coordinate: nodes[3], distanceMeters: 0, alongMeters: line.distance(2), geometryMeters: line.distance(2))
+        var request = RoutingRequest(start: start.coordinate, end: end.coordinate, style: .dirt, seed: 1)
+        #expect(try !engine.localLegalConnectionPossible(request, start: start, end: end, budget: .init()))
+        #expect(try engine.localLegalConnectionPossible(request, start: start, end: end, budget: .init(), maximumLabels: 1))
+        request.access.allowUnknown = true
+        #expect(try engine.localLegalConnectionPossible(request, start: start, end: end, budget: .init()))
+        #expect(throws: RoutingFailure.self) {
+            try engine.localLegalConnectionPossible(request, start: start, end: end, budget: .init(seconds: 0))
+        }
+    }
+
     @Test func continuationUsesTraversedRoadAtJunctionRatherThanEndMatch() throws {
         let line = PolicyTests.Line(nodes: [.init(longitude: 0, latitude: 0), .init(longitude: 0.01, latitude: 0),
                                            .init(longitude: 0.02, latitude: 0)],

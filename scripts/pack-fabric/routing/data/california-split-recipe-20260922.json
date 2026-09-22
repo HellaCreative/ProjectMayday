@@ -1,0 +1,24 @@
+{
+  "purpose": "Adopted factory clipping recipe after owned-road/legal/fuel/services coverage and 60 California/neighbor route checks passed. New complete release still requires final qualification.",
+  "parentPolygon": {
+    "path": "/Volumes/SIDECAR/LIVE/MAYDAYiOS/Dirt/scripts/pack-fabric/routing/data/region-polygons/ca.clip.geojson",
+    "sha256": "6fbb3d31740d0f5416e1822a71de3b02f7714024d2eb4ba8e186a76135c6a27f"
+  },
+  "ownershipCutLat": 37,
+  "polygonOverlapDegrees": 0,
+  "extractionHaloMeters": 2000,
+  "regions": {
+    "ca-n": {
+      "path": "scripts/pack-fabric/routing/data/region-polygons/ca-n.clip.geojson",
+      "sha256": "8f588b5beb8d0c2e8fc9be48e84e8aacc2a2f6c96342ade44dc9dc4ee151f172",
+      "replacesSHA256": "b672845829ff97ffb06fe93d3173a65d0a364690fb8e2e1695694502c2309b35"
+    },
+    "ca-s": {
+      "path": "scripts/pack-fabric/routing/data/region-polygons/ca-s.clip.geojson",
+      "sha256": "54c266add951e6a0711bc47d8871936586c8a9c6387a9529264a7b97139a1b18",
+      "replacesSHA256": "28955a8c945d3fae5b84353fdfbdb4c780f0913b2add8ba13bc09264e1d5c843"
+    }
+  },
+  "coverageReceipt": ".build/continental-qualification-20260920/california-owned-coverage-20260922/owned-union-coverage-receipt.json",
+  "qualificationReceipt": ".build/continental-qualification-20260920/california-preparation-profile-20260922/legal-probe-matrix/routes/qualification.json"
+}

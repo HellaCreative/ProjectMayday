@@ -176,7 +176,44 @@ public struct RoutingEngine: Sendable {
         }
         throw lastFailure
     }
+    /// Only exhaustion of a small legal search rules out this snap pair. A
+    /// limit or an available route leaves ordinary routing fully in charge.
+    /// All road-access and turn-state handling comes from the same PathSearch;
+    /// optional scenic bounds are relaxed, so this cannot reject a connection
+    /// merely because it leaves a preferred corridor or crosses a city.
+    func localLegalConnectionPossible(_ request: RoutingRequest, start: RoadMatch,
+                                      end: RoadMatch, budget: ComputationBudget,
+                                      maximumLabels: Int = 256) throws -> Bool {
+        try budget.check()
+        var options = request.options
+        options.objective = .profile
+        options.roadRemaining = nil
+        options.cityWall = false
+        options.maximumMeters = .infinity
+        options.corridorMeters = .infinity
+        options.extentCenter = nil
+        options.maxExtentMeters = .infinity
+        options.disableProgressRegression = true
+        options.preventLocalCircuits = false
+        options.avoidCircuitNodes = []
+        options.pavedOnly = false
+        options.collectEveryGoal = false
+        let started = ContinuousClock.now
+        defer { request.options.counter?.recordStage("localLegalProbe", since: started) }
+        do {
+            _ = try PathSearch(pack: pack).search(start: start, end: end,
+                policy: request.profile, access: request.access, options: options,
+                budget: budget.limited(to: 0.1, maximumLabels: maximumLabels))
+            return true
+        } catch RoutingFailure.noPath { return false }
+        catch RoutingFailure.resourceLimit { try budget.check(); return true }
+    }
+
     public func route(_ request: RoutingRequest,start: RoadMatch,end: RoadMatch,budget: ComputationBudget) throws -> ComputedRoute {
+        if request.options.composeDirtRide, request.profile.style == .dirt,
+           try !localLegalConnectionPossible(request, start: start, end: end, budget: budget) {
+            throw RoutingFailure.noPath
+        }
         if let composed = try composedDirtRide(request, start: start, end: end, budget: budget) {
             return composed
         }

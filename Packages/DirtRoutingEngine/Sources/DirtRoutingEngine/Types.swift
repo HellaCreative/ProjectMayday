@@ -86,6 +86,12 @@ public struct ComputationBudget: Sendable {
         .init(deadline: min(deadline,ContinuousClock.now.advanced(by: .seconds(max(0,seconds)))),
               maximumLabels: maximumLabels, maximumSearchHistoryBytes: maximumSearchHistoryBytes, windowSeconds: windowSeconds, cancellation: cancellation)
     }
+    func limited(to seconds: Double, maximumLabels: Int) -> Self {
+        .init(deadline: min(deadline, .now.advanced(by: .seconds(max(0, seconds)))),
+              maximumLabels: min(self.maximumLabels, max(1, maximumLabels)),
+              maximumSearchHistoryBytes: maximumSearchHistoryBytes,
+              windowSeconds: windowSeconds, cancellation: cancellation)
+    }
     func afterCommittedStage() throws -> Self {
         try cancellation.check()
         return .init(deadline: .now.advanced(by: .seconds(windowSeconds)),

@@ -19,6 +19,36 @@ struct NativeCandidateQualificationTests {
             .appendingPathComponent("scripts/pack-fabric/routing/candidates/fabric-v4-20260917-02/packs")
     }
 
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_CALIFORNIA"] == "1"),
+          .timeLimit(.minutes(3)))
+    func californiaArizonaDirtCompletesWithLegalAccessThroughAppAdapter() async throws {
+        let directory = try #require(ProcessInfo.processInfo.environment["DIRT_QUALIFY_CALIFORNIA_PACK_ROOT"])
+        let packRoot = URL(fileURLWithPath: directory, isDirectory: true)
+        let directories = Dictionary(uniqueKeysWithValues: ["ca-s", "az"].map { ($0, packRoot.appendingPathComponent($0)) })
+        let request = RidePreferenceContext.$current.withValue(
+            .init(wander: 0.5, avoidCities: true, avoidHighways: true)) {
+            RouteRequest(profile: .dirt, locations: [
+                .init(latitude: 32.82610321044922, longitude: -114.82572937011719, label: "California"),
+                .init(latitude: 32.68992233276367, longitude: -114.58694458007812, label: "Arizona")
+            ], allowUnknown: false, sessionSeed: 1, matchLimitMeters: 250)
+        }
+        let native = try NativeRoutingAdapter.request(request)
+        #expect(native.access.avoidFerries && !native.access.allowUnknown)
+        #expect(native.profile.avoidMajorHighways && native.options.cityWall)
+        let started = ContinuousClock.now
+        let route = try await NativeRoutingSession().route(native, directories: directories)
+        #expect(route.limit == nil)
+        #expect(route.start.coordinate.distance(to: native.start) <= 250)
+        #expect(route.end.coordinate.distance(to: native.end) <= 250)
+        #expect(route.segments.allSatisfy { $0.access != 2 && $0.access != 5 && $0.structure != "ferry" })
+        #expect(RouteQuality(route: route).reriddenMeters <= 100)
+        verifyShortUnknownConnectors(route)
+        let response = NativeRoutingAdapter.response(route, style: .dirt)
+        #expect(response.coordinates.count > 2)
+        #expect(abs((response.distanceMeters ?? 0) - route.distanceMeters) < 1)
+        report("california-arizona-legal-probe", started: started, route: route)
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_STREAM_BRIDGE"] == "1"),
           .timeLimit(.minutes(5)))
     func publishedTwoPackProgressDrainsBeforeReturningTheSameRoute() async throws {
