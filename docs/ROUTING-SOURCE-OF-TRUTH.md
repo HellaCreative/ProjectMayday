@@ -4002,3 +4002,37 @@ Compact-proof integration checkpoint529c5dd is pushed. Initial new app results
 include California→Arizona47.761s with462MB process-lifetime peak footprint
 and cold Texas45.016s with the same peak; remaining app checks are still
 running, so these are not full app or release completion.
+
+### September 22 06:05 UTC — app checks isolate a timed-comparison difference
+
+The compact-proof app run completed62/64 checks. Texas cold/warm both return
+299,051m (45.016s/39.474s); California→Arizona completes47.761s. Two checks
+failed and the new qualification/publication queues stopped before starting
+qualification-packed-marks. Preserve packed-marks-app/tests.xcresult and its
+failed state. run-packed-marks.py25278 and activate-packed-marks.py26067 are
+stopped and must not be restarted unchanged.
+
+The long-planner failure was test setup: the assembled70 candidate has
+release.json but no publication-generated manifest.json yet. A separate exact
+planner rerun uses the published68 catalog with the identical Canadian pack
+bytes, preserving production per-leg catalog selection and the new runtime.
+It passes:14 editable legs95.088s versus direct97.655s, both11,044,901.952m,
+with actual incremental progress and final-only completion. Evidence in
+packed-marks-planner-corrected/{provenance.json,state.json,tests.xcresult}.
+The original62 passing checks and this correction remain separately attributed;
+no historical failed receipt is rewritten.
+
+The remaining dense-app test failure is LA→San Diego cold/warm road identity:
+cold60.269s/338,586.649m versus warm60.719s/378,616.649m. Both return complete
+legal routes with valid pins and memory; both report an optional candidate
+comparison stopped at the existing60s deadline. The original pre-memory-change
+host receipt qualification/1126.json also reaches that deadline (60.216s,
+378,616.649m), but this alone does not establish prior app cold/warm behavior.
+Do not silently remove the consistency failure or change route limits/scores.
+A private app replay in los-angeles-baseline-app uses the exact f52d668 engine,
+the same candidate, seed/settings and unchanged assertions, selecting only this
+LA case. PID32494 owns its serial build/test on the existing simulator. It
+modifies no main source and stops for review; compare tests.log and tests.xcresult
+when complete. packed-marks-app-review.json records current evidence. Full70
+publication remains blocked pending that review and complete new resource
+qualification; the delivered68 phone release remains available.
