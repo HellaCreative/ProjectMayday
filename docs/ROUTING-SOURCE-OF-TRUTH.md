@@ -4149,3 +4149,28 @@ These are code findings, not a proved diagnosis or accepted repair. Naively
 adding alternatives changes stage time budgets and could regress successful
 rides; retain this caution for a later private regression. No implementation or
 heavy experiment was added, so final delivery proceeds without interruption.
+
+### September 22 09:48 UTC — complete70 final qualification PASSED; publication active
+
+All1,165 original route/resource requests passed on the frozen city-clipping
+runtime, with zero coverage failures. qualification-city-clipping/qualification.json
+finished2026-09-22T09:48:09.375Z and binds probeSHA
+56140dba542196e58aff5fe0b7c646fd8d1665d41379ce38e49f460fb7c058f7,
+release and plan identities. This includes both California regions and all155
+neighboring pairs. Historical failed receipts remain unchanged. Texas's formerly
+failing case passes at871,284,736 RSS with identical ordered roads, geometry and
+distance. Do not rerun the completed matrix or the64 passing integrated app tests.
+
+Supervisor47922 advanced automatically to publishing-full70-and-verifying-downloads
+(child68056). Full70 fabric-v4-20260922-01 is qualified but publication/download
+verification is not yet complete. activate-city-clipping.py47923 remains the
+sole tail for verified discovery, exact70 published app checks and authorized
+DEV installation/launch. Inspect publication.log and both state files; do not
+start another publisher or mutate the frozen runtime. Record installed and
+launched status separately, preserving device-lock boundaries.
+
+Read-only append-streaming-implementation-review.md in phone-utah-followup
+records the confirmed From Here-only stream/promotion guards and the required
+prefix identity, progress scoping, retry/cancel and atomic tail-splice regressions.
+It is preparation only, not an implemented repair; Utah diagnosis also remains
+open. Both follow-ups must preserve the completed pack qualification evidence.
