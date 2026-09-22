@@ -3880,3 +3880,19 @@ publication, DEV catalog activation, exact70 app download/registry verification
 and matching physical installation are still required. The delivered68-region
 phone build stays available for Richard's testing. The long-append subdivision
 and BC→Utah matching follow-ups from his log remain recorded above.
+
+Full70 delivery tail is queued in complete-dev-70-20260922/activate-and-deliver.py
+PID88827, state activation-state.json. It waits for successful1165-case
+qualification and verified publication, verifies all public discovery bytes,
+checks frozen source identities, then activates only the DEV catalog. It builds
+and checks exact70 registry/discovery, NB/PE published download/reuse/bridge,
+and a new actual published California/Arizona download/reuse/cross-border route.
+The added published-California test is prepared and syntax-parsed; it has not
+yet been compiled or executed because the70-region release is not published.
+The tail fails closed on any build/test/source mismatch and installs only the
+authorized com.mayday.dirt.dev bundle on the existing test iPhone. It records
+installation and launch separately and never bypasses a lock. On completion
+review receipts, notify Richard, and commit/push only its three DEV activation
+files plus the source-of-truth checkpoint. No automatic production changes.
+AssemblyPID86728 is actively verifying original sealed input files (observed
+reading Indiana seam metadata); a quiet assembly log does not mean a dead job.

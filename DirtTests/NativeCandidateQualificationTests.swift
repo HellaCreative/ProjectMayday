@@ -147,6 +147,45 @@ struct NativeCandidateQualificationTests {
         report("published-download-verify-reuse-bridge", started: startedInstall, route: route)
     }
 
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_PUBLISHED_CALIFORNIA"] == "1"),
+          .timeLimit(.minutes(10)))
+    func publishedCaliforniaDownloadsVerifyReuseAndRouteToArizona() async throws {
+        let expected = try #require(ProcessInfo.processInfo.environment["DIRT_QUALIFY_FABRIC"])
+        let store = GraphPackStore()
+        await store.refreshCatalog()
+        #expect(store.lastManifestVersion == expected)
+        for id in ["ca-n", "ca-s", "az"] { #expect(store.isRoutingPackPublished(id)) }
+        try await store.installVerifiedPacks(["ca-s", "az"], replaceInstalled: true)
+        let points = [CLLocationCoordinate2D(latitude: 32.82610321044922, longitude: -114.82572937011719),
+                      CLLocationCoordinate2D(latitude: 32.68992233276367, longitude: -114.58694458007812)]
+        let directories = try store.routingDirectories(for: points)
+        #expect(Set(directories.keys) == ["ca-s", "az"])
+        let repository = try PackRepository(installedDirectories: directories)
+        for id in ["ca-s", "az"] {
+            #expect(store.hasCompleteNativePack(id))
+            #expect(store.packRevisionState(id) == .current)
+            #expect(try repository.open(id, requireSeams: true).manifest.fabricReleaseId == expected)
+        }
+        let identities = ["ca-s", "az"].map { store.installedPackIdentity(regionId: $0) }
+        try await store.installVerifiedPacks(["ca-s", "az"], replaceInstalled: false)
+        #expect(identities == ["ca-s", "az"].map { store.installedPackIdentity(regionId: $0) })
+        let request = RidePreferenceContext.$current.withValue(
+            .init(wander: 0.5, avoidCities: true, avoidHighways: true)) {
+            RouteRequest(profile: .dirt, locations: points.map {
+                .init(latitude: $0.latitude, longitude: $0.longitude, label: "Published California crossing")
+            }, allowUnknown: false, sessionSeed: 1, matchLimitMeters: 250)
+        }
+        let started = ContinuousClock.now
+        let source = PackRoutingSource(packs: store, cache: RouteResponseCache())
+        let response = try await source.route(request)
+        #expect(response.coordinates.count > 2)
+        #expect((response.distanceMeters ?? 0) > 0)
+        let last = try #require(response.coordinates.last)
+        #expect(CLLocation(latitude: last.latitude, longitude: last.longitude).distance(
+            from: CLLocation(latitude: points[1].latitude, longitude: points[1].longitude)) < 250)
+        print("CANDIDATE published-california-download-verify-reuse-route seconds=\(started.duration(to: .now)) meters=\(response.distanceMeters ?? 0)")
+    }
+
     @Test(.timeLimit(.minutes(3)))
     func southernQuebecColdAndWarmRemainWithinAppLimits() async throws {
         let directories = ["qc-s": root.appendingPathComponent("qc-s")]
