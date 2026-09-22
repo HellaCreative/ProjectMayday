@@ -3749,3 +3749,17 @@ measured-repair. Old waiting tailPID31566 was deliberately stopped before gate
 approval because it bound the previous runtime; the new identity-bound delivery
 tail must build/install only com.mayday.dirt.dev on the authorized existing phone.
 Physical riding acceptance remains pending. California remains excluded.
+
+September 22 00:43 UTC: scoped DEV device delivery is complete. Source f34e3db
+was built as com.mayday.dirt.dev, installed and launched successfully on the
+authorized existing iPhone. The binary contains fabric-v4-20260921-01; new runtime
+source digests were verified before and after building. Receipts:
+scoped-dev-68/streaming-device-build-receipt.json, streaming-device-install.json,
+streaming-device-launch.json. activation-state.json is scoped-dev-delivered;
+deliver-streaming-dev.py PID54057 finished. Richard was notified that testing
+can resume with 68-region coverage (including Ontario), acquisition progress
+fixes and the measured one-pass editable planner. Physical riding acceptance
+remains pending. No old waiter should be restarted. Next: California south to
+Arizona Dirt preparation timeout and narrow-overlap owned-road/legal-feature
+coverage proof, followed by honest full-70 qualification/publication. The scoped
+release and its immutable receipts remain complete.
