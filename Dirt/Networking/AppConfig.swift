@@ -128,7 +128,7 @@ enum AppConfig {
 
     /// Immutable production bytes verified against the accepted national pack audit.
     nonisolated static var v4ProductionBaseURL: URL {
-        packCDNBaseURL.appendingPathComponent("v4/releases/fabric-v4-20260909-02")
+        packCDNBaseURL.appendingPathComponent("v4/releases/fabric-v4-20260922-01")
     }
 
     #if DIRT_DEVELOPMENT

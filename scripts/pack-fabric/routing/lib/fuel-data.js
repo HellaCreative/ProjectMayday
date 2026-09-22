@@ -53,7 +53,7 @@ async function fetchRegionFuel(id, url) {
   }
   const bytes = Buffer.from(await response.arrayBuffer());
   const payload = JSON.parse(bytes.toString("utf8"));
-  const releaseMatch = url.match(/\/candidates\/([^/]+)\//i);
+  const releaseMatch = url.match(/\/(?:candidates|releases)\/([^/]+)\//i);
   return {
     regionId: id,
     stations: Array.isArray(payload && payload.stations) ? payload.stations : [],

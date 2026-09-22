@@ -37,6 +37,38 @@ test("packed fuel reports the exact candidate sidecar identity", async (t) => {
   });
 });
 
+test("packed fuel reports the exact production sidecar identity", async (t) => {
+  clearFuelCache();
+  const previousFetch = global.fetch;
+  const previousOverrides = process.env.R2_REGION_BASE_OVERRIDES;
+  const bytes = Buffer.from(JSON.stringify({ stations: [{ id: "pump-1" }] }));
+  process.env.R2_REGION_BASE_OVERRIDES = JSON.stringify({
+    ns: "https://packs.example/releases/ns-osm-test-01"
+  });
+  global.fetch = async (url) => ({
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => bytes,
+    url
+  });
+  t.after(() => {
+    clearFuelCache();
+    global.fetch = previousFetch;
+    if (previousOverrides == null) delete process.env.R2_REGION_BASE_OVERRIDES;
+    else process.env.R2_REGION_BASE_OVERRIDES = previousOverrides;
+  });
+
+  const result = await loadRegionFuel("ns");
+  assert.equal(result.stations.length, 1);
+  assert.deepEqual(result.packIdentity, {
+    regionId: "ns",
+    releaseId: "ns-osm-test-01",
+    fuelSource: "https://packs.example/releases/ns-osm-test-01/ns/fuel.v1.json",
+    fuelBytes: bytes.length,
+    fuelSha256: crypto.createHash("sha256").update(bytes).digest("hex")
+  });
+});
+
 test("a warm planning operation reuses the packed fuel sidecar", async (t) => {
   clearFuelCache();
   const previousFetch = global.fetch;

@@ -1,5 +1,38 @@
 # DIRT production TestFlight preparation — September 22, 2026
 
+## Current September 22 delivery checkpoint
+
+Richard explicitly authorized the latest repair on his phone and production
+TestFlight preparation/upload. Optimized DEV source `00e416c` is installed and
+launched on White, stamp `continental-70-country-20260922`. 218 engine and 103
+focused app tests pass; the actual NH–Indiana extension still times out near
+OH–IN in the Debug simulator. It stays in the U.S.; completion is not repaired.
+An additional optimized simulator attempt hit a Swift compiler crash in the
+IssueReporting dependency and supplies no runtime qualification.
+
+Production build 2 (46) archives at
+`.build/archives/DIRT-Production-2-46-Country.xcarchive` with production bundle,
+backend hosts and `fabric-v4-20260922-01` selection. DEV hosts are absent.
+Existing tracked `ride.mov` onboarding video and `ne-admin1-na.json` map boundary
+resources were byte-compared to their sources and added to the release resource
+allowlist; no unknown resource was blindly permitted.
+
+App Store export is blocked: Xcode reports **No Accounts** and no **iOS
+Distribution** certificate. Only an Apple Development identity is available.
+Richard must sign into the appropriate Apple Developer account in Xcode and
+make distribution signing available. No IPA export or TestFlight upload succeeded.
+Production data copying and independent download/hash verification are running
+under `.build/production-full70-20260922/promote.py`; inspect `state.json` and
+`production-data-receipt.json` before claiming completion. All 495 objects must
+verify, with discovery last. Its temporary authenticated worker is deleted by
+its cleanup handler. Production hosted-service settings still name the old
+release and must be aligned and checked after data verification, before upload.
+Fuel identity parsing now recognizes both candidate and release namespaces;
+focused fuel identity/cache tests pass. No hosted service was changed yet.
+
+The older preparation baseline below is historical. Current authorization and
+these pending gates supersede its preparation-only wording.
+
 ## Purpose
 
 Prepare the next TestFlight candidate without changing the public production

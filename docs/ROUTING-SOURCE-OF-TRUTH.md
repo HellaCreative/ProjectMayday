@@ -988,7 +988,10 @@ stamped `continental-70-country-20260922`; installation/launch receipts are unde
 Physical acceptance remains pending.
 Production immutable data preparation is under `.build/production-full70-20260922`;
 copy/download verification does not qualify the changed app runtime. Production
-app activation, archive and upload remain pending until recorded evidence exists.
+app activation and upload remain pending. Production archive 2 (46) now exists
+with the full70 production selection; export fails because Xcode has no signed-in
+account or distribution signing identity. See `TESTFLIGHT-PRODUCTION-PREPARATION-2026-09-22.md`
+for exact archive/data/signing checkpoints. No successful TestFlight upload.
 
 DIRT helps motorcycle riders create useful adventures over connected roads and
 trails, through their chosen places, with understandable surface choices and
