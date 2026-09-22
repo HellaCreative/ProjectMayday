@@ -4115,3 +4115,9 @@ honest new app/runtime evidence before exact70 published checks and authorized
 DEV phone installation. Do not restart old queues, rebuild datasets, replace
 failed receipts or run another heavy job. Full70 remains unpublished pending
 these gates; the delivered68 phone release remains available.
+
+Current integrated checkpointf3c0243 is pushed. Serial owners are integrated
+app47528 (child47620 at06:35UTC), final qualifier waiter47922 and publication/
+device waiter47923. New resource matrix has not started at this checkpoint;
+app qualification remains in progress. The hourly automation now names these
+owners and discards stale instructions to revive prior stopped supervisors.
