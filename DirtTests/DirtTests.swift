@@ -21,13 +21,13 @@ struct DirtTests {
         #expect(AppConfig.liveFuelURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel")
         #expect(AppConfig.liveFuelChainURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel-chain")
         #expect(AppConfig.livePOIURL.absoluteString == "https://pack-fabric.vercel.app/api/poi")
-        #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260921-01")
+        #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260922-01")
         #expect(AppConfig.packManifestURL.absoluteString ==
             "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
-            "fabric-v4-20260921-01/manifest.json")
+            "fabric-v4-20260922-01/manifest.json")
         #expect(AppConfig.riderServicesManifestURL.absoluteString ==
             "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
-            "fabric-v4-20260921-01/rider-services/manifest.json")
+            "fabric-v4-20260922-01/rider-services/manifest.json")
         for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json"] {
             #expect(AppConfig.packFileURL(version: AppConfig.v4ConnectionRevision, regionId: "qc-s", fileName: name)
                 == AppConfig.v4CandidateBaseURL.appendingPathComponent("qc-s").appendingPathComponent(name))

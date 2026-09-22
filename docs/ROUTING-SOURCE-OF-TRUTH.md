@@ -4207,3 +4207,16 @@ Receipt labels distinguish simulator functional checks from optimized-device
 identity/signature checks; physical runtime/riding acceptance remains pending.
 No App Store archive or production promotion. Read activation-state.json and
 release-dev-activation-supervisor.log; do not restart the old waiter.
+
+### September 22 13:49 UTC — complete70 optimized Release DEV delivered
+
+The immutable `fabric-v4-20260922-01` release is published and download-verified
+with all70 regions and155 neighboring pairs. The exact70 published-app checks
+passed before a device build. `ReleaseDev` is an explicit internal build
+configuration: it retains `DIRT_DEVELOPMENT`, `com.mayday.dirt.dev`, the DIRT Dev
+display name and Swift `-O`, without selecting production hosts or catalog data.
+The signed build was installed on Richard's authorized existing iPhone and
+launched successfully after the device was unlocked. The binary identity and
+installation/launch receipts are in complete-dev-70-20260922; physical runtime
+and riding acceptance remain Richard's separate next step. Production promotion
+and an App Store archive remain out of scope until he requests them.
