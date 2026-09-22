@@ -22,13 +22,16 @@ public struct GeographicBox: Codable, Sendable {
     func intersects(_ a: Coordinate, _ b: Coordinate) -> Bool {
         let dx = b.longitude - a.longitude, dy = b.latitude - a.latitude
         var lo = 0.0, hi = 1.0
-        for (p,q) in [(-dx,a.longitude-minLon), (dx,maxLon-a.longitude),
-                      (-dy,a.latitude-minLat), (dy,maxLat-a.latitude)] {
-            if p == 0 { if q < 0 { return false }; continue }
+        // Identical Liang–Barsky clipping, without constructing four tuples
+        // in a heap-backed array for every explored road/city pair.
+        func clip(_ p: Double, _ q: Double) -> Bool {
+            if p == 0 { return !(q < 0) }
             let r = q / p
-            if p < 0 { lo = max(lo,r) } else { hi = min(hi,r) }
-            if lo > hi { return false }
+            if p < 0 { lo = max(lo, r) } else { hi = min(hi, r) }
+            return !(lo > hi)
         }
+        guard clip(-dx, a.longitude - minLon), clip(dx, maxLon - a.longitude),
+              clip(-dy, a.latitude - minLat), clip(dy, maxLat - a.latitude) else { return false }
         return true
     }
 }

@@ -4073,3 +4073,45 @@ prove root cause. Adding Washington alone does not resolve the rejection; do
 not infer a misplaced pin or unsupported border. The qualifier's extra missing
 route/settings messages follow from its failed-route schema, not separate
 confirmed defects. Original phone evidence remains authoritative.
+
+### September 22 06:32 UTC — city-check allocation repair passes unchanged app assertion
+
+The private scalar-clipping trial passes213 engine tests. Its native LA request
+passes all unchanged route/resource checks at60.183s and796,327,936 RSS, with
+selected roads/geometry/distance identical to the original full-matrix LA
+receipt. It completed9 searches/8,489,244 pops versus7/7,594,109 before, but
+optional comparisons still use the60s deadline. This is not a demonstrated
+whole-request latency improvement. The original under55s native screening
+therefore stopped and is preserved in la-geometry-app/native-screening-decision.json.
+
+After reviewing that the original profile candidate now completes despite
+cold preparation, a separate private app replay ran the UNCHANGED cold/warm
+consistency assertion (no source/test/limit relaxation). It PASSES: cold60.240s
+and warm60.050s both378,616.649m, identical ordered roads,1.1% known dirt,
+zero reridden meters; process-lifetime peak461/487MB. The previous cold
+338,586.649m fallback changes because more of the same permitted comparison
+finishes, matching the previously selected warm/host profile candidate. No
+scoring, city preference, access or legal rule changes. Evidence:
+la-geometry-app/{diagnostic-review.json,tests.xcresult,tests.log}. Original
+failed baseline/current receipts remain preserved. A new device build still
+needs qualification; physical acceptance is separate.
+
+The two equivalent calculation changes and oracle test are now integrated
+exactly; la-geometry-trial/integrated-source-identity.json binds main to the
+private213-test/probe/app evidence. New probeSHA
+56140dba542196e58aff5fe0b7c646fd8d1665d41379ce38e49f460fb7c058f7.
+No pack bytes changed. test-city-clipping-app.py PID47528 owns the integrated
+app build and64 checks in two separately attributed parts:63 planner/builder/
+bridge/CA/dense tests against the70 candidate, then the actual long planner
+against the published68 catalog and identical Canadian bytes (the unpublished70
+manifest is still absent). Read city-clipping-app/state.json and its logs.
+
+run-city-clipping.py supersedes the stopped compact-only supervisor, waiting
+for those64 app checks and controlled timing plus exact source identity, then
+running all1165 original resource requests into qualification-city-clipping.
+It can publish/download-verify only after every gate passes. The corresponding
+activate-city-clipping.py tail uses city-clipping-execution-identity.json and
+honest new app/runtime evidence before exact70 published checks and authorized
+DEV phone installation. Do not restart old queues, rebuild datasets, replace
+failed receipts or run another heavy job. Full70 remains unpublished pending
+these gates; the delivered68 phone release remains available.

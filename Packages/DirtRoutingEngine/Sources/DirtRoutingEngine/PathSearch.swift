@@ -437,7 +437,9 @@ public struct PathSearch: Sendable {
             guard node >= 0, node < compass.count else { return .infinity }
             return compass[node]
         }
-        let cores = UrbanCores.boxes(in: pack)
+        let cores = UrbanCores.boxes(in: pack).filter {
+            !$0.contains(start.coordinate) && !$0.contains(end.coordinate)
+        }
         let blockingCores = cores.filter { !$0.contains(start.coordinate) && !$0.contains(end.coordinate) }
         let canonicalTopology = pack is GraphPack || pack is RegionalGraph
             || (pack as? IndexedGraph)?.hasCanonicalPackTopology == true
@@ -710,7 +712,7 @@ public struct PathSearch: Sendable {
                 }
                 let peak = max(current.peakProgress, progress)
                 let urban = cores.contains {
-                    !$0.contains(start.coordinate) && !$0.contains(end.coordinate) && $0.intersects(fromPoint,toPoint)
+                    $0.intersects(fromPoint,toPoint)
                 }
                 if urban && options.cityWall {
                     options.profile?.cityWallRejects += 1
