@@ -4323,3 +4323,38 @@ Separate build/install/launch receipts are in
 `validation-repair/device-receipt.json`, `install.json` and `launch.json`.
 Physical acceptance remains pending. Production is not changed by this routing
 repair. BC–Utah chain recovery remains a separate unresolved issue.
+
+### September 22 — failed extension remains visibly incomplete
+
+Owner log exported 19:37:25 UTC on `continental-70-all-legs-20260922` shows
+From Here NS–NB succeeding, explicit conversion to Plan, WV download completing,
+and an NB–WV extension producing two provisional sections (802,863/800,334 m).
+That extension failed at 123.355 seconds with `resourceLimit("time")` while
+trying PA–WV handovers, peak labels 3,000,000 and process peak footprint 737 MB.
+Only the earlier NS–NB leg remained committed. No waypoint deletion or return
+to From Here was logged. This is not a successful WV route; the engine failure
+remains unresolved. The two disappearing generated sections were provisional
+and correctly discarded on whole-extension failure; original rider pins remain.
+
+The presentation defect was independent: error toasts auto-dismissed after one
+second, and subsequent whole-route focus taps replaced the failure with “Route
+overview,” framing just the completed prefix. An incomplete route now retains
+an explicit notice with its error, overview includes all requested pins, and
+Start ride cannot treat the earlier usable leg as the whole requested trip.
+New routing clears the old error; a successful retry restores normal readiness.
+No route engine settings, resource limits, pack bytes or access rules changed.
+
+All 64 focused planner/builder tests pass (two opt-in native timing tests skipped),
+including From Here → Plan → streamed extension failure → overview taps →
+persistent notice → rejected Start → successful retry. The regression verifies
+original pin IDs, destination and built prefix are retained, no success celebration,
+and destination included in overview bounds. Evidence is in
+`.build/failed-extension-20260922/{final-tests.xcresult,tested-source.json,owner-phone-evidence.json}`.
+The engine is unchanged from `c65c62c`; its earlier 215-test and pack qualification
+receipts remain separate historical evidence. DEV stamp is
+`continental-70-failed-extension-20260922`; optimized ReleaseDev installed and
+launched on White at 19:50:37 UTC. Binary SHA256:
+`9db855607a4a7c57719c8fdebeabfc42d62dc850c1bfde7857694d2e90dc7b9d`.
+Separate receipts are `device-receipt.json`, `install.json` and `launch.json`.
+This presentation fix does not qualify the failed NB–WV request or change
+production/TestFlight readiness. Physical acceptance remains pending.

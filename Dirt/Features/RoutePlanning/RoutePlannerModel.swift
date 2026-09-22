@@ -554,6 +554,12 @@ final class RoutePlannerModel {
 
     private(set) var isRouting = false
     var errorMessage: String?
+    /// Keep a failed extension distinct from the usable route that preceded it.
+    var routeFailureNotice: String? {
+        guard let errorMessage, !isRouting else { return nil }
+        guard hasRoute, !routePlanIsCompleteSuccess else { return errorMessage }
+        return "Route incomplete. Your earlier route and all points are kept. " + errorMessage
+    }
     /// Non-destructive fuel recovery/status shown in the compact fuel summary.
     private(set) var fuelPlanNotice: String?
     private var fuelTargetMarkers: [MapState.Marker] = []
@@ -582,7 +588,8 @@ final class RoutePlannerModel {
             guard toast != oldValue else { return }
             toastDismissTask?.cancel()
             toastDismissTask = nil
-            guard let message = toast, !Self.isPersistentProgressToast(message) else { return }
+            guard let message = toast, !Self.isPersistentProgressToast(message),
+                  message != routeFailureNotice else { return }
             let shown = message
             let seconds: Double = {
                 if message.localizedCaseInsensitiveContains("PACKS") { return 4.5 }
@@ -702,6 +709,9 @@ final class RoutePlannerModel {
     }
 
     var hasRoute: Bool { !activeResponses.isEmpty }
+    var canStartPlannedRide: Bool {
+        hasRoute && !isRouting && !isAssemblingRoute && errorMessage == nil
+    }
 
     var totalMeters: Double {
         activeResponses.reduce(0) { $0 + ($1.distanceMeters ?? 0) }
@@ -1068,6 +1078,7 @@ final class RoutePlannerModel {
     ) {
         let requested = itinerary
         routeCompletionID = nil
+        errorMessage = nil
         builtBeforeCurrentSolve = Dictionary(grouping: reuse?.legs ?? [], by: \.riderLegID)
         let preferences = ridePreferences
         let fuel = FuelRangePrefs.snapshot
@@ -1235,8 +1246,8 @@ final class RoutePlannerModel {
                 if promotedLongRide {
                     self.toast = "Long ride split into editable legs"
                 }
-            } else if let error = self.errorMessage {
-                self.toast = error
+            } else if self.errorMessage != nil {
+                self.toast = self.routeFailureNotice
             }
             if let gap = result.riderLegStatus.values.compactMap({ status -> FuelGap? in
                 if case .gap(let gap) = status { return gap }
@@ -3886,8 +3897,10 @@ final class RoutePlannerModel {
     func focusEntirePlannedRoute() {
         guard canFocusEntirePlannedRoute else { return }
         refreshMap()
-        mapState.fit(allCoordinates)
-        toast = "Route overview"
+        let framing = routeFailureNotice == nil ? allCoordinates
+            : allCoordinates + itinerary.waypoints.map(\.coordinate)
+        mapState.fit(framing)
+        toast = routeFailureNotice ?? "Route overview"
         RoutingDebugLog.shared.event(
             "map focus scope=entire_route stages=\(stages.count) points=\(allCoordinates.count)"
         )
@@ -4025,7 +4038,11 @@ final class RoutePlannerModel {
     /// Start Navigation gates only the first rider/fuel stage corridor. Later
     /// stages are saved one at a time while riding, before the rider reaches them.
     func startNavigation() {
-        guard hasRoute, navigation.beginPrefetch() else { return }
+        guard canStartPlannedRide else {
+            if let notice = routeFailureNotice { toast = notice }
+            return
+        }
+        guard navigation.beginPrefetch() else { return }
         cancelFuelReplacement()
         refreshMap()
 

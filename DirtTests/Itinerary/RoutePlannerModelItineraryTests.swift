@@ -828,6 +828,56 @@ struct RoutePlannerModelItineraryTests {
         print("APPEND complete elapsed=\(began.duration(to: .now)) legs=\(model.itinerary.legs.count)")
     }
 
+    @Test func failedStreamedExtensionAfterFromHereConversionKeepsPinsAndFailureVisible() async throws {
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        model.apply(.replaceAll(waypoints: [point(0), point(0.2)], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: false), source: "fromHere")
+        await model.waitForCanonicalBuildForTesting()
+        let prior = try #require(model.built).legs
+        model.switchToPlanKeepingFromHere()
+        let pins = model.itinerary.waypoints
+        let message = NativeRoutingAdapter.message(.resourceLimit("time"))
+        source.progressRouteHandler = { _, progress in
+            progress(.started(regions: ["nb", "wv"]))
+            progress(.leg(index: 0, response: plannerRoadResponse(from: point(0.2), to: point(0.6))))
+            progress(.discarded)
+            throw RoutingError.server(message)
+        }
+        model.apply(.append(coordinate: point(1)), source: "longPress")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.mode == .plan)
+        #expect(model.itinerary.waypoints.count == 3)
+        #expect(model.itinerary.waypoints.prefix(2).map(\.id) == pins.map(\.id))
+        #expect(model.itinerary.waypoints.last?.coordinate == point(1))
+        #expect(model.built?.legs == prior)
+        #expect(model.routeCompletionID == nil)
+        #expect(!model.frameCompletedRouteForCelebration())
+        let notice = try #require(model.routeFailureNotice)
+        #expect(notice.hasPrefix("Route incomplete."))
+        #expect(model.toast == notice)
+        model.focusEntirePlannedRoute()
+        #expect(model.toast == notice)
+        guard let camera = map.camera, case .fit(let framed) = camera.command else {
+            Issue.record("Incomplete overview must frame the requested endpoint")
+            return
+        }
+        #expect(framed.contains(point(1)))
+        #expect(!model.canStartPlannedRide)
+        model.startNavigation()
+        #expect(model.navigation.phase == .idle)
+        try await Task.sleep(for: .milliseconds(1200))
+        #expect(model.toast == notice)
+        #expect(model.routeCompletionID == nil)
+        source.progressRouteHandler = nil
+        model.apply(.move(waypointID: model.itinerary.waypoints.last!.id, to: point(0.8)), source: "confirmedMove")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.errorMessage == nil)
+        #expect(model.canStartPlannedRide)
+        #expect(model.routeCompletionID != nil)
+    }
+
     @Test func appendedLongLegStreamsWhilePreservingExistingPinsAndRoads() async throws {
         let source = PlannerFakeRoutingSource()
         let map = MapState()

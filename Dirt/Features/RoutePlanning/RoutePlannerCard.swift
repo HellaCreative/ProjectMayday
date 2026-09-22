@@ -1189,7 +1189,7 @@ struct RoutePlannerCard: View {
     @ViewBuilder private var routingStatus: some View {
         if planner.fuelPlanningStatus != nil || planner.isRouting {
             EmptyView()
-        } else if let error = planner.errorMessage {
+        } else if let error = planner.routeFailureNotice {
             Text(error)
                 .font(.dirtUI(12, weight: .semibold))
                 .foregroundStyle(DirtTheme.danger)
@@ -1339,6 +1339,10 @@ struct RoutePlannerCard: View {
     }
 
     private func requestStart() {
+        guard planner.canStartPlannedRide else {
+            if let notice = planner.routeFailureNotice { planner.toast = notice }
+            return
+        }
         guard app.trial.requestStart() else { return }
         if !planner.unacknowledgedFuelGaps.isEmpty {
             showFuelGapStartConfirm = true
