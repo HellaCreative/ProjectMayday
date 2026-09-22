@@ -3816,3 +3816,26 @@ source, and stops for review. Do not duplicate this heavy job. On completion
 review all route/resource receipts and add focused legal-probe edge-case proof;
 then qualify the actual app/runtime before accepting source and assembling the
 truthful full70-region release. The existing68-region delivery is complete.
+
+September 22 physical planning evidence supplied by Richard (log exported
+00:50:29Z, scoped-68-planner-20260921/fabric-v4-20260921-01): Ontario downloaded
+and NS/NB/QC South updated before routing began. The initial 5,031,379m Dirt
+route completed in25.629s and promoted seven editable legs (six approximately
+800km plus a222km tail). Appending BC downloaded BC/MB/SK/AB first, reused all
+seven prior legs and built5,561,769m in25.989s. Appending Washington downloaded
+WA first, reused eight prior legs, crossed the international border and built
+1,073,222m in28.238s. Reported peak app footprint was620MB. This is actual-phone
+planning evidence, not physical riding/navigation acceptance. Extracted receipt:
+scoped-dev-68/physical-planning-20260922T005029.json; source is the user-pasted
+diagnostic log, not a hash-verified original file.
+
+Two follow-ups remain explicit: appended long legs are not yet subdivided
+(the5,562km BC extension and1,073km WA extension each remained one leg), and
+BC→Utah failed noMatch before search with directionProof live=0 on both pin
+positions. Reproduce seed793497639047794, Dirt/Wander0.5, unknown/ferries off,
+from50.314188,-122.678825 to38.421340,-109.432993 then38.453673,-109.405533,
+using bc/id/ut. Root cause is not established; do not blame the dropped pin
+without proof. The Oregon attempt was cancelled by the rider after52.240s,
+not a demonstrated completed route failure. Preserve prior valid legs and
+cancellation behavior. California's existing serial private matrix keeps its
+heavy-job slot; this phone report does not authorize duplicating it.
