@@ -4036,3 +4036,40 @@ modifies no main source and stops for review; compare tests.log and tests.xcresu
 when complete. packed-marks-app-review.json records current evidence. Full70
 publication remains blocked pending that review and complete new resource
 qualification; the delivered68 phone release remains available.
+
+The private pre-memory-change app replay is complete and reproduces the same
+LA cold/warm identity failure:60.281s/338,586.649m and60.643s/378,616.649m.
+Both ordered road/direction sequences match the compact-proof run EXACTLY in
+the corresponding cold/warm state. comparison.json in los-angeles-baseline-app
+records hashes. The compact storage change did not introduce this difference.
+The existing60s optional-comparison behavior is the remaining consistency issue;
+the assertion has not been removed and no release gate was relaxed. Private
+baseline build succeeded; its initial runner failed to read legacy xctestrun
+format, preserved in build-orchestration-failure.json. run-test.py36302 reused
+the completed build and performed the actual failing replay.
+
+Stack sampling of the current native LA request identifies repeated city-box
+intersection work and temporary-array/refcount operations in the search. This
+is diagnostic evidence, not a speed qualification. A distinct private trial
+la-geometry-trial/package keeps Liang–Barsky clipping arithmetic/order but
+avoids constructing a four-tuple array per intersection; endpoint-containing
+city boxes are filtered once per search instead of per explored arc. It changes
+no city/access/scoring policy, data or deadline. An independent original-loop
+oracle covers2,401 degenerate/boundary pairs and20,000 seeded random segments.
+PID40371 runs the complete private engine suite, builds its probe and replays
+the original LA request. Read state.json/tests.log/routes when complete. No
+main source has been changed or trial accepted. A serial app waiterPID41236
+(run-app-after-trial.py) launches a separate private LA-only app replay only
+if the native trial has no route/resource failures, finishes under55s and has
+no stopped optional comparison. Otherwise it records insufficiency and stops.
+The unchanged cold/warm identity assertion remains required; neither trial
+publishes or approves source. Check la-geometry-app/state.json as well.
+
+The phone Utah failure was reproduced separately at both original/moved pins
+with bc,id,ut and with Washington additionally available: all four return
+noMatch at direction proof before any searches. Evidence phone-utah-followup.
+These diagnostics omit prior-route exclusions/incoming identity and do not
+prove root cause. Adding Washington alone does not resolve the rejection; do
+not infer a misplaced pin or unsupported border. The qualifier's extra missing
+route/settings messages follow from its failed-route schema, not separate
+confirmed defects. Original phone evidence remains authoritative.
