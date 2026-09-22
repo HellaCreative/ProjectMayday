@@ -1033,8 +1033,9 @@ final class RoutePlannerModel {
         let fuel = FuelRangePrefs.snapshot
         let initialProgress = Self.initialBuildProgressToast(for: fuel)
         streamedLegResponses = []
-        streamedLegGeneration = mode == .fromHere && requested.waypoints.count == 2
-            && requested.legs.count == 1 ? requested.generation : nil
+        streamedLegGeneration = (mode == .fromHere || mode == .plan)
+            && requested.waypoints.count == 2 && requested.legs.count == 1
+            ? requested.generation : nil
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
         isRouting = true
@@ -1182,7 +1183,7 @@ final class RoutePlannerModel {
                 return nil
             }.first
             let promotedLongRide = hardFailure == nil
-                && self.promoteLongFromHereRideIfNeeded(result)
+                && self.promoteLongRideIfNeeded(result)
             self.streamedLegGeneration = nil
             self.streamedLegResponses = []
             // Fuel proof is advisory once road geometry exists. Only a route
@@ -1302,18 +1303,15 @@ final class RoutePlannerModel {
         )
     }
 
-    /// A continental From Here result becomes a real Plan itinerary. The
+    /// A continental two-pin result becomes a real Plan itinerary. The
     /// intermediate pins are taken from the legal route that just completed,
     /// so none can land in water, wilderness, or on an unrelated road. The
     /// accepted geometry is split and reused; conversion performs no second
     /// routing pass. Moving a promoted pin later rebuilds only its neighbouring
     /// rider legs through the ordinary itinerary reducer.
     @discardableResult
-    private func promoteLongFromHereRideIfNeeded(_ result: BuiltItinerary) -> Bool {
-        // A single proven streamed leg means no eligible internal cut exists.
-        // Never replace that proof with an arbitrary geometric split.
-        guard streamedLegResponses.count != 1 else { return false }
-        guard mode == .fromHere,
+    private func promoteLongRideIfNeeded(_ result: BuiltItinerary) -> Bool {
+        guard mode == .fromHere || mode == .plan,
               itinerary.waypoints.count == 2,
               itinerary.legs.count == 1,
               let riderLeg = itinerary.legs.first,
@@ -1327,11 +1325,14 @@ final class RoutePlannerModel {
                 : Self.longRouteSplitPlan(response: response)
         else { return false }
 
-        destination = nil
-        destinationName = nil
-        fromHereResponse = nil
-        fromHereNeedsStartPin = false
-        fromHereStartOverride = nil
+        let source = mode == .fromHere ? "fromHere" : "plan"
+        if mode == .fromHere {
+            destination = nil
+            destinationName = nil
+            fromHereResponse = nil
+            fromHereNeedsStartPin = false
+            fromHereStartOverride = nil
+        }
         mode = .plan
         mapState.selectPlannerPin(nil)
         seedCanonicalBuild(
@@ -1344,7 +1345,7 @@ final class RoutePlannerModel {
             "\($0.latitude),\($0.longitude)"
         }.joined(separator: ";")
         RoutingDebugLog.shared.event(
-            "long ride promoted source=fromHere meters=\(Int(split.totalMeters.rounded())) "
+            "long ride promoted source=\(source) meters=\(Int(split.totalMeters.rounded())) "
                 + "legs=\(split.responses.count) targetLegMeters=800000"
         )
         return true

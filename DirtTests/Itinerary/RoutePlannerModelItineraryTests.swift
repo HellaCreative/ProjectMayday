@@ -740,6 +740,40 @@ struct RoutePlannerModelItineraryTests {
         #expect(RoutePlannerModel.longRouteSplitPlan(response: short) == nil)
     }
 
+    @Test func planModePromotesTwoPinContinentalRideIntoEditableLegs() async throws {
+        let source = PlannerFakeRoutingSource()
+        let start = point(0)
+        let end = point(1)
+        let geometry = [start, point(0.25), point(0.5), point(0.75), end]
+        let response = RouteResponse(
+                status: "complete", error: nil, message: nil,
+                distanceMeters: 2_100_000,
+                estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
+                geometry: geometry, segments: nil,
+                stats: RouteStats(dirtPercent: 70, pavedPercent: 30),
+                maneuvers: nil, warnings: nil,
+                dirtPercentValue: nil, pavedPercentValue: nil
+        )
+        source.progressRouteHandler = { _, progress in
+            progress(.started(regions: []))
+            progress(.leg(index: 0, response: response))
+            progress(.completed(response: response))
+            return response
+        }
+        let model = makeModel(source: source)
+        model.selectMode(.plan)
+        model.apply(.replaceAll(waypoints: [start, end], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: true), source: "plan")
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.errorMessage == nil)
+        #expect(model.mode == .plan)
+        #expect(model.itinerary.legs.count == 3)
+        #expect(model.itinerary.waypoints.count == 4)
+        #expect(model.built?.legs.count == 3)
+        #expect(source.routeRequests.count == 1)
+    }
+
     @Test func insertAndDeleteMutateOnlyCanonicalWaypoints() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }

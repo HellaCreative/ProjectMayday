@@ -4220,3 +4220,21 @@ launched successfully after the device was unlocked. The binary identity and
 installation/launch receipts are in complete-dev-70-20260922; physical runtime
 and riding acceptance remain Richard's separate next step. Production promotion
 and an App Store archive remain out of scope until he requests them.
+
+### September 22 14:08 UTC — Plan-mode long-route and DEV tester follow-up prepared
+
+A phone report showed that a two-pin Washington-to-Southern-California route
+created through **Plan a Route** remained a single rider leg. The accepted
+one-solve splitter had been limited to From Here. `RoutePlannerModel` now gives
+two-pin Plan routes the same ordered native progress and promotes a completed
+route over 1,000 km into editable roughly 800 km legs from its legal geometry;
+this performs no second route solve. The focused regression includes a single
+streamed native leg, the case that previously remained unsplit, and passes.
+
+The optimized internal `ReleaseDev` configuration also enables only the
+explicit `DIRT_PRE_RELEASE_TESTER_UNLOCK` compilation condition. This restores
+the DEV-only Tester controls, including Copy app log, while retaining
+`DIRT_DEVELOPMENT`, `com.mayday.dirt.dev`, and `-O`; it does not affect an
+ordinary production Release. The build-settings inspection and the tester
+build-policy test pass. The updated device build must not replace an active
+phone route; it is ready to build and install once Richard finishes that route.
