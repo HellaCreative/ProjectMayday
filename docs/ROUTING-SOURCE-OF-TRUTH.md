@@ -4121,3 +4121,31 @@ app47528 (child47620 at06:35UTC), final qualifier waiter47922 and publication/
 device waiter47923. New resource matrix has not started at this checkpoint;
 app qualification remains in progress. The hourly automation now names these
 owners and discards stale instructions to revive prior stopped supervisors.
+
+### September 22 06:42 UTC — all64 integrated app checks pass; final70 matrix active
+
+The integrated sourcef3c0243 passes all64 app checks:63 tests in the first
+xcresult and the actual long-planner comparison in its separate xcresult, both
+bound to the same tested-source.json. LA cold/warm identity remains passing.
+Controlled Halifax–Squamish completes14 editable legs in92.884615s versus
+90.833343s direct, both11,044,901.951780m, with real incremental progress and
+final-only completion. city-clipping-app/qualification.json records both parts;
+controlled-comparison.json records the unchanged timing/distance gate. This
+supersedes pending app status, not historical failed receipts.
+
+run-city-clipping.py47922 automatically advanced at06:42:20UTC to the fresh
+1165-case final qualification, child50578, qualification-city-clipping. The
+first24 cases passed at this checkpoint; the complete matrix is NOT yet passed.
+activate-city-clipping.py47923 remains the sole publication-to-device waiter.
+Full70 fabric-v4-20260922-01 remains unpublished/uninstalled until those receipts
+establish completion. Do not repeat the completed app suite or start a second
+heavy job. Source remains frozen by the execution/activation identities.
+
+Read-only Utah chain recovery investigation is saved in
+phone-utah-followup/chain-recovery-investigation.md. Avoid-ferries currently
+returns one shortest land-region chain; merely adding WA does not necessarily
+attempt it. A separate chain-local noMatch can bypass existing fallback handling.
+These are code findings, not a proved diagnosis or accepted repair. Naively
+adding alternatives changes stage time budgets and could regress successful
+rides; retain this caution for a later private regression. No implementation or
+heavy experiment was added, so final delivery proceeds without interruption.
