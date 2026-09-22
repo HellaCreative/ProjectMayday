@@ -4,6 +4,43 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct StagedRouterTests {
+    @Test func seamSearchMustArriveInTheProvedOnwardDirection() throws {
+        let graph = PolicyTests.Line(nodes: [
+            .init(longitude: 0, latitude: 0), .init(longitude: 0.001, latitude: 0),
+            .init(longitude: 0.002, latitude: 0), .init(longitude: 0.001, latitude: 0.001)
+        ], edges: [(0,1), (1,2), (1,3), (3,2)],
+            surfaces: Array(repeating: "gravel", count: 4), roads: Array(repeating: "track", count: 4))
+        let length = graph.polyline(0)[0].distance(to: graph.polyline(0)[1])
+        let start = RoadMatch(edge: 0, coordinate: .init(longitude: 0.0005, latitude: 0),
+            distanceMeters: 0, alongMeters: length / 2, geometryMeters: length, forward: true)
+        for fraction in [0.0, 0.5] {
+            let end = RoadMatch(edge: 1, coordinate: .init(longitude: 0.001 + fraction * 0.001, latitude: 0),
+                distanceMeters: 0, alongMeters: length * fraction, geometryMeters: length, forward: true)
+            var options = SearchOptions(); options.objective = .distance; options.cityWall = false
+            options.requiredArrivalRoads = [graph.identity(of: 1)]
+            options.requiredArrivalDirections = [graph.identity(of: 1) + "|0"]
+            let result = try PathSearch(pack: graph).search(start: start, end: end,
+                policy: .init(style: .dirt), access: .init(), options: options)
+            #expect(result.segments.last?.edge == 1)
+            #expect(result.segments.last?.forward == false)
+            #expect(result.segments.contains { $0.edge == 3 })
+            var denied = graph
+            denied.reverseAccess = [0, 2, 0, 0]
+            #expect(throws: RoutingFailure.noPath) {
+                try PathSearch(pack: denied).search(start: start, end: end,
+                    policy: .init(style: .dirt), access: .init(), options: options)
+            }
+            if fraction == 0.5 {
+                options.requiredArrivalRoads = []
+                options.requiredArrivalDirections = []
+                let riderPin = try PathSearch(pack: graph).search(start: start, end: end,
+                    policy: .init(style: .dirt), access: .init(), options: options)
+                #expect(riderPin.segments.last?.forward == true)
+                #expect(riderPin.distanceMeters < result.distanceMeters)
+            }
+        }
+    }
+
     @Test func seamDirectionUsesLegalRouteProofRatherThanInitialBearing() throws {
         // The east-facing direction looks correct but ends at a cul-de-sac.
         // The west-facing direction reaches the onward road after a legal loop.

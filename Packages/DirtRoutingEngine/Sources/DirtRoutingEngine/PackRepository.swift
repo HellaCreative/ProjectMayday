@@ -409,6 +409,36 @@ public struct PackRepository: Sendable {
 public struct RegionConnectivity: Sendable {
     public let neighbors: [String:Set<String>]
     public init(neighbors: [String:Set<String>]) { self.neighbors = neighbors }
+    public static let canadianRegions: Set<String> = [
+        "ns", "nb", "pe", "nl", "nl-island", "nl-lab", "qc", "qc-s", "qc-n",
+        "on", "on-s", "on-n", "mb", "sk", "ab", "bc", "yt", "nt", "nu"
+    ]
+    public static let unitedStatesRegions: Set<String> = Set(
+        "al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj nm ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy ca-n ca-s tx-ne tx-nw tx-se tx-sw".split(separator: " ").map(String.init))
+
+    /// Rider endpoints authorize country transitions, independently for each leg.
+    /// Same-country legs never acquire an international shortcut. Cross-border
+    /// legs may enter the destination country once, without exiting it again.
+    /// Unknown synthetic/legacy IDs retain ordinary connectivity semantics.
+    public func respectingCountries(from start: String, to end: String) -> RegionConnectivity {
+        func country(_ id: String) -> Int? {
+            if Self.canadianRegions.contains(id) { return 0 }
+            if Self.unitedStatesRegions.contains(id) { return 1 }
+            return nil
+        }
+        guard let origin = country(start), let destination = country(end) else { return self }
+        var result: [String: Set<String>] = [:]
+        for (region, links) in neighbors {
+            guard let current = country(region), origin != destination || current == origin else { continue }
+            result[region] = Set(links.filter { next in
+                guard let onward = country(next) else { return false }
+                if origin == destination { return onward == origin }
+                return current == origin || onward == destination
+            })
+        }
+        return RegionConnectivity(neighbors: result)
+    }
+
     /// Keep the ordinary connection as an alternative, but never let a ferry
     /// erase an available land/bridge corridor just because it crosses fewer packs.
     public func chains(from start: String, to end: String,

@@ -596,6 +596,28 @@ public struct PathSearch: Sendable {
                    !options.requiredArrivalRoads.isEmpty,
                    (current.state.incoming < 0 || current.state.incoming >= pack.edgeCount
                     || !pack.matches(current.state.incoming, identities: options.requiredArrivalRoads)) { continue }
+                if arc.target == endNode, !options.requiredArrivalDirections.isEmpty {
+                    // Generated seams must arrive in a direction already proved
+                    // usable in the next pack. Ordinary rider pins still accept
+                    // either legal direction. A zero-length virtual arc cannot
+                    // invent a new arrival direction at a shared junction.
+                    var incomingArc: Arc? = arc
+                    if arc.meters <= 0.01 {
+                        var index = entry.label
+                        incomingArc = nil
+                        while index >= 0 {
+                            let label = labels[index]
+                            if let previous = storedArc(label), previous.meters > 0.01 {
+                                incomingArc = previous
+                                break
+                            }
+                            index = label.parent ?? -1
+                        }
+                    }
+                    guard let arrival = incomingArc,
+                          options.requiredArrivalDirections.contains(
+                            "\(pack.identity(of: arrival.edge))|\(arrival.forward ? 1 : 0)") else { continue }
+                }
                 if !options.avoidCircuitNodes.isEmpty, arc.target != endNode, options.avoidCircuitNodes.contains(arc.target) { continue }
                 let physicalEdge = pack.restrictionEdge(e)
                 if let previous = storedArc(current), previous.edge == e, current.state.node < pack.nodeCount { continue }

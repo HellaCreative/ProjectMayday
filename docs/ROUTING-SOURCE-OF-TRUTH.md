@@ -947,6 +947,49 @@ future Android work also live here; implementation or parity is not implied.
 
 ## 2. The rider's result
 
+### September 22 owner update — country intent and final TestFlight delivery
+
+Each consecutive pair of rider pins defines the permitted countries. Canadian
+endpoints stay in Canada; U.S. endpoints stay in the United States. A pin in the
+other country explicitly permits crossing to it, after which that leg must not
+return across the border. This applies independently to appended/edited legs and
+loop halves, regardless of where the itinerary originally began. Missing domestic
+coverage must not silently authorize an international shortcut. Download selection
+and regional road search must use the same rule, including land/ferry alternatives.
+
+Richard asks to assess, not automatically implement, an 800 km search-horizon
+redesign. Retain the existing legal roughly 800 km editable sections and genuine
+incremental progress while measuring the country-selection repair first. These
+sections do not currently bound the native search horizon to 800 km.
+
+Richard now authorizes completing these routing changes and moving the matching
+production build to TestFlight. This supersedes the earlier production-preparation-
+only restriction. Preserve production/DEV identities, qualify affected behavior,
+promote exact immutable full70 data, verify production selection/signing and record
+archive/upload results honestly. Public App Store review/release is separate from
+the TestFlight delivery discussed with Richard; older physical acceptance and
+App Store checklist gaps are not silently marked passed.
+
+Current September 22 country repair evidence: 218 engine tests and 103 focused
+app checks pass (`.build/country-routing-20260922/direction-repair`). The exact
+NS–NH prefix completes in 78.518 seconds in the Debug simulator. NH–Indiana now
+selects NH/MA/NY/PA/OH/IN, without the previous Canadian detour, but still reaches
+its time limit near OH–IN after 227.397 seconds. Preserve both failed actual-route
+receipts; this is not a qualified fix for long-route completion. A new regression
+proved that generated seam arrival directions were checked after search but not
+constrained during search. PathSearch now applies that existing direction proof;
+ordinary rider-pin arrival remains either legal direction and access rules remain
+unchanged. The replay still fails, so no completion-performance claim follows.
+Richard explicitly requested the latest phone build for testing and production
+TestFlight delivery after this investigation. The optimized DEV testing build is
+stamped `continental-70-country-20260922`; installation/launch receipts are under
+`.build/country-routing-20260922/device`. Installation and launch on White both succeeded; binary SHA256
+`1786d9fb4479c03809a63bfa59fc4cfa0670300f35ab801c25ac3944d69a3678`.
+Physical acceptance remains pending.
+Production immutable data preparation is under `.build/production-full70-20260922`;
+copy/download verification does not qualify the changed app runtime. Production
+app activation, archive and upload remain pending until recorded evidence exists.
+
 DIRT helps motorcycle riders create useful adventures over connected roads and
 trails, through their chosen places, with understandable surface choices and
 fuel awareness. Short rides, long rides, and province/state crossings are all

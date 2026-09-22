@@ -828,6 +828,73 @@ struct RoutePlannerModelItineraryTests {
         print("APPEND complete elapsed=\(began.duration(to: .now)) legs=\(model.itinerary.legs.count)")
     }
 
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_COUNTRY_APPEND"] == "1"), .timeLimit(.minutes(10)))
+    func actualNewHampshireIndianaAppendStaysInUnitedStates() async throws {
+        let root = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["DIRT_QUALIFY_PACK_ROOT"]))
+        let source = PlannerFakeRoutingSource(name: "pack")
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        let start = RouteCoordinate(longitude: -63.340276, latitude: 44.764764)
+        let maine = RouteCoordinate(longitude: -71.701550, latitude: 43.221850)
+        let end = RouteCoordinate(longitude: -86.768354, latitude: 40.110770)
+        model.selectMode(.plan)
+        model.setPlanningSessionSeedForTesting(691737807611539)
+        let catalogData = try Data(contentsOf: root.deletingLastPathComponent().appendingPathComponent("manifest.json"))
+        let catalog = try #require(JSONSerialization.jsonObject(with: catalogData) as? [String: Any])
+        let rows = try #require(catalog["regions"] as? [[String: Any]])
+        let published = Set(rows.compactMap { $0["id"] as? String })
+        let roads = (catalog["roadNeighbors"] as? [String: [String]] ?? [:]).mapValues(Set.init)
+        func directories(_ request: RouteRequest) throws -> [String: URL] {
+            let ids = GraphPackStore.requiredCatalogRoutingRegions(for: request.locations.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) },
+                published: published, roadNeighbors: roads)
+            try #require(!ids.isEmpty)
+            print("COUNTRY request packs=\(ids.joined(separator: ","))")
+            return Dictionary(uniqueKeysWithValues: ids.map { ($0, root.appendingPathComponent($0)) })
+        }
+        let session = NativeRoutingSession()
+        source.progressRouteHandler = { request, progress in
+            let directories = try directories(request)
+            return try await NativeRouteProgressBridge.route(request, session: session, directories: directories, onProgress: progress)
+        }
+        model.apply(.replaceAll(waypoints: [start, maine], profile: .dirt,
+            allowUnknown: false, avoidMotorways: true, preferBackRoads: true), source: "plan")
+        model.setPlanningSessionSeedForTesting(691737807611539)
+        await model.waitForCanonicalBuildForTesting()
+        try #require(model.errorMessage == nil)
+        let prefix = try #require(model.built).legs
+        let pins = model.itinerary.waypoints
+        let began = ContinuousClock.now
+        var times: [Duration] = []
+        source.progressRouteHandler = { request, progress in
+            let directories = try directories(request)
+            #expect(directories.keys.allSatisfy { !GraphPackStore.isCanadianRegion($0) })
+            return try await NativeRouteProgressBridge.route(request, session: session, directories: directories) { event in
+                progress(event)
+                if case .leg(_, let response) = event {
+                    times.append(began.duration(to: .now))
+                    #expect(model.activeResponses.first?.coordinates == prefix[0].response.coordinates)
+                    #expect(model.activeResponses.last?.coordinates == response.coordinates)
+                    #expect(model.routeCompletionID == nil)
+                    print("APPEND leg meters=\(response.distanceMeters ?? 0) elapsed=\(times.last!)")
+                }
+            }
+        }
+        model.setPlanningSessionSeedForTesting(691737807611539)
+        model.apply(.append(coordinate: end), source: "longPress")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.errorMessage == nil)
+        #expect(model.built?.legs.first == prefix.first)
+        #expect(model.itinerary.waypoints.prefix(pins.count).map(\.id) == pins.map(\.id))
+        #expect(times.count >= 2)
+        let newGeometry = model.built?.legs.dropFirst(prefix.count).flatMap { $0.response.coordinates } ?? []
+        let countries = newGeometry.compactMap { RegionPolygons.polygonOwner(longitude: $0.longitude, latitude: $0.latitude) }
+        #expect(!countries.isEmpty)
+        #expect(countries.allSatisfy { !GraphPackStore.isCanadianRegion($0) })
+        #expect(try #require(times.first) < began.duration(to: .now) - .seconds(1))
+        #expect(model.itinerary.legs.count == times.count + prefix.count)
+        print("APPEND complete elapsed=\(began.duration(to: .now)) legs=\(model.itinerary.legs.count)")
+    }
+
     @Test func failedStreamedExtensionAfterFromHereConversionKeepsPinsAndFailureVisible() async throws {
         let source = PlannerFakeRoutingSource()
         let map = MapState()

@@ -124,7 +124,9 @@ public enum StagedRouter {
                 roads[id] = roadNeighbors.intersection(Set(unique))
             }
         }
-        let chains = try RegionConnectivity(neighbors: neighbors).chains(from: startRegion, to: endRegion,
+        let chains = try RegionConnectivity(neighbors: neighbors)
+            .respectingCountries(from: startRegion, to: endRegion)
+            .chains(from: startRegion, to: endRegion,
                                                                           roadNeighbors: roads, avoidFerries: request.access.avoidFerries)
         if chains.count == 1 {
             return try observedAttempt(chain: chains[0], onProgress: onProgress) {

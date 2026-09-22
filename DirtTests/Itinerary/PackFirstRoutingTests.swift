@@ -604,6 +604,33 @@ struct PackFirstRoutingTests {
         #expect(merged == Set(["ns", "nb"]))
     }
 
+    @Test func USAppendDoesNotDownloadCanadianShortcutIncludingRoadAlternative() throws {
+        let nh = CLLocationCoordinate2D(latitude: 43.221850, longitude: -71.701550)
+        let indiana = CLLocationCoordinate2D(latitude: 40.110770, longitude: -86.768354)
+        let published = fabricV4_20260917_02PublishedIds
+        let roads: [String: Set<String>] = ["nh": ["qc-s"], "qc-s": ["on-n"], "on-n": ["mi"], "mi": ["in"]]
+        let required = GraphPackStore.requiredCatalogRoutingRegions(for: [nh, indiana], published: published, roadNeighbors: roads)
+        #expect(required.contains("nh") && required.contains("in"))
+        #expect(required.contains("ny") && required.contains("pa"))
+        #expect(required.allSatisfy { !GraphPackStore.isCanadianRegion($0) })
+        #expect(GraphPackStore.preferredCorridorPath(from: "nh", to: "in", allowedRegionIds: ["nh", "qc-s", "on-n", "mi", "in"]) == nil)
+        #expect(GraphPackStore.preferredCorridorPath(from: "bc", to: "on-n", allowedRegionIds: ["bc", "wa", "id", "mt", "nd", "mn", "on-n"]) == nil)
+    }
+
+    @Test func repeatedPinRegionPreservesEachCountryTransition() {
+        let halifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
+        let maine = CLLocationCoordinate2D(latitude: 44.508191, longitude: -69.870425)
+        let whistler = CLLocationCoordinate2D(latitude: 50.3463, longitude: -122.8234)
+        let published = fabricV4_20260917_02PublishedIds
+        let itinerary = GraphPackStore.requiredCatalogRoutingRegions(for: [halifax, maine, halifax, whistler], published: published)
+        let pairs = [[halifax, maine], [maine, halifax], [halifax, whistler]]
+        let union = Set(pairs.flatMap { GraphPackStore.requiredCatalogRoutingRegions(for: $0, published: published) })
+        #expect(Set(itinerary) == union)
+        #expect(itinerary.contains("ab") && itinerary.contains("sk"))
+        let domesticUS = GraphPackStore.requiredCatalogRoutingRegions(for: [maine, .init(latitude: 47.61, longitude: -122.33)], published: published)
+        #expect(!domesticUS.isEmpty && domesticUS.allSatisfy { !GraphPackStore.isCanadianRegion($0) })
+    }
+
     @Test func canadaToCanadaCorridorPrefersCanadianProvincesOverUS() {
         let nearHalifax = CLLocationCoordinate2D(latitude: 44.7648, longitude: -63.3402)
         // Whistler / Duffey Lake area — same west pin Richard used.

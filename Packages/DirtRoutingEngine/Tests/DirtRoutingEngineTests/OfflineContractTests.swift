@@ -3,6 +3,33 @@ import Testing
 @testable import DirtRoutingEngine
 
 struct OfflineContractTests {
+    @Test func riderCountriesExcludeShorterInternationalDetoursAndFailClosed() throws {
+        let graph = RegionConnectivity(neighbors: [
+            "nh": ["qc-s", "vt"], "qc-s": ["nh", "on-n", "nb"],
+            "on-n": ["qc-s", "mi"], "mi": ["on-n", "in", "oh"],
+            "in": ["mi", "oh"], "vt": ["nh", "ny"], "ny": ["vt", "pa"],
+            "pa": ["ny", "oh"], "oh": ["pa", "mi", "in"], "nb": ["qc-s"]])
+        let domestic = graph.respectingCountries(from: "nh", to: "in")
+        #expect(try domestic.chain(from: "nh", to: "in") == ["nh", "vt", "ny", "pa", "oh", "in"])
+        for avoid in [true, false] {
+            let paths = try domestic.chains(from: "nh", to: "in", roadNeighbors: graph.neighbors, avoidFerries: avoid)
+            #expect(paths.allSatisfy { $0.allSatisfy(RegionConnectivity.unitedStatesRegions.contains) })
+        }
+        let missing = RegionConnectivity(neighbors: ["nh": ["qc-s"], "qc-s": ["nh", "on-n"], "on-n": ["in"], "in": []])
+        #expect(throws: RoutingFailure.noPath) {
+            try missing.respectingCountries(from: "nh", to: "in").chain(from: "nh", to: "in")
+        }
+        let canada = RegionConnectivity(neighbors: ["bc": ["wa", "ab"], "wa": ["bc", "on-n"], "ab": ["sk"], "sk": ["mb"], "mb": ["on-n"], "on-n": []])
+        #expect(try canada.respectingCountries(from: "bc", to: "on-n").chain(from: "bc", to: "on-n") == ["bc", "ab", "sk", "mb", "on-n"])
+    }
+
+    @Test func explicitCrossBorderPinPermitsOneCrossingInEitherDirection() throws {
+        let graph = RegionConnectivity(neighbors: ["nb": ["me"], "me": ["nb", "qc-s", "nh"], "qc-s": ["me", "ny"], "nh": ["me", "vt"], "vt": ["nh", "ny"], "ny": ["qc-s", "vt"]])
+        #expect(try graph.respectingCountries(from: "nb", to: "ny").chain(from: "nb", to: "ny") == ["nb", "me", "nh", "vt", "ny"])
+        #expect(try graph.respectingCountries(from: "ny", to: "nb").chain(from: "ny", to: "nb") == ["ny", "vt", "nh", "me", "nb"])
+        #expect(try graph.respectingCountries(from: "me", to: "qc-s").chain(from: "me", to: "qc-s") == ["me", "qc-s"])
+    }
+
     private func route(_ dirtMeters: Double, id: String) -> ComputedRoute {
         let a = Coordinate(longitude: 0, latitude: 0)
         let c = Coordinate(longitude: 1, latitude: 0)

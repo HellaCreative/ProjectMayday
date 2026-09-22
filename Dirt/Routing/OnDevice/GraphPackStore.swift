@@ -394,11 +394,12 @@ final class GraphPackStore {
             ) else {
                 return []
             }
-            if !ends.contains(resolved) { ends.append(resolved) }
+            if ends.last != resolved { ends.append(resolved) }
         }
         guard !ends.isEmpty else { return [] }
 
-        var ordered = ends
+        var ordered: [String] = []
+        for id in ends where !ordered.contains(id) { ordered.append(id) }
         let allowed = pathAllowedRegionIds(published: published)
         for (a, b) in zip(ends, ends.dropFirst()) {
             guard let path = preferredCorridorPath(
@@ -406,7 +407,7 @@ final class GraphPackStore {
                 to: b,
                 allowedRegionIds: allowed
             ) else {
-                continue
+                return []
             }
             for id in path where !ordered.contains(id) {
                 ordered.append(id)
@@ -414,11 +415,10 @@ final class GraphPackStore {
             // The catalog carries a compact summary derived from verified seams.
             // Acquire the bridge/land alternative as well as a direct ferry, so
             // storage-region hop count cannot remove that option before search.
-            let roadAllowed = isCanadianRegion(a) && isCanadianRegion(b)
-                ? allowed.intersection(canadianRegionIds) : allowed
-            let roads = roadNeighbors.filter { roadAllowed.contains($0.key) }
-                .mapValues { $0.intersection(roadAllowed) }
-            if let roadPath = try? RegionConnectivity(neighbors: roads).chain(from: a, to: b) {
+            let roads = roadNeighbors.filter { allowed.contains($0.key) }
+                .mapValues { $0.intersection(allowed) }
+            if let roadPath = try? RegionConnectivity(neighbors: roads)
+                .respectingCountries(from: a, to: b).chain(from: a, to: b) {
                 for id in roadPath where !ordered.contains(id) { ordered.append(id) }
             }
         }
@@ -437,35 +437,25 @@ final class GraphPackStore {
         return allowed
     }
 
-    /// Canadian provinces/territories and their published halves. Used to keep
-    /// Canada↔Canada corridors on the Canadian network when a published path exists.
-    nonisolated static let canadianRegionIds: Set<String> = [
-        "ns", "nb", "pe", "nl", "nl-island", "nl-lab",
-        "qc", "qc-s", "qc-n", "on", "on-s", "on-n",
-        "mb", "sk", "ab", "bc", "yt", "nt", "nu"
-    ]
+    nonisolated static let canadianRegionIds = RegionConnectivity.canadianRegions
 
     nonisolated static func isCanadianRegion(_ regionID: String) -> Bool {
         canadianRegionIds.contains(regionID.lowercased())
     }
 
-    /// Canada↔Canada corridors prefer a published Canadian-only path so equal-hop
-    /// BFS cannot slip through ND/MT (or other US borders) alphabetically.
-    /// Cross-border rides still use the full adjacency graph.
+    /// Every consecutive pair of rider pins independently authorizes countries.
+    /// No fallback through another country when a domestic path is unavailable.
     nonisolated static func preferredCorridorPath(
         from: String,
         to: String,
         allowedRegionIds: Set<String>
     ) -> [String]? {
-        let start = from.lowercased()
-        let end = to.lowercased()
-        if isCanadianRegion(start), isCanadianRegion(end) {
-            let canadianOnly = allowedRegionIds.intersection(canadianRegionIds)
-            if let path = shortestRegionPath(from: start, to: end, allowedRegionIds: canadianOnly) {
-                return path
-            }
-        }
-        return shortestRegionPath(from: start, to: end, allowedRegionIds: allowedRegionIds)
+        let start = from.lowercased(), end = to.lowercased()
+        guard allowedRegionIds.contains(start), allowedRegionIds.contains(end) else { return nil }
+        let neighbors = roadReachableNeighbours.filter { allowedRegionIds.contains($0.key) }
+            .mapValues { $0.intersection(allowedRegionIds) }
+        return try? RegionConnectivity(neighbors: neighbors)
+            .respectingCountries(from: start, to: end).chain(from: start, to: end)
     }
 
     /// Parent aliases replaced by published province/state pieces in split fabrics.
@@ -2167,6 +2157,9 @@ final class GraphPackStore {
             throw RoutingFailure.invalidRequest("No routing region covers a rider point")
         }
         let regions = requiredCatalogRoutingRegions(for: points)
+        guard !regions.isEmpty else {
+            throw RoutingFailure.invalidRequest("No published routing corridor stays in the countries selected by your points")
+        }
         var directories: [String:URL] = [:], missing: [String] = []
         for id in regions {
             if hasCompleteNativePack(id), let graph = findGraphFileURL(regionId: id) {
