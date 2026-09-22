@@ -3990,3 +3990,15 @@ packed-marks-execution-identity.json binds the new source/probe/plan/release;
 the old execution identity and failed matrix are unchanged. Do not restart old
 supervisors or run another heavy job. The original full70 activation tail is
 superseded and must use the new identity/qualification before proceeding.
+
+The matching publication-to-device tail is now activate-packed-marks.py
+PID26067. It uses packed-marks-execution-identity.json and the new
+qualification-packed-marks directory, freezing the new tracked source in
+packed-marks-activation-prepared-source.json. After verified publication it
+performs the same exact70 published catalog/download/routing checks and
+separate authorized DEV installation/launch receipts. Old activationPID88827
+is stopped and its failure state remains archived; do not restart it.
+Compact-proof integration checkpoint529c5dd is pushed. Initial new app results
+include California→Arizona47.761s with462MB process-lifetime peak footprint
+and cold Texas45.016s with the same peak; remaining app checks are still
+running, so these are not full app or release completion.
