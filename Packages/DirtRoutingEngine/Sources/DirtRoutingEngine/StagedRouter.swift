@@ -182,7 +182,8 @@ public enum StagedRouter {
         let windows = overlappingWindows(chain)
         guard windows.count >= 2 else {
             return try routeWindow(windows.first ?? chain, request: request, repository: repository,
-                                   budget: budget, prepared: prepared, compassStore: compassStore)
+                                   budget: budget, prepared: prepared, compassStore: compassStore,
+                                   proveEditableBoundaries: onProgress != nil)
         }
         var parts: [ComputedRoute] = []
         var cursor = request.start
@@ -283,9 +284,17 @@ public enum StagedRouter {
                     }
                     hop1.options.counter = request.options.counter
                     let started1 = ContinuousClock.now
-                    let part1 = try routeAvoidingEarlierRoads(hop1, graph: secondGraph,
+                    var part1 = try routeAvoidingEarlierRoads(hop1, graph: secondGraph,
                         compassStore: compassStore, budget: attemptBudget)
                     hop1.options.counter?.recordStage("stage1:\(windows[1].joined(separator: ","))", since: started1)
+                    if onProgress != nil {
+                        part0.editableBoundaries = try EditableRouteBoundary.proven(in: part0,
+                            graph: firstGraph, initialRestrictions: hop0.options.arrival?.restrictions
+                                ?? hop0.options.arrivalRestrictions, budget: attemptBudget)
+                        part1.editableBoundaries = try EditableRouteBoundary.proven(in: part1,
+                            graph: secondGraph, initialRestrictions: hop1.options.arrival?.restrictions
+                                ?? hop1.options.arrivalRestrictions, budget: attemptBudget)
+                    }
                     let combined = try stitch([part0, part1], windows: windows)
                     // Both halves must succeed before exposing either: a failed
                     // second half may cause a different handover to be selected.
@@ -496,6 +505,11 @@ public enum StagedRouter {
                         indexed.identity(of: $0.edge)
                     })
                     hop.options.counter?.recordStage("carryHistory:\(index)", since: historyStarted)
+                    if onProgress != nil {
+                        part.editableBoundaries = try EditableRouteBoundary.proven(in: part,
+                            graph: indexed, initialRestrictions: hop.options.arrival?.restrictions
+                                ?? hop.options.arrivalRestrictions, budget: attemptBudget)
+                    }
                     parts.append(part)
                     // Handover clipping and onward direction proof are complete.
                     // A later chain failure still invalidates this preview.
@@ -1205,9 +1219,16 @@ public enum StagedRouter {
     static func routeWindow(_ regions: [String], request: RoutingRequest, repository: PackRepository,
                             budget: ComputationBudget,
                             prepared: PreparedGraphStore = PreparedGraphStore(),
-                            compassStore: RoadCompassStore? = nil) throws -> ComputedRoute {
+                            compassStore: RoadCompassStore? = nil,
+                            proveEditableBoundaries: Bool = false) throws -> ComputedRoute {
         let indexed = try openWindow(regions, repository: repository, budget: budget, prepared: prepared)
-        return try RoutingEngine(pack: indexed, compassStore: compassStore).route(request, budget: budget)
+        var result = try RoutingEngine(pack: indexed, compassStore: compassStore).route(request, budget: budget)
+        if proveEditableBoundaries {
+            result.editableBoundaries = try EditableRouteBoundary.proven(in: result, graph: indexed,
+                initialRestrictions: request.options.arrival?.restrictions ?? request.options.arrivalRestrictions,
+                budget: budget)
+        }
+        return result
     }
 
     /// Directed connectivity on both halves before a full Balanced/Dirt search.

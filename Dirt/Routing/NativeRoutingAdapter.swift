@@ -174,7 +174,7 @@ actor NativeRoutingSession {
         Task { @MainActor in RoutingDebugLog.shared.event(identity) }
         var prepared = 0, prepareDetail: String?
         do {
-            let result: ComputedRoute
+            var result: ComputedRoute
             if StagedRouter.shouldStage(regionCount: directories.count, start: request.start, end: request.end) {
                 let repository = try PackRepository(installedDirectories: directories)
                 prepared = 0
@@ -197,6 +197,11 @@ actor NativeRoutingSession {
                 do {
                     result = try RoutingEngine(pack: preparation.graph, compassStore: compassStore)
                         .route(request,budget: budget)
+                    if progress != nil, result.limit == nil {
+                        result.editableBoundaries = try EditableRouteBoundary.proven(in: result,
+                            graph: preparation.graph, initialRestrictions: request.options.arrival?.restrictions
+                                ?? request.options.arrivalRestrictions, budget: budget)
+                    }
                     if result.limit == nil { progress?.yield(.completed(route: result)) }
                     else { progress?.yield(.discarded) }
                 } catch {

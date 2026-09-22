@@ -136,6 +136,8 @@ public struct RouteSegment: Sendable {
 }
 
 public struct ComputedRoute: Sendable {
+    /// Optional proof for generated rider points, collected before graph eviction.
+    public var editableBoundaries: [EditableRouteBoundary]? = nil
     public var maneuvers: [NavigationCue] = []
     /// Source identities remain valid when the next leg opens a different pack.
     public var startRoadIdentity: String?

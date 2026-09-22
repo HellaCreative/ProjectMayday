@@ -40,6 +40,7 @@ struct NativeCandidateQualificationTests {
             case .started: events.append("started")
             case .stage(let index, let response):
                 events.append("stage:\(index)"); stages.append(response)
+            case .leg: Issue.record("Short route must not generate long-ride legs")
             case .completed(let response):
                 events.append("completed"); completed = response
             case .discarded: events.append("discarded")

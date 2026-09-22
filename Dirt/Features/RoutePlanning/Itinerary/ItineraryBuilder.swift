@@ -104,6 +104,7 @@ final class ItineraryBuilder {
         source policy: RoutingSourcePolicy,
         replanFromStationID: String? = nil,
         onFuelStatus: @MainActor (String) -> Void = { _ in },
+        onRouteProgress: (@MainActor (RouteBuildProgress) -> Void)? = nil,
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
@@ -246,13 +247,14 @@ final class ItineraryBuilder {
                     discoveryProfile = reuse?.legs.first(where: { $0.riderLegID == riderLeg.id })?.routeProfile
                         ?? discoveryProfile
                 } else {
-                    response = try await selectedSource.route(routeRequest(
-                        itinerary: itinerary,
-                        legIndex: index,
-                        maxPathMeters: nil,
-                        history: discoveryHistory,
-                        profileOverride: discoveryProfile
-                    ))
+                    let request = routeRequest(
+                        itinerary: itinerary, legIndex: index, maxPathMeters: nil,
+                        history: discoveryHistory, profileOverride: discoveryProfile)
+                    if let onRouteProgress {
+                        response = try await selectedSource.route(request, onProgress: onRouteProgress)
+                    } else {
+                        response = try await selectedSource.route(request)
+                    }
                 }
                 // Clean is the fast connectivity foundation only for a true
                 // long-haul or cross-region leg. Requiring several pumps is not

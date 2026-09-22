@@ -7,6 +7,7 @@ import DirtRoutingEngine
 enum RouteBuildProgress: Sendable {
     case started(regions: [String])
     case stage(index: Int, response: RouteResponse)
+    case leg(index: Int, response: RouteResponse)
     case completed(response: RouteResponse)
     case discarded
 }
@@ -210,34 +211,11 @@ final class PackRoutingSource: RoutingSource {
     func route(_ req: RouteRequest,
                onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
         do {
-            let request = try NativeRoutingAdapter.request(req)
             let directories = try packs.routingDirectories(for: req.locations.map {
                 CLLocationCoordinate2D(latitude: $0.latitude,longitude: $0.longitude)
             })
-            let prior = Set(req.options?.priorEdgeIds ?? [])
-            let (events, continuation) = AsyncStream<StagedRouter.Progress>.makeStream()
-            // Structured child cancellation follows the parent build. The actor
-            // finishes the stream on success or failure; drain it in order before
-            // returning the authoritative final result.
-            var completedResponse: RouteResponse?
-            async let calculation = session.route(request, directories: directories, progress: continuation)
-            for await event in events {
-                try Task.checkCancellation()
-                switch event {
-                case .started(let regions): onProgress(.started(regions: regions))
-                case .stage(let index, let route):
-                    onProgress(.stage(index: index, response: NativeRoutingAdapter.response(
-                        route, style: request.profile.style, prior: prior)))
-                case .completed(let route):
-                    let response = NativeRoutingAdapter.response(route, style: request.profile.style, prior: prior)
-                    completedResponse = response
-                    onProgress(.completed(response: response))
-                case .discarded: onProgress(.discarded)
-                }
-            }
-            let result = try await calculation
-            try Task.checkCancellation()
-            return completedResponse ?? NativeRoutingAdapter.response(result, style: request.profile.style, prior: prior)
+            return try await NativeRouteProgressBridge.route(req, session: session,
+                directories: directories, onProgress: onProgress)
         } catch let failure as RoutingFailure {
             throw RoutingError.server(NativeRoutingAdapter.message(failure))
         }
@@ -399,4 +377,55 @@ private func cacheKey(
 
 private func normalizedEdgeIDs(_ ids: [String]?) -> [String] {
     Array(Set(ids ?? [])).sorted()
+}
+
+/// The production ordered bridge is also used by controlled local-pack tests.
+@MainActor
+enum NativeRouteProgressBridge {
+    static func route(_ req: RouteRequest, session: NativeRoutingSession,
+                      directories: [String: URL],
+                      onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
+        let request = try NativeRoutingAdapter.request(req)
+        let prior = Set(req.options?.priorEdgeIds ?? [])
+        let (events, continuation) = AsyncStream<StagedRouter.Progress>.makeStream()
+        var assembler = EditableRouteLegAssembler()
+        var legIndex = 0
+        var completedResponse: RouteResponse?
+        func emit(_ legs: [ComputedRoute]) {
+            for leg in legs {
+                onProgress(.leg(index: legIndex, response: NativeRoutingAdapter.response(
+                    leg, style: request.profile.style, prior: prior)))
+                legIndex += 1
+            }
+        }
+        async let calculation = session.route(request, directories: directories, progress: continuation)
+        do {
+            for await event in events {
+                try Task.checkCancellation()
+                switch event {
+                case .started(let regions):
+                    assembler = EditableRouteLegAssembler(); legIndex = 0; completedResponse = nil
+                    onProgress(.started(regions: regions))
+                case .stage(let index, let route):
+                    emit(try assembler.append(route))
+                    onProgress(.stage(index: index, response: NativeRoutingAdapter.response(
+                        route, style: request.profile.style, prior: prior)))
+                case .completed(let route):
+                    emit(try assembler.finish(route))
+                    let response = NativeRoutingAdapter.response(route, style: request.profile.style, prior: prior)
+                    completedResponse = response
+                    onProgress(.completed(response: response))
+                case .discarded:
+                    assembler = EditableRouteLegAssembler(); legIndex = 0; completedResponse = nil
+                    onProgress(.discarded)
+                }
+            }
+            let result = try await calculation
+            try Task.checkCancellation()
+            return completedResponse ?? NativeRoutingAdapter.response(result, style: request.profile.style, prior: prior)
+        } catch {
+            onProgress(.discarded)
+            throw error
+        }
+    }
 }

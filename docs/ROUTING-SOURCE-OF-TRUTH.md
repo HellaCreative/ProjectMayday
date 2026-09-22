@@ -3724,3 +3724,28 @@ been integrated or connected to the planner. Next implement the buffered
 roughly-800km leg accumulator, capture proof before each graph is evicted,
 consume the ordered stream with retry/cancellation resets, and measure the
 actual workflow. Do not replay the completed baseline unchanged.
+
+September 22 00:38 UTC: the actual one-pass editable planner is implemented and
+measured. Halifax–Squamish, seed8026290980254235, same preferences/catalog/adapter:
+14 generated legs in97.515s versus direct93.712s, both11,044,901.952m. First leg
+arrives46.001s into the running calculation; all completed full-leg camera
+updates precede the final overview/celebration. The previous230.704s guide-plus-
+rebuild workflow is removed. Internal graph-window searches remain bounded;
+generated roughly800km rider points reuse that selected geometry and are
+editable through ordinary adjacent-leg rebuilds. Short final tails stay buffered.
+Whole-segment boundaries retain exact road geometry, stable arrival identity,
+access and empty restriction-state proof; unavailable proof fails closed.
+Provisional chain previews reset on retries/cancellation. Fuel stays advisory.
+
+203 engine tests and62 app tests pass, including ordered actual two-pack bridge,
+actual continental planner timing, no early celebration, retry reset and editable
+adjacent legs. Evidence: planner-streaming-prototype/streaming-engine-suite.log,
+streaming-planner-tests.xcresult, streaming-planner-tested-source.json and
+accepted-streaming-runtime-identity.json. A Swift type-inference compile failure
+was corrected with an explicitly typed callback; failed build receipt preserved.
+This new runtime's affected qualification supplements, and does not rewrite, the
+published pack qualification. The efficiency review is now accepted-after-
+measured-repair. Old waiting tailPID31566 was deliberately stopped before gate
+approval because it bound the previous runtime; the new identity-bound delivery
+tail must build/install only com.mayday.dirt.dev on the authorized existing phone.
+Physical riding acceptance remains pending. California remains excluded.

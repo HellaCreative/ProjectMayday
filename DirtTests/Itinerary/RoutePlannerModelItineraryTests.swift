@@ -36,41 +36,30 @@ struct RoutePlannerModelItineraryTests {
         let initialCelebration = model.routeCompletionID
         var requests = 0
         let started = ContinuousClock.now
-        source.routeHandler = { request in
+        var legTimes: [Duration] = []
+        source.progressRouteHandler = { request, progress in
             requests += 1
             let native = try NativeRoutingAdapter.request(request)
-            let receiptRoot = ProcessInfo.processInfo.environment["DIRT_QUALIFY_PLANNER_RECEIPTS"].map {
-                URL(fileURLWithPath: $0, isDirectory: true)
-            }
-            if let receiptRoot {
-                try FileManager.default.createDirectory(at: receiptRoot, withIntermediateDirectories: true)
-                try JSONEncoder().encode(request).write(to: receiptRoot.appendingPathComponent("request-\(requests).json"), options: .atomic)
-            }
-            if requests == 1 {
-                #expect(native.profile.wander == 0)
-                #expect(!native.options.cityWall && !native.profile.avoidMajorHighways)
-                #expect(native.access.avoidFerries)
-            }
-            if requests > 1 {
-                #expect(model.activeRouteProgressMessage == "Building leg \(requests - 1) of \(model.itinerary.legs.count)")
-                #expect(map.routeBuildCameraSequence?.steps.count == requests - 1)
-                #expect(model.routeCompletionID == initialCelebration)
-            }
-            let legStarted = ContinuousClock.now
-            let selectedDirectories = try directories(for: request)
+            #expect(native.profile.style == .dirt && native.profile.wander == 1)
+            #expect(native.options.cityWall && native.profile.avoidMajorHighways && native.access.avoidFerries)
             let routingSession = try #require(session)
-            let route = try await routingSession.route(native, directories: selectedDirectories)
-            #expect(route.limit == nil)
-            #expect(route.end.coordinate.distance(to: native.end) <= 250)
-            #expect(route.segments.allSatisfy { ![2, 5].contains($0.access) && $0.structure != "ferry" })
-            #expect(ProcessMemory.megabytes().peak < 1_300)
-            print("CANDIDATE planner-800km request=\(requests) regions=\(selectedDirectories.keys.sorted().joined(separator: ",")) style=\(native.profile.style) seed=\(request.options?.sessionSeed ?? 0) meters=\(route.distanceMeters) elapsed=\(legStarted.duration(to: .now)) progress=\(model.activeRouteProgressMessage ?? "guide")")
-            let response = NativeRoutingAdapter.response(route, style: native.profile.style)
-            if let receiptRoot {
-                try JSONEncoder().encode(response).write(to: receiptRoot.appendingPathComponent("response-\(requests).json"), options: .atomic)
+            let response = try await NativeRouteProgressBridge.route(request, session: routingSession,
+                directories: directories(for: request)) { event in
+                #expect(model.routeCompletionID == initialCelebration)
+                progress(event)
+                if case .leg(let index, let leg) = event {
+                    legTimes.append(started.duration(to: .now))
+                    #expect(model.activeRouteProgressMessage == "Building leg \(index + 2)")
+                    #expect(map.routeBuildCameraSequence?.steps.count == index + 2)
+                    #expect(model.activeResponses.last?.coordinates == leg.coordinates)
+                    print("CANDIDATE streamed-leg number=\(index + 1) meters=\(leg.distanceMeters ?? 0) elapsed=\(started.duration(to: .now))")
+                }
             }
+            #expect(ProcessMemory.megabytes().peak < 1_300)
             return response
         }
+        defer { source.progressRouteHandler = nil }
+
         let start = RouteCoordinate(longitude: -63.5752, latitude: 44.6488)
         let end = RouteCoordinate(longitude: -123.1558, latitude: 49.7016)
         model.selectMode(.fromHere)
@@ -78,11 +67,13 @@ struct RoutePlannerModelItineraryTests {
             ridePreferences: .init(wander: 1, avoidCities: true, avoidHighways: true, avoidFerries: true))
         model.apply(.replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false,
             avoidMotorways: true, preferBackRoads: true), source: "fromHere")
+        model.setPlanningSessionSeedForTesting(8026290980254235)
         await model.waitForCanonicalBuildForTesting()
         try #require(model.errorMessage == nil)
         #expect(model.mode == .plan)
         #expect(model.itinerary.legs.count > 2)
-        #expect(requests == model.itinerary.legs.count + 1)
+        #expect(requests == 1)
+        #expect(legTimes.count == model.itinerary.legs.count)
         #expect(model.built?.legs.count == model.itinerary.legs.count)
         #expect(map.routeBuildCameraSequence?.steps.count == model.itinerary.legs.count + 1)
         #expect(model.routeCompletionID != initialCelebration)
@@ -90,12 +81,14 @@ struct RoutePlannerModelItineraryTests {
         let last = try #require(model.activeResponses.last?.coordinates.last)
         #expect(GeoMath.meters(last, end) <= 250)
         let plannerDuration = started.duration(to: .now)
+        #expect(try #require(legTimes.first) < plannerDuration - .seconds(5))
+        #expect(plannerDuration < .seconds(180))
         print("CANDIDATE planner-800km-complete legs=\(model.itinerary.legs.count) elapsed=\(plannerDuration)")
         if ProcessInfo.processInfo.environment["DIRT_QUALIFY_COMPARE_LONG_PLANNER"] == "1" {
             // Compare identical pins, seed, preferences, catalog and adapter.
             // A fresh session prevents the direct baseline borrowing prepared
             // graphs from the planner. Both runs use already-installed packs.
-            source.routeHandler = nil
+            source.progressRouteHandler = nil
             session = nil
             let directRequest = RidePreferenceContext.$current.withValue(
                 RidePreferences(wander: 1, avoidCities: true, avoidHighways: true, avoidFerries: true)) {
@@ -109,6 +102,7 @@ struct RoutePlannerModelItineraryTests {
             let directStarted = ContinuousClock.now
             let direct = try await NativeRoutingSession().route(directNative, directories: directories(for: directRequest))
             let directDuration = directStarted.duration(to: .now)
+            #expect(plannerDuration < directDuration * 1.35 + .seconds(10))
             #expect(direct.limit == nil)
             #expect(direct.end.coordinate.distance(to: directNative.end) <= 250)
             #expect(direct.segments.allSatisfy { ![2, 5].contains($0.access) && $0.structure != "ferry" })
@@ -638,79 +632,73 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.activeResponses.flatMap(\.coordinates).last == end)
     }
 
-    @Test func continentalFromHereRideBuildsEditableDirtLegsFromLegalGuide() async throws {
-        let prefs = FuelPrefsRestore()
-        defer { prefs.restore() }
-        FuelRangePrefs.notificationsEnabled = false
-
-        let start = RouteCoordinate(longitude: -63, latitude: 45)
-        let middle = RouteCoordinate(longitude: -73, latitude: 45)
-        let end = RouteCoordinate(longitude: -83, latitude: 45)
+    @Test func continentalFromHereStreamsOneStyledSolveAndEditsOnlyAdjacentLegs() async throws {
+        let start = point(0), middle = point(0.5), end = point(1)
         let source = PlannerFakeRoutingSource()
-        defer { source.routeHandler = nil }
         let map = MapState()
         let model = makeModel(source: source, mapState: map)
-        var progressMessages: [String?] = []
-        var completedCameraLegs: [[RouteCoordinate]] = []
         let initialCelebration = model.routeCompletionID
-        source.routeHandler = { request in
-            let endpoints = try requestEndpoints(request)
-            if request.profile == .balanced {
-                #expect(request.options?.ridePreferences?.wander == 0)
-                #expect(request.options?.ridePreferences?.avoidCities == false)
-                #expect(request.options?.ridePreferences?.avoidHighways == false)
-                #expect(request.options?.ridePreferences?.avoidFerries == true)
-                return RouteResponse(
-                    status: "complete", error: nil, message: nil,
-                    distanceMeters: 1_700_000,
-                    estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
-                    geometry: [start, middle, end], segments: nil,
-                    stats: RouteStats(dirtPercent: 0, pavedPercent: 100),
-                    maneuvers: nil, warnings: nil,
-                    dirtPercentValue: nil, pavedPercentValue: nil
-                )
-            }
-            progressMessages.append(model.activeRouteProgressMessage)
+        var requests = 0
+        let first = plannerRoadResponse(from: start, to: middle)
+        let second = plannerRoadResponse(from: middle, to: end)
+        source.progressRouteHandler = { request, progress in
+            requests += 1
+            #expect(request.profile == .dirt)
+            progress(.started(regions: ["ns"]))
+            progress(.leg(index: 0, response: first))
+            #expect(model.activeRouteProgressMessage == "Building leg 2")
+            #expect(model.activeResponses.map(\.coordinates) == [first.coordinates])
+            #expect(map.routeBuildCameraSequence?.steps.count == 2)
             #expect(model.routeCompletionID == initialCelebration)
-            if let steps = map.routeBuildCameraSequence?.steps {
-                completedCameraLegs = steps.compactMap { step in
-                    if case .completedLeg(let geometry) = step { return geometry }
-                    return nil
-                }
-            }
-            #expect(completedCameraLegs.count == progressMessages.count - 1)
-            #expect(completedCameraLegs == (model.built?.legs ?? []).map { $0.response.coordinates })
-            return plannerRoadResponse(from: endpoints.0, to: endpoints.1)
+            await Task.yield()
+            progress(.leg(index: 1, response: second))
+            let full = plannerRoadResponse(from: start, to: end)
+            progress(.completed(response: full))
+            #expect(model.routeCompletionID == initialCelebration)
+            return full
         }
         model.selectMode(.fromHere)
-
-        model.apply(
-            .replaceAll(
-                waypoints: [start, end], profile: .dirt, allowUnknown: false,
-                avoidMotorways: true, preferBackRoads: false
-            ),
-            source: "fromHere"
-        )
+        model.apply(.replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false,
+            avoidMotorways: true, preferBackRoads: false), source: "fromHere")
         await model.waitForCanonicalBuildForTesting()
-
-        #expect(source.routeRequests.count == 4)
-        #expect(source.routeRequests.first?.profile == .balanced)
-        #expect(source.routeRequests.dropFirst().allSatisfy { $0.profile == .dirt })
-        #expect(!source.routeRequests.dropFirst().contains { request in
-            guard let endpoints = try? requestEndpoints(request) else { return false }
-            return endpoints.0 == start && endpoints.1 == end
-        })
+        #expect(requests == 1)
         #expect(model.mode == .plan)
-        #expect(model.itinerary.waypoints.count == 4)
-        #expect(model.built?.legs.count == 3)
-        #expect(model.itinerary.waypoints.first?.coordinate == start)
-        #expect(model.itinerary.waypoints.last?.coordinate == end)
-        #expect(progressMessages == ["Building leg 1 of 3", "Building leg 2 of 3", "Building leg 3 of 3"])
-        #expect(model.activeRouteProgressMessage == nil)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [start, middle, end])
+        #expect(model.activeResponses.map(\.coordinates) == [first.coordinates, second.coordinates])
+        #expect(map.routeBuildCameraSequence?.steps.count == 3)
         #expect(model.routeCompletionID != initialCelebration)
-        #expect(map.routeBuildCameraSequence?.steps.count == 4)
-        #expect(RoutePlannerModel.isPersistentProgressToast("Building leg 2 of 3"))
-        #expect(!RoutePlannerModel.usesRotatingBuildHype(for: "Building leg 2 of 3"))
+        #expect(model.activeRouteProgressMessage == nil)
+        source.progressRouteHandler = nil
+        source.routeRequests = []
+        let pin = model.itinerary.waypoints[1].id
+        model.apply(.move(waypointID: pin, to: point(0.6)), source: "test")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(source.routeRequests.count == 2)
+        #expect(model.itinerary.waypoints[1].id == pin)
+        #expect(model.itinerary.waypoints[1].coordinate == point(0.6))
+    }
+
+    @Test func failedStreamingChainDiscardsItsGeometryAndCameraBeforeRetry() async throws {
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map)
+        source.progressRouteHandler = { _, progress in
+            progress(.started(regions: ["a"]))
+            progress(.leg(index: 0, response: plannerRoadResponse(from: point(0), to: point(0.4))))
+            progress(.discarded)
+            #expect(model.activeResponses.isEmpty)
+            #expect(map.routeBuildCameraSequence?.steps.count == 1)
+            progress(.started(regions: ["b"]))
+            let result = plannerRoadResponse(from: point(0), to: point(1))
+            progress(.completed(response: result))
+            return result
+        }
+        model.selectMode(.fromHere)
+        model.apply(.replaceAll(waypoints: [point(0), point(1)], profile: .dirt, allowUnknown: false,
+            avoidMotorways: true, preferBackRoads: false), source: "fromHere")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.count == 2)
+        #expect(model.errorMessage == nil)
     }
 
     @Test func longRouteSplitUsesRouteDistanceAndLeavesShortRoutesAlone() throws {
@@ -1575,6 +1563,17 @@ private final class PlannerFakeRoutingSource: RoutingSource {
     var stationCandidates: [FuelStationCandidate] = []
     var routeError: Error?
     var routeHandler: ((RouteRequest) async throws -> RouteResponse)?
+    var progressRouteHandler: ((RouteRequest, @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse)?
+
+    func route(_ req: RouteRequest, onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
+        if let progressRouteHandler {
+            routeRequests.append(req)
+            return try await progressRouteHandler(req, onProgress)
+        }
+        let response = try await route(req)
+        onProgress(.completed(response: response))
+        return response
+    }
     var fuelChainError: Error?
 
     init(name: String = "live") {
