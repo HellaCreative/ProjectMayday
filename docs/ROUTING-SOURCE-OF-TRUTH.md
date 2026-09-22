@@ -3896,3 +3896,44 @@ review receipts, notify Richard, and commit/push only its three DEV activation
 files plus the source-of-truth checkpoint. No automatic production changes.
 AssemblyPID86728 is actively verifying original sealed input files (observed
 reading Indiana seam metadata); a quiet assembly log does not mean a dead job.
+
+### September 22 02:23 UTC — full70 assembly complete; Texas memory finding
+
+fabric-v4-20260922-01 assembly completed with70 regions and155 neighboring
+pairs, reusing the68 delivered regions' exact road/fuel/service bytes. The new
+1165-case matrix remains live under run.py PID85279 / qualifierPID90929.
+At361 completed cases, one failure is recorded: tx-austin-houston-dirt returned
+its complete299,051.074m route in32.026s but measured1,087,913,984 bytes RSS,
+14,172,160 bytes above the unchanged1,073,741,824 ceiling. Publication must
+remain blocked; allow the matrix to finish collecting all failures. This is
+not a California dataset failure or evidence that packs need rebuilding.
+
+The prior scoped run on probe c58170aaba27ee1bc4ecd3a070c1170458b7dc3806c8e14977b4cb9221c362c6
+used866,746,368 bytes RSS and44.368s. Both runs have identical Texas graph and
+geometry identities, chosen road hash, distance, eight searches,4,770,621 pops,
+and844,877 peak labels. The new probe is
+c01a54bad4c070eceff93ac18ce6a39b640edd4ae8e2aee8516a5ef579060b68.
+No localLegalProbe stage appears in this failed route. Root cause is unproven;
+do not call it measurement noise or assume the earlier cache-capacity defect.
+Evidence: complete-dev-70-20260922/qualification/0099.{json,time},
+texas-memory-comparison.json, and the prior scoped qualification's0099 receipts.
+Historical receipts and the resource ceiling remain unchanged.
+
+A diagnostic-only serial waiter is queued at complete-dev-70-20260922/
+resource-comparison/run-after-matrix.py PID96419. It waits for terminal original
+matrix status, upstream full70-needs-review and an empty heavy slot. It then
+compares all original failed requests using frozen old/new probes against the
+same full70 candidate/settings, followed by a reversed-order Texas pair. It
+records raw route/time/memory receipts, VM state and probe/release identities,
+and stops for review. These subset runs intentionally fail release coverage;
+even a passing replay cannot replace the original failed matrix or qualify
+publication. It changes no main source and publishes nothing. Inspect its
+state.json, comparison.json and live process before further heavy work. Review
+all final failures, then profile/repair the actual runtime layer and establish
+honest subsequent qualification. Do not restart an unchanged full matrix.
+
+The activation tailPID88827 is expected to stop when the upstream gate fails;
+do not interpret that as a dead-job invitation to bypass qualification. The
+complete70 release is not published or installed. Delivered68 coverage remains
+available on Richard's phone. Richard was notified of assembly completion and
+the Texas memory failure; no user action is required at this point.
