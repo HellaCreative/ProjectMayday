@@ -4238,3 +4238,34 @@ the DEV-only Tester controls, including Copy app log, while retaining
 ordinary production Release. The build-settings inspection and the tester
 build-policy test pass. The updated device build must not replace an active
 phone route; it is ready to build and install once Richard finishes that route.
+
+### September 22 14:21 UTC — Plan-mode Release DEV follow-up delivered
+
+Richard authorized replacement of the active DEV app after reporting that a
+roughly 3,000 km two-pin **Plan a Route** ride was correctly built across the
+new regions but presented as one leg. Commit `869ff85` extends the accepted
+one-solve long-route promotion to Plan mode. A 45-pass focused planner
+itinerary suite includes the single-streamed-leg regression and proves a route
+over 1,000 km becomes editable roughly 800 km legs without another routing
+pass. From Here behaviour remains covered by that suite.
+
+The optimized `ReleaseDev` build was rebuilt with `DIRT_DEVELOPMENT` and the
+explicit DEV-only `DIRT_PRE_RELEASE_TESTER_UNLOCK` condition, then installed
+and launched on Richard's authorized iPhone. It is `com.mayday.dirt.dev`,
+`DIRT Dev`, ReleaseDev with Swift `-O`, and embeds
+`fabric-v4-20260922-01`. The signed binary hash is
+`89c4b3c7a2306b7517f463f793f52d69af64a85c5b06b960d4e7d0ecaef00fce`.
+This restores Copy app log for DEV diagnostics; it does not alter ordinary
+production Release. Device installation and launch receipts are in
+complete-dev-70-20260922. Physical route/riding acceptance remains Richard's
+separate decision.
+
+### September 22 — production TestFlight preparation recorded
+
+`TESTFLIGHT-PRODUCTION-PREPARATION-2026-09-22.md` identifies the exact next
+production sequence. Production remains intentionally unchanged: its ordinary
+Release currently selects production services and the older
+`fabric-v4-20260909-02` fabric. The full70 bytes and matching catalog/service
+selection must be promoted and independently verified only after DEV physical
+acceptance and a separate production authorization. No production pointer,
+archive, TestFlight upload, or App Store promotion was performed.
