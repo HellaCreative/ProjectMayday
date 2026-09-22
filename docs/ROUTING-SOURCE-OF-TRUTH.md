@@ -3937,3 +3937,56 @@ do not interpret that as a dead-job invitation to bypass qualification. The
 complete70 release is not published or installed. Delivered68 coverage remains
 available on Richard's phone. Richard was notified of assembly completion and
 the Texas memory failure; no user action is required at this point.
+
+### September 22 05:26 UTC — complete matrix reviewed; compact connectivity marks
+
+The original full70 matrix finished1164/1165 passing, with all39 restored
+California requests passing. Austin–Houston Dirt RSS is the sole failure;
+publication and activation correctly stopped. Original qualification and
+original-state.json/original-activation-state.json remain preserved. The four
+controlled old/new diagnostic replays returned identical roads and passed RSS,
+but do not replace the failed original. Reading the Texas inputs before a new
+unmodified run produced925,122,560 bytes RSS in32.361s. Memory instrumentation
+in resource-profile confirms substantial mapped-page and temporary proof/search
+storage; it does not establish the entire cause of the original peak variation.
+
+An early-release-of-proof-caches private experiment passes209 engine tests and
+returns identical Texas roads at912,719,872 RSS, but was not adopted. The
+accepted improvement instead stores each forward/reverse connectivity mark as
+one bit rather than one Bool byte. It preserves the same cached proof results,
+iteration, access rules and reuse; it does not introduce new route selection or
+change pack bytes. ReachabilityMarks has tests against a Boolean oracle across
+word boundaries, copy independence, clearing and exact bounded storage. All212
+engine tests pass. No observer, score, restriction, ferry, fuel or route budget
+policy changed.
+
+Seven focused actual route/resource audits pass on the compact representation:
+Texas all3 styles, Indiana→Kentucky Dirt, California South↔Arizona Dirt and
+California South→Arizona Cleanest. Every selected segment, geometry, legal
+metadata, pack identity and distance matches the original full-matrix receipt.
+Texas Dirt is34.744s /843,857,920 bytes RSS; California South→Arizona Dirt is
+33.957s /877,264,896 bytes; its Cleanest case51.963s /881,623,040 bytes. These
+are focused subset receipts, not complete-release qualification. Evidence:
+complete-dev-70-20260922/resource-packed-marks-trial/{engine-tests.log,
+focused-audit.json,source-identity.json,integrated-source-identity.json}.
+New probeSHA6262083bdcec970209de6b25ad562b8851886c0f7a2ad530a0eec1f1c112ec09.
+Main engine source equals this tested private source exactly. Rejected trial
+and original failed receipts remain intact.
+
+The integrated simulator build succeeded. test-packed-marks-app.py PID24146
+owns64 app checks (existing planner/builder/bridge/California checks plus actual
+cold/warm dense Texas/Ontario/California rides). The existing simulator is used
+serially. Read packed-marks-app/state.json and tests.log; app results and
+controlled Halifax–Squamish comparison are still pending at this checkpoint.
+
+run-packed-marks.py PID25278 is the next serial owner. It waits for those app
+checks, exact source identities and the controlled timing/distance gate, then
+runs the1165 original requests against the existing70-region candidate with
+the new runtime in qualification-packed-marks. It reuses the sealed datasets,
+not old resource receipts. This common proof-storage change affects resource
+use throughout the engine, so it receives a separate final qualification under
+unchanged limits. It publishes/download-verifies only after all gates pass.
+packed-marks-execution-identity.json binds the new source/probe/plan/release;
+the old execution identity and failed matrix are unchanged. Do not restart old
+supervisors or run another heavy job. The original full70 activation tail is
+superseded and must use the new identity/qualification before proceeding.

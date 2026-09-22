@@ -180,7 +180,7 @@ final class EndpointReachability {
     private struct EndKey: Hashable { let edge: Int }
     /// `arrival[arc]`: the end is reachable after arriving along that arc.
     /// `free[node]`: reachable after a coincident-node transfer, when any road may follow.
-    private struct Marks { let arrival: [Bool]; let free: [Bool] }
+    private struct Marks { let arrival: ReachabilityMarks; let free: ReachabilityMarks }
     private var cache: [EndKey: Marks] = [:]
     private struct StartKey: Hashable { let edge: Int; let direction: Int8 }
     private struct ForwardKey: Hashable { let starts: [StartKey] }
@@ -335,8 +335,8 @@ final class EndpointReachability {
         let key = ForwardKey(starts: keys)
         if let cached = forwardCache[key] { return cached }
         let nodeCount = graph.nodeCount
-        var arrival = [Bool](repeating: false, count: arcs.outEdge.count)
-        var free = [Bool](repeating: false, count: nodeCount)
+        var arrival = ReachabilityMarks(count: arcs.outEdge.count)
+        var free = ReachabilityMarks(count: nodeCount)
         var arcQueue: [Int32] = [], nodeQueue: [Int32] = []
         func markArc(_ arc: Int) {
             let edge = Int(arcs.outEdge[arc])
@@ -383,8 +383,8 @@ final class EndpointReachability {
         let key = EndKey(edge: end.edge)
         if let cached = cache[key] { return cached }
         let nodeCount = graph.nodeCount
-        var arrival = [Bool](repeating: false, count: arcs.outEdge.count)
-        var free = [Bool](repeating: false, count: nodeCount)
+        var arrival = ReachabilityMarks(count: arcs.outEdge.count)
+        var free = ReachabilityMarks(count: nodeCount)
         var arcQueue: [Int32] = [], nodeQueue: [Int32] = []
         func markFree(_ node: Int) {
             if !free[node] { free[node] = true; nodeQueue.append(Int32(node)) }
