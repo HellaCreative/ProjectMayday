@@ -4174,3 +4174,19 @@ records the confirmed From Here-only stream/promotion guards and the required
 prefix identity, progress scoping, retry/cancel and atomic tail-splice regressions.
 It is preparation only, not an implemented repair; Utah diagnosis also remains
 open. Both follow-ups must preserve the completed pack qualification evidence.
+
+### September 22 — owner clarifies optimized Release DEV delivery target
+
+Richard requests a Release build on his existing iPhone using DEV services,
+then a quick transition to production TestFlight after acceptance. The current
+activate-city-clipping.py tail still builds Debug; its completion must not be
+described as completing this new optimized Release DEV requirement. Preserve
+publication and frozen-source checks. Prepare an explicit internal Release DEV
+configuration or verified overrides retaining DIRT_DEVELOPMENT, DEV bundle ID
+and marker, with exact70 catalog and backend identity verified in the binary.
+Do not silently select ordinary Release: the current Production scheme selects
+production services and the older fabric-v4-20260909-02 pack release. Production
+TestFlight therefore also requires coherent verified pack promotion/selection,
+configuration and signing checks after acceptance; Richard may handle upload.
+No immediate production promotion or archive is requested. Detailed resumption
+scope is complete-dev-70-20260922/owner-release-dev-target.json.
