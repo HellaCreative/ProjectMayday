@@ -868,20 +868,6 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
 
-            if activeSheet == nil, !routeRideSettingsPresented {
-                VStack {
-                    HStack {
-                        if dockLeading { Spacer(minLength: 0) }
-                        searchButton
-                        if !dockLeading { Spacer(minLength: 0) }
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
-                .zIndex(2)
-            }
-
             // Side drawers behind the vertical dock (wash extends under the rail).
             if routeCardOpen {
                 RoutePlannerCard(
@@ -904,7 +890,7 @@ struct RootView: View {
                     .zIndex(1)
             }
 
-            // Idle: full bottom control strip. Route sheet: recenter (+ fit plan) outside the sheet.
+            // Search, fit-route and recenter stay together outside the route sheet.
             // Layers / Group: no map controls. Profile owns a full-screen cover.
             if activeSheet == nil {
                 VStack(spacing: 10) {
@@ -979,7 +965,8 @@ struct RootView: View {
         // Packs on the sheet-adjacent edge; fit + recenter on the far open-map edge.
         let controls = HStack(spacing: 10) {
             Spacer(minLength: 8)
-            if app.planner.canFocusEntirePlannedRoute {
+            if !routeRideSettingsPresented { searchButton }
+            if app.mapState.hasDisplayedRoute, app.planner.canFocusEntirePlannedRoute {
                 landscapeFitPlanButton
             }
             landscapeRecenterButton
@@ -1049,8 +1036,8 @@ struct RootView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous)
                     .stroke(
-                        app.mapState.showRoutingGraphDebug ? DirtTheme.orange : Color.clear,
-                        lineWidth: 2
+                        app.mapState.showRoutingGraphDebug ? Color.yellow.opacity(0.35) : Color.clear,
+                        lineWidth: 1
                     )
             )
         }
@@ -1160,7 +1147,8 @@ struct RootView: View {
             compact: compact,
             groupOnly: activeSheet == .group,
             savedOnly: routeCardOpen && app.planner.mode == .saved && !app.planner.showingLoop,
-            horizontal: true
+            horizontal: true,
+            onSearch: mapSearchAction
         )
     }
 
@@ -1360,21 +1348,18 @@ struct RootView: View {
             ),
             groupOnly: activeSheet == .group,
             savedOnly: routeCardOpen && app.planner.mode == .saved && !app.planner.showingLoop,
-            showsZoom: showsZoom
+            showsZoom: showsZoom,
+            onSearch: mapSearchAction
         )
     }
 
+    private var mapSearchAction: (() -> Void)? {
+        guard activeSheet == nil, !routeRideSettingsPresented, !navActive else { return nil }
+        return { locationSearch.isPresented = true }
+    }
+
     private var searchButton: some View {
-        Button { locationSearch.isPresented = true } label: {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(DirtTheme.ink)
-                .frame(width: 50, height: 50)
-                .dirtGlassControl(tint: .white)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Search places")
-        .accessibilityHint("Find a place or address to route to or add as a waypoint")
+        PlaceSearchButton { locationSearch.isPresented = true }
     }
 
     private var topChrome: some View {
@@ -1395,7 +1380,6 @@ struct RootView: View {
                 HStack(alignment: .top, spacing: 8) {
                     idleBrandStack
                     Spacer(minLength: 8)
-                    if activeSheet == nil, !routeRideSettingsPresented { searchButton }
                 }
             }
         }
@@ -1762,6 +1746,13 @@ private struct IslandBrandBar: View {
         .frame(minWidth: DirtIsland.cutoutWidth)
         .background(Color.black, in: wrapperShape)
         .clipShape(wrapperShape)
+        .overlay {
+            wrapperShape.strokeBorder(
+                graphDebugVisible ? Color.yellow.opacity(0.35) : Color.clear,
+                lineWidth: 1
+            )
+            .allowsHitTesting(false)
+        }
         .scaleEffect(x: 1, y: wrapperScale, anchor: .top)
         .opacity(barOpacity)
         .onAppear(perform: playEntrance)

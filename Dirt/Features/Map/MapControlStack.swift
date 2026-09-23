@@ -30,6 +30,9 @@ struct MapControlStack: View {
     /// In-ride landscape: chips sit opposite the island. Popover opens toward the map.
     var landscapeChipsOnTrailing: Bool? = nil
 
+    /// Planning search shares the bottom row with fit-route and recenter.
+    var onSearch: (() -> Void)? = nil
+
     @State private var cuesOpen = false
     @State private var sharingOpen = false
     @State private var locationRecovery: LocationRecovery?
@@ -138,21 +141,28 @@ struct MapControlStack: View {
             if !hidesMapFunctionChrome {
                 riderStatusButton
             }
-            if app.mapState.hasDisplayedRoute,
-               app.planner.canFocusEntirePlannedRoute {
-                if horizontal {
-                    fitPlannedRouteButton
-                    recenterButton
-                } else {
-                    HStack(spacing: Self.itemSpacing) {
-                        fitPlannedRouteButton
-                        recenterButton
-                    }
-                }
+            if horizontal {
+                planningLocationButtons
             } else {
-                recenterButton
+                HStack(spacing: Self.itemSpacing) {
+                    planningLocationButtons
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    private var planningLocationButtons: some View {
+        if let onSearch {
+            PlaceSearchButton {
+                closePopovers()
+                onSearch()
+            }
+        }
+        if app.mapState.hasDisplayedRoute, app.planner.canFocusEntirePlannedRoute {
+            fitPlannedRouteButton
+        }
+        recenterButton
     }
 
     private var hidesMapFunctionChrome: Bool { groupOnly || savedOnly }

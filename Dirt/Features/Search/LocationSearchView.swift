@@ -138,3 +138,21 @@ struct SearchConfirmationCard: View {
             .buttonStyle(DirtSecondaryButtonStyle())
     }
 }
+
+/// Shared map action so search has the same appearance in both orientations.
+struct PlaceSearchButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(DirtTheme.ink)
+                .frame(width: 50, height: 50)
+                .dirtGlassControl(tint: .white)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Search places")
+        .accessibilityHint("Find a place or address to route to or add as a waypoint")
+    }
+}
