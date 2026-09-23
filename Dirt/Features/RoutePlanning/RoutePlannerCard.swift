@@ -80,8 +80,8 @@ struct RoutePlannerCard: View {
             VStack(spacing: 0) {
                 if showDefaultRideSettings {
                     RideSettingsPanel(
-                        title: planner.showingLoop ? "Loop settings" : "Default ride settings",
-                        scopeNote: planner.showingLoop ? "Updates this loop." : "Used for new legs. Existing Plan legs keep their own settings.",
+                        title: planner.showingLoop ? "Whole-loop settings" : "Default ride settings",
+                        scopeNote: planner.showingLoop ? "Applies to every leg. Use a leg’s style button to edit only that leg." : "Used for new legs. Existing Plan legs keep their own settings.",
                         profile: planner.profile,
                         allowUnknown: planner.allowUnknown,
                         preferences: planner.displayedRidePreferences,
@@ -899,13 +899,7 @@ struct RoutePlannerCard: View {
             number: index + 1,
             profileTitle: stage.profile.title,
             isActive: false,
-            onToggle: {
-                if planner.showingLoop {
-                    openDefaultSettings()
-                } else {
-                    openLegSettings(at: index)
-                }
-            },
+            onToggle: { openLegSettings(at: index) },
             onFocus: { planner.focusStage(at: index) },
             endpointTitle: planner.stageEndpointTitle(at: index),
             endpointIsFuelStation: planner.stageEndpointIsFuelStation(at: index),

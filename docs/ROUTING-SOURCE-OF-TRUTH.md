@@ -1297,6 +1297,31 @@ Separate source/build/signature/install/launch receipts are under
 the 82-check simulator qualification. Physical acceptance remains pending;
 no engine scoring trial, production promotion or TestFlight upload is included.
 
+### September 23 — independent leg settings delivered
+
+Owner update: a leg row always edits that leg alone, in From Here, Loop and
+Plan. The Loop-specific dropdown branch that opened whole-loop defaults is
+removed. Rows now open the existing local editor; whole-loop controls explicitly
+label their all-leg scope. This supersedes the earlier single-style-loop rule.
+The new regression builds a loop, changes its outward leg to Clean, changes the
+return to Dirt and repeatedly toggles Unknown/Wander/avoidances. Each change
+issues one selected-leg request and preserves the opposite leg's settings and
+geometry; mixed settings and pin identities also survive a far-pin move.
+83 selected simulator checks pass, including existing local edits, incremental
+rebuilds and actual NS loop checks; three unrelated long-route opt-ins skipped.
+The first build exposed a test-fixture property typo, corrected before the
+passing build; both logs are preserved. No engine/scoring/data changes.
+
+Optimized ReleaseDev installed and launched on White at 2026-09-23T09:00:41.829397+00:00.
+Stamp `continental-70-leg-settings-20260923`, bundle `com.mayday.dirt.dev`,
+fabric `fabric-v4-20260922-01`. Simulator-tested source including the stamp is
+identical to device-build source. DEV identity, Swift `-O`, code signature and
+absence of production hosts verified. Binary SHA256 `12cf8b4c02a471fe1f7ffc70d3533b4f83fe44fbf14ab755859f78def3c426f0`.
+Evidence: `.build/leg-settings-20260923/` (app xcresult/summary/source identity)
+and `device/` (build/signature/separate install and launch receipts).
+Physical acceptance remains pending; coastal circuit quality remains a separate
+follow-up and no production/TestFlight action is included.
+
 ### Loop and navigation handoff
 
 A loop is two pins: the rider's start, and one far pin they drop where they want
@@ -1314,8 +1339,11 @@ a Plan waypoint, and it can be tapped, dragged, and dropped somewhere else, whic
 rebuilds the loop. That is the rider's control: if they do not like the loop, they
 move the pin.
 
-A loop is one ride: one style and one Allow Unknown setting for the whole
-circuit, never per leg. Shared access roads may be necessary and a perfect circle
+A newly generated loop starts with the selected default settings. The owner’s
+23 September update explicitly permits independent settings on every leg,
+including Loop: Clean outbound and Dirt/Unknown-enabled return are valid.
+Each leg’s style button edits only that leg’s style, Unknown Access, Wander,
+and avoidances. Other legs retain settings and geometry. Shared access roads may be necessary and a perfect circle
 is not promised. Make a true loop wherever the network allows one; where space is
 confined — a peninsula, a dead-end valley, one road in and out — an out-and-back
 is an acceptable result, but it is reported as what it is, with the repeated
@@ -1528,9 +1556,13 @@ with the same gesture, tapped, moved, and dropped again to rebuild the loop.
 
 Outbound and return are ordinary styled legs (rule 2) and obey leg shape
 (rule 3), so the return re-rides as little of the outbound as the network allows.
-The whole circuit carries one style and one Allow Unknown setting; the app never
-changes a loop leg's style, and a loop has no per-leg settings that can disagree
-with each other. Where the network is confined, an out-and-back is an acceptable
+Initial generation uses the selected defaults for both legs. After generation,
+the owner’s 23 September contract allows each leg to own its style, Unknown
+Access, Wander and avoidances. Editing a leg must preserve every other leg’s
+settings and geometry; this applies equally to From Here, Loop and Plan.
+Explicit whole-loop controls are labelled as affecting every leg; a leg row
+always opens that leg’s settings. Moving a shared rider waypoint necessarily
+changes both incident legs’ endpoints. Where the network is confined, an out-and-back is an acceptable
 answer, declared as one with its repeated distance. Reserve failure for a pin
 that cannot be reached at all, and say it in terms of the pin, because the
 rider's move is to drop it somewhere else.

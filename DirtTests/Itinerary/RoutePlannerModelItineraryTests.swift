@@ -223,6 +223,51 @@ struct RoutePlannerModelItineraryTests {
         }
     }
 
+    @Test func generatedLoopLegSettingsStayLocalAndSurviveFarPinMove() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.notificationsEnabled = false
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        let ids = model.itinerary.waypoints.map(\.id)
+        let returnGeometry = try #require(model.stages[1].response).coordinates
+        let returnSettings = model.itinerary.legs[1]
+        source.routeRequests.removeAll()
+        model.applyLegRideSettings(at: 0, profile: .cleanest, allowUnknown: false,
+            ridePreferences: .init(wander: 0.1, avoidCities: false, avoidHighways: true, avoidFerries: true))
+        await model.waitForCanonicalBuildForTesting()
+        #expect(source.loopRequestCount == 1)
+        #expect(source.routeRequests.count == 1)
+        #expect(model.itinerary.legs[1] == returnSettings)
+        #expect(model.stages[1].response?.coordinates == returnGeometry)
+        #expect(model.stages[0].profile == .cleanest)
+        let outboundSettings = model.itinerary.legs[0]
+        let outboundGeometry = try #require(model.stages[0].response).coordinates
+        for unknown in [true, false, true] {
+            source.routeRequests.removeAll()
+            model.applyLegRideSettings(at: 1, profile: .dirt, allowUnknown: unknown,
+                ridePreferences: .init(wander: unknown ? 0.9 : 0.3, avoidCities: true,
+                    avoidHighways: false, avoidFerries: !unknown))
+            await model.waitForCanonicalBuildForTesting()
+            #expect(source.routeRequests.count == 1)
+            #expect(source.routeRequests.first?.profile == .dirt)
+            #expect(source.routeRequests.first?.accessPolicy.motorizedUnknown == unknown)
+            #expect(model.itinerary.legs[0] == outboundSettings)
+            #expect(model.stages[0].response?.coordinates == outboundGeometry)
+            #expect(model.stages[1].profile == .dirt && model.stages[1].allowUnknown == unknown)
+            #expect(model.itinerary.waypoints.map(\.id) == ids)
+        }
+        model.apply(.move(waypointID: ids[1], to: point(0.5)), source: "loopFar")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(source.loopRequestCount == 1)
+        #expect(model.stages[0].profile == .cleanest && !model.stages[0].allowUnknown)
+        #expect(model.stages[1].profile == .dirt && model.stages[1].allowUnknown)
+        #expect(model.itinerary.waypoints.map(\.id) == ids)
+    }
+
     @Test func completedLoopSignalsOverviewIndependentlyOfToast() async throws {
         let source = PlannerFakeRoutingSource()
         let map = MapState()
