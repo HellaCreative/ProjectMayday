@@ -1229,8 +1229,8 @@ canonical itinerary and are never discarded by these operations. Ordinary Plan
 default settings retain their existing semantics. The panel labels its Loop
 scope explicitly. All 82 selected simulator checks pass; three unrelated
 long-route opt-in checks are skipped. Source hashes, xcresult and summary are
-in `.build/loop-circuit-20260923/`. These app repairs are not yet installed and
-do not claim to repair circuit shape.
+in `.build/loop-circuit-20260923/`. These app repairs were subsequently installed as recorded below; they do not
+claim to repair circuit shape.
 
 The existing start-centred far-pin radius plus 2 km remains unchanged. A private
 counterfactual removing that radius produced exactly the same smaller-pin
@@ -1247,6 +1247,55 @@ requirement is a useful whole circuit with distinct corridors and meaningful
 dirt, allowing necessary shared access, tested against both supplied pins and
 actual displayed settings. GPX entry choice and From Here departure bias remain
 separate unresolved items.
+
+### September 23 — owner accepts a shared approach and an inland circuit
+
+The owner explicitly accepts a lollipop: a plain shared road approach of even
+20–30 km to a substantial dirt circuit, then the same approach home. Do not
+substitute repeated tiny dirt excursions for that approach. Judge the useful
+circuit separately from its shared access; aggregate repeated-road distance
+alone is not an acceptance rule. Evaluate available connected riding areas on
+both sides of the road, respecting actual land/road topology and legal access.
+The reported coastal bias occurs with Unknown both on and off. It must not be
+attributed to that toggle without route-specific evidence. No hard-radius or
+access-policy change is authorized by this clarification alone.
+
+A private north/south proposal audit at the smaller pin found a northern
+known-access dirt candidate at 44.902126,-63.167038 and legally routed through
+it with Unknown off; those complete circuits still tangled. Thus broad northern
+inaccessibility is not established. Disabling early-pavement/early-away charges
+also failed to materially repair the small-pin circuit and was not integrated.
+Evidence: `.build/loop-lollipop-20260923/{proposals.log,connector-policy.log}`;
+these probes explicitly used highway avoidance and are diagnostic experiments,
+not exact phone replays. No experimental engine change is retained.
+
+The owner explicitly accepts the broad circuit in the 08:41:52 phone example.
+Start 44.76476006281873,-63.34028057291781, rounded far
+44.91624,-62.51208, seed 749065113099719, Balanced/Unknown on/Wander zero.
+Using the app's non-Clean highway policy (avoidMajorHighways false) reproduces
+223,104.945 m / 2,173.360 m repeated / 6,008.391 m spatial return / 31.9% known
+dirt. Dirt at the same seed, pins, Unknown and Wander produces 221,608.945 m /
+2,173.360 m repeated / 43.9% known dirt, with 97,345 m meaningful dirt and zero
+short dirt scraps. Geometry inspection confirms a broad northern outward path
+and separate southern return. Dirt/Wander 0.5 yields 280,230.945 m / 2,302.585 m
+repeated / 69.9% known dirt; this is a changed setting, not the same request.
+The app log contains no routing request after the failed style interaction;
+the row dropdown opens the default/Loop panel fixed in b7f43dc. Preserve this
+accepted geometry example alongside the unresolved smaller-pin examples.
+Evidence: `accepted-app-policy.log`, `accepted-app-policy-audit.swift`,
+`accepted-*.json` and `accepted-dirt.png` in the same evidence directory.
+The earlier `accepted-shape.log` deliberately records the mismatching
+highway-avoidance replay and must not be presented as a phone reproduction.
+
+The control repair was installed and launched on White at 2026-09-23T08:49:04.569497+00:00
+as optimized ReleaseDev, bundle `com.mayday.dirt.dev`, stamp
+`continental-70-loop-controls-20260923`, same immutable full70 fabric. DEV
+service identity, Swift `-O`, absence of DEBUG/production hosts and strict
+signature verification passed. Binary SHA256 `1c3ae21ca00836d9ed98c09283741c75957d4d8395b65e4125f978ed86b4adc5`.
+Separate source/build/signature/install/launch receipts are under
+`.build/loop-lollipop-20260923/device/`. Only the diagnostic stamp changed after
+the 82-check simulator qualification. Physical acceptance remains pending;
+no engine scoring trial, production promotion or TestFlight upload is included.
 
 ### Loop and navigation handoff
 
