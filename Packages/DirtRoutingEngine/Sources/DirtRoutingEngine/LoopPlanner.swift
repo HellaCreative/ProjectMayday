@@ -52,17 +52,50 @@ public enum LoopFailure: Error, Equatable, Sendable {
 /// are ordinary styled searches. Complete circuits compare both legal departure
 /// directions; unavoidable shared access roads remain possible.
 public struct LoopPlanner: Sendable {
-    /// Final-approach slack on the hard extent: the pin can fall anywhere along
-    /// its graph edge, and the road reaching that edge may run a short distance
-    /// beyond the pin's straight-line radius before turning onto it. This is a
-    /// snap/geometry allowance, not wander room — it stays fixed regardless of
-    /// pin distance or target distance.
-    public static let extentToleranceMeters = 2_000.0
     let pack: any RoadGraph
     public init(pack: any RoadGraph) { self.pack = pack }
 
     public func plan(_ request: LoopRequest, budget: ComputationBudget = .init(seconds: 60),
                      onLeg: ((Int, ComputedRoute) throws -> Void)? = nil) throws -> LoopPlanResult {
+        // Start near the pin to avoid turning low-Wander rides into province-wide
+        // tours. This is a search hint, never a reachability boundary: retry with
+        // the caller's original area if the nearby search cannot connect.
+        guard request.options.extentCenter == nil else {
+            return try planInArea(request, budget: budget, onLeg: onLeg)
+        }
+        var nearby = request
+        nearby.options.extentCenter = request.start
+        nearby.options.maxExtentMeters = request.start.distance(to: request.far) + 2_000
+        var selected: LoopPlanResult
+        do {
+            selected = try planInArea(nearby, budget: budget)
+        } catch LoopFailure.pinUnreachable {
+            return try planInArea(request, budget: budget, onLeg: onLeg)
+        } catch RoutingFailure.noPath {
+            return try planInArea(request, budget: budget, onLeg: onLeg)
+        }
+        // A folded nearby result may improve outside that area, but an optional
+        // comparison cannot replace it with a much longer tour or erase success.
+        if selected.reriddenMeters > max(500, selected.distanceMeters * 0.05) {
+            do {
+                let wider = try planInArea(request, budget: budget.limited(to: 2))
+                if wider.distanceMeters <= selected.distanceMeters * 1.25,
+                   Self.prefersCircuit(wider, over: selected, style: request.profile.style) {
+                    selected = wider
+                }
+            } catch is CancellationError { throw CancellationError() }
+            catch LoopFailure.pinUnreachable { }
+            catch RoutingFailure.noPath { }
+            catch RoutingFailure.resourceLimit { }
+        }
+        try Task.checkCancellation()
+        try onLeg?(0, selected.outbound)
+        try onLeg?(1, selected.inbound)
+        return selected
+    }
+
+    private func planInArea(_ request: LoopRequest, budget: ComputationBudget,
+                            onLeg: ((Int, ComputedRoute) throws -> Void)? = nil) throws -> LoopPlanResult {
         try budget.check()
         let engine = RoutingEngine(pack: pack)
         var outboundRequest = RoutingRequest(start: request.start, end: request.far,
@@ -79,13 +112,9 @@ public struct LoopPlanner: Sendable {
         outboundRequest.options.maximumMeters = .infinity
         let slack = max(0, request.targetMeters / 2 - request.start.distance(to: request.far))
         outboundRequest.options.loopSlackMeters = slack
-        // The far pin is a hard extent, not merely what the circuit aims at: no
-        // explored road, outbound or return, may sit farther from the start than
-        // the pin itself. Lateral wander inside that radius is unaffected; this
-        // only rejects the radial "past the pin" case. `.with(...)` below carries
-        // these two fields onto the return leg, so both share one centre/radius.
-        outboundRequest.options.extentCenter = request.start
-        outboundRequest.options.maxExtentMeters = request.start.distance(to: request.far) + Self.extentToleranceMeters
+        // The pin is a required destination, not a radius around home. Legal
+        // roads may pass beyond it to cross a river or reach the other side.
+        // Keep any explicit caller extent; do not invent one from pin distance.
         let outbound: ComputedRoute
         do {
             outbound = try engine.route(outboundRequest, budget: budget)
@@ -99,10 +128,12 @@ public struct LoopPlanner: Sendable {
         // Every return is searched legally with the far pin's arrival state.
         // A failed search is never permission to reverse directed roads.
         func returning(from first: ComputedRoute, budget: ComputationBudget,
-                       departure: RoadMatch? = nil) throws -> ComputedRoute {
+                       departure: RoadMatch? = nil, connecting: Bool = false, separate: Bool = false) throws -> ComputedRoute {
             var back = outboundRequest.with(start: first.end.coordinate, end: first.start.coordinate)
             back.options.repeatEdges = Set(first.segments.map(\.edgeID).filter { !$0.isEmpty })
             back.options.repeatFactor = 16
+            if separate { back.options.repeatMinimumCostPerKm = 150 }
+            if connecting { back.profile.style = .balanced; back.profile.balancedDirtPreference = 0 }
             if let last = first.segments.last {
                 back.options.arrival = .init(edge: pack.restrictionEdge(last.edge),
                     coordinate: first.end.coordinate, restrictions: first.arrivalRestrictions)
@@ -161,6 +192,26 @@ public struct LoopPlanner: Sendable {
             switch failure {
             case .noPath, .resourceLimit: break
             default: throw failure
+            }
+        }
+        // Dirt describes the whole ride, not an obligation to hunt for dirt on
+        // both halves. Compare a direct connecting half with the dirt-rich half,
+        // under the same access, extent and total comparison budget.
+        if request.profile.style == .dirt {
+            do {
+                consider(outbound, try returning(from: outbound, budget: comparisonBudget, separate: true))
+                consider(outbound, try returning(from: outbound, budget: comparisonBudget, connecting: true, separate: true))
+                var connector = outboundRequest
+                connector.profile.style = .balanced
+                connector.profile.balancedDirtPreference = 0
+                let first = try engine.route(connector, budget: comparisonBudget)
+                consider(first, try returning(from: first, budget: comparisonBudget, separate: true))
+            } catch is CancellationError { throw CancellationError() }
+            catch let failure as RoutingFailure {
+                switch failure {
+                case .noPath, .resourceLimit: break
+                default: throw failure
+                }
             }
         }
         try Task.checkCancellation()

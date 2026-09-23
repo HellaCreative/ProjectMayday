@@ -1170,7 +1170,8 @@ The planner compares both legal travel directions on the same snapped start
 and far roads, within one optional six-second/shared remaining budget. It ranks
 complete circuits for repeated riding and style quality, preserving meaningful
 dirt, and rejects alternatives longer than 125% of the initial legal circuit.
-It retains the hard far-pin extent, legal/turn/ferry constraints and existing
+At that checkpoint it retained the hard far-pin extent (superseded by the
+23 September required-waypoint update), legal/turn/ferry constraints and existing
 return repeat cost. Arrival restrictions carry into the return. No dataset or
 ordinary A-to-B scoring changes are included.
 
@@ -1370,22 +1371,92 @@ Separate identity/signature/install/launch receipts are in `device/` under the
 same evidence directory. Physical riding acceptance remains pending; this is
 not a production or TestFlight delivery.
 
+### Loop snapshots and required-waypoint repair — 23 September
+
+Owner reports `103415Z` and `103938Z` establish three separate defects: a failed
+initial loop left no usable far-pin identity; Dirt edits could favor roads used
+by the accepted opposite half; Clean's ordinary-primary-road cost plus strong
+corridor preference produced the Bellafontaine detour. Unknown enabled helped
+the owner's successful example; it was not the cause of the failure.
+
+New map drops replace the loop, publish the new pin before solving, and cancel
+older requests. Failure leaves the new intent editable. Stale completions cannot
+restore old geometry. Dragging an existing waypoint still edits the itinerary.
+
+Local edits of a closed itinerary (endpoints within 250 m) pass stable road IDs
+from the other accepted legs into native routing. This reuses existing responses;
+it does not load another map or duplicate companion geometry. Dirt edits penalize
+those roads and, if still overlapping, compare one mixed-surface search candidate
+under a two-second child budget. Candidate acceptance reduces combined overlap
+and internal repeats, retains meaningful dirt when present, and limits growth to
+125% of the first candidate. The displayed rider style and access policy remain
+unchanged. Untouched legs retain their settings and geometry. Open itineraries
+retain the ordinary routing path; shared access roads remain usable.
+
+Fresh Dirt loops compare a connecting half with a dirt-rich half under the
+existing six-second alternative-search budget. A minimum repeat cost prevents
+very cheap dirt from remaining cheap after the repeat multiplier. Candidates are
+judged together; no UI setting is silently changed to Balanced. The pin is now a
+required destination rather than a hard radius, as described below.
+
+Clean uses a modest ordinary-primary-road cost (2 rather than 8); real trunk and
+motorway costs are unchanged. Its local corridor preference is soft enough to
+remove an unnecessary bend while preserving the broad side of an accepted ride.
+Balanced dirt-scrap cleanup and legal/access constraints remain in force.
+
+Verification: 225 engine tests pass with both opt-in owner NS graph checks
+executed. The new required-pin case completes beyond the former radius; edited
+Dirt/Unknown-on halves total 105.8 km with about 320 m repeated. The companion
+sets contain 264 and 118 IDs, with host edit times of 0.48 and 1.66 seconds in the
+full suite. Clean's logged return replay falls from 56.3 to 47.0 km and remains
+0% known dirt, removing the Bellafontaine detour.
+
+All 87 focused simulator app checks pass (three unrelated long-route opt-ins
+skipped), including immediate pin intent, replacement after failure, cancellation
+of a pending loop, delayed stale-result rejection, and either-leg companion
+context with untouched geometry. Three real-pack app seeds retain the prior
+163.2 km / 53.6% known dirt / 320 m repeated circuit, 1.96–2.97 seconds and 93 MB
+process peak in the final run. These are simulator/host measurements, not phone
+riding acceptance. The first app run caught GPS fixture leakage in three new
+tests; their explicit location fixture now restores preferences, and the failed
+result remains recorded.
+
+The previously accepted broad loop retains its Balanced/Unknown-on 220.0 km
+shape (32% dirt), and Dirt/Unknown-on variants remain 221.6 km at Wander 0 and
+280.2 km at 0.5, with no dirt scraps. Dirt/Unknown-off now chooses a 238.9 km
+circuit, 11.6% known dirt, 27.7 km meaningful dirt, 5.3 km repeated and no scraps;
+the earlier comparison was 313.0 km / 29.5% dirt with 8.5 km scraps. This is a
+deliberate trade toward a coherent circuit, not a silent profile change. Some
+Unknown-off pins still require long connections on this graph.
+
+Evidence: `.build/loop-circuit-repair-20260923/`, including the original failed
+checks, full engine log, final `app-tests-3.xcresult`, source hashes and
+`final-broad/` geometry. The reported white map box has not been independently
+reproduced and is not claimed fixed.
+
+Optimized ReleaseDev installed and launched on White at
+2026-09-23T11:21:03.966718+00:00,
+stamp `continental-70-loop-snapshot-20260923`. DEV identity/services, Swift `-O`,
+signature and tested-source hashes verified. Binary SHA256:
+`7b0e4b023984040c595a9ef77e92d3d8785aff771cdbf8ce2b3ccd6ce1b2ff2d`. Separate build, signature, install and
+launch receipts are in `device/`. Physical riding acceptance remains pending;
+this is not production or TestFlight delivery.
+
 ### Loop and navigation handoff
 
 A loop is two pins: the rider's start, and one far pin they drop where they want
 the ride to reach. There is no compass heading and no distance slider. The far pin
-is the distance and the direction — the rider may drop it as near or as far as
-they like, including another province. The pin is honoured: it is a hard extent,
-the outer edge of the day's ride, not merely what the circuit aims at (owner
-decision, 16 Sep, §5). Outbound and return may wander widely side to side —
-lateral width is not limited by this — but neither leg may travel farther from
-the start than the far pin itself. This is the rider's contract: "this is how
-far I ride today."
+sets the destination and general direction — the rider may drop it as near or as
+far as they like, including another province. **Owner update, 23 September:**
+the pin is a place the loop must reach, not a hard radius around home. Necessary
+road detours may go beyond it. This supersedes the 16 September hard-extent rule.
+Wander, legal access and the computation budget still apply.
 
-The far pin is an ordinary rider waypoint. It is dropped with the same gesture as
-a Plan waypoint, and it can be tapped, dragged, and dropped somewhere else, which
-rebuilds the loop. That is the rider's control: if they do not like the loop, they
-move the pin.
+A new map tap or long press in Loop replaces the previous circuit with
+`[start, new pin, start]`. Publish the new waypoint immediately, clear the old
+geometry, and allow another drop after failure or while a request is pending.
+Only the latest request may commit. Dragging an existing waypoint remains an
+itinerary edit and preserves the other explicit waypoints.
 
 A newly generated loop starts with the selected default settings. The owner’s
 23 September update explicitly permits independent settings on every leg,
@@ -1580,27 +1651,20 @@ and one far pin the rider drops where they want the ride to reach. Compass
 headings — north, south, east, west — are removed. A heading asks the rider to
 name a direction they cannot see from a map (which coast, which way around the
 water), and it forced the engine to invent a far point, which produced tangles
-instead of loops. The far pin is a fact, and it is a hard extent (owner
-decision, 16 Sep): no explored road, outbound or return, may sit farther from
-the start than the far pin itself. Lateral wander — side-to-side meander while
-staying within that radius — is unaffected; only radially passing the pin is
-rejected. This is the rider's contract: "this is how far I ride today," and
-past the pin breaks it. An explicit Wander setting shapes how much the ride
-wanders getting out to the pin and home again; a distance target supplies only
-the initial default when the caller has not overridden it; it no longer sets the boundary
-itself, and it never lets the ride go past the pin to hit a number.
+instead of loops. The far pin is a required destination. The owner's 23 September
+update permits necessary detours beyond its straight-line radius, superseding
+the 16 September hard-extent contract. Explicit Wander shapes the ride; a target
+only supplies the initial default when the caller has not overridden it.
 
-Engine enforcement: `SearchOptions.extentCenter`/`maxExtentMeters` (opt-in, nil
-by default) reject any explored road farther than `maxExtentMeters` from
-`extentCenter`, with a small fixed `LoopPlanner.extentToleranceMeters` (2 km)
-for the pin's own graph edge, which may run a short distance past the pin's
-exact coordinate before turning onto it. `LoopPlanner` is the only caller that
-sets these fields, both legs sharing one centre (the start) and radius (start
-to far), so From Here and Plan searches — which never set them — are
-unaffected; the 16 Sep matrix (§8 STEP 6) proves this exactly.
-
-The far pin is a rider waypoint and uses the existing waypoint path — dropped
-with the same gesture, tapped, moved, and dropped again to rebuild the loop.
+`LoopPlanner` first searches near the pin (start-to-pin radius plus 2 km),
+then retries without that derived radius if the connection is unreachable.
+A folded nearby result may also receive a two-second wider comparison, accepted
+only when it improves circuit quality and stays within 125% of the incumbent
+length. This avoids expanding an already useful short loop gratuitously.
+The generic optional search extent remains available and respected if a caller
+explicitly supplies it. Closed-road, one-way, turn and ferry constraints are
+unchanged. A new map drop replaces the whole loop; dragging an existing pin
+continues through the itinerary edit path.
 
 Outbound and return are ordinary styled legs (rule 2) and obey leg shape
 (rule 3), so the return re-rides as little of the outbound as the network allows.
@@ -2187,7 +2251,8 @@ permitted known dirt as a discovery hint; actual road search proves the ride.
 Non-staged composition rejects repeated roads, closed source-junction circuits
 and short dirt scraps. Passing near an earlier part of the ride on a different
 road is no longer automatically rejected by the old two-kilometre proximity
-check. Loop's far-pin extent and ordinary legal turn-around behavior are retained.
+check. That checkpoint retained Loop's far-pin extent (subsequently superseded
+by the 23 September required-waypoint update) and legal turn-around behavior.
 Saved route geometry is not regenerated. The roughly-800 km generated waypoints
 apply only to new From Here rides of at least 1,000 km; they are editable rider
 waypoints, not hidden immutable engine cuts. A completed long route may be split
@@ -2508,7 +2573,7 @@ are still proposal-only until Stage 3.
 | Pump pick | `RiderLeg.fuelStopOverrides: [String: String]` | Departure anchor (`from.uuidString` or previous `stationID`) → chosen `stationID`. |
 | Rider drag | `ItineraryAction.move(waypointID:to:)` | Marker `wp:{UUID}`. Drag/pan/zoom freely; tap the pending pin to road-snap and request Yes/No, then rebuild only after Yes. `reduce` sets `rebuildFromLegIndex = max(0, waypointIndex-1)` and `rebuildThroughLegIndex = nil` → rebuilds the **suffix**, then fuel re-solves. |
 | Fuel “drag” | `RoutePlannerModel.moveFuelStop` / `beginPlannerPinDrag` | Separate path. Drop must land on `validFuelTargets` within 5 km (or a probed replacement). Writes `setFuelStopOverride`. Not free placement. |
-| Loop (Build) | start + rider-dropped far pin + target distance → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep) and a hard extent — outbound/return never travel farther from start than the pin — no heading. The distance target shapes wander inside that initial extent rather than placing the far point or setting the boundary. Initial legs inherit the selected defaults. Once generated, rider waypoint edits and individual leg settings use the canonical itinerary builder, retaining other pins and reusable legs instead of regenerating the circuit. Rider edits can reshape the initial extent. Fuel is not consulted while building. |
+| Loop (Build) | start + rider-dropped far pin + target distance → `LoopPlanner` → `[start, far, start]` | Two rider waypoints plus a return pin at the start. Far is the rider's own pin (§5, 16 Sep) that must be reached, allowing necessary road detours beyond it — no heading. The distance target supplies default wander rather than placing the far point or imposing a radial boundary. Initial legs inherit the selected defaults. Once generated, rider waypoint edits and individual leg settings use the canonical itinerary builder, retaining other pins and reusable legs instead of regenerating the circuit. New map drops replace the circuit; dragging existing rider pins edits the itinerary. Fuel is not consulted while building. |
 | Loop (Plan close) | `closeLoop()` → `.append(coordinate: start)` | Same: extra rider waypoint at the start pin, not a special route type. |
 | Saved library | `SavedRoute` (`SwiftData`) | `coordinatesData` (full polyline), `segmentsData?`, `profileRawValue` (one profile for the whole record), `ridePreferencesData?`, `routeSeedsData?`, stats. **No `RiderItinerary`.** |
 | Reopen | `loadSavedRoute` → `applyStoredRouteGeometry` | Frozen `.saved` track with pins `start`/`dest`. Does not restore waypoints or fuel stops. Re-planning requires a new From Here / Plan. |

@@ -42,8 +42,10 @@ struct NativeCandidateQualificationTests {
             #expect(result.outbound.end.coordinate.distance(to: far) < 250)
             #expect(result.inbound.end.coordinate.distance(to: result.outbound.start.coordinate) < 1)
             #expect(result.segments.allSatisfy { $0.access != 2 && $0.access != 5 && $0.structure != "ferry" })
+            // This accepted nearby circuit should not balloon after removing
+            // the hard radius. Other pins may require a legal detour beyond it.
             #expect(result.combined.geometry.allSatisfy {
-                start.distance(to: $0) <= start.distance(to: far) + LoopPlanner.extentToleranceMeters + 1
+                start.distance(to: $0) <= start.distance(to: far) + 2_001
             })
             report("porters-lake-loop-\(seed)", started: started, route: result.combined)
         }

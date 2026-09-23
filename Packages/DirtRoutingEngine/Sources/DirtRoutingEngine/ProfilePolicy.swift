@@ -388,7 +388,10 @@ public struct ProfilePolicy: Sendable {
     }
     // Immutable scoring tables are shared, not allocated for each examined arc.
     private static let dirtKm = [150.0,0.05,0.02,0.02,0.9]
-    private static let cleanTiers = ["collector":0.82,"local_paved":0.95,"arterial":8.0,"service":2.4,
+    // Primary roads include ordinary through roads such as Trunk 7. Keep a
+    // modest back-road preference without pricing a direct junction above a
+    // long residential detour; motorway and trunk penalties stay separate.
+    private static let cleanTiers = ["collector":0.82,"local_paved":0.95,"arterial":2.0,"service":2.4,
         "destination":1.15,"trunk":40.0,"motorway":80.0,"adventure":120.0,"unknown":2.2]
     private static let cleanFamilies: [Surface: Double] = [.paved:1,.gravel:48,.loose:220,.unknown:12]
     private static let dirtWeights = [16.0,0.1624,0.0456,0.0168,0.154]

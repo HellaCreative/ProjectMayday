@@ -403,12 +403,116 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.errorMessage != nil)
         #expect(map.plannerMarkers.count == 4)
         source.routeError = nil
-        model.handleMapLongPress(movedFar.locationCoordinate)
+        model.apply(.move(waypointID: originalFarID, to: movedFar), source: "confirmedMove")
         await model.waitForCanonicalBuildForTesting()
         #expect(model.itinerary.waypoints.map(\.coordinate) == [start, added, movedFar, start])
         #expect(model.itinerary.waypoints[2].id == originalFarID)
         #expect(model.loopFar == movedFar)
         #expect(source.loopRequestCount == 1)
+    }
+
+    @Test func eitherLoopLegReceivesOtherSideWithoutRebuildingIt() async throws {
+        let source = PlannerFakeRoutingSource()
+        source.routeHandler = { request in
+            let (from, to) = try requestEndpoints(request)
+            return recoveryFixture([from, to], edge: from == point(0) ? "out" : "back")
+        }
+        let model = makeModel(source: source)
+        model.mode = .plan
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        for index in [0, 1] {
+            let other = try #require(model.stages[1 - index].response)
+            let ids = Set((other.segments ?? []).compactMap(\.edgeId))
+            source.routeRequests.removeAll()
+            model.applyLegRideSettings(at: index, profile: .dirt, allowUnknown: true,
+                ridePreferences: .init(wander: 0.25))
+            await model.waitForCanonicalBuildForTesting()
+            #expect(source.routeRequests.count == 1)
+            #expect(source.loopCompanionContexts.last == ids)
+            #expect(!ids.isEmpty)
+            #expect(model.stages[1 - index].response?.coordinates == other.coordinates)
+        }
+    }
+
+    @Test func newLoopDropReplacesFailedOrEditedLoopAndPublishesPinImmediately() async throws {
+        let source = PlannerFakeRoutingSource()
+        let map = MapState()
+        let model = makeModel(source: source, mapState: map, locationService: try await locationFixture(point(0)))
+        model.mode = .plan
+        model.showingLoop = true
+        source.routeError = RoutingError.server("Unreachable pin")
+        model.generateLoop(start: point(0), far: point(1))
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [point(0), point(1), point(0)])
+        #expect(map.plannerMarkers.count == 3)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.errorMessage != nil)
+        source.routeError = nil
+        model.handleMapTap(point(0.5).locationCoordinate)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [point(0), point(0.5), point(0)])
+        #expect(model.built?.legs.isEmpty == true)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(source.loopRequestCount == 2)
+        #expect(model.errorMessage == nil)
+        model.applyLegRideSettings(at: 1, profile: .balanced, allowUnknown: true,
+            ridePreferences: .init())
+        await model.waitForCanonicalBuildForTesting()
+        let oldIDs = model.itinerary.waypoints.map(\.id)
+        model.handleMapLongPress(point(0.7).locationCoordinate)
+        #expect(model.built?.legs.isEmpty == true)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(source.loopRequestCount == 3)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [point(0), point(0.7), point(0)])
+        #expect(Set(model.itinerary.waypoints.map(\.id)).isDisjoint(with: oldIDs))
+        #expect(model.routeCompletionID != nil)
+    }
+
+    @Test func newerLoopDropCancelsPendingIntent() async throws {
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source, locationService: try await locationFixture(point(0)))
+        model.mode = .plan
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        model.handleMapLongPress(point(0.5).locationCoordinate)
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [point(0), point(0.5), point(0)])
+        #expect(model.stages.count == 2)
+        #expect(model.errorMessage == nil)
+        #expect(!model.isRouting)
+    }
+
+    @Test func delayedOldLoopCannotOverwriteNewDrop() async throws {
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source, locationService: try await locationFixture(point(0)))
+        model.mode = .plan
+        model.showingLoop = true
+        var pending: CheckedContinuation<Void, Never>?
+        var held = false
+        source.routeHandler = { request in
+            let (from, to) = try requestEndpoints(request)
+            if to == point(1), !held {
+                held = true
+                await withCheckedContinuation { pending = $0 }
+            }
+            return recoveryFixture([from, to], edge: "road")
+        }
+        model.generateLoop(start: point(0), far: point(1))
+        for _ in 0..<1_000 {
+            if pending != nil { break }
+            await Task.yield()
+        }
+        let release = try #require(pending)
+        model.handleMapTap(point(0.5).locationCoordinate)
+        await model.waitForCanonicalBuildForTesting()
+        let currentGeometry = model.stages.compactMap { $0.response?.coordinates }
+        let completion = model.routeCompletionID
+        release.resume()
+        for _ in 0..<30 { await Task.yield() }
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [point(0), point(0.5), point(0)])
+        #expect(model.stages.compactMap { $0.response?.coordinates } == currentGeometry)
+        #expect(model.routeCompletionID == completion)
+        #expect(model.errorMessage == nil)
     }
 
     @Test func failedLoopDoesNotSignalCompletion() async {
@@ -1848,6 +1952,29 @@ struct RoutePlannerModelItineraryTests {
 }
 
 @MainActor
+private func locationFixture(_ coordinate: RouteCoordinate) async throws -> LocationService {
+    let defaults = UserDefaults.standard
+    let keys = ["dirt.lastUserLatitude", "dirt.lastUserLongitude",
+                "dirt.lastUserLocationTimestamp", "dirt.lastUserLocationAccuracy"]
+    let saved = keys.map { defaults.object(forKey: $0) }
+    defer {
+        for (key, value) in zip(keys, saved) {
+            if let value { defaults.set(value, forKey: key) }
+            else { defaults.removeObject(forKey: key) }
+        }
+    }
+    let service = LocationService()
+    let fix = CLLocation(coordinate: coordinate.locationCoordinate, altitude: 0,
+        horizontalAccuracy: 5, verticalAccuracy: -1, timestamp: Date())
+    service.locationManager(CLLocationManager(), didUpdateLocations: [fix])
+    for _ in 0..<100 where service.lastLocation?.timestamp != fix.timestamp {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    try #require(service.currentCoordinate == coordinate)
+    return service
+}
+
+@MainActor
 private func makeModel(
     source: PlannerFakeRoutingSource,
     policy: RoutingSourcePolicy? = nil,
@@ -1912,9 +2039,11 @@ private final class PlannerFakeRoutingSource: RoutingSource {
     let name: String
     var routeRequests: [RouteRequest] = []
     var corridorContexts: [RouteResponse?] = []
-    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?,
+    var loopCompanionContexts: [Set<String>] = []
+    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?, loopCompanionRoads: Set<String>,
                onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
         corridorContexts.append(previous)
+        loopCompanionContexts.append(loopCompanionRoads)
         return try await route(req, onProgress: onProgress)
     }
     var fuelChainRequests: [FuelChainRequest] = []

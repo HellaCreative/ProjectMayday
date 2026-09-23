@@ -175,22 +175,21 @@ struct LoopPlannerTests {
         }
     }
 
-    @Test func loopGeometryNeverGoesPastTheFarPinExtent() throws {
-        let graph = try parallelRoads(hops: 30)
-        let start = Coordinate(longitude: 0.002, latitude: 0.002)
-        let far = Coordinate(longitude: 0.28, latitude: 0.002)
-        // Maximum target opens full wander, the case most likely to send the
-        // search past the pin if the extent were not enforced.
-        var request = LoopRequest(start: start, far: far, targetMeters: 200_000, style: .dirt)
+    @Test func loopReachesPinWhenOnlyConnectionPassesBeyondItsRadius() throws {
+        let nodes = [Coordinate(longitude: 0, latitude: 0),
+                     Coordinate(longitude: 0.05, latitude: 0),
+                     Coordinate(longitude: 0.05, latitude: 0.04),
+                     Coordinate(longitude: 0, latitude: 0.04)]
+        let graph = try IndexedGraph(PolicyTests.Line(nodes: nodes,
+            edges: [(0,1),(1,2),(2,3)], surfaces: ["asphalt","gravel","asphalt"],
+            roads: ["tertiary","track","tertiary"]))
+        var request = LoopRequest(start: nodes[0], far: nodes[3], targetMeters: 9_000, style: .dirt)
         request.options.cityWall = false
         let result = try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10))
-        let allowed = start.distance(to: far) + LoopPlanner.extentToleranceMeters
-        for point in result.outbound.geometry {
-            #expect(start.distance(to: point) <= allowed + 1)
-        }
-        for point in result.inbound.geometry {
-            #expect(start.distance(to: point) <= allowed + 1)
-        }
+        #expect(result.outbound.end.coordinate.distance(to: nodes[3]) < 1)
+        #expect(result.inbound.end.coordinate.distance(to: nodes[0]) < 1)
+        #expect(result.outbound.geometry.contains { nodes[0].distance(to: $0) > nodes[0].distance(to: nodes[3]) + 2_000 })
+        #expect(result.reriddenMeters > 0) // A necessary shared approach stays legal.
     }
 
     @Test func extentCenterRejectsTheOnlyRoadPastItAndInfinityDoesNotChangeIt() throws {

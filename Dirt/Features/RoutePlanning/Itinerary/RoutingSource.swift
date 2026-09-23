@@ -18,7 +18,7 @@ protocol RoutingSource: AnyObject {
     var supportsCombinedFuelPlanning: Bool { get }
     func route(_ req: RouteRequest) async throws -> RouteResponse
     func route(_ req: RouteRequest, onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse
-    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?,
+    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?, loopCompanionRoads: Set<String>,
                onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop?
@@ -50,7 +50,7 @@ struct PlannedLoop: Sendable {
 }
 
 extension RoutingSource {
-    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?,
+    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?, loopCompanionRoads: Set<String>,
                onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
         try await route(req, onProgress: onProgress)
     }
@@ -232,14 +232,14 @@ final class PackRoutingSource: RoutingSource {
         }
     }
 
-    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?,
+    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?, loopCompanionRoads: Set<String>,
                onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
         do {
             let directories = try packs.routingDirectories(for: req.locations.map {
                 CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
             })
             return try await NativeRouteProgressBridge.route(req, session: session,
-                directories: directories, preservingCorridor: previous, onProgress: onProgress)
+                directories: directories, preservingCorridor: previous, loopCompanionRoads: loopCompanionRoads, onProgress: onProgress)
         } catch let failure as RoutingFailure {
             throw RoutingError.server(NativeRoutingAdapter.message(failure))
         }
@@ -430,11 +430,14 @@ enum NativeRouteProgressBridge {
     static func route(_ req: RouteRequest, session: NativeRoutingSession,
                       directories: [String: URL],
                       preservingCorridor previous: RouteResponse? = nil,
+                      loopCompanionRoads: Set<String> = [],
                       onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
-        var request = try NativeRoutingAdapter.request(req)
+        var preparedRequest = try NativeRoutingAdapter.request(req)
+        preparedRequest.options.loopCompanionRoads = loopCompanionRoads
         if req.profile == .cleanest, let previous {
-            request.options.preferredCorridorRoads = Set((previous.segments ?? []).compactMap(\.edgeId))
+            preparedRequest.options.preferredCorridorRoads = Set((previous.segments ?? []).compactMap(\.edgeId))
         }
+        let request = preparedRequest
         let prior = Set(req.options?.priorEdgeIds ?? [])
         let (events, continuation) = AsyncStream<StagedRouter.Progress>.makeStream()
         var assembler = EditableRouteLegAssembler()

@@ -39,6 +39,8 @@ public struct SearchOptions: Sendable {
     /// Loop return: outbound edges are expensive, not forbidden.
     public var repeatEdges: Set<String> = []
     public var repeatFactor: Double = 16
+    /// Optional circuit comparison: cheap dirt must still pay for repeating.
+    public var repeatMinimumCostPerKm: Double = 0
     /// Extra road-progress budget so a loop can spend leftover target distance
     /// wandering. Zero (default) keeps ordinary A→B extra meters identical.
     public var loopSlackMeters: Double = 0
@@ -55,6 +57,8 @@ public struct SearchOptions: Sendable {
     /// A soft preference for the accepted leg during a local edit. Legal/access
     /// checks still apply and new roads remain available for necessary bypasses.
     public var preferredCorridorRoads: Set<String> = []
+    /// Accepted opposite side of a loop; considered without rebuilding that leg.
+    public var loopCompanionRoads: Set<String> = []
     public var backtrackFactor: Double = 4
     public var seed: UInt64 = 0
     public var varietyEnabled = true
@@ -816,7 +820,9 @@ public struct PathSearch: Sendable {
                     achievedMeaningfulDirt: current.achievedMeaningfulDirt)
                 step += clawback
                 if !preferred.isEmpty, roadMembership & 16 == 0 {
-                    step += arc.meters / 1000 * 100
+                    // Clean may simplify local bends without abandoning its
+                    // accepted side of the loop to save a little road cost.
+                    step += arc.meters / 1000 * (policy.style == .cleanest ? 2 : 100)
                 }
                 if !resource {
                     // Geodesic early-leg away, even when road compass is active —
@@ -840,7 +846,9 @@ public struct PathSearch: Sendable {
                 }
                 if urban { step *= policy.style == .cleanest ? (policy.avoidMajorHighways ? 10 : 2) : 120 }
                 if roadMembership & 2 != 0 { step *= max(1,options.backtrackFactor) }
-                if roadMembership & 4 != 0 { step *= max(1,options.repeatFactor) }
+                if roadMembership & 4 != 0 {
+                    step = max(step * max(1, options.repeatFactor), arc.meters / 1000 * options.repeatMinimumCostPerKm)
+                }
                 let cost = current.cost+step
                 guard cost.isFinite, step >= 0 else { throw RoutingFailure.invalidPack("nonfinite search cost") }
                 // Under a finite tank/fog cap, a cheap short label must not dominate

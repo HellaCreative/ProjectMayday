@@ -255,7 +255,16 @@ final class ItineraryBuilder {
                     // Pin moves and fresh generations do not inherit this preference.
                     let previous = localEdit && discoveryProfile == .cleanest
                         ? reuse?.riderRoutes[riderLeg.id] : nil
-                    response = try await selectedSource.route(request, preservingCorridor: previous) { event in
+                    var companionRoads: Set<String> = []
+                    if localEdit, let first = itinerary.waypoints.first?.coordinate,
+                       let last = itinerary.waypoints.last?.coordinate,
+                       itinerary.legs.count > 1, straightLineMeters(first, last) < 250 {
+                        for other in itinerary.legs where other.id != riderLeg.id {
+                            companionRoads.formUnion((reuse?.riderRoutes[other.id]?.segments ?? []).compactMap(\.edgeId))
+                        }
+                    }
+                    response = try await selectedSource.route(request, preservingCorridor: previous,
+                                                              loopCompanionRoads: companionRoads) { event in
                         onScopedRouteProgress?(riderLeg.id, event)
                         onRouteProgress?(event)
                     }

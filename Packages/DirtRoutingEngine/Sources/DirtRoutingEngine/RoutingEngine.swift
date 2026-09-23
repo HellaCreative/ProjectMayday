@@ -38,6 +38,41 @@ public struct RoutingEngine: Sendable {
         self.pack = pack
         self.compassStore = compassStore
     }
+    /// Keep a Dirt edit from winning merely by copying the other half's dirt.
+    /// A mixed-surface candidate is still assessed as a Dirt ride; access and
+    /// rider settings are never changed, nor is the accepted companion rebuilt.
+    private func editedLoopLeg(_ request: RoutingRequest, budget: ComputationBudget) throws -> ComputedRoute {
+        let companion = request.options.loopCompanionRoads
+        var ordinary = request
+        ordinary.options.loopCompanionRoads = []
+        ordinary.options.repeatEdges.formUnion(companion)
+        let selected = try route(ordinary, budget: budget)
+        guard selected.limit == nil, budget.remainingSeconds > 1 else { return selected }
+        func overlap(_ route: ComputedRoute) -> Double {
+            route.segments.reduce(0) { total, segment in
+                total + (pack.matches(segment.edge, identities: companion) ? segment.meters : 0)
+            }
+        }
+        guard overlap(selected) > 500 else { return selected }
+        var connector = ordinary
+        connector.options.composeDirtRide = false
+        connector.profile.style = .balanced
+        do {
+            let alternative = try route(connector, start: selected.start, end: selected.end,
+                budget: budget.limited(to: 2))
+            let a = RouteQuality(route: alternative), b = RouteQuality(route: selected)
+            guard alternative.limit == nil,
+                  alternative.distanceMeters <= selected.distanceMeters * 1.25,
+                  a.meaningfulDirtMeters > 0 || b.meaningfulDirtMeters == 0,
+                  overlap(alternative) + a.reriddenMeters + 500 < overlap(selected) + b.reriddenMeters else { return selected }
+            var result = alternative
+            result.searchSummary = "loop-separation/" + (result.searchSummary ?? "")
+            return result
+        } catch is CancellationError { throw CancellationError() }
+        catch RoutingFailure.noPath { return selected }
+        catch RoutingFailure.resourceLimit { return selected }
+    }
+
     /// Shared by ordinary routing and optional riding-area legs. A destination
     /// table depends on its exact graph, road position and cap, not the origin.
     func roadCompass(toward end: RoadMatch, budget: ComputationBudget,
@@ -64,6 +99,9 @@ public struct RoutingEngine: Sendable {
     }
     public func route(_ request: RoutingRequest,budget: ComputationBudget = .init(seconds: 45)) throws -> ComputedRoute {
         try budget.check()
+        if request.profile.style == .dirt, !request.options.loopCompanionRoads.isEmpty {
+            return try editedLoopLeg(request, budget: budget)
+        }
         let matcher = RoadMatcher(pack: pack)
         let radius = min(2000,max(80,request.mapZoom.map { 28*156543.03392*cos(request.end.latitude * .pi/180)/pow(2,$0) } ?? request.matchRadiusMeters))
         // JS outer router scores B against the reverse of A→B so arrival travel

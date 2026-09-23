@@ -181,7 +181,7 @@ final class RoutePlannerModel {
     /// Endpoint resolution is separate so the completion flow is also testable
     /// without asking Core Location for a live rider position.
     func generateLoop(start: RouteCoordinate, far: RouteCoordinate, preserving pins: RiderItinerary? = nil) {
-        guard navigation.phase == .idle, !isRouting else { return }
+        guard navigation.phase == .idle else { return }
         invalidateInFlightRoutes()
         let runID = UUID()
         loopRunID = runID
@@ -202,6 +202,28 @@ final class RoutePlannerModel {
             locations: [RouteLocation(latitude: start.latitude, longitude: start.longitude, label: "start"),
                         RouteLocation(latitude: far.latitude, longitude: far.longitude, label: "far")],
             allowUnknown: selectedAllow)
+        var loopIntent = pins ?? reduce(RiderItinerary(), .replaceAll(
+            waypoints: [start, far, start], profile: selectedProfile, allowUnknown: selectedAllow,
+            avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads)).itinerary
+        loopIntent.setRideDefaults(profile: selectedProfile, allowUnknown: selectedAllow,
+            preferences: preferences, forLegsNotIn: [])
+        itinerary = loopIntent
+        built = .empty(for: loopIntent)
+        streamedLegGeneration = loopIntent.generation
+        streamedRiderLegID = nil; streamedLegResponses = []
+        streamedRoutesByLeg = [:]; streamedPrefixResponses = []
+        streamedCameraLegIDs = []
+        cameraBuildGeneration = loopIntent.generation
+        mapState.beginRouteBuildCamera(at: start)
+        loopFar = far
+        loopFarWaypointID = loopIntent.waypoints[1].id
+        routeIdentity = "loop:\(runID.uuidString)"
+        fromHereResponse = nil
+        savedRouteOrigin = nil
+        toast = nil
+        mapState.selectPlannerPin(nil)
+        refreshMap()
+        RoutingDebugLog.shared.event("loop begin seed=\(loopSeed) start=\(start.latitude),\(start.longitude) far=\(far.latitude),\(far.longitude) style=\(selectedProfile.rawValue) unknown=\(selectedAllow) wander=\(preferences.normalized.wander)")
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
             var loopCommitted = false
@@ -221,19 +243,6 @@ final class RoutePlannerModel {
             }
             do {
                 let source = policy.select(for: dummy)
-                var loopIntent = pins ?? reduce(RiderItinerary(), .replaceAll(
-                    waypoints: [start, far, start], profile: selectedProfile, allowUnknown: selectedAllow,
-                    avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
-                loopIntent.setRideDefaults(profile: selectedProfile, allowUnknown: selectedAllow,
-                    preferences: preferences, forLegsNotIn: [])
-                self.itinerary = loopIntent
-                self.built = .empty(for: loopIntent)
-                self.streamedLegGeneration = loopIntent.generation
-                self.streamedRiderLegID = nil; self.streamedLegResponses = []
-                self.streamedRoutesByLeg = [:]; self.streamedPrefixResponses = []
-                self.streamedCameraLegIDs = []
-                self.cameraBuildGeneration = loopIntent.generation
-                self.mapState.beginRouteBuildCamera(at: start)
                 let result = try await source.planLoop(PlannedLoopRequest(
                     start: start, far: far, targetMeters: target,
                     profile: selectedProfile, allowUnknown: selectedAllow,
@@ -1782,7 +1791,10 @@ final class RoutePlannerModel {
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
-        if showingLoop { return }
+        if showingLoop {
+            replaceLoopFar(point)
+            return
+        }
         switch mode {
         case .fromHere:
             // First pin: short tap point 2. After off-graph GPS recovery: tap point 1.
@@ -1895,17 +1907,7 @@ final class RoutePlannerModel {
         guard navigation.phase == .idle else { return }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
         if showingLoop {
-            loopFar = point
-            errorMessage = nil
-            if !itinerary.legs.isEmpty {
-                guard let farID = loopFarWaypointID else {
-                    toast = "Add a waypoint on the route to reshape this loop"
-                    return
-                }
-                apply(.move(waypointID: farID, to: point), source: "loopFar")
-            } else {
-                generateLoop()
-            }
+            replaceLoopFar(point)
             return
         }
         switch mode {
@@ -1917,6 +1919,26 @@ final class RoutePlannerModel {
         case .saved:
             break
         }
+    }
+
+    /// A new map drop is a new loop. Dragging an existing waypoint remains an edit.
+    private func replaceLoopFar(_ point: RouteCoordinate) {
+        let start = locationService.currentCoordinate ?? itinerary.waypoints.first?.coordinate
+        invalidateInFlightRoutes()
+        built = nil
+        itinerary = RiderItinerary()
+        fromHereResponse = nil
+        routeIdentity = nil
+        loopFarWaypointID = nil
+        loopFar = point
+        destination = nil
+        errorMessage = nil
+        toast = nil
+        presentRouteCard = true
+        mapState.selectPlannerPin(nil)
+        refreshMap()
+        if let start { generateLoop(start: start, far: point) }
+        else { generateLoop() }
     }
 
     private func beginFromHereDestination(_ point: RouteCoordinate) {
@@ -2425,6 +2447,7 @@ final class RoutePlannerModel {
     /// Invalidate every in-flight planner route (clear / mode convert / wipe).
     private func invalidateInFlightRoutes(cancelPlanRebuildTask: Bool = true) {
         routeCompletionID = nil
+        loopRunID = nil
         longRideBuildGeneration = nil
         mapState.cancelRouteBuildCamera()
         waypointPlacement = nil
