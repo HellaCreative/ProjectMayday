@@ -1153,6 +1153,61 @@ for an explicitly frozen seed — a saved route, a resume, or a pinned test.
   where equivalent behavior is expected; a deliberate routing correction can
   change newly generated geometry with explicit comparison and evidence.
 
+### September 23 — generated-loop quality repair under qualification
+
+The owner’s 07:42:52 phone loop reports 123,802 m total, 16,805 m of
+re-ridden roads and 54,169 m of spatial return. Spatial return is proximity to an
+earlier part of the ride, not literal reversed-road mileage. Its seed was not
+logged, so a byte-identical replay cannot be claimed. The earlier 07:32 log’s
+From Here departure issue remains a separate follow-up.
+
+Two concrete generated-loop defects are repaired: the planner overwrote the
+caller’s Wander with a value derived from the far pin’s round-trip geodesic
+(which the app supplies, normally forcing zero); and it accepted the first
+outbound/return pair without comparing whole circuits. Target-derived Wander
+now initializes the request only; explicit caller settings survive planning.
+The planner compares both legal travel directions on the same snapped start
+and far roads, within one optional six-second/shared remaining budget. It ranks
+complete circuits for repeated riding and style quality, preserving meaningful
+dirt, and rejects alternatives longer than 125% of the initial legal circuit.
+It retains the hard far-pin extent, legal/turn/ferry constraints and existing
+return repeat cost. Arrival restrictions carry into the return. No dataset or
+ordinary A-to-B scoring changes are included.
+
+A failed return is no longer replaced with a mechanically reversed outbound.
+Timeout/label exhaustion remains a resource failure, cancellation propagates,
+and only a legally completed circuit publishes its selected legs, in order.
+Alternative trials do not appear as completed rider progress. Necessary shared
+access roads and genuinely confined out-and-back routes remain possible.
+
+Controlled host comparisons at start 44.764769,-63.340274 and far
+44.81354,-62.88582 use three fixed seeds, Dirt/Wander 0.5/Unknown on and
+city/highway/ferry avoidance. Before: 135.1 km, approximately 22.0 km re-ridden,
+19.7% known dirt. With explicit Wander retained alone: 174.1 km, 12.0 km
+re-ridden, 52.0% dirt. With complete-circuit comparison: 163.2 km, 320 m
+re-ridden, 53.6% known dirt, approximately 87.2 km meaningful dirt and zero
+short dirt scraps, approximately one second per host solve. These are measured
+same-request comparisons, not an exact replay of the unlogged phone seed.
+Evidence: `.build/loop-quality-20260923/{baseline.log,wander-only.log,circuits-trial.log}`.
+All 221 engine checks pass, including legal one-way return rejection, resource
+failure classification, cancellation and selected-leg observer ordering. All 61
+selected Debug simulator app checks pass (three unrelated long-route opt-ins
+skipped), including the three real-pack seeds through NativeRoutingSession:
+163.2 km / 53.6% known dirt / 320 m repeated roads, 1.15–2.18 seconds,
+95–96 MB process peak footprint. Evidence: `engine-final.log`,
+`app-tests.xcresult`, `app-summary.json` and `app-tested-source.json` in the same
+evidence directory. Optimized ReleaseDev was installed and launched on White at
+2026-09-23T08:05:19.603422+00:00 with DEV identity/services and Swift `-O` verified.
+Stamp: `continental-70-loop-quality-20260923`; binary SHA256:
+`89547e3d68a02da820c468de6464c97488d9919a3d513477581f963b6a8fbd2e`. Separate build/signature/install/launch receipts are in
+`device/`. Only the diagnostic stamp differs from the simulator-tested app
+sources. Physical acceptance remains pending. This is DEV delivery, not a
+TestFlight upload; the previous production archive predates this loop repair.
+
+GPX entry choice is secondary at the owner’s request: choose an imported entry
+point/direction and offer a separate legal connector from the rider’s location;
+preserve the original imported trace. This interaction is not implemented here.
+
 ### Loop and navigation handoff
 
 A loop is two pins: the rider's start, and one far pin they drop where they want
@@ -1365,8 +1420,9 @@ decision, 16 Sep): no explored road, outbound or return, may sit farther from
 the start than the far pin itself. Lateral wander — side-to-side meander while
 staying within that radius — is unaffected; only radially passing the pin is
 rejected. This is the rider's contract: "this is how far I ride today," and
-past the pin breaks it. The distance target still shapes how much the ride
-wanders getting out to the pin and home again; it no longer sets the boundary
+past the pin breaks it. An explicit Wander setting shapes how much the ride
+wanders getting out to the pin and home again; a distance target supplies only
+the initial default when the caller has not overridden it; it no longer sets the boundary
 itself, and it never lets the ride go past the pin to hit a number.
 
 Engine enforcement: `SearchOptions.extentCenter`/`maxExtentMeters` (opt-in, nil

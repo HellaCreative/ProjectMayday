@@ -239,7 +239,7 @@ actor NativeRoutingSession {
                 progress.yield(LoopLegProgress(index: index, route: proven))
             }
             log("pack loop", started: started, prepared: prepared, prepareDetail: prepareDetail, counter: counter,
-                outcome: "outbound=\(Int(result.outbound.distanceMeters.rounded())) inbound=\(Int(result.inbound.distanceMeters.rounded())) far=\(String(format: "%.5f", result.far.longitude)),\(String(format: "%.5f", result.far.latitude)) reridden=\(Int(result.reriddenMeters.rounded())) return=\(Int(result.returnMeters.rounded()))")
+                outcome: "seed=\(request.options.seed) target=\(request.targetMeters) wander=\(request.profile.wander) start=\(request.start.longitude),\(request.start.latitude) outbound=\(Int(result.outbound.distanceMeters.rounded())) inbound=\(Int(result.inbound.distanceMeters.rounded())) far=\(String(format: "%.5f", result.far.longitude)),\(String(format: "%.5f", result.far.latitude)) reridden=\(Int(result.reriddenMeters.rounded())) return=\(Int(result.returnMeters.rounded()))")
             return result
         } catch {
             log("pack loop failed", started: started, prepared: prepared, prepareDetail: prepareDetail, counter: counter,

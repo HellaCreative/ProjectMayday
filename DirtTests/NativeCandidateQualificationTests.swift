@@ -19,6 +19,36 @@ struct NativeCandidateQualificationTests {
             .appendingPathComponent("scripts/pack-fabric/routing/candidates/fabric-v4-20260917-02/packs")
     }
 
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_OWNER_LOOP"] == "1"),
+          .timeLimit(.minutes(3)))
+    func portersLakeLoopUsesMeaningfulDirtWithoutRetracingTheOutbound() async throws {
+        let start = Coordinate(longitude: -63.340274, latitude: 44.764769)
+        let far = Coordinate(longitude: -62.88582, latitude: 44.81354)
+        let session = NativeRoutingSession()
+        for seed: UInt64 in [8662469907828474, 1973670747666001, 3557758954119727] {
+            var request = LoopRequest(start: start, far: far, targetMeters: start.distance(to: far) * 2,
+                                      style: .dirt, allowUnknown: true, seed: seed)
+            request.profile.wander = 0.5
+            request.profile.avoidMajorHighways = true
+            request.options.cityWall = true
+            request.access.avoidFerries = true
+            let started = ContinuousClock.now
+            let result = try await session.loop(request, directories: ["ns": root.appendingPathComponent("ns")])
+            let quality = RouteQuality(route: result.combined)
+            #expect(quality.reriddenMeters < 1_000)
+            #expect(quality.knownDirtPercent > 45)
+            #expect(quality.meaningfulDirtMeters > 70_000)
+            #expect(quality.shortDirtScrapMeters == 0)
+            #expect(result.outbound.end.coordinate.distance(to: far) < 250)
+            #expect(result.inbound.end.coordinate.distance(to: result.outbound.start.coordinate) < 1)
+            #expect(result.segments.allSatisfy { $0.access != 2 && $0.access != 5 && $0.structure != "ferry" })
+            #expect(result.combined.geometry.allSatisfy {
+                start.distance(to: $0) <= start.distance(to: far) + LoopPlanner.extentToleranceMeters + 1
+            })
+            report("porters-lake-loop-\(seed)", started: started, route: result.combined)
+        }
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_CALIFORNIA"] == "1"),
           .timeLimit(.minutes(3)))
     func californiaArizonaDirtCompletesWithLegalAccessThroughAppAdapter() async throws {

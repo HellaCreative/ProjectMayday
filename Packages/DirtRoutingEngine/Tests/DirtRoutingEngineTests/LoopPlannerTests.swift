@@ -19,6 +19,47 @@ struct LoopPlannerTests {
         return try IndexedGraph(PolicyTests.Line(nodes: nodes, edges: edges, surfaces: surfaces, roads: roads))
     }
 
+    @Test func aOneWayOutboundCannotBeReversedIntoAnIllegalReturn() throws {
+        let nodes = (0...8).map { Coordinate(longitude: Double($0) * 0.01, latitude: 0) }
+        let graph = try IndexedGraph(PolicyTests.Line(nodes: nodes,
+            edges: (0..<8).map { ($0, $0 + 1) }, surfaces: Array(repeating: "dirt", count: 8),
+            roads: Array(repeating: "track", count: 8), reverseAccess: Array(repeating: 2, count: 8)))
+        var request = LoopRequest(start: .init(longitude: 0.002, latitude: 0),
+            far: .init(longitude: 0.078, latitude: 0), targetMeters: 12_000, style: .dirt)
+        request.options.cityWall = false
+        var visibleLegs = 0
+        #expect(throws: RoutingFailure.noPath) {
+            try LoopPlanner(pack: graph).plan(request) { _, _ in visibleLegs += 1 }
+        }
+        #expect(visibleLegs == 0)
+    }
+
+    @Test func aResourceLimitDoesNotMeanThePinIsUnreachable() throws {
+        let graph = try parallelRoads()
+        var request = LoopRequest(start: .init(longitude: 0.002, latitude: 0.002),
+            far: .init(longitude: 0.28, latitude: 0.002), targetMeters: 50_000, style: .dirt)
+        request.options.cityWall = false
+        do {
+            _ = try LoopPlanner(pack: graph).plan(request, budget: .init(seconds: 10, maximumLabels: 1))
+            Issue.record("The deliberately exhausted label budget must fail")
+        } catch RoutingFailure.resourceLimit { }
+    }
+
+    @Test func cancellationFromSelectedProgressDoesNotPublishTheReturn() throws {
+        let graph = try parallelRoads()
+        var request = LoopRequest(start: .init(longitude: 0.002, latitude: 0.002),
+            far: .init(longitude: 0.28, latitude: 0.002), targetMeters: 50_000, style: .dirt)
+        request.options.cityWall = false
+        var indexes: [Int] = []
+        #expect(throws: CancellationError.self) {
+            try LoopPlanner(pack: graph).plan(request) { index, _ in
+                indexes.append(index)
+                throw CancellationError()
+            }
+        }
+        #expect(indexes == [0])
+    }
+
     @Test func observedLoopKeepsRoadsAndProvidesProvableLegsInOrder() throws {
         let graph = try parallelRoads()
         var request = LoopRequest(start: .init(longitude: 0.002, latitude: 0.002),

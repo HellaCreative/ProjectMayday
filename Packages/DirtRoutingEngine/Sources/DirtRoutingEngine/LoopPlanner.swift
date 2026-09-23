@@ -15,6 +15,8 @@ public struct LoopRequest: Sendable {
         self.far = far
         self.targetMeters = targetMeters
         profile = .init(style: style)
+        let roundTrip = max(1, start.distance(to: far) * 2)
+        profile.wander = min(1, max(0, (max(0, targetMeters) / roundTrip - 1) / 2))
         access = .init(allowUnknown: style == .cleanest ? false : allowUnknown)
         options = .init()
         options.seed = seed
@@ -47,8 +49,8 @@ public enum LoopFailure: Error, Equatable, Sendable {
 }
 
 /// Start pin, rider-dropped far pin, and a distance target. Outbound and return
-/// are ordinary styled searches. Outbound edges are expensive on the return,
-/// not forbidden, so a confined network still comes home.
+/// are ordinary styled searches. Complete circuits compare both legal departure
+/// directions; unavoidable shared access roads remain possible.
 public struct LoopPlanner: Sendable {
     /// Final-approach slack on the hard extent: the pin can fall anywhere along
     /// its graph edge, and the road reaching that edge may run a short distance
@@ -62,8 +64,6 @@ public struct LoopPlanner: Sendable {
     public func plan(_ request: LoopRequest, budget: ComputationBudget = .init(seconds: 60),
                      onLeg: ((Int, ComputedRoute) throws -> Void)? = nil) throws -> LoopPlanResult {
         try budget.check()
-        var request = request
-        request.profile.wander = aimedWander(start: request.start, far: request.far, target: request.targetMeters)
         let engine = RoutingEngine(pack: pack)
         var outboundRequest = RoutingRequest(start: request.start, end: request.far,
                                              style: request.profile.style,
@@ -91,22 +91,106 @@ public struct LoopPlanner: Sendable {
             outbound = try engine.route(outboundRequest, budget: budget)
         } catch RoutingFailure.ferriesAvoided {
             throw RoutingFailure.ferriesAvoided
-        } catch is RoutingFailure {
+        } catch RoutingFailure.noMatch {
+            throw LoopFailure.pinUnreachable
+        } catch RoutingFailure.noPath {
             throw LoopFailure.pinUnreachable
         }
-        try onLeg?(0, outbound)
-        var inboundRequest = outboundRequest.with(start: request.far, end: request.start)
-        inboundRequest.options.repeatEdges = Set(outbound.segments.map(\.edgeID).filter { !$0.isEmpty })
-        inboundRequest.options.repeatFactor = 16
-        inboundRequest.options.avoidEdges = []
-        let inbound: ComputedRoute
-        do {
-            inbound = try engine.route(inboundRequest, budget: budget)
-        } catch {
-            inbound = outbound.reversed()
+        // Every return is searched legally with the far pin's arrival state.
+        // A failed search is never permission to reverse directed roads.
+        func returning(from first: ComputedRoute, budget: ComputationBudget,
+                       departure: RoadMatch? = nil) throws -> ComputedRoute {
+            var back = outboundRequest.with(start: first.end.coordinate, end: first.start.coordinate)
+            back.options.repeatEdges = Set(first.segments.map(\.edgeID).filter { !$0.isEmpty })
+            back.options.repeatFactor = 16
+            if let last = first.segments.last {
+                back.options.arrival = .init(edge: pack.restrictionEdge(last.edge),
+                    coordinate: first.end.coordinate, restrictions: first.arrivalRestrictions)
+                back.options.arrivalEdgeID = pack.identity(of: last.edge)
+                back.options.arrivalRestrictions = first.arrivalRestrictions
+            }
+            if let departure {
+                return try engine.route(back, start: departure, end: first.start, budget: budget)
+            }
+            return try engine.route(back, budget: budget)
         }
-        try onLeg?(1, inbound)
-        return LoopPlanResult(outbound: outbound, inbound: inbound, far: request.far)
+        let inbound = try returning(from: outbound, budget: budget)
+        var selected = LoopPlanResult(outbound: outbound, inbound: inbound, far: request.far)
+        let maximumCandidateMeters = selected.distanceMeters * 1.25
+        let comparisonBudget = budget.limited(to: min(6, budget.remainingSeconds * 0.5))
+        func otherDirection(_ match: RoadMatch) throws -> RoadMatch? {
+            try RoadMatcher(pack: pack).matches(at: match.coordinate, radius: 1, start: true,
+                policy: request.access, limit: 64, budget: comparisonBudget).first {
+                    $0.edge == match.edge && $0.forward != match.forward
+                        && abs($0.alongMeters - match.alongMeters) < 1
+                }
+        }
+        func consider(_ first: ComputedRoute, _ back: ComputedRoute) {
+            let candidate = LoopPlanResult(outbound: first, inbound: back, far: request.far)
+            guard first.limit == nil, back.limit == nil,
+                  candidate.distanceMeters <= maximumCandidateMeters else { return }
+            if Self.prefersCircuit(candidate, over: selected, style: request.profile.style) {
+                selected = candidate
+            }
+        }
+        // Compare complete circuits from both legal directions of the SAME
+        // snapped roads. Never jump to a nearby disconnected/parallel trail.
+        do {
+            if let opposite = try otherDirection(inbound.start) {
+                consider(outbound, try returning(from: outbound, budget: comparisonBudget, departure: opposite))
+            }
+        } catch is CancellationError { throw CancellationError() }
+        catch let failure as RoutingFailure {
+            switch failure {
+            case .noPath, .resourceLimit: break
+            default: throw failure
+            }
+        }
+        do {
+            if let opposite = try otherDirection(outbound.start) {
+                let first = try engine.route(outboundRequest, start: opposite, end: outbound.end,
+                                             budget: comparisonBudget)
+                let back = try returning(from: first, budget: comparisonBudget)
+                consider(first, back)
+                if let other = try otherDirection(back.start) {
+                    consider(first, try returning(from: first, budget: comparisonBudget, departure: other))
+                }
+            }
+        } catch is CancellationError { throw CancellationError() }
+        catch let failure as RoutingFailure {
+            switch failure {
+            case .noPath, .resourceLimit: break
+            default: throw failure
+            }
+        }
+        try Task.checkCancellation()
+        // Only selected, legally completed legs become visible; rejected
+        // alternatives never appear as completed rider progress.
+        try onLeg?(0, selected.outbound)
+        try onLeg?(1, selected.inbound)
+        return selected
+    }
+
+    static func prefersCircuit(_ candidate: LoopPlanResult, over existing: LoopPlanResult,
+                               style: RidingStyle) -> Bool {
+        let a = RouteQuality(route: candidate.combined), b = RouteQuality(route: existing.combined)
+        // Continuous useful dirt must not lose to a paved-only shortcut.
+        if style == .dirt, (a.meaningfulDirtMeters > 0) != (b.meaningfulDirtMeters > 0) {
+            return a.meaningfulDirtMeters > 0
+        }
+        if abs(a.reriddenMeters - b.reriddenMeters) > 500 {
+            return a.reriddenMeters < b.reriddenMeters
+        }
+        if style == .dirt {
+            return RouteQuality.prefersDirt(a, over: b, widthA: 0, widthB: 0)
+        }
+        if style == .balanced, abs(a.knownDirtPercent - 50) != abs(b.knownDirtPercent - 50) {
+            return abs(a.knownDirtPercent - 50) < abs(b.knownDirtPercent - 50)
+        }
+        if style == .cleanest, abs(a.knownDirtPercent - b.knownDirtPercent) > 2 {
+            return a.knownDirtPercent < b.knownDirtPercent
+        }
+        return candidate.distanceMeters < existing.distanceMeters
     }
 
     /// Distance target sets wander: a pin 20 km away with a 120 km target is a
