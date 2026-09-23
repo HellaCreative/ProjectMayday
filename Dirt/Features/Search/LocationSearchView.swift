@@ -23,7 +23,7 @@ struct LocationSearchView: View {
                     .textInputAutocapitalization(.words)
                     .submitLabel(.search)
                     .focused($fieldFocused)
-                    .onSubmit { model.retry() }
+                    .onSubmit { model.submit() }
                 if !model.query.isEmpty {
                     Button { model.query = "" } label: {
                         Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
@@ -43,23 +43,25 @@ struct LocationSearchView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if model.isSearching {
+                    if model.isSearching || model.isResolving {
                         HStack(spacing: 10) {
                             ProgressView()
-                            Text("Searching…")
+                            Text(model.isResolving ? "Opening place…" : "Finding suggestions…")
                         }
-                        .frame(maxWidth: .infinity, minHeight: 70)
-                    } else if let error = model.searchError {
+                        .frame(maxWidth: .infinity, minHeight: model.results.isEmpty ? 70 : 32)
+                    }
+                    if let error = model.searchError {
                         Text(error).foregroundStyle(DirtTheme.muted)
                         Button("Try again") { model.retry() }
                             .buttonStyle(DirtSecondaryButtonStyle())
-                    } else if model.results.isEmpty {
+                    } else if model.results.isEmpty && !model.isSearching && !model.isResolving {
                         Text(model.hasSearchQuery ? "No places found. Try a nearby town or a fuller address." : "Find a place or address, then route there or add it to your plan.")
                             .foregroundStyle(DirtTheme.muted)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text("Place search needs an internet connection.")
                             .font(.footnote).foregroundStyle(DirtTheme.muted)
-                    } else {
+                    }
+                    if !model.results.isEmpty {
                         ForEach(model.results) { result in
                             Button { model.select(result) } label: {
                                 HStack(spacing: 12) {
@@ -80,6 +82,7 @@ struct LocationSearchView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .disabled(model.isResolving)
                         }
                     }
                 }

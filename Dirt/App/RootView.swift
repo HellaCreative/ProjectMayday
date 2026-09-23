@@ -1749,8 +1749,7 @@ private struct IslandBrandBar: View {
             Button(action: onToggleGraph) {
                 BrandChip(sitsInIslandStack: true)
                     .padding(.horizontal, 14)
-                    .padding(.top, 2)
-                    .padding(.bottom, 10)
+                    .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(graphDebugVisible ? "Hide surface network" : "Show surface network")

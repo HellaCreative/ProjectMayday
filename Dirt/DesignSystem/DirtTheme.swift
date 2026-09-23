@@ -236,7 +236,7 @@ enum DirtIsland {
     static let cutoutHeight: CGFloat = 37
     /// Keep the standalone logo's top corners identical to its existing bottom corners.
     static var wrapperRadius: CGFloat { cutoutHeight / 2 }
-    /// Visible logo height (top 2 + 32 wordmark + bottom 10).
+    /// Visible logo height (6pt padding above and below the 32pt wordmark).
     static let wordmarkBand: CGFloat = 44
 
     static func isPresent(
