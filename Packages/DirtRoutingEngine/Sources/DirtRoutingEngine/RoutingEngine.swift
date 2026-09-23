@@ -46,31 +46,44 @@ public struct RoutingEngine: Sendable {
         var ordinary = request
         ordinary.options.loopCompanionRoads = []
         ordinary.options.repeatEdges.formUnion(companion)
-        let selected = try route(ordinary, budget: budget)
+        var selected = try route(ordinary, budget: budget)
         guard selected.limit == nil, budget.remainingSeconds > 1 else { return selected }
         func overlap(_ route: ComputedRoute) -> Double {
             route.segments.reduce(0) { total, segment in
                 total + (pack.matches(segment.edge, identities: companion) ? segment.meters : 0)
             }
         }
-        guard overlap(selected) > 500 else { return selected }
+        func crossings(_ route: ComputedRoute) -> Set<Int> {
+            RouteTopology.crossings(route.segments, companion: companion, graph: pack,
+                endpoints: [request.start, request.end]).union(RouteTopology.selfCrossings(route.segments, graph: pack))
+        }
+        guard overlap(selected) > 500 || !crossings(selected).isEmpty else { return selected }
+        // Try removing the actual crossing junctions before trading away dirt.
+        // An unsuccessful optional search retains the completed legal route.
         var connector = ordinary
         connector.options.composeDirtRide = false
-        connector.profile.style = .balanced
-        do {
-            let alternative = try route(connector, start: selected.start, end: selected.end,
-                budget: budget.limited(to: 2))
-            let a = RouteQuality(route: alternative), b = RouteQuality(route: selected)
-            guard alternative.limit == nil,
-                  alternative.distanceMeters <= selected.distanceMeters * 1.25,
-                  a.meaningfulDirtMeters > 0 || b.meaningfulDirtMeters == 0,
-                  overlap(alternative) + a.reriddenMeters + 500 < overlap(selected) + b.reriddenMeters else { return selected }
-            var result = alternative
-            result.searchSummary = "loop-separation/" + (result.searchSummary ?? "")
-            return result
-        } catch is CancellationError { throw CancellationError() }
-        catch RoutingFailure.noPath { return selected }
-        catch RoutingFailure.resourceLimit { return selected }
+        connector.options.avoidCircuitNodes.formUnion(crossings(selected))
+        let comparison = budget.limited(to: 2)
+        for style in [request.profile.style, .balanced] {
+            connector.profile.style = style
+            do {
+                let alternative = try route(connector, start: selected.start, end: selected.end,
+                    budget: comparison)
+                let a = RouteQuality(route: alternative), b = RouteQuality(route: selected)
+                let fewerCrossings = crossings(alternative).count < crossings(selected).count
+                let sameCrossings = crossings(alternative).count == crossings(selected).count
+                guard alternative.limit == nil,
+                      alternative.distanceMeters <= selected.distanceMeters * 1.25,
+                      a.meaningfulDirtMeters > 0 || b.meaningfulDirtMeters == 0,
+                      fewerCrossings || (sameCrossings && overlap(alternative) + a.reriddenMeters + 500 < overlap(selected) + b.reriddenMeters) else { continue }
+                selected = alternative
+                selected.searchSummary = "loop-separation/" + (selected.searchSummary ?? "")
+                connector.options.avoidCircuitNodes.formUnion(crossings(selected))
+            } catch is CancellationError { throw CancellationError() }
+            catch RoutingFailure.noPath { }
+            catch RoutingFailure.resourceLimit { }
+        }
+        return selected
     }
 
     /// Shared by ordinary routing and optional riding-area legs. A destination
@@ -248,6 +261,13 @@ public struct RoutingEngine: Sendable {
     }
 
     public func route(_ request: RoutingRequest,start: RoadMatch,end: RoadMatch,budget: ComputationBudget) throws -> ComputedRoute {
+        let result = try routeCandidates(request, start: start, end: end, budget: budget)
+        do { return try simplifiedTransfers(result, request: request, budget: budget) }
+        catch is CancellationError { throw CancellationError() }
+        catch RoutingFailure.resourceLimit { return result }
+    }
+
+    private func routeCandidates(_ request: RoutingRequest,start: RoadMatch,end: RoadMatch,budget: ComputationBudget) throws -> ComputedRoute {
         if request.options.composeDirtRide, request.profile.style == .dirt,
            try !localLegalConnectionPossible(request, start: start, end: end, budget: budget) {
             throw RoutingFailure.noPath

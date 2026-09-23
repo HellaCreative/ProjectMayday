@@ -120,8 +120,8 @@ struct RoutingEngineTests {
         counted.options.counter = counter
         let route = try RoutingEngine(pack: pavedLine()).route(counted,budget: .init(seconds: 20))
         // Shortest path plus a 50/50 profile search; an all-paved line then tries
-        // the dirt-preferring correction. None of those flood past B.
-        #expect(counter.searches == 3)
+        // the dirt-preferring correction. The transfer check adds one bounded shorter-road search.
+        #expect(counter.searches == 4)
         #expect((route.searchSummary?.split(separator: ",").filter { !$0.hasPrefix("shape:") }.count) == 3)
         #expect(counter.pops >= route.poppedLabels)
         #expect(counter.stageSummary.contains("compass"))

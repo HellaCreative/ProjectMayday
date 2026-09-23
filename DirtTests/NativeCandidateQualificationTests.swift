@@ -51,6 +51,35 @@ struct NativeCandidateQualificationTests {
         }
     }
 
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_OWNER_LOOP"] == "1"),
+          .timeLimit(.minutes(3)))
+    func ownerSeptember23SmallDetoursThroughAppSession() async throws {
+        let a = Coordinate(longitude: -63.34025664115886, latitude: 44.764817051109134)
+        let b = Coordinate(longitude: -62.536457866023916, latitude: 44.92292596445551)
+        let seed: UInt64 = 5418482707130398
+        let session = NativeRoutingSession()
+        let directories = ["ns": root.appendingPathComponent("ns")]
+        var request = LoopRequest(start: a, far: b, targetMeters: 131866.28924594066,
+                                  style: .dirt, allowUnknown: false, seed: seed)
+        request.profile.wander = 0.5; request.access.avoidFerries = true
+        let began = ContinuousClock.now
+        let result = try await session.loop(request, directories: directories)
+        report("owner-september23-loop", started: began, route: result.combined)
+        #expect(result.distanceMeters < 250_000)
+        for leg in [result.outbound, result.inbound] {
+            #expect(RouteQuality.shortDirtExcursions(leg.segments, maximumKnownMeters: 1_000).isDisjoint(with: leg.segments.filter { $0.surface == .gravel || $0.surface == .loose }.map(\.edgeID)))
+            #expect(leg.geometry.filter { $0.longitude > -63.33 && $0.longitude < -63.27 }.allSatisfy { $0.latitude > 44.73 })
+            verifyShortUnknownConnectors(leg)
+        }
+        // From Here and Plan feed the same session route entry point. Verify
+        // its Dirt result as well as the separate initial-loop entry point.
+        var direct = RoutingRequest(start: a, end: b, style: .dirt, allowUnknown: false, seed: seed)
+        direct.profile.wander = 0.5; direct.access.avoidFerries = true
+        let route = try await session.route(direct, directories: directories)
+        #expect(RouteQuality.shortDirtExcursions(route.segments, maximumKnownMeters: 1_000).isDisjoint(with: route.segments.filter { $0.surface == .gravel || $0.surface == .loose }.map(\.edgeID)))
+        #expect(route.limit == nil && route.end.coordinate.distance(to: b) < 250)
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRT_QUALIFY_CALIFORNIA"] == "1"),
           .timeLimit(.minutes(3)))
     func californiaArizonaDirtCompletesWithLegalAccessThroughAppAdapter() async throws {

@@ -10,6 +10,7 @@ public struct SearchArrival: Sendable {
 }
 
 public struct SearchOptions: Sendable {
+    var simplifyTransfers = true
     /// Local graph junctions already ridden by an earlier composed section.
     /// Scoped to the same graph; never carried as indices across regional windows.
     var avoidCircuitNodes: Set<Int> = []

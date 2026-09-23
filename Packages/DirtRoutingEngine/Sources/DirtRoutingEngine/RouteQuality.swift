@@ -117,6 +117,12 @@ public struct RouteQuality: Sendable {
         minimumSectionDirtPercent = (0..<4).map { sectionTotal[$0] > 0 ? (sectionKnown[$0]/sectionTotal[$0]*1000).rounded()/10 : 0 }.min() ?? 0
     }
 
+    /// Repeated source junctions using four distinct roads. Shared stems and
+    /// grade-separated crossings do not count as figure-eights.
+    public static func crossingCount(_ segments: [RouteSegment], in graph: any RoadGraph) -> Int {
+        RouteTopology.selfCrossings(segments, graph: graph).count
+    }
+
     /// A real circuit revisits a source junction after riding away. Merely
     /// passing within kilometres of another road is not a repeated junction.
     public static func hasClosedRoadCircuit(_ segments: [RouteSegment], in graph: any RoadGraph) -> Bool {

@@ -1386,10 +1386,12 @@ restore old geometry. Dragging an existing waypoint still edits the itinerary.
 Local edits of a closed itinerary (endpoints within 250 m) pass stable road IDs
 from the other accepted legs into native routing. This reuses existing responses;
 it does not load another map or duplicate companion geometry. Dirt edits penalize
-those roads and, if still overlapping, compare one mixed-surface search candidate
-under a two-second child budget. Candidate acceptance reduces combined overlap
-and internal repeats, retains meaningful dirt when present, and limits growth to
-125% of the first candidate. The displayed rider style and access policy remain
+those roads and compare junction passages as well as reused roads. If still
+crossing or overlapping, bounded Dirt and mixed-surface candidates avoid the
+observed crossing junctions under a two-second child budget. Fewer crossings
+rank before dirt share; equal-crossing candidates must reduce overlap and internal
+repeats. Meaningful dirt is retained when present, and growth is limited to 125%
+of the current candidate. The displayed rider style and access policy remain
 unchanged. Untouched legs retain their settings and geometry. Open itineraries
 retain the ordinary routing path; shared access roads remain usable.
 
@@ -1441,6 +1443,72 @@ signature and tested-source hashes verified. Binary SHA256:
 `7b0e4b023984040c595a9ef77e92d3d8785aff771cdbf8ce2b3ccd6ce1b2ff2d`. Separate build, signature, install and
 launch receipts are in `device/`. Physical riding acceptance remains pending;
 this is not production or TestFlight delivery.
+
+### Shared transfer cleanup — September 23 phone follow-up
+
+The `123137Z` phone result disproved general detour acceptance of the prior
+repair: the exact Unknown-off loop was 279,283 m, with 20% and 13% dirt. Its
+return harvested repeated separate 91–776 m known-dirt pieces. The existing
+penalties and Balanced-only cleanup were not reliable enforcement: ordinary
+Dirt selection could retain an unclean candidate and composed Dirt could bypass
+cleanup. This was a shared-engine gap, not simply a missing Loop-only rule.
+
+From Here, Plan and Loop now share a final transfer comparison for Dirt and
+Balanced, including composed results. Continuous known dirt of at least 1 km
+remains anchored. Between those sections, a bounded legal search may substitute
+a shorter paved connection; short dirt remains when no shorter permitted paved
+connection is established. Source turn restrictions are replayed across every
+splice; active restriction boundaries, rider endpoints and substantial dirt are
+preserved. Replacements cannot increase major-highway use when avoided, self
+crossings, or internal repeated-road mileage. City/ferry/access exclusions stay
+in force. An optional failure retains the completed legal route. Search bounds
+are two seconds total and 0.3 seconds per transfer within the existing request
+budget, not a new distance eligibility cutoff. No profile is silently relabeled.
+
+Paved transfers can use a shared approach without paying a repeat penalty that
+buys a useless paved U. The outer loop still compares its complete shape. Source
+junction passages identify figure-eights using four distinct roads; overpasses
+and lollipop stems are not classified as crossings. Independent leg edits keep
+the other accepted geometry fixed. This supplements road-ID overlap detection.
+
+Qualification evidence is under `.build/loop-detours-20260923/`, including
+before/after geometry, north-up comparisons and preserved failed trials. All
+229 permanent native tests pass (`engine-accepted.log`) with the real NS fixtures
+enabled. All 88 focused app checks pass on the single existing iPhone 17 / iOS
+26.5 simulator (`app-tests-accepted.xcresult`); three unrelated long-route opt-ins
+are skipped. The app suite covers the exact loop, the shared ordinary route
+entry used by From Here and Plan, pin replacement and independent leg settings.
+
+The exact Unknown-off loop changes from 279.283 to 246.571 km. Its return had
+22 continuous known-dirt runs shorter than 1 km; none remain in that returned
+leg. The Bellefontaine dip is absent in the inspected geometry. The circuit
+retains its longer dirt sections, including a 1.080 km run counted as a scrap by
+the older 2.5 km diagnostic. It is not a claim that all larger detours are useful.
+Known dirt is 15.4%; the shared approach contributes about 27.9 km repeated,
+consistent with the owner's accepted lollipop shape. App calculation takes
+3.979 s, process peak footprint 106 MB. These are Debug simulator measurements,
+not optimized phone timings.
+
+The older three-seed Porters Lake fixture remains about 158.4 km / 55.1% known
+dirt, 320 m repeated and zero diagnostic scraps, 2.02–2.99 s on that simulator.
+A proposed hard whole-loop crossing preference regressed this fixture to extra
+repeated mileage and a 776 m dirt section; that experiment was removed rather
+than relaxing its tests. The final repair adds crossing comparison to Dirt leg
+edits and prevents transfer replacements increasing within-leg crossings. The
+older fixture still has one four-arm junction revisit near its far pin; universal
+initial-loop crossing rejection is not established by these tests. Exact owner
+Unknown-on two-leg edits have no detected crossings after either edit and keep
+the untouched half fixed. This is bounded comparison, not a guarantee of finding
+every possible alternative. No source pack, access setting or displayed riding
+style changes.
+
+Optimized ReleaseDev was installed and launched on White at
+2026-09-23T13:25:36.404842+00:00, stamp
+`continental-70-loop-transfers-20260923`. Tested source, DEV services/bundle,
+Swift `-O`, signature and unchanged fabric identity were verified before install.
+Binary SHA256: `3f9140419a46e417bcce32460a4924ce9e973a36f8672693c0b7ebc2daaaee5c`.
+Separate build, install and launch receipts are in `device/`. Physical riding
+acceptance remains pending; this is not production or TestFlight delivery.
 
 ### Loop and navigation handoff
 

@@ -18,6 +18,7 @@ extension RoutingEngine {
         // ordinary search cannot connect, a two-section proposal may still do so.
         var ordinary = request
         ordinary.options.composeDirtRide = false
+        ordinary.options.simplifyTransfers = false
         let reference: ComputedRoute?
         do { reference = try self.route(ordinary, start: start, end: end, budget: budget) }
         catch RoutingFailure.noPath { reference = nil }
