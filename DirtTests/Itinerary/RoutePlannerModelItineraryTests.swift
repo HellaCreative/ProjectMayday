@@ -185,6 +185,44 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.stages.count == 2)
     }
 
+    @Test func generatedLoopFarMoveKeepsCircuitPlannerAndPinIdentities() async throws {
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        let ids = model.itinerary.waypoints.map(\.id)
+        let seed = try #require(source.loopRequests.last).seed
+        model.apply(.move(waypointID: ids[1], to: point(0.5)), source: "loopFar")
+        await model.waitForCanonicalBuildForTesting()
+        #expect(source.loopRequestCount == 2)
+        #expect(source.loopRequests.last?.far == point(0.5))
+        #expect(source.loopRequests.last?.seed == seed)
+        #expect(model.itinerary.waypoints.map(\.id) == ids)
+        #expect(model.itinerary.waypoints.map(\.coordinate) == [point(0), point(0.5), point(0)])
+    }
+
+    @Test func loopSettingsRebuildCurrentCircuitWithSameSeedAndExplicitOrigin() async throws {
+        let source = PlannerFakeRoutingSource()
+        let model = makeModel(source: source)
+        model.showingLoop = true
+        model.generateLoop(start: point(0), far: point(1))
+        await model.waitForCanonicalBuildForTesting()
+        let ids = model.itinerary.waypoints.map(\.id)
+        let seed = try #require(source.loopRequests.last).seed
+        for (index, values) in [(RouteProfile.dirt, false, 0.0), (.dirt, true, 1.0), (.balanced, true, 0.5)].enumerated() {
+            model.applyDefaultRideSettings(profile: values.0, allowUnknown: values.1,
+                ridePreferences: .init(wander: values.2, avoidCities: true, avoidHighways: true, avoidFerries: true))
+            await model.waitForCanonicalBuildForTesting()
+            let request = try #require(source.loopRequests.last)
+            #expect(source.loopRequestCount == index + 2)
+            #expect(request.start == point(0) && request.far == point(1))
+            #expect(request.profile == values.0 && request.allowUnknown == values.1)
+            #expect(request.wander == values.2 && request.seed == seed)
+            #expect(model.itinerary.waypoints.map(\.id) == ids)
+        }
+    }
+
     @Test func completedLoopSignalsOverviewIndependentlyOfToast() async throws {
         let source = PlannerFakeRoutingSource()
         let map = MapState()
@@ -1864,11 +1902,13 @@ private final class PlannerFakeRoutingSource: RoutingSource {
         )
     }
 
+    var loopRequests: [PlannedLoopRequest] = []
     var loopRequestCount = 0
     var loopProgressInspection: ((Int, RouteBuildProgress) -> Void)?
     func planLoop(_ request: PlannedLoopRequest,
                   onProgress: @escaping @MainActor (Int, RouteBuildProgress) -> Void) async throws -> PlannedLoop {
         loopRequestCount += 1
+        loopRequests.append(request)
         var responses: [RouteResponse] = []
         for (index, pair) in [(request.start, request.far), (request.far, request.start)].enumerated() {
             let response = try await route(RouteRequest(profile: request.profile, locations: [
@@ -1891,6 +1931,7 @@ private final class PlannerFakeRoutingSource: RoutingSource {
 
     func planLoop(_ request: PlannedLoopRequest) async throws -> PlannedLoop {
         loopRequestCount += 1
+        loopRequests.append(request)
         func leg(_ from: RouteCoordinate, _ to: RouteCoordinate) async throws -> RouteResponse {
             try await route(RouteRequest(profile: request.profile, locations: [
                 RouteLocation(latitude: from.latitude, longitude: from.longitude, label: "start"),

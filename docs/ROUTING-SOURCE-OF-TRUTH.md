@@ -1208,6 +1208,46 @@ GPX entry choice is secondary at the owner’s request: choose an imported entry
 point/direction and offer a separate legal connector from the rider’s location;
 preserve the original imported trace. This interaction is not implemented here.
 
+### September 23 — phone loop regression and control repair
+
+The 08:09:41 phone example is exactly reproduced with the recorded origin,
+far pin, seed 7711779248977317, Dirt/Wander 0.5/Unknown off: 371,966.468 m,
+25,307.524 m repeated roads, 46.8% known dirt. This supersedes any inference
+that the earlier three-seed example establishes general loop-shape acceptance.
+The smaller far pin at 44.768234,-62.948369 remains an explicit unresolved
+circuit-quality case. Its phone edit used ordinary two-leg routing instead of
+LoopPlanner; the generated-loop replay also remains poor (113.6 km, 16.37 km
+repeated, 8.5% known dirt). Green map fill does not establish graph connectivity
+or motor access; the preferred northern corridor has not been individually
+proved or rejected.
+
+Two app integration repairs are now simulator-qualified: changing the Loop
+settings panel rebuilds the displayed circuit, and moving the far pin of an
+otherwise unedited generated loop invokes LoopPlanner. Both retain the explicit
+origin, waypoint identities, and seed. Explicitly inserted stops remain in the
+canonical itinerary and are never discarded by these operations. Ordinary Plan
+default settings retain their existing semantics. The panel labels its Loop
+scope explicitly. All 82 selected simulator checks pass; three unrelated
+long-route opt-in checks are skipped. Source hashes, xcresult and summary are
+in `.build/loop-circuit-20260923/`. These app repairs are not yet installed and
+do not claim to repair circuit shape.
+
+The existing start-centred far-pin radius plus 2 km remains unchanged. A private
+counterfactual removing that radius produced exactly the same smaller-pin
+results, so the boundary is not established as the cause of this example.
+Allowing Unknown changed the Sheet Harbour replay to 284.8 km, 1.46 km repeated,
+77.1% known dirt; this proves request sensitivity, not that any specific trail
+is legally available. Controls previously failed to propagate through the UI.
+The matrix and counterfactual are preserved in `settings-matrix.log` and
+`radius-trial.log`. Direct-outward and independently composed-dirt trials were
+rejected: reducing repeats at the expense of dirt or increasing dirt with more
+backtracking does not satisfy the owner. All experimental engine edits were
+restored; runtime remains the previously qualified engine. The new acceptance
+requirement is a useful whole circuit with distinct corridors and meaningful
+dirt, allowing necessary shared access, tested against both supplied pins and
+actual displayed settings. GPX entry choice and From Here departure bias remain
+separate unresolved items.
+
 ### Loop and navigation handoff
 
 A loop is two pins: the rider's start, and one far pin they drop where they want

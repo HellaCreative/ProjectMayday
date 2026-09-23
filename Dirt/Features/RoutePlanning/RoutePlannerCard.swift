@@ -80,8 +80,8 @@ struct RoutePlannerCard: View {
             VStack(spacing: 0) {
                 if showDefaultRideSettings {
                     RideSettingsPanel(
-                        title: "Default ride settings",
-                        scopeNote: "Used for new legs. Existing Plan legs keep their own settings.",
+                        title: planner.showingLoop ? "Loop settings" : "Default ride settings",
+                        scopeNote: planner.showingLoop ? "Updates this loop." : "Used for new legs. Existing Plan legs keep their own settings.",
                         profile: planner.profile,
                         allowUnknown: planner.allowUnknown,
                         preferences: planner.displayedRidePreferences,

@@ -180,7 +180,7 @@ final class RoutePlannerModel {
 
     /// Endpoint resolution is separate so the completion flow is also testable
     /// without asking Core Location for a live rider position.
-    func generateLoop(start: RouteCoordinate, far: RouteCoordinate) {
+    func generateLoop(start: RouteCoordinate, far: RouteCoordinate, preserving pins: RiderItinerary? = nil) {
         guard navigation.phase == .idle, !isRouting else { return }
         invalidateInFlightRoutes()
         let runID = UUID()
@@ -190,6 +190,8 @@ final class RoutePlannerModel {
         isAssemblingRoute = true
         errorMessage = nil
         fuelPlanningStatus = "Creating loop"
+        if pins == nil { routingSessionSeed = UInt64.random(in: 1...9_007_199_254_740_991) }
+        let loopSeed = routingSessionSeed
         let target = loopTargetMeters(start: start, far: far)
         let selectedProfile = profile, selectedAllow = allowUnknown
         var preferences = displayedRidePreferences
@@ -219,10 +221,11 @@ final class RoutePlannerModel {
             }
             do {
                 let source = policy.select(for: dummy)
-                var loopIntent = reduce(RiderItinerary(), .replaceAll(
+                var loopIntent = pins ?? reduce(RiderItinerary(), .replaceAll(
                     waypoints: [start, far, start], profile: selectedProfile, allowUnknown: selectedAllow,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
-                loopIntent.setRidePreferencesForAllLegs(preferences)
+                loopIntent.setRideDefaults(profile: selectedProfile, allowUnknown: selectedAllow,
+                    preferences: preferences, forLegsNotIn: [])
                 self.itinerary = loopIntent
                 self.built = .empty(for: loopIntent)
                 self.streamedLegGeneration = loopIntent.generation
@@ -236,7 +239,7 @@ final class RoutePlannerModel {
                     profile: selectedProfile, allowUnknown: selectedAllow,
                     wander: preferences.normalized.wander, avoidCities: preferences.avoidCities,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads,
-                    seed: UInt64.random(in: 1...9_007_199_254_740_991), avoidFerries: preferences.avoidFerries)) { index, event in
+                    seed: loopSeed, avoidFerries: preferences.avoidFerries)) { index, event in
                     guard self.loopRunID == runID, !Task.isCancelled, loopIntent.legs.indices.contains(index) else { return }
                     self.consumeLongRouteProgress(event, riderLegID: loopIntent.legs[index].id, generation: loopIntent.generation)
                     if case .completed(let response) = event,
@@ -379,6 +382,12 @@ final class RoutePlannerModel {
         else { apply(.rebuild, source: "ridePreferences") }
     }
 
+    private var isUneditedGeneratedLoop: Bool {
+        showingLoop && routeIdentity?.hasPrefix("loop:") == true
+            && itinerary.waypoints.count == 3 && itinerary.legs.count == 2
+            && itinerary.waypoints[1].id == loopFarWaypointID
+    }
+
     /// Changes the values copied into subsequently-created legs. Existing Plan
     /// legs keep their own choices; their style button edits them explicitly.
     func applyDefaultRideSettings(
@@ -394,6 +403,21 @@ final class RoutePlannerModel {
         avoidMotorways = newProfile == .cleanest && preferences.avoidHighways
         suppressPlannerReroute = false
         syncNetworkAccessPolicy()
+        if showingLoop, !itinerary.legs.isEmpty {
+            if isUneditedGeneratedLoop, let start = itinerary.waypoints.first?.coordinate,
+               let far = loopFar {
+                let pins = reduce(itinerary, .rebuild).itinerary
+                invalidateInFlightRoutes()
+                isRouting = false
+                generateLoop(start: start, far: far, preserving: pins)
+            } else {
+                // Explicit extra stops remain authoritative; never replace them
+                // with a fresh three-pin loop when changing ride settings.
+                itinerary.setRideDefaults(profile: profile, allowUnknown: allowUnknown,
+                    preferences: displayedRidePreferences, forLegsNotIn: [])
+                apply(.rebuild, source: "loop-settings")
+            }
+        }
     }
 
     var canAllowFerries: Bool {
@@ -912,6 +936,16 @@ final class RoutePlannerModel {
     }
 
     private func applyImmediately(_ action: ItineraryAction, source: String) {
+        if isUneditedGeneratedLoop, case .move(let id, let far) = action,
+           id == loopFarWaypointID, let start = itinerary.waypoints.first?.coordinate {
+            let moved = reduce(itinerary, action).itinerary
+            RoutingDebugLog.shared.event(ItineraryLog.line(action: action, before: itinerary,
+                after: moved, source: source))
+            invalidateInFlightRoutes()
+            isRouting = false
+            generateLoop(start: start, far: far, preserving: moved)
+            return
+        }
         cancelFuelReplacement()
         let before = itinerary
         let change = reduce(before, action)
