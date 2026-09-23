@@ -234,15 +234,10 @@ enum DirtIsland {
     static let minimumTopInset: CGFloat = 59
     static let cutoutWidth: CGFloat = 126
     static let cutoutHeight: CGFloat = 37
-    static let cutoutTop: CGFloat = 11
-    /// Capsule corners of the hardware Island — the wrapper uses the same radius
-    /// so Island + logo read as one object, not two pills.
+    /// Keep the standalone logo's top corners identical to its existing bottom corners.
     static var wrapperRadius: CGFloat { cutoutHeight / 2 }
-    /// Wordmark padding under the cutout slot (top 2 + 32 wordmark + bottom 10).
+    /// Visible logo height (top 2 + 32 wordmark + bottom 10).
     static let wordmarkBand: CGFloat = 44
-    static var restingHeight: CGFloat { cutoutHeight + wordmarkBand }
-    /// First-frame scaleY so the black wrapper matches the hardware Island.
-    static var collapsedScaleY: CGFloat { cutoutHeight / restingHeight }
 
     static func isPresent(
         topInset: CGFloat,

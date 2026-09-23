@@ -719,9 +719,11 @@ struct RootView: View {
 
             }
         }
-        .overlay(alignment: .top) {
+        .overlay(alignment: .topLeading) {
             if hasDynamicIsland {
                 islandBrandBar
+                    .padding(.leading, 12)
+                    .padding(.top, portraitTopChromeInset)
             }
         }
         .ignoresSafeArea(edges: navActive ? .bottom : [])
@@ -1057,8 +1059,7 @@ struct RootView: View {
         .accessibilityHint("Shows or hides nearby road surfaces")
     }
 
-    /// Portrait Island phones: hardware cutout on top, wordmark under it, one
-    /// black rounded wrapper around both. Nothing is drawn into the cutout.
+    /// Same wordmark band, now a separate rounded pill beneath the clock.
     private var islandBrandBar: some View {
         IslandBrandBar(
             graphDebugVisible: app.mapState.showRoutingGraphDebug,
@@ -1066,17 +1067,13 @@ struct RootView: View {
         )
     }
 
-    /// Portrait top chrome sits in the safe area with this inset. Island overlay
-    /// ignores the top inset, so ticker clearance subtracts it.
+    /// Portrait controls and the logo sit below the status bar.
     private var portraitTopChromeInset: CGFloat { 6 }
 
-    /// Push the progress ticker below the Island wrapper by the same gap as
-    /// minus→3D on the map control stack. Does not move the wrapper.
+    /// Keep progress messages below the logo with the map controls' usual gap.
     private var islandTickerClearance: CGFloat {
         guard hasDynamicIsland else { return 0 }
-        let barBottom = DirtIsland.cutoutTop + DirtIsland.restingHeight
-        let safeTop = Self.foregroundSafeAreaInsets.top
-        return max(0, barBottom + MapControlStack.afterZoomGap - safeTop - portraitTopChromeInset)
+        return DirtIsland.wordmarkBand + MapControlStack.afterZoomGap
     }
 
     private var islandTickerHasContent: Bool {
@@ -1709,8 +1706,8 @@ private struct MapLibreCanvas: View {
     }
 }
 
-/// Load entrance: wrapper grows down from the hardware Island, then `DIRT.` plops
-/// into the settled bar. Reduce Motion fades; the wrapper never bounces off the cutout.
+/// Standalone logo pill. Preserve the wordmark's existing size and entrance;
+/// Reduce Motion uses a fade.
 private struct IslandBrandBar: View {
     let graphDebugVisible: Bool
     let onToggleGraph: () -> Void
@@ -1725,7 +1722,7 @@ private struct IslandBrandBar: View {
 
     private var wrapperScale: CGFloat {
         if reduceMotion { return 1 }
-        return wrapperRevealed ? 1 : DirtIsland.collapsedScaleY
+        return wrapperRevealed ? 1 : 0.88
     }
 
     private var barOpacity: Double {
@@ -1749,11 +1746,6 @@ private struct IslandBrandBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Color.clear
-                .frame(width: DirtIsland.cutoutWidth, height: DirtIsland.cutoutHeight)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-
             Button(action: onToggleGraph) {
                 BrandChip(sitsInIslandStack: true)
                     .padding(.horizontal, 14)
@@ -1773,8 +1765,6 @@ private struct IslandBrandBar: View {
         .clipShape(wrapperShape)
         .scaleEffect(x: 1, y: wrapperScale, anchor: .top)
         .opacity(barOpacity)
-        .padding(.top, DirtIsland.cutoutTop)
-        .ignoresSafeArea(edges: .top)
         .onAppear(perform: playEntrance)
     }
 
