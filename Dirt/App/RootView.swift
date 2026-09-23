@@ -1036,7 +1036,7 @@ struct RootView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous)
                     .stroke(
-                        app.mapState.showRoutingGraphDebug ? Color.yellow.opacity(0.35) : Color.clear,
+                        app.mapState.showRoutingGraphDebug ? Color.yellow : Color.clear,
                         lineWidth: 1
                     )
             )
@@ -1748,7 +1748,7 @@ private struct IslandBrandBar: View {
         .clipShape(wrapperShape)
         .overlay {
             wrapperShape.strokeBorder(
-                graphDebugVisible ? Color.yellow.opacity(0.35) : Color.clear,
+                graphDebugVisible ? Color.yellow : Color.clear,
                 lineWidth: 1
             )
             .allowsHitTesting(false)
