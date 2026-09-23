@@ -240,7 +240,7 @@ public struct RoutingEngine: Sendable {
         let blockingCores = UrbanCores.boxes(in: pack).filter {
             !$0.contains(start.coordinate) && !$0.contains(end.coordinate)
         }
-        func run(_ options: SearchOptions, policy: ProfilePolicy? = nil) throws -> ComputedRoute {
+        func runBudgeted(_ options: SearchOptions, policy: ProfilePolicy?, budget: ComputationBudget) throws -> ComputedRoute {
             var options = options
             options.roadRemaining = compass?.remaining
             do {
@@ -271,6 +271,9 @@ public struct RoutingEngine: Sendable {
                 return try search.search(start: start,end: end,policy: policy ?? request.profile,access: request.access,options: options,budget: budget)
             }
         }
+        func run(_ options: SearchOptions, policy: ProfilePolicy? = nil) throws -> ComputedRoute {
+            try runBudgeted(options, policy: policy, budget: budget)
+        }
         if request.profile.style == .cleanest {
             // Clean is pavement-max on back roads — not an unbounded scenic wander.
             // Bound gratuitous detours, while allowing the necessary road distance
@@ -295,7 +298,7 @@ public struct RoutingEngine: Sendable {
             let shortest: ComputedRoute?
             do { shortest = try run(shortestOpts) }
             catch RoutingFailure.noPath { shortest = nil }
-            if let shortest { note("shortest", shortest) }
+            if let shortest { note(request.options.preferredCorridorRoads.isEmpty ? "shortest" : "corridorBaseline", shortest) }
             let lengthCap = max(max(span, shortest?.distanceMeters ?? 0) * 1.50, 80_000)
 
             var clean = request.options
@@ -345,7 +348,9 @@ public struct RoutingEngine: Sendable {
             return finish(route)
         }
         if request.profile.style == .balanced {
-            return try balanced(request, run: run, budget: budget, hasCompass: compass != nil)
+            return try balanced(request, run: run, cleanupRun: { options, policy in
+                try runBudgeted(options, policy: policy, budget: budget.limited(to: 1.0))
+            }, budget: budget, hasCompass: compass != nil)
         }
         var candidateLog: [String] = []
         var cap = request.options.maximumMeters
@@ -519,6 +524,7 @@ public struct RoutingEngine: Sendable {
     /// whose dirt weight is steered toward 45–55%. Stops at B; no resource flood.
     private func balanced(_ request: RoutingRequest,
                           run: (SearchOptions, ProfilePolicy?) throws -> ComputedRoute,
+                          cleanupRun: (SearchOptions, ProfilePolicy?) throws -> ComputedRoute,
                           budget: ComputationBudget,
                           hasCompass: Bool) throws -> ComputedRoute {
         var shortest = request.options
@@ -571,6 +577,32 @@ public struct RoutingEngine: Sendable {
         }
         let selected = Self.chooseBalanced(candidates) ?? candidates[0]
         var result = selected.route
+        var cleanup = request.options
+        cleanup.preferredCorridorRoads = Set(result.segments.map(\.edgeID))
+        cleanup.penalizedDirtEdges = RouteQuality.shortDirtExcursions(result.segments)
+        cleanup.objective = .profile
+        cleanup.corridorMeters = .infinity
+        cleanup.cityWall = false
+        var cleanupPolicy = request.profile
+        cleanupPolicy.balancedDirtPreference = 1
+        if selected.quality.shortDirtScrapMeters > 0, budget.remainingSeconds > 2,
+           !cleanup.penalizedDirtEdges.isEmpty {
+            do {
+                let alternative = try cleanupRun(cleanup, cleanupPolicy)
+                log.append(note("cleanup", alternative, quality(alternative)))
+                let originalLongDirt = Set(result.segments.filter {
+                    ($0.surface == .gravel || $0.surface == .loose) && !cleanup.penalizedDirtEdges.contains($0.edgeID)
+                }.map(\.edgeID))
+                let alternativeIDs = Set(alternative.segments.map(\.edgeID))
+                if alternative.limit == nil, originalLongDirt.isSubset(of: alternativeIDs),
+                   alternative.distanceMeters <= result.distanceMeters,
+                   quality(alternative).shortDirtScrapMeters < quality(result).shortDirtScrapMeters {
+                    result = alternative
+                }
+            } catch is CancellationError { throw CancellationError() }
+            catch RoutingFailure.noPath { }
+            catch RoutingFailure.resourceLimit { }
+        }
         let repaired = try repairLegShape(result, request: request, run: run, policy: request.profile)
         result = repaired.route
         result.searchSummary = log.joined(separator: ",") + ",shape:\(repaired.before)->\(repaired.after)"

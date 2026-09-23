@@ -52,6 +52,9 @@ public struct SearchOptions: Sendable {
     public var extentCenter: Coordinate? = nil
     public var maxExtentMeters: Double = .infinity
     public var penalizedDirtEdges: Set<String> = []
+    /// A soft preference for the accepted leg during a local edit. Legal/access
+    /// checks still apply and new roads remain available for necessary bypasses.
+    public var preferredCorridorRoads: Set<String> = []
     public var backtrackFactor: Double = 4
     public var seed: UInt64 = 0
     public var varietyEnabled = true
@@ -508,7 +511,8 @@ public struct PathSearch: Sendable {
         let prior = options.priorEdges
         let repeated = options.repeatEdges
         let penalized = options.penalizedDirtEdges
-        let needIdentity = !avoid.isEmpty || !prior.isEmpty || !repeated.isEmpty || !penalized.isEmpty
+        let preferred = options.preferredCorridorRoads
+        let needIdentity = !avoid.isEmpty || !prior.isEmpty || !repeated.isEmpty || !penalized.isEmpty || !preferred.isEmpty
         // Identity membership is constant for this request. Resolve it only for
         // roads actually visited, once per road rather than once per label.
         var memberships: [Int: UInt8] = [:]
@@ -518,7 +522,7 @@ public struct PathSearch: Sendable {
             let local = pack.edgeID(edge), stable = pack.identity(of: edge)
             func contains(_ set: Set<String>) -> Bool { set.contains(local) || set.contains(stable) }
             let value: UInt8 = (contains(avoid) ? 1 : 0) | (contains(prior) ? 2 : 0)
-                | (contains(repeated) ? 4 : 0) | (contains(penalized) ? 8 : 0)
+                | (contains(repeated) ? 4 : 0) | (contains(penalized) ? 8 : 0) | (contains(preferred) ? 16 : 0)
             memberships[edge] = value
             return value
         }
@@ -811,6 +815,9 @@ public struct PathSearch: Sendable {
                     riddenMetersBeforeArc: current.meters,
                     achievedMeaningfulDirt: current.achievedMeaningfulDirt)
                 step += clawback
+                if !preferred.isEmpty, roadMembership & 16 == 0 {
+                    step += arc.meters / 1000 * 100
+                }
                 if !resource {
                     // Geodesic early-leg away, even when road compass is active —
                     // paved U-dips can keep remaining-to-B flat while walking off

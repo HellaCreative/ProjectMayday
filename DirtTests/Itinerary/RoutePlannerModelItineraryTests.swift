@@ -233,6 +233,7 @@ struct RoutePlannerModelItineraryTests {
         model.generateLoop(start: point(0), far: point(1))
         await model.waitForCanonicalBuildForTesting()
         let ids = model.itinerary.waypoints.map(\.id)
+        let initialOutbound = try #require(model.stages[0].response).coordinates
         let returnGeometry = try #require(model.stages[1].response).coordinates
         let returnSettings = model.itinerary.legs[1]
         source.routeRequests.removeAll()
@@ -244,6 +245,7 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.itinerary.legs[1] == returnSettings)
         #expect(model.stages[1].response?.coordinates == returnGeometry)
         #expect(model.stages[0].profile == .cleanest)
+        #expect(source.corridorContexts.last.flatMap { $0 }?.coordinates == initialOutbound)
         let outboundSettings = model.itinerary.legs[0]
         let outboundGeometry = try #require(model.stages[0].response).coordinates
         for unknown in [true, false, true] {
@@ -254,15 +256,18 @@ struct RoutePlannerModelItineraryTests {
             await model.waitForCanonicalBuildForTesting()
             #expect(source.routeRequests.count == 1)
             #expect(source.routeRequests.first?.profile == .dirt)
+            #expect(source.corridorContexts.last! == nil)
             #expect(source.routeRequests.first?.accessPolicy.motorizedUnknown == unknown)
             #expect(model.itinerary.legs[0] == outboundSettings)
             #expect(model.stages[0].response?.coordinates == outboundGeometry)
             #expect(model.stages[1].profile == .dirt && model.stages[1].allowUnknown == unknown)
             #expect(model.itinerary.waypoints.map(\.id) == ids)
         }
+        source.corridorContexts.removeAll()
         model.apply(.move(waypointID: ids[1], to: point(0.5)), source: "loopFar")
         await model.waitForCanonicalBuildForTesting()
         #expect(source.loopRequestCount == 1)
+        #expect(source.corridorContexts.allSatisfy { $0 == nil })
         #expect(model.stages[0].profile == .cleanest && !model.stages[0].allowUnknown)
         #expect(model.stages[1].profile == .dirt && model.stages[1].allowUnknown)
         #expect(model.itinerary.waypoints.map(\.id) == ids)
@@ -1906,6 +1911,12 @@ private final class FakeInstalledPackRegistry: RoutingInstalledPackRegistry {
 private final class PlannerFakeRoutingSource: RoutingSource {
     let name: String
     var routeRequests: [RouteRequest] = []
+    var corridorContexts: [RouteResponse?] = []
+    func route(_ req: RouteRequest, preservingCorridor previous: RouteResponse?,
+               onProgress: @escaping @MainActor (RouteBuildProgress) -> Void) async throws -> RouteResponse {
+        corridorContexts.append(previous)
+        return try await route(req, onProgress: onProgress)
+    }
     var fuelChainRequests: [FuelChainRequest] = []
     var distanceOverrides: [String: Double] = [:]
     var profileGeometry: [RouteProfile: [RouteCoordinate]] = [:]

@@ -251,15 +251,13 @@ final class ItineraryBuilder {
                     let request = routeRequest(
                         itinerary: itinerary, legIndex: index, maxPathMeters: nil,
                         history: discoveryHistory, profileOverride: discoveryProfile)
-                    if let onScopedRouteProgress {
-                        response = try await selectedSource.route(request) { event in
-                            onScopedRouteProgress(riderLeg.id, event)
-                            onRouteProgress?(event)
-                        }
-                    } else if let onRouteProgress {
-                        response = try await selectedSource.route(request, onProgress: onRouteProgress)
-                    } else {
-                        response = try await selectedSource.route(request)
+                    // A style edit cleans the selected leg's accepted corridor.
+                    // Pin moves and fresh generations do not inherit this preference.
+                    let previous = localEdit && discoveryProfile == .cleanest
+                        ? reuse?.riderRoutes[riderLeg.id] : nil
+                    response = try await selectedSource.route(request, preservingCorridor: previous) { event in
+                        onScopedRouteProgress?(riderLeg.id, event)
+                        onRouteProgress?(event)
                     }
                 }
                 // Clean is the fast connectivity foundation only for a true

@@ -178,6 +178,9 @@ public struct ProfilePolicy: Sendable {
             if surface == 4 && ["freeway","arterial","ramp","collector","local","service"].contains(coarse) {
                 surfaceCost = style == .dirt ? Self.dirtWeights[0] : balancedWeight(0)
             }
+            // Optional Balanced cleanup removes the reward for identified scraps.
+            // This is a cost, never a closure of a necessary connector.
+            if style == .balanced && penalizedDirt { surfaceCost = max(surfaceCost, 150) }
             var roadFactor = (style == .dirt ? Self.dirtRoads : Self.balancedRoads)[coarse,default: 1]
             // Same early-opening relief as the ×8 arterial table below: do not
             // make Trunk/Hwy class roads 4–9× a paved collector before any dirt.

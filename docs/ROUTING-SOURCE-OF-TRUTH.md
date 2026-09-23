@@ -1322,6 +1322,54 @@ and `device/` (build/signature/separate install and launch receipts).
 Physical acceptance remains pending; coastal circuit quality remains a separate
 follow-up and no production/TestFlight action is included.
 
+### September 23 — coastal scraps and Clean leg edits
+
+The owner's matching 09:05 phone log establishes two separate defects with
+independent leg settings already working. The exact origin
+44.764788479181554,-63.340282994964475, far point
+44.9217014613305,-62.535082727942886 and seed1369334504736932 reproduce
+Balanced/Wander0/Unknown off at133,277.586m (11% dirt,8,139m short scraps),
+and Clean at121,450.586m. Both retain city/highway/ferry avoidance. Clean
+chooses a northern paved corridor because its backroad costs prefer it to the
+coastal primary road; it previously received no accepted-leg corridor context.
+The owner's request is to clean the existing leg where legal alternatives allow,
+not silently move it across the loop. A short useful dirt connector stays valid;
+small detours solely to collect surface percentage do not establish a good ride.
+
+The candidate adds a soft accepted-road preference only to local Clean edits,
+never to fresh generations or moved pins. It cannot permit a prohibited road.
+Balanced performs at most one optional one-second cleanup comparison, retaining
+the completed result if the comparison fails or lacks headroom. A replacement
+must be no longer, contain fewer short scraps and retain the original dirt roads
+outside the short-scrap set. Connector roads are penalized, never forbidden.
+No pack bytes, access rules, country intent or long-route budgets change.
+
+Exact native replay yields130,630.586m Balanced,466m short scraps and6,023m
+continuous useful dirt. Clean with accepted-leg context yields123,847.586m,
+zero known dirt, staying on the coastal side. This is not a claim that every
+remaining road detour is ideal or that the last466m is necessarily required.
+The accepted broad-loop replay remains a broad circuit: Balanced220,038.945m,
+2,173.360m repeated and zero short scraps; the prior223,104.945m example had
+2,222m scraps. The Dirt examples retain their distances and useful-dirt figures.
+Evidence and original phone-matching baseline are in
+`.build/coastal-leg-20260923`. Runtime and app qualification/delivery status
+must be recorded separately; these are host results, not phone acceptance.
+All224 permanent engine tests pass with the real NS coastal case enabled,
+plus the four-setting accepted-loop audit. All83 selected app tests pass on the
+existing simulator (three unrelated opt-in cases skipped), including corridor
+context for a Clean edit, no retained context after a pin move, and untouched
+opposite-leg geometry/settings. The first app run exposed stale observations
+in the new test fixture; its failed receipt is preserved and the corrected test
+passes without an application change. See `final-engine-tests-2.log` and
+`app-tests-2.xcresult`. Device diagnostic stamp is
+`continental-70-coastal-edit-20260923`. Optimized ReleaseDev installed and
+launched successfully on White, retaining DEV services, bundle `com.mayday.dirt.dev`,
+Swift `-O` and the unchanged `fabric-v4-20260922-01`. Binary SHA256:
+`6ff20a6caa5efa59b68ee5c0cc1fa2ebe77e36607f41104299706189a5ac9311`.
+Separate identity/signature/install/launch receipts are in `device/` under the
+same evidence directory. Physical riding acceptance remains pending; this is
+not a production or TestFlight delivery.
+
 ### Loop and navigation handoff
 
 A loop is two pins: the rider's start, and one far pin they drop where they want
